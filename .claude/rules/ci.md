@@ -13,6 +13,10 @@ paths:
   `needs: changes` and the `if` of its kind; a file a job newly depends on goes into the lists of the script.
   `nightly.yml` (03:00 UTC, or by hand) builds the iOS example with CocoaPods frameworks (static, dynamic, React Native
   from source) and an Expo app with the packed library.
+- `rn-watch.yml` (05:00 UTC, or by hand with a version) runs `scripts/rn-watch.mjs`: for a React Native minor newer
+  than the repository's (npm `latest`, `next`) it opens the issue `React Native 0.<minor>` (label `react-native`) and
+  adds the minor's later versions to it as comments; the issue closes when the repository moves to that minor. The
+  work on the new version starts from that issue.
 - `release.yml` runs on every push to `main`: release-please keeps the release pull request open (the `release` skill),
   and after it is merged publishes to npm through the `npm` environment (trusted publishing, no token).
   `docs.yml` builds the docs site on a pull request that changes `docs/`, `src/` or `package.json`, and on `main`

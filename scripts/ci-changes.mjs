@@ -15,7 +15,7 @@ const DOCS = [
   /^docs\/(?!.*\.(js|mjs|ts|tsx)$)/,
   /^\.claude\//,
   /^\.github\/(assets|ISSUE_TEMPLATE)\//,
-  /^\.github\/workflows\/(docs|nightly|pr-title|release)\.yml$/,
+  /^\.github\/workflows\/(docs|nightly|pr-title|release|rn-watch)\.yml$/,
   /^(\.release-please-manifest\.json|release-please-config\.json|LICENSE|\.gitignore)$/,
 ];
 
