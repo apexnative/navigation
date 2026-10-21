@@ -15,7 +15,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Which jobs the change needs (scripts/ci-changes.mjs): the docs alone need none of them, and a change without native
+  # code skips the native builds. A skipped job counts as passed for a required check.
+  changes:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    outputs:
+      code: ${{ steps.changes.outputs.code }}
+      native: ${{ steps.changes.outputs.native }}
+
+    steps:
+      # The whole history without the file contents: enough to list the files a change touches.
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 0
+          filter: blob:none
+
+      - name: What the change touches
+        id: changes
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
+        run: node scripts/ci-changes.mjs "$BASE" "$HEAD" >> "$GITHUB_OUTPUT"
+
   lint:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -35,6 +64,8 @@ jobs:
         run: yarn check:headers
 
   test:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -48,6 +79,8 @@ jobs:
         run: yarn test --maxWorkers=2 --coverage
 
   build-library:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -61,6 +94,8 @@ jobs:
         run: yarn prepare
 
   build-android:
+    needs: changes
+    if: needs.changes.outputs.native == 'true'
     runs-on: ubuntu-latest
 
     env:
@@ -120,6 +155,8 @@ jobs:
           yarn turbo run build:android --cache-dir="${{ env.TURBO_CACHE_DIR }}"
 
   build-ios:
+    needs: changes
+    if: needs.changes.outputs.native == 'true'
     runs-on: macos-latest
 
     env:
@@ -170,6 +207,8 @@ jobs:
           yarn turbo run build:ios --cache-dir="${{ env.TURBO_CACHE_DIR }}"
 
   build-ios-spm:
+    needs: changes
+    if: needs.changes.outputs.native == 'true'
     runs-on: macos-latest
 
     env:
