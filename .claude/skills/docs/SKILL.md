@@ -63,7 +63,8 @@ files and maps when the structure changed. Update them in the same task.
 
 ## Check
 
-`scripts/docs.sh api` and `scripts/docs.sh typecheck`; `scripts/docs.sh build` after a page changed.
+`scripts/docs.sh api` and `scripts/docs.sh typecheck`; `scripts/docs.sh build` after a page changed. A pull request
+builds the site the same way (`docs.yml`); a merge into `main` publishes it at navigation.apexnative.dev.
 
 ## The result
 
