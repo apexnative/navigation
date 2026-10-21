@@ -73,12 +73,12 @@ Keep one behavior change per commit. The commit-msg hook checks the format.
 
 ## Publishing to npm
 
-We use [release-it](https://github.com/release-it/release-it) to bump the version, tag and
-publish:
-
-```sh
-yarn release
-```
+Releases are made by [release-please](https://github.com/googleapis/release-please). After every
+merge into `main` it keeps a release pull request open with the next version and the changelog,
+built from the titles of the merged pull requests. Merging it tags the version, creates the
+GitHub release and publishes the package to npm from GitHub Actions, after a maintainer approves
+the publication. There is no npm token: npm trusts the release workflow (trusted publishing),
+and every version carries its provenance.
 
 ## Sending a pull request
 

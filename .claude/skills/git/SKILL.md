@@ -13,9 +13,9 @@ Never `--no-verify`, never force-push `main`, never rewrite history that was pus
 
 - **Conventional commits**, checked by commitlint (`@commitlint/config-conventional`) in the commit-msg hook: `feat`,
   `fix`, `perf`, `refactor`, `docs`, `test`, `build`, `ci`, `chore`; `!` after the type or a `BREAKING CHANGE:`
-  footer for a breaking change. release-it builds the changelog and the next version from them, so the type says what
-  an app sees: a change only to the Showcase, the docs, `scripts/` or `.claude/` is never `feat` or `fix`. An optional
-  scope names the area: `ios`, `android`, `cli`, `docs`, `example`, or an API area (`tabs`, `linking`).
+  footer for a breaking change. release-please builds the changelog and the next version from them, so the type says
+  what an app sees: a change only to the Showcase, the docs, `scripts/` or `.claude/` is never `feat` or `fix`. An
+  optional scope names the area: `ios`, `android`, `cli`, `docs`, `example`, or an API area (`tabs`, `linking`).
 - **Subject:** imperative, lowercase, no period, under 100 characters. **Body:** why, wrapped at 100 columns.
 - **One behavior change per commit.** A fix and the refactor it needed are two commits; the iOS and Android halves of
   one behavior are one.
@@ -29,8 +29,10 @@ Never `--no-verify`, never force-push `main`, never rewrite history that was pus
 
 - `main` takes changes through pull requests, CI and the merge queue (`merge_group` in `ci.yml`). A branch is
   `<type>/<short-slug>`: `fix/stack-double-pop`.
-- A pull request is one change, titled like a commit subject. Its body: what changes for an app, why, the platforms,
-  how it was checked (the scripts, the device checks), what is not done; `Fixes #123` for an issue.
+- A pull request is one change, titled like a commit subject: it is squashed into one commit named by its title, and
+  that title is its line in the changelog (`pr-title.yml` checks it with commitlint). Its body: what changes for an
+  app, why, the platforms, how it was checked (the scripts, the device checks), what is not done; `Fixes #123` for an
+  issue.
 - After the pull request is open, CI is watched through the app, not by polling.
 
 ## When CI fails
@@ -45,4 +47,5 @@ Never `--no-verify`, never force-push `main`, never rewrite history that was pus
 
 ## Releases
 
-`/release` (`.claude/skills/release/SKILL.md`). Publishing stays the maintainer's.
+A release is the release pull request that `release.yml` keeps open: `/release` (`.claude/skills/release/SKILL.md`).
+Merging it and approving the npm publication stay the maintainer's.

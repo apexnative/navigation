@@ -4,8 +4,8 @@
 const { compare } = require('./versions');
 
 /**
- * What changed between two versions, from a CHANGELOG.md as release-it writes it (conventional changelog: a heading
- * per version, `## [1.2.0](…) (date)`, and in it `### BREAKING CHANGES`, `### Features`, `### Bug Fixes`).
+ * What changed between two versions, from a CHANGELOG.md as release-please writes it (conventional changelog: a
+ * heading per version, `## [1.2.0](…) (date)`, and in it `### ⚠ BREAKING CHANGES`, `### Features`, `### Bug Fixes`).
  * @typedef {{ breaking: { version: string; text: string }[]; notes: { version: string; text: string }[] }} Notes
  */
 
