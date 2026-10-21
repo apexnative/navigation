@@ -37,6 +37,9 @@ The stage is `prerelease-type` in `release-please-config.json`; the jump is a co
   1.0" note of `docs/content/start/introduction.mdx` and the status line of `README.md` go in the same pull request.
   From then on `latest` on npm is the stable version: `release.yml` moves it with pre-releases only until then.
 - **A new major after a stable release:** keep the released docs first (the `docs` skill), then `prerelease` back to
-  `true` with `alpha` and `Release-As: 2.0.0-alpha.0`.
+  `true`, `versioning: prerelease` and `prerelease-type: alpha` back, and `Release-As: 2.0.0-alpha.0`. `latest` on npm
+  stays on the stable major; the new one goes out under `alpha`, `beta`, `rc` until its stable release. Fixes of the
+  old major while the new one is a pre-release need a branch of their own (`1.x`) with release-please on it, which
+  `release.yml` doesn't have yet.
 
 The change goes through a pull request like any other; the release pull request then shows the new version.
