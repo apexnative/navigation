@@ -2,9 +2,11 @@
    Docs page of the brand canvas (DocsHome, DocsPage, DocsApi, DocsOptions, DocsPhone, DocsTokens). */
 
 :root {
-  --an-display: 'Righteous', 'Golos Text', sans-serif;
-  --an-body: 'Golos Text', system-ui, sans-serif;
-  --an-mono: 'JetBrains Mono', ui-monospace, monospace;
+  /* The font names stand in properties whose name has "font": the production build's minifier (cssnano's
+     discardUnused) drops every @font-face whose family it doesn't find in such a property, and a var() hides it. */
+  --an-display: var(--ifm-heading-font-family);
+  --an-body: var(--ifm-font-family-base);
+  --an-mono: var(--ifm-font-family-monospace);
 
   --an-bg: #f4ecdc;
   --an-surface: #fffaf0;
@@ -36,10 +38,10 @@
   --ifm-code-background: var(--an-surface2);
   --ifm-color-emphasis-300: var(--an-line);
 
-  --ifm-font-family-base: var(--an-body);
-  --ifm-heading-font-family: var(--an-display);
+  --ifm-font-family-base: 'Golos Text', system-ui, sans-serif;
+  --ifm-heading-font-family: 'Righteous', 'Golos Text', sans-serif;
   --ifm-heading-font-weight: 400;
-  --ifm-font-family-monospace: var(--an-mono);
+  --ifm-font-family-monospace: 'JetBrains Mono', ui-monospace, monospace;
   --ifm-font-size-base: 15px;
   --ifm-line-height-base: normal;
   --ifm-global-radius: 18px;
