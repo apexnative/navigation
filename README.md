@@ -9,7 +9,8 @@ Native navigation for React Native on iOS, iPadOS and Android. Stacks, tabs, mod
 menus and overlays are real platform containers — `UINavigationController`,
 `UITabBarController`, Material components — owned by the native side and driven from JS.
 
-> **Status:** early development, not published to npm yet.
+> **Status:** a pre-release on npm; the API can still change before 1.0. The current version is on the
+> [releases page](https://github.com/apexnative/navigation/releases).
 
 ## Principles
 

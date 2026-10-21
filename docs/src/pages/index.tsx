@@ -1,4 +1,5 @@
 import Link from '@docusaurus/Link';
+import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import Layout from '@theme/Layout';
 import clsx from 'clsx';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -354,8 +355,13 @@ function Mono({ children }: { children: React.ReactNode }) {
   return <span className={styles.inlineMono}>{children}</span>;
 }
 
+// The stage of a pre-release, by the tag in its version (1.0.0-alpha.2).
+const STAGES: Record<string, string> = { alpha: 'Alpha', beta: 'Beta', rc: 'Release candidate' };
+
 export default function Home(): React.JSX.Element {
   const stars = useMemo(makeStars, []);
+  const version = String(useDocusaurusContext().siteConfig.customFields?.version ?? '');
+  const stage = /-(alpha|beta|rc)\b/.exec(version)?.[1];
   return (
     <Layout
       title="Native navigation for React Native"
@@ -401,9 +407,9 @@ export default function Home(): React.JSX.Element {
               </div>
               <div className={styles.pills}>
                 <span className={styles.pill} style={{ background: '#E9B949', color: '#101828' }}>
-                  Early development
+                  {stage ? STAGES[stage] : 'Stable'}
                 </span>
-                <span className={clsx(styles.pill, styles.pillDim)}>Not on npm yet</span>
+                <span className={clsx(styles.pill, styles.pillDim)}>npm · {version}</span>
                 <span className={clsx(styles.pill, styles.pillDim)}>iOS · iPadOS · Android</span>
               </div>
             </div>

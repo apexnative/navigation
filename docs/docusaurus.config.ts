@@ -46,6 +46,8 @@ const config: Config = {
   onBrokenAnchors: 'throw',
   markdown: { hooks: { onBrokenMarkdownLinks: 'throw' } },
   i18n: { defaultLocale: 'en', locales: ['en'] },
+  // The home page shows the version and its stage.
+  customFields: { version: VERSION },
   clientModules: [require.resolve('./src/fonts.ts')],
   presets: [
     [
