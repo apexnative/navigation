@@ -1,0 +1,545 @@
+import { Os } from '@site/src/components/Intro';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+`useNavigation()` gives a screen its navigation: the commands that act **from this screen**. `push` goes into its
+stack, `dismiss` closes its modal, `setOptions` changes its bar, so none of them takes an id. The commands of the whole
+app are on the same object (`switchTo`, `dismissAllModals`, `getState`, the theme, the context), so a screen needs
+nothing else. Call it in any component inside a screen, however deep.
+
+## Usage {#usage}
+
+```tsx title="src/screens/Home.tsx"
+import { Button } from 'react-native';
+import { defineScreen, useNavigation } from '@apexnative/navigation';
+
+function Home() {
+  const navigation = useNavigation();
+  const open = () =>
+    navigation.push('Details', {
+      props: { id: '42' },
+      transition: 'fade',
+    });
+  return <Button title="Details" onPress={open} />;
+}
+
+export const HomeScreen = defineScreen({
+  component: Home,
+  options: (s) => s.title('Home'),
+});
+```
+
+A tap on Details fades Details in over Home; back fades it out. The same `push` from a list row inside Home works too:
+the row is in Home's screen, so its `useNavigation()` is Home's.
+
+The returned object stays the same between renders of the screen, so it can go into the dependencies of
+`useCallback` and `useEffect` without running them again.
+
+:::info[Coming from React Navigation]
+
+It looks like React Navigation's `useNavigation`, with two differences. Screens are named by their name in `screens`,
+and `push` always adds a screen (React Navigation's `navigate` goes back to an existing one; here a `key` in
+`defineScreen` does that). And the commands return promises that resolve when the move has ended. See
+[From React Navigation](/docs/migration/from-react-navigation).
+
+:::
+
+<DeviceVideo name="moves-push" />
+
+## Signature {#signature}
+
+<ApiSignature data={data} name="useNavigation" />
+
+It takes no arguments and returns a `ScreenNavigation`, described below.
+
+Outside a screen it throws: "useNavigation is for the screens of createNavigation, and this component is not in one".
+That happens in a component that `appProvider` renders around the screens, in content a portal host in `appProvider`
+renders, or in a test that renders the component alone. Code outside the screens uses
+[`navigation`](/api/moving-between-screens/navigation).
+
+## This screen {#screen-group}
+
+### `screen` {#screen}
+
+<ApiMember data={data} of="ScreenNavigation" name="screen" />
+
+The screen the commands act from, as `{ id, name }`: the same object [`useScreen()`](/api/screens-and-props/useScreen)
+returns. The id is of this showing: two Profiles pushed one over the other have the same name and different ids.
+
+```ts
+const { id, name } = navigation.screen;
+```
+
+### `setOptions` {#setOptions}
+
+<ApiMember data={data} of="ScreenNavigation" name="setOptions" />
+
+Changes the options of this screen once, from an event: a press, an answer from the server. It takes a chain, as in
+`defineScreen`, or options as an object; they merge over what the screen has.
+
+```ts
+const rename = async (name: string) => {
+  await saveName(name); // your own request
+  navigation.setOptions((s) => s.title(name));
+};
+```
+
+The bar shows the new name once it is saved. When the options follow the state of the component (a title from loaded
+data, a button that turns on with a selection), use [`useScreenOptions`](/api/screen-options/useScreenOptions)
+instead: it keeps them in step on every render. See [Screen options](/docs/fundamentals/screen-options#change).
+
+## The stack {#stack-group}
+
+The stack commands act on the stack this screen is in. Two kinds of screens have no stack of their own and act from
+elsewhere:
+
+- **An overlay** acts from the screen the user sees, as `navigation` does: a banner opens a chat in the stack under it.
+- **A menu of a side menu** acts from its center, and the menu closes once the center has changed. See
+  [A pick in the menu](/docs/containers/side-menu#pick).
+
+Any other screen that isn't in a stack (a screen alone in a tab, a modal with `stack: false`) rejects the stack
+commands: "Home is not in a stack".
+
+### `push` {#push}
+
+<ApiMember data={data} of="ScreenNavigation" name="push" />
+
+Shows a screen over this one in its stack. The second argument takes its `props` and the settings of this push
+([`PushConfig`](/api/stack/types#pushconfig)): `transition`, how it comes and goes, and `options`, its options for this
+showing.
+
+```ts
+const id = await navigation.push('Profile', {
+  props: { userId },
+  options: (s) => s.title(userName),
+});
+```
+
+It resolves, once Profile is in place, with the id of the screen shown. `props` is required when the screen has a
+required prop.
+
+- **The user moved on.** The push goes into this screen's stack even when the user has gone to another tab meanwhile:
+  the screen shows there when the user comes back. That is what you want after a load the screen started.
+- **This screen has closed** before the push, such as after a slow request: it rejects, "the screen 'Component12' is
+  gone".
+- **A double tap** pushes two screens. Give the screen a `key` in `defineScreen`, and a push of it goes back to the one
+  that shows instead: see [One screen per item](/docs/fundamentals/screens-and-props#key).
+- **A screen that isn't on top** pushes into its stack all the same: the new screen goes on top, over the screens
+  already there.
+
+### `pop` {#pop}
+
+<ApiMember data={data} of="ScreenNavigation" name="pop" />
+
+Goes back to the screen before this one in its stack, as the back button does. Resolves with the id of the screen that
+left.
+
+```ts
+const save = async () => {
+  await saveProfile(form); // your own request
+  await navigation.pop();
+};
+```
+
+On the first screen of its stack it rejects: "Home is the first screen of its stack, there is nothing to go back to".
+A screen that is first in a modal closes it with [`dismiss`](#dismiss), and one that can be either uses
+[`goBack`](#goBack).
+
+### `popTo` {#popTo}
+
+<ApiMember data={data} of="ScreenNavigation" name="popTo" />
+
+Goes back to a screen of the stack by its id: the one `push` resolved with, or `screen.id` that a screen passed on.
+
+```tsx
+// Cart pushes Checkout with its own id
+navigation.push('Checkout', {
+  props: { cartId: navigation.screen.id },
+});
+
+// on the last checkout screen
+await navigation.popTo(cartId);
+```
+
+It rejects when that screen has closed.
+
+### `popToRoot` {#popToRoot}
+
+<ApiMember data={data} of="ScreenNavigation" name="popToRoot" />
+
+Goes back to the first screen of this stack, past all the others at once: "Done" at the end of a flow of several
+screens.
+
+### `replace` {#replace}
+
+<ApiMember data={data} of="ScreenNavigation" name="replace" />
+
+Shows a screen in place of the whole history of this stack, this screen included: it comes in as a push does and is
+alone in the stack, so there is no back.
+
+```ts
+// on Payment, once the payment went through
+await navigation.replace('OrderPlaced', { props: { orderId } });
+```
+
+Back can't lead to a second payment. Resolves with the id of the new screen. From a side menu, `replace` is how a pick
+starts the center over with a new section.
+
+### `setStack` {#setStack}
+
+<ApiMember data={data} of="ScreenNavigation" name="setStack" />
+
+Replaces the screens of this stack: the last one shows, back goes down the others. Each entry is a name, or
+`Screen(name, props)`.
+
+```ts
+import { Screen } from '@apexnative/navigation';
+
+await navigation.setStack('Inbox', Screen('Chat', { chatId }));
+```
+
+Every screen of the new stack is new, this one included. In a modal, `setStack` replaces its first screen too, and the
+`onDismiss` of the modal runs. See [A whole stack at once](/docs/containers/stack#deep-link).
+
+### `canPop` {#canPop}
+
+<ApiMember data={data} of="ScreenNavigation" name="canPop" />
+
+Whether there is a screen under this one in its stack. It answers at once, so a screen can choose what to render:
+
+```tsx
+{navigation.canPop() && (
+  <Button title="Back" onPress={() => navigation.pop()} />
+)}
+```
+
+The answer is of the moment of the render; the screen doesn't render again when it changes.
+
+## Going back {#back-group}
+
+### `goBack` {#goBack}
+
+<ApiMember data={data} of="ScreenNavigation" name="goBack" />
+
+What the back button would do here: `pop()` when there is a screen under this one in its stack, `dismiss()` when it is
+the first screen of a modal or in an overlay. For a screen that opens both ways, pushed in one place and in a modal in
+another:
+
+```ts
+const send = async () => {
+  await sendMessage(); // your own request
+  await navigation.goBack();
+};
+```
+
+Pushed, Compose goes back to the screen under it; in a modal, the modal closes. On the first screen of the root it
+rejects: there is nothing to go back to.
+
+### `canGoBack` {#canGoBack}
+
+<ApiMember data={data} of="ScreenNavigation" name="canGoBack" />
+
+Whether `goBack()` has something to do: `canPop()` or `canDismiss()`. Answers at once.
+
+### `dismiss` {#dismiss}
+
+<ApiMember data={data} of="ScreenNavigation" name="dismiss" />
+
+Closes the modal or the overlay this screen is in, with all its screens, from any screen of it. Resolves once it is
+gone.
+
+```tsx
+<Button title="Cancel" onPress={() => navigation.dismiss()} />
+```
+
+On a screen that isn't in a modal or an overlay it rejects: "Home is not in a modal or an overlay". A modal whose
+screen keeps the user with [`usePreventLeave`](/api/back-and-gestures/usePreventLeave) still closes with `dismiss`:
+the hold is on the user's ways out, not on the app's.
+
+### `canDismiss` {#canDismiss}
+
+<ApiMember data={data} of="ScreenNavigation" name="canDismiss" />
+
+Whether this screen is in a modal or an overlay, so `dismiss()` has one to close. Answers at once:
+
+```tsx
+{navigation.canDismiss() && (
+  <Button title="Close" onPress={() => navigation.dismiss()} />
+)}
+```
+
+## Modals {#modals-group}
+
+### `showModal` {#showModal}
+
+<ApiMember data={data} of="ScreenNavigation" name="showModal" />
+
+Shows a screen over everything, in a stack of its own unless `stack: false`. It acts from no screen, so it is the same
+as [`navigation.showModal`](/api/moving-between-screens/navigation#showModal), with its settings
+([`ModalConfig`](/api/modals/types#modalconfig)).
+
+```ts
+navigation.showModal('Compose', { closeButton: true });
+```
+
+Compose slides up with a close button. Inside it, `useNavigation()` is Compose's: its `push` goes into the modal's
+stack, its `dismiss` closes the modal. See [Modals](/docs/containers/modals).
+
+### `dismissModal` {#dismissModal}
+
+<ApiMember data={data} of="ScreenNavigation" name="dismissModal" />
+
+Closes a modal by its id or the id of a screen in it. From a screen of the modal, [`dismiss`](#dismiss) needs no id. As
+[`navigation.dismissModal`](/api/moving-between-screens/navigation#dismissModal).
+
+### `dismissAllModals` {#dismissAllModals}
+
+<ApiMember data={data} of="ScreenNavigation" name="dismissAllModals" />
+
+Closes every modal at once. As [`navigation.dismissAllModals`](/api/moving-between-screens/navigation#dismissAllModals).
+
+## Overlays {#overlays-group}
+
+### `showOverlay` {#showOverlay}
+
+<ApiMember data={data} of="ScreenNavigation" name="showOverlay" />
+
+Shows a screen over everything without taking the place of any. As
+[`navigation.showOverlay`](/api/moving-between-screens/navigation#showOverlay); the overlay closes itself with its own
+`useNavigation().dismiss()`.
+
+```tsx title="src/screens/Toast.tsx"
+import { useEffect } from 'react';
+import { Text } from 'react-native';
+import { useNavigation } from '@apexnative/navigation';
+
+function Toast({ text }: { text: string }) {
+  const navigation = useNavigation();
+  useEffect(() => {
+    const timer = setTimeout(() => navigation.dismiss(), 2000);
+    return () => clearTimeout(timer);
+  }, [navigation]);
+  return <Text>{text}</Text>;
+}
+```
+
+### `dismissOverlay` {#dismissOverlay}
+
+<ApiMember data={data} of="ScreenNavigation" name="dismissOverlay" />
+
+Closes an overlay by its id. As [`navigation.dismissOverlay`](/api/moving-between-screens/navigation#dismissOverlay).
+
+### `dismissAllOverlays` {#dismissAllOverlays}
+
+<ApiMember data={data} of="ScreenNavigation" name="dismissAllOverlays" />
+
+Closes every overlay. As
+[`navigation.dismissAllOverlays`](/api/moving-between-screens/navigation#dismissAllOverlays).
+
+## Roots {#roots-group}
+
+### `switchTo` {#switchTo}
+
+<ApiMember data={data} of="ScreenNavigation" name="switchTo" />
+
+Replaces the whole navigation with another root, this screen included: it unmounts. As
+[`navigation.switchTo`](/api/moving-between-screens/navigation#switchTo).
+
+```ts
+const signOut = async () => {
+  await clearSession(); // your own
+  await navigation.switchTo('signedOut');
+};
+```
+
+Code after the `await` runs in a screen that has gone: set state there only in a component that stays, and don't make
+more commands of this screen.
+
+## Tabs {#tabs-group}
+
+### `selectTab` {#selectTab}
+
+<ApiMember data={data} of="ScreenNavigation" name="selectTab" />
+
+Selects a tab of the tabs this screen is in, by index or by the id of `Tab().id()`. Resolves once the state shows it.
+
+```ts
+await navigation.selectTab('inbox');
+```
+
+The commands after it are still this screen's: a `push` after it goes into this screen's stack, not into Inbox's. To
+act in the new tab, follow with [`navigation`](/api/moving-between-screens/navigation#selectTab), which acts where the
+user is. See [Selecting a tab](/docs/containers/tabs#select).
+
+### `setTabBadge` {#setTabBadge}
+
+<ApiMember data={data} of="ScreenNavigation" name="setTabBadge" />
+
+The badge of this screen's tab, or of the tab with the id; `null` and the number `0` take it away, the text `'0'`
+shows "0".
+
+```ts
+useEffect(() => {
+  navigation.setTabBadge(unread);
+}, [navigation, unread]);
+```
+
+The Inbox tab shows the number of unread messages, and no badge at 0. See
+[Badges and dots](/docs/containers/tabs#badges).
+
+## Split view {#split-group}
+
+### `showInColumn` {#showInColumn}
+
+<ApiMember data={data} of="ScreenNavigation" name="showInColumn" />
+
+Shows a screen in a column of the split view this screen is in, in place of what the column shows: the details beside a
+list. `column` ([`ColumnConfig`](/api/split-view/types#columnconfig)) is `'secondary'`, the default, or
+`'supplementary'`, the middle one of three.
+
+```tsx
+function Settings() {
+  const navigation = useNavigation();
+  const open = (section: string) =>
+    navigation.showInColumn('Details', { props: { section } });
+  return <Button title="Profile" onPress={() => open('profile')} />;
+}
+```
+
+On an iPad, Details shows beside the list, and a sidebar over it goes away. Collapsed into one stack (an iPhone, a
+narrow window) Details is pushed, and back comes to Settings. <Os name="Android" /> The secondary pane comes over the
+primary one, and has no supplementary column. Outside a split view, Details is pushed over this screen. See
+[Split view](/docs/containers/split-view#show).
+
+### `showColumn` {#showColumn}
+
+<ApiMember data={data} of="ScreenNavigation" name="showColumn" />
+
+Shows a column of the split view this screen is in: the sidebar (`'primary'`), the middle column (`'supplementary'`),
+the inspector. Resolves once the columns have moved. <Os name="Android" /> The primary pane only; the other columns
+resolve and change nothing.
+
+### `hideColumn` {#hideColumn}
+
+<ApiMember data={data} of="ScreenNavigation" name="hideColumn" />
+
+Hides a column of the split view this screen is in: `hideColumn('primary')` leaves the item alone on screen, for
+reading. Resolves once the columns have moved.
+
+## Side menu {#menu-group}
+
+### `openMenu` {#openMenu}
+
+<ApiMember data={data} of="ScreenNavigation" name="openMenu" />
+
+Opens the `'left'` or `'right'` menu of the side menu this screen is in. Resolves once the menu is open; at once when it
+is open already. A screen outside a side menu rejects: "Home is not in a side menu".
+
+```ts
+// in defineScreen
+options: (s) =>
+  s.leftButtons({
+    id: 'menu',
+    icon: { ios: 'line.3.horizontal', android: 'ic_menu' },
+    onPress: ({ navigation }) => navigation.openMenu('left'),
+  }),
+```
+
+The `navigation` a button's `onPress` gets is this object for the button's screen. See
+[Side menu](/docs/containers/side-menu#open).
+
+### `closeMenu` {#closeMenu}
+
+<ApiMember data={data} of="ScreenNavigation" name="closeMenu" />
+
+Closes the menu that is open; resolves once it is closed and `getState()` shows the center, at once when none is. A pick
+in the menu that moves the center closes it by itself.
+
+## The rest of the app {#app-group}
+
+These act on the whole app, the same as on [`navigation`](/api/moving-between-screens/navigation).
+
+### `setTheme` {#setTheme}
+
+<ApiMember data={data} of="ScreenNavigation" name="setTheme" />
+
+Changes the theme of the navigation; the new theme replaces the old one. A Settings screen with an accent color picker
+calls it. See [`navigation.setTheme`](/api/moving-between-screens/navigation#setTheme).
+
+### `setDirection` {#setDirection}
+
+<ApiMember data={data} of="ScreenNavigation" name="setDirection" />
+
+Changes the direction of the app. See [`navigation.setDirection`](/api/moving-between-screens/navigation#setDirection).
+
+### `getContext` {#getContext}
+
+<ApiMember data={data} of="ScreenNavigation" name="getContext" />
+
+The app's context now, for a handler. A component that renders from it uses `useAppContext`, which renders again when
+it changes; `getContext()` in a render doesn't.
+
+### `setContext` {#setContext}
+
+<ApiMember data={data} of="ScreenNavigation" name="setContext" />
+
+Changes the app's context: the value replaces it, or a function of the previous one returns the new one.
+
+```ts
+navigation.setContext((context) => ({ ...context, signedIn: true }));
+```
+
+### `getState` {#getState}
+
+<ApiMember data={data} of="ScreenNavigation" name="getState" />
+
+What the user sees now: the screen and the selected tab. It may be another screen than this one: a modal over it,
+another tab. After a command resolves, it shows what the command did: after `await navigation.push('Details')` it
+names Details. To render from it, use `useIsFocused()` (this screen is the one the user sees) or `useNavigationState`.
+
+### `on` {#on}
+
+<ApiMember data={data} of="ScreenNavigation" name="on" />
+
+Listens to an event of the whole navigation; returns the function that stops. In a screen, the hooks are simpler:
+`useScreenEvent` for this screen's events and `useNavigationEvent` for all of them stop by themselves when the screen
+unmounts. See [Where to listen](/docs/fundamentals/lifecycle-and-events#where).
+
+### `getPendingLink` {#getPendingLink}
+
+<ApiMember data={data} of="ScreenNavigation" name="getPendingLink" />
+
+The link that waits, or `null`. A screen that shows it uses `usePendingLink`, which renders again when it changes.
+
+### `openPendingLink` {#openPendingLink}
+
+<ApiMember data={data} of="ScreenNavigation" name="openPendingLink" />
+
+Runs the waiting link now and forgets it; resolves with `false` when none waits. See
+[`navigation.openPendingLink`](/api/moving-between-screens/navigation#openPendingLink).
+
+### `clearPendingLink` {#clearPendingLink}
+
+<ApiMember data={data} of="ScreenNavigation" name="clearPendingLink" />
+
+Forgets the waiting link.
+
+## A screen that isn't on top {#not-on-top}
+
+A screen stays mounted under the screens pushed over it, under a modal, and in a tab the user left. Its commands still
+act from it:
+
+- A timer on Home that pushes Details while the user is on Profile, over Home, pushes Details over Profile, in Home's
+  stack. A push that should only happen while the screen shows checks `useIsFocused()` or waits for
+  `useScreenAppear`.
+- A screen under a modal pushes into its own stack, under the modal: the user sees it after the modal closes.
+- The commands of a screen that has closed reject, "the screen '…' is gone". A request that ends after the user went
+  back should catch it, or check that the screen is still mounted.
+
+## See also {#see-also}
+
+- [`navigation`](/api/moving-between-screens/navigation): the same commands for the screen the user sees, from
+  anywhere.
+- [`screenNavigation`](/api/moving-between-screens/screenNavigation): this object for code outside React that knows the
+  screen.
+- [Moving between screens](/docs/fundamentals/moving-between-screens): the moves, going back, when a move is done, a
+  result back.

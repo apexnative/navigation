@@ -1,0 +1,105 @@
+`useScreenOptions` keeps the options of a screen in step with its state, the way React keeps its views: a title from
+data that has loaded, a Delete button that turns on with a selection, a bar that hides in full screen. Call it in the
+component of a screen, or in any component inside it.
+
+## Usage {#usage}
+
+```tsx title="src/screens/Photos.tsx"
+import { useState } from 'react';
+import { defineScreen, useScreenOptions } from '@apexnative/navigation';
+
+function Photos() {
+  const [selected, setSelected] = useState<string[]>([]);
+
+  useScreenOptions((s) =>
+    s
+      .title(selected.length ? `${selected.length} selected` : 'Photos')
+      .rightButtons({
+        id: 'delete',
+        text: 'Delete',
+        enabled: selected.length > 0,
+        onPress: () => deletePhotos(selected), // your own
+      }),
+  );
+
+  return <PhotoGrid selected={selected} onSelect={setSelected} />;
+}
+
+export const PhotosScreen = defineScreen({
+  component: Photos,
+  options: (s) => s.title('Photos'),
+});
+```
+
+The bar reads Photos with Delete dimmed. The user picks two photos: the title reads "2 selected" and Delete turns on.
+A tap on Delete deletes the two photos picked at that moment, as the handler of the last render has them.
+
+## Signature {#signature}
+
+<ApiSignature data={data} name="useScreenOptions" />
+
+It takes a function that gets an empty [`ScreenOptions`](/api/screen-options/ScreenOptions) chain and returns it with
+its steps, and returns nothing. Unlike `defineScreen`, the function gets no props and no theme: the component has
+them at hand.
+
+## How it works {#how}
+
+- **On every render** the function runs and builds the options.
+- **Only a change goes out.** When they differ from those of the last render, they are merged into the screen's options
+  in a layout effect, so the bar changes before the screen paints the render that changed them. When they are the same,
+  nothing is sent: a render that changes nothing in the bar costs the building of a small object.
+- **Handlers follow the render.** A button's `onPress` is the one of the last render, so it sees the current state, as
+  `deletePhotos(selected)` above. A new handler alone sends nothing to the native side.
+
+## What goes where {#where}
+
+| | `defineScreen({ options })` | `useScreenOptions` | `setOptions` |
+| --- | --- | --- | --- |
+| When | When the screen is shown, with the command. | On each render that changes them. | Once, when you call it. |
+| From | Props, theme, context. | The component's state, hooks, data. | An event: a press, a response. |
+| For | What the screen always has: its title, its buttons. | What follows the state. | A change after an event. |
+
+Put what is known when the screen is shown into `defineScreen`: those options go with the command, so they are there
+in the first frame, while the screen comes in. `useScreenOptions` applies after the component has rendered, so a title
+that only it sets can appear a moment after the screen. In the example, Photos is the title in `defineScreen` too, and
+the hook only changes it.
+
+## Leaving an option out doesn't remove it {#remove}
+
+The options merge into the screen's options. A render that stops setting something leaves the last value in place:
+
+```ts
+// Don't: once editing ends, the Done button stays
+useScreenOptions((s) =>
+  editing ? s.rightButtons({ id: 'done', text: 'Done' }) : s,
+);
+```
+
+Set the value for every state instead: `rightButtons()` with no argument takes the buttons away, `hideTopBar(false)`
+shows the bar again.
+
+```ts
+useScreenOptions((s) =>
+  editing
+    ? s.rightButtons({ id: 'done', text: 'Done', onPress: save })
+    : s.rightButtons(),
+);
+```
+
+## Caveats {#caveats}
+
+- **Only inside a screen.** Outside one it throws: "This hook is for the screens of createNavigation, and the component
+  is not in one".
+- **One per screen.** Two components that each call it for the same option overwrite each other at every change of
+  either. Keep the options of a screen in one call, in the screen's component, and pass the state up.
+- **Return the chain.** Each step returns a new chain; a step whose result isn't returned is lost. See
+  [The chain returns a new value](/api/screen-options/ScreenOptions#immutable).
+- **The theme.** For colors of the theme, read them with `useNavigationTheme()` in the component: the component
+  renders again when the theme changes, and the hook sends the new colors.
+
+## See also {#see-also}
+
+- [Changing the options of a shown screen](/docs/fundamentals/screen-options#change).
+- [`ScreenOptions`](/api/screen-options/ScreenOptions): every step of the chain.
+- [`setOptions`](/api/moving-between-screens/useNavigation#setOptions): a change from an event.
+- [Buttons that change](/docs/screen-ui/bar-buttons#change).

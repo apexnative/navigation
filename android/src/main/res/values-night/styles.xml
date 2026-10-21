@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The popup themes of the bar's toolbars in dark mode: see values/styles.xml. -->
+    <style name="ThemeOverlay.ApexNavigation.TopBar.PopupOverLight" parent="ThemeOverlay.Material3.Dark" />
+    <style name="ThemeOverlay.ApexNavigation.TopBar.PopupOverDark" parent="" />
+</resources>

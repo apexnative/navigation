@@ -1,0 +1,146 @@
+import { Os } from '@site/src/components/Intro';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+`Root` wraps the layout of a root to add what only a root has: modals shown over it once it is in place, and the
+transition it comes in with. Where a root is given, `Root(…)` goes in place of the layout: `root` and `roots` of
+`createNavigation`, `navigation.switchTo`, and `start` of a link. A root that needs neither stays a plain layout.
+
+## Usage {#usage}
+
+A notification about an order opens the order in a modal. When it launches the app, the user should land in the app
+with the order over it, as if they had opened it themselves, so that closing it leaves them in the app:
+
+```ts title="src/notifications.ts"
+import {
+  navigation,
+  Root,
+  Screen,
+  Stack,
+  Tab,
+  Tabs,
+} from '@apexnative/navigation';
+
+export function openOrder(orderId: string) {
+  return navigation.switchTo(
+    Root(Tabs(Tab('Home'), Tab('Inbox'))).modal(
+      Stack(Screen('Details', { orderId })),
+    ),
+  );
+}
+```
+
+The tabs take the window, then Details slides up over them. When the user closes it, Home is under it.
+
+A root of `roots` with a transition of its own:
+
+```ts title="src/Navigation.ts"
+roots: {
+  login: 'Login',
+  main: Root(Tabs(Tab('Home'), Tab('Inbox'))).transition('fade'),
+},
+```
+
+Every `navigation.switchTo('main')` fades the tabs in over Login.
+
+<DeviceVideo name="moves-root" />
+
+## Signature {#signature}
+
+<ApiSignature data={data} name="Root" />
+
+It takes what a root takes, and returns a `RootElement`:
+
+- **A screen name**, `Root('Home')`: the screen in a stack. Inside `Root` a string is always a screen name, also in
+  `switchTo`, where a string alone is the name of a root of `roots`.
+- **A layout**: `Stack(…)`, `Tabs(…)`, `SideMenu(…)`, `SplitView(…)`, or `Screen(…)` for a screen without a stack.
+
+The screens it shows, those of its modals too, are checked against `screens` by the types.
+
+## Over the root {#over-group}
+
+### `modal()` {#modal}
+
+<ApiMember data={data} of="RootElement" name="modal" />
+
+A modal shown over the root once the root is in place: the screen a notification or a link opens at a cold start, a
+prompt that must come first. The modal takes what a place of a layout takes; a screen name alone becomes a stack with
+the screen, so it can push.
+
+```ts
+Root('Home')
+  .modal('Onboarding')
+  .modal(Stack(Screen('Details', { orderId })));
+```
+
+- **Several modals** go one over the other, in order. The last comes with its animation, as a modal the user opens;
+  those under it come at once, so the user sees one modal come up, not a series.
+- **`switchTo` resolves once the root and all its modals are shown.**
+- **The options of `presentation.modal` don't apply here:** these modals are part of the layout, not `showModal`
+  commands. A modal gets its screens' own options; give it other ones on its layout, such as
+  `Stack(…).options({ … })`.
+- <Os name="iOS" /> When the new root dissolves in over the old one, the modals come once it is in, not over the
+  picture of the old root.
+
+## How it comes in {#transition-group}
+
+### `transition()` {#transition}
+
+<ApiMember data={data} of="RootElement" name="transition" />
+
+How this root replaces the one before. The transition belongs to the root, so with a root of `roots` it plays at every
+switch to it.
+
+- **`'platform'`**: the platform's own transition, as without `transition()`.
+- **`'none'`**: no animation. The new root shows at once, as soon as its content is drawn, so it never comes in
+  empty. It turns off both sides, the new root's and the old one's, so a setRoot animation in the app's `options`
+  (`animations.setRoot`) doesn't play either.
+- **A preset**, 250 ms: `'fade'`, `'slideUp'` (up from the bottom edge), `'slideFromEnd'` (from the trailing edge,
+  the left one right to left), `'scale'` (grows from 85% as it fades in).
+- **`{ enter, exit }`**, animations of their own: `enter` for the new root, `exit` for the old one, with the
+  properties of the screen animations (`alpha`, `translationX`, `scaleX` and the others), `waitForRender` and
+  `enabled`.
+
+```ts
+Root('Home').transition({
+  enter: {
+    alpha: { from: 0, to: 1, duration: 400 },
+    waitForRender: true,
+  },
+});
+```
+
+With `waitForRender: true` the new root waits for its content as long as it takes, so it never comes in empty.
+
+`enabled: false` turns a side off on both platforms, even when it has an animation: one of its own, or one that comes
+from `animations.setRoot` in the app's `options`. When neither side plays, the platform's transition plays, unless
+`enter` has `enabled: false`: then the new root shows at once, as with `'none'`.
+
+**Without a transition**, or with `'platform'`, the platform's own plays when a root replaces another:
+<Os name="iOS" /> a cross dissolve of 0.3 s, <Os name="Android" /> Material's fade through. For a root that takes the
+window at once, `'none'`:
+
+```ts
+navigation.switchTo(
+  Root(Tabs(Tab('Home'), Tab('Inbox'))).transition('none'),
+);
+```
+
+The first root at launch comes in place of the splash screen: at once with `'platform'` and `'none'` (on <Os name="Android" /> `'none'` keeps the splash until the root is drawn, however long it takes), over the splash with a preset or `{ enter, exit }`. After a splash of your own, a first root without a transition of its own comes in with `transition` of [`splash`](/api/starting-the-app/createNavigation#splash), `'fade'` by default.
+
+All the animations: [Transitions](/docs/architecture/transitions).
+
+## Over time {#time}
+
+- **The root is built at each switch.** A `Root(…)` in `roots` is a description: each `switchTo` makes new screens
+  from it, with new ids and fresh state.
+- **A switch replaces everything under the overlays:** the old root's screens unmount, its modals close, the overlays
+  stay. See [What a switch does](/docs/fundamentals/switching-roots#switch).
+- <Os name="Android" /> **A new activity** brings back the last root, without the screens pushed or presented over
+  it: see [When Android brings the app back](/docs/fundamentals/switching-roots#android).
+
+## See also {#see-also}
+
+- [Switching roots](/docs/fundamentals/switching-roots): roots, `switchTo`, [a root with a
+  modal](/docs/fundamentals/switching-roots#with-modal), [transitions](/docs/fundamentals/switching-roots#transitions).
+- [`createNavigation`](/api/starting-the-app/createNavigation#roots): `root`, `roots` and `initialRoot`.
+- [Notifications](/docs/guides/notifications#launch): a screen opened by a notification at a cold start.

@@ -1,0 +1,328 @@
+---
+title: Bar buttons
+description: 'The buttons of the top bar: adding one, what a button can be, where the press is handled, menus and the overflow menu, which buttons stay when the bar is short of room, a component as a button, buttons that change with the state, and the vertical bar of iPhone Duo.'
+---
+
+import { SectionStatus, SectionApi } from '@site/src/components/Api';
+import { Mark, Os } from '@site/src/components/Intro';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+<SectionStatus id="bar-buttons" />
+
+The buttons of the top bar are the actions of a screen: edit, share, add, a menu. They are the platform's own buttons, with its look, its press feedback and its accessibility. A screen lists them in its options, each with what its press does:
+
+```tsx title="src/screens/Home.tsx"
+import { defineScreen } from '@apexnative/navigation';
+
+export const HomeScreen = defineScreen({
+  component: Home,
+  options: (s) =>
+    s.title('Home').rightButtons({
+      id: 'settings',
+      icon: { ios: 'gearshape', android: 'ic_settings' },
+      onPress: ({ navigation }) => navigation.push('Settings'),
+    }),
+});
+```
+
+A gear shows at the trailing edge of the bar; a tap on it opens Settings. This page answers:
+
+1. [Where buttons go](#where) in the bar.
+2. [What a button can be](#kinds).
+3. [Where the press is handled](#press).
+4. [Menus](#menus), [the overflow menu](#overflow), and [which buttons stay](#priority) when the bar is short of room.
+5. [A component as a button](#component).
+6. [Buttons that change](#change) with the state of the screen.
+7. [Buttons on iPhone Duo](#iphone-duo), in the vertical bar at the side.
+
+## Where buttons go {#where}
+
+| Option | Place |
+| --- | --- |
+| `rightButtons` | The trailing edge: the actions of the screen. |
+| `leftButtons` | The leading edge. On a pushed screen they take the place of the back button. |
+| `centerButtons` | <Os name="iPadOS" /> 16+ The middle of the bar. See [Center buttons](#center). |
+
+Several buttons go in one call, from the edge inward:
+
+```ts
+s.rightButtons(
+  { id: 'share', icon: { ios: 'square.and.arrow.up' } },
+  { id: 'done', text: 'Done', style: 'prominent' },
+);
+```
+
+Every button has an `id`, and its press is told by it. <Mark>A list of buttons is replaced whole</Mark>: a later layer of options with `rightButtons` replaces all the right buttons before it, so a screen never shows a mix of its own buttons and the app's.
+
+## What a button can be {#kinds}
+
+A button is a text, an icon or a system item, and the platform draws it:
+
+<DeviceVideo name="bar-buttons" />
+
+| Option | The button |
+| --- | --- |
+| `text` | A text button. On iOS an icon button shows only its icon; the text names it in the overflow menu and for VoiceOver. |
+| `icon` | An image (`require('./star.png')`), or an icon for each platform: an SF Symbol and a drawable of the app, `{ ios: 'square.and.arrow.up', android: 'ic_share' }`. A platform left out shows no icon. |
+| `systemItem` | <Os name="iOS" /> A button of the system: `'done'`, `'cancel'`, `'edit'`, `'close'`…, in the user's language. On Android only `'close'` applies: a close icon. |
+| `component` | A React component, for what the others can't draw: see [A component as a button](#component). |
+
+The look and the state of a button:
+
+| Option | What it does |
+| --- | --- |
+| `color` | The color of this button. |
+| `enabled: false` | Dimmed; a press does nothing. |
+| `style: 'prominent'` | <Os name="iOS" /> The main action, such as Done or Send. On iOS 26 a filled capsule in the button's `color`; before, a bold title. |
+| `group` | <Os name="iOS" /> 26: buttons with the same group share one glass capsule; each other button has a capsule of its own. |
+| `badge` | <Os name="iOS" /> 26: a number, a short text, or `true` for a dot. |
+| `toggle`, `selected` | <Os name="iOS" /> A button that switches on and off at each tap; the press carries the new state as `selected`. |
+
+`topBar.rightButtonColor` and `leftButtonColor` color all the buttons of a side, and `*DisabledColor` the disabled ones. A `color` of one button wins over them. Without any of them the buttons take the `primary` color of the [theme](../architecture/theme-and-context), then the platform's.
+
+## Where the press is handled {#press}
+
+A button gets its press <Mark>where it is defined</Mark>. A button that is always on the screen is defined with the screen, with `onPress`, as in the first example. It is in the bar from the first frame, and `onPress` gets the navigation of the screen, so the options need no import.
+
+When the press needs the state of the component, the component handles it with `useNavigationButton`, by the button's id. Here Share sends the text of the note, which only the component knows:
+
+```tsx title="src/screens/Note.tsx"
+import { useState } from 'react';
+import { Share, TextInput } from 'react-native';
+import {
+  defineScreen,
+  useNavigationButton,
+} from '@apexnative/navigation';
+
+export const NoteScreen = defineScreen({
+  component: Note,
+  options: (s) =>
+    s.rightButtons({
+      id: 'share',
+      icon: { ios: 'square.and.arrow.up', android: 'ic_share' },
+    }),
+});
+
+function Note() {
+  const [text, setText] = useState('');
+  useNavigationButton('share', () => Share.share({ message: text }));
+  return <TextInput value={text} onChangeText={setText} multiline />;
+}
+```
+
+| The press needs | Handle it with |
+| --- | --- |
+| Nothing of the component: open a screen, a menu | `onPress` in the options of `defineScreen`. |
+| The state of the component | `useNavigationButton(id, handler)` in the component. |
+| To be heard by the whole app, such as for analytics | The event `buttonPressed`, with the screen and the id: see [Where to listen](../fundamentals/lifecycle-and-events#where). |
+
+## Menus {#menus}
+
+A button with a `menu` opens it on a tap. Each item has an `id`, and its own `onPress`:
+
+```ts
+s.rightButtons({
+  id: 'new',
+  icon: { ios: 'plus', android: 'ic_add' },
+  menu: {
+    items: [
+      {
+        id: 'new-note',
+        title: 'Note',
+        onPress: ({ navigation }) => navigation.showModal('NewNote'),
+      },
+      {
+        id: 'new-folder',
+        title: 'Folder',
+        onPress: ({ navigation }) => navigation.showModal('NewFolder'),
+      },
+    ],
+  },
+});
+```
+
+A tap on + opens a menu of Note and Folder; a pick opens its screen in a modal. A pick also sends the press with the id of the item, so a component handles it with `useNavigationButton` when it needs its state. Item ids and button ids share one space: keep them different.
+
+A menu that picks one of several, such as a sort order, has `singleSelection: true`: the check moves to the picked item, and the screen keeps it when it shows again.
+
+```tsx
+// in the options: a Sort button whose menu has singleSelection,
+// with the items 'sort-date' and 'sort-name'
+useNavigationButton('sort-date', () => setSort('date'));
+useNavigationButton('sort-name', () => setSort('name'));
+```
+
+`menuOnLongPress: true` opens the menu on a long press instead, so a tap stays the button's own press. An item can have an `icon`, `destructive: true` for red, `disabled: true`, and a submenu is an item with `items` of its own.
+
+| Platform | The menu |
+| --- | --- |
+| <Os name="iOS" /> | The system menu, with SF Symbols, submenus and a check on the picked item. |
+| <Os name="Android" /> | The Material popup menu under the button, with the same items, without the `title` of the menu. |
+
+<DeviceVideo name="bar-menus" />
+
+## The overflow menu {#overflow}
+
+Actions that are used less go into the overflow menu at the end of the bar: "•••" on iOS 16+, "⋮" on Android. `overflowMenu` gives it its items. They are plain options, without `onPress`, so the component handles each pick by the item's id:
+
+```tsx
+export const NoteScreen = defineScreen({
+  component: Note,
+  options: {
+    topBar: {
+      overflowMenu: {
+        items: [
+          { id: 'export', title: 'Export' },
+          { id: 'delete', title: 'Delete', destructive: true },
+        ],
+      },
+    },
+  },
+});
+
+function Note() {
+  useNavigationButton('export', () => exportNote()); // your own
+  useNavigationButton('delete', () => deleteNote()); // your own
+  // …
+}
+```
+
+When the bar has no room, the platform moves right buttons into the menu too. `pinned: true` keeps a button out of it, at the trailing edge.
+
+### Which buttons stay {#priority}
+
+A bar has room for few buttons: a phone in portrait, a long title, the vertical bar of [iPhone Duo](#iphone-duo). `priority` says which leave for the overflow menu last: `'high'` stays the longest, `'low'` goes first, `'standard'` by default.
+
+```ts
+s.rightButtons(
+  {
+    id: 'share',
+    icon: { ios: 'square.and.arrow.up', android: 'ic_share' },
+    priority: 'low',
+  },
+  { id: 'copy', icon: { ios: 'doc.on.doc', android: 'ic_copy' } },
+  {
+    id: 'bookmark',
+    icon: { ios: 'bookmark', android: 'ic_bookmark' },
+    priority: 'high',
+  },
+);
+```
+
+With room for two, Bookmark and Copy stay and Share goes into the menu.
+
+| Platform | `priority` |
+| --- | --- |
+| <Os name="iOS" /> 27+ | UIKit's `visibilityPriority`, in every bar. Before iOS 27 it has no effect, and UIKit decides by itself. |
+| <Os name="Android" /> | The right buttons that stay in the bar are taken by priority, then in their order; the bar keeps their order, and the others go into "⋮". |
+
+`pinned` is a promise and `priority` a preference: a pinned button never goes into the menu, a high one goes last.
+
+## A component as a button {#component}
+
+Some buttons are more than a text or an icon, such as the avatar of the user that opens the profile. A React component draws them, in the same three steps as [a component in place of the title](./top-bar#title-component).
+
+**1. The component.** It handles its own touches, so it is a `Pressable`:
+
+```tsx title="src/bar/AvatarButton.tsx"
+import { Image, Pressable } from 'react-native';
+import { navigation } from '@apexnative/navigation';
+
+export function AvatarButton(props: { avatar: string }) {
+  // push shows Profile in the stack the user sees: this bar's
+  return (
+    <Pressable onPress={() => navigation.push('Profile')}>
+      <Image
+        source={{ uri: props.avatar }}
+        style={{ width: 32, height: 32, borderRadius: 16 }}
+      />
+    </Pressable>
+  );
+}
+```
+
+**2. Its registration** in `screens`:
+
+```ts title="Navigation.ts"
+export const Navigation = createNavigation({
+  screens: { Home: HomeScreen, Profile: ProfileScreen, AvatarButton },
+  root: 'Home',
+});
+```
+
+**3. The button** names it in `component`:
+
+```ts title="src/screens/Home.tsx"
+s.rightButtons({
+  id: 'avatar',
+  component: { name: 'AvatarButton', passProps: { avatar } },
+});
+```
+
+The bar sends no press for it: the component's own `onPress` is the press. On <Os name="iOS" /> 26 it has no glass capsule; `hideSharedBackground: false` puts it on one. On <Os name="Android" /> `component.width` and `height` size it.
+
+## Buttons that change {#change}
+
+A button that depends on the state is built from the state with `useScreenOptions`. Here Save stays off while the note is empty, and turns on with the first letter:
+
+```tsx title="src/screens/NewNote.tsx"
+function NewNote() {
+  const [text, setText] = useState('');
+
+  useScreenOptions((s) =>
+    s.rightButtons({
+      id: 'save',
+      text: 'Save',
+      enabled: text.length > 0,
+      onPress: () => saveNote(text), // your own save
+    }),
+  );
+
+  return <TextInput value={text} onChangeText={setText} multiline />;
+}
+```
+
+The options are built on each render and applied before the screen paints when they changed, so the bar never lags behind the state. `onPress` sees the state of the same render. A full form in a modal, with Cancel and Save, is walked through in [Forms in a modal](../flows/forms-in-a-modal).
+
+On <Os name="iOS" /> `animateRightButtons` and `animateLeftButtons` fade the new buttons in. On iOS 26 buttons that share a capsule (several with one `group`) change at once: UIKit has no animation for groups of buttons.
+
+## Buttons on iPhone Duo {#iphone-duo}
+
+<Os name="iOS" /> 27.1 iPhone Duo, folded and open, has a vertical bar at the trailing edge of the window: a strip that holds the status bar, the tab bar and the buttons of the bars. The title stays in the row at the top, and the screen goes under the strip ([The vertical bar of iPhone Duo](./system-ui#vertical-bar)). UIKit decides what goes where, and the app doesn't need to:
+
+
+- **The left and right buttons and the toolbar's items** go into the vertical bar. With few buttons UIKit may keep them in the row.
+- **`component` buttons and `pinned` buttons** stay in the row of the title.
+- **Center buttons** go into the overflow menu "•••".
+- **The large title** stays in the row.
+- **The vertical bar holds few buttons**: of ten right buttons about four stay, the rest go into "•••", the toolbar's items first. [`priority`](#priority) decides which stay.
+
+<DeviceVideo name="duo-vertical-bar" devices={['duo']} />
+
+Three options change it:
+
+| Option | What it does |
+| --- | --- |
+| `vertical` of a button | `true`: the button may go into the vertical bar, a `component` button too, squeezed to the bar's width. `false`: only the row of the title. Unset: UIKit decides. |
+| `topBar.verticalBarKeeps` | When the tabs and the buttons share the vertical bar and it has no room for all: `'tabs'`, the default, keep their place and buttons go into "•••"; `'buttons'` keep theirs and the tabs shrink. |
+| `layout.verticalBars: false` | The screen's bars and the status bar stay horizontal, as on any iPhone. Set it once for a screen: Apple asks apps not to switch it with the state of the screen. |
+
+```ts
+s.rightButtons({
+  id: 'avatar',
+  component: { name: 'AvatarButton', passProps: { avatar } },
+  vertical: true, // into the vertical bar with the others
+}).options({ topBar: { verticalBarKeeps: 'buttons' } });
+```
+
+<Os name="Android" /> Android has no vertical bars: `vertical`, `verticalBarKeeps` and `verticalBars` do nothing there.
+
+## Center buttons {#center}
+
+<Os name="iPadOS" /> 16+ This section is rarely needed: it is for document apps on iPad. `centerButtons` sit in the middle of the bar with the `'browser'` or `'editor'` [layout](./top-bar#layout). On iPhone, and with the `'navigator'` layout, UIKit puts them in the overflow menu, so an icon button there needs a `text`.
+
+`topBar.customizationId` lets the user arrange them, from Customize Toolbar of the system menu. Each button's `customization` (`'fixed'`, `'movable'`, `'optional'`) says what the user can do with it, and UIKit keeps the arrangement under the id.
+
+## API {#api}
+
+<SectionApi id="bar-buttons" />

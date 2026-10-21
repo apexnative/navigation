@@ -1,0 +1,192 @@
+---
+title: Back and gestures
+description: 'Every way the user goes back on each platform, the back button and its look, the swipe back, the system back of Android, and how to keep the user on a screen with unsaved changes.'
+---
+
+import { SectionStatus, SectionApi } from '@site/src/components/Api';
+import { Mark, Os } from '@site/src/components/Intro';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+<SectionStatus id="back-and-gestures" />
+
+Going back is the move users make most, and each platform has its own ways for it. Every screen pushed on a stack gets them all without code. What an app changes is the look of the back button, and whether the user may leave a screen, such as one with an unsaved draft:
+
+```tsx title="src/screens/Details.tsx"
+import { defineScreen } from '@apexnative/navigation';
+
+export const DetailsScreen = defineScreen({
+  component: Details,
+  options: (s) => s.backButton({ title: 'Inbox' }),
+});
+```
+
+On iOS the back button of Details reads "Inbox". This page answers:
+
+1. [The ways back](#ways) on each platform.
+2. [The back button](#back-button): [its title](#title) and [its look](#look).
+3. [The swipe back](#swipe) of iOS, and [the system back](#system-back) of Android.
+4. [How to keep the user on a screen](#prevent) with unsaved changes.
+
+## The ways back {#ways}
+
+| Platform | The user goes back with |
+| --- | --- |
+| <Os name="iOS" /> | The back button of the bar. A swipe from the left edge, and on iOS 26 from anywhere on the content. A long press on the back button opens the history, to jump back several screens. A swipe down closes a sheet. |
+| <Os name="Android" /> | The back arrow of the bar. The system back: a button, or a swipe from either edge. |
+
+Each of them goes back one step <Mark>where the user is</Mark>: a pushed screen pops, a modal closes. The app itself goes back with commands: see [Going back](../fundamentals/moving-between-screens#back).
+
+## The back button {#back-button}
+
+The back button shows by itself on every screen but the first of a stack. <Mark>A screen sets its own back button</Mark>, in its own options, as in the example above. In UIKit the screen underneath sets it; here the screen that has the button does, so its options say everything about it.
+
+### Its title {#title}
+
+<Os name="iOS" /> The back button can show the title of the screen it goes back to, "Back", or the arrow alone. When the bar is full, it gets shorter by itself:
+
+<DeviceVideo name="back-modes" devices={['ios']} />
+
+| Option | What it does |
+| --- | --- |
+| `title` | A title of its own instead of the one of the screen under it. |
+| `showTitle` | `true` shows the title of the screen under it, `false` the arrow alone. Without it the system decides: on iOS 26 the arrow alone. |
+| `displayMode` | How it gets shorter: `'default'` the title, then "Back", then the arrow; `'generic'` "Back", then the arrow; `'minimal'` the arrow alone. |
+
+An app that wants the arrow alone everywhere sets it once, in the app defaults:
+
+```ts title="Navigation.ts"
+export const Navigation = createNavigation({
+  // …
+  options: (s) => s.backButton({ showTitle: false }),
+});
+```
+
+<Os name="Android" /> The back arrow has no title: the bar shows the title of the screen itself next to it.
+
+### Its look {#look}
+
+| Option | What it does |
+| --- | --- |
+| `color` | The color of the arrow and the title. Without it, the `primary` color of the theme. |
+| `icon` | Another arrow: an image, or an icon for each platform, `{ ios: 'xmark', android: 'ic_close' }`. |
+| `visible: false` | No back button. |
+| `enableMenu: false` | <Os name="iOS" /> No history on a long press: the screen gets a back button of its own instead of the system one. |
+| `hideSharedBackground` | <Os name="iOS" /> 26: `false` puts the button on a glass capsule. |
+
+`fontSize`, `fontWeight` and `fontStyle` style the title, and `fontFamily` too on iOS.
+
+`visible: false` only hides the button. To keep the user on a screen, hide nothing: [hold the leave](#prevent) instead, which holds the swipe and the system back too.
+
+## The swipe back {#swipe}
+
+<Os name="iOS" /> A swipe from the left edge goes back, following the finger: the user can stop halfway and stay. On iOS 26 a swipe from anywhere on the content does the same. Content that swipes sideways itself, such as a carousel or a map, can clash with it, so a screen can narrow the swipe:
+
+<DeviceVideo name="swipe-back" devices={['ios']} />
+
+```ts
+export const MapScreen = defineScreen({
+  component: Map,
+  options: (s) => s.popGesture('edge'),
+});
+```
+
+| `popGesture` | The swipe back |
+| --- | --- |
+| `true` | From the edge and from the content: the default. |
+| `'edge'` | From the edge only: a swipe on the content stays with the content. |
+| `false` | Off. The back button still works. |
+
+<Os name="Android" /> The system back swipes from either edge; the app doesn't change it.
+
+## The system back of Android {#system-back}
+
+<Os name="Android" /> The system back goes one step back where the user is, in this order:
+
+| Where | The system back |
+| --- | --- |
+| An open side menu | Closes it. |
+| A search field with focus | Closes the search. |
+| A pushed screen | Pops it. |
+| The first screen of a modal | Closes the modal. |
+| The first screen of a tab | What `Tabs().backBehavior(…)` says: leave the app, go to the first tab, or to the tab before. See [Back on Android](../containers/tabs#back). |
+| The first screen of the app | Leaves the app, as every Android app does, with the system's own animation ([below](#system-animation)). `usePreventLeave` doesn't hold it; to ask first, see [Asking before the user leaves the app](/api/back-and-gestures/usePreventLeave#leaving-the-app). |
+
+### Back to the home screen {#system-animation}
+
+<Os name="Android" /> On the first screen of the app, with nothing left to go back to, the navigation leaves the back to the system. The system then plays its predictive back animation: as the user swipes, the app shrinks and the home screen shows behind it, and the user can still change their mind halfway. The system decides this as the swipe starts, so the navigation takes the back only while it has something to do with it: a screen to pop, a modal, a menu or a search to close, a tab to go to (`backBehavior`), or a [`BackHandler` listener](#back-handler) of the app.
+
+An app that targets Android 16 (API 36) gets the animation without a change. An app that targets an older API turns it on in `AndroidManifest.xml`; `npx apex-navigation setup` adds it:
+
+```xml title="android/app/src/main/AndroidManifest.xml"
+<application
+  android:enableOnBackInvokedCallback="true"
+  …>
+```
+
+Without it, back on the first screen still leaves the app, at once. See [What setup changes](../start/installation#android-files).
+
+With the animation on, the system leaves the app itself: an `invokeDefaultOnBackPressed` of the app's `MainActivity` (such as `moveTaskToBack(true)`) isn't called on the first screen. Without it, and before Android 13, the back goes through the activity as before.
+
+### Handling back yourself: BackHandler {#back-handler}
+
+<Os name="Android" /> React Native's `BackHandler` works on every screen, as in any React Native app. A listener runs before the navigation's own back: returning `true` takes the press, `false` passes it on to the next listener, then to the navigation.
+
+- **While a listener is registered, the navigation keeps the back,** on the first screen too, so the listener is called there. The system's animation back to the home screen doesn't play meanwhile. Listen only while the screen needs it, in [`useFocusEffect`](/api/lifecycle-and-events/useFocusEffect), as in [Asking before the user leaves the app](/api/back-and-gestures/usePreventLeave#leaving-the-app).
+- **`BackHandler.exitApp()` is the default back,** not a way to close the app from anywhere: the navigation goes back where it can (pops a screen, closes a modal), and on the first screen the app leaves. React Native calls it itself when no listener takes the press.
+- **A listener added before `createNavigation` runs isn't counted.** The navigation counts the listeners from that call on, so one added by a module that loads ahead of your navigation file runs only while the navigation keeps the back for another reason. On the first screen, back leaves the app without calling it. Import such a module after the navigation file, or add the listener in a component.
+
+iOS has no system back: `BackHandler` does nothing there.
+
+## Keeping the user on a screen {#prevent}
+
+A screen with unsaved changes, such as a draft or a form, shouldn't lose them on a careless swipe. `usePreventLeave` holds <Mark>every way back from this screen to another screen of the app</Mark> while its condition is true, and calls its handler instead, so the screen can ask:
+
+```tsx title="src/screens/Compose.tsx"
+import { useState } from 'react';
+import { Alert, TextInput } from 'react-native';
+import {
+  useNavigation,
+  usePreventLeave,
+} from '@apexnative/navigation';
+
+function Compose() {
+  const navigation = useNavigation();
+  const [text, setText] = useState('');
+
+  usePreventLeave(text.length > 0, () => {
+    Alert.alert('Discard the draft?', undefined, [
+      { text: 'Keep editing' },
+      { text: 'Discard', onPress: () => navigation.goBack() },
+    ]);
+  });
+
+  return <TextInput value={text} onChangeText={setText} multiline />;
+}
+```
+
+While the draft has text, back asks "Discard the draft?". Keep editing stays; Discard leaves. With an empty draft back leaves at once.
+
+| It holds | On |
+| --- | --- |
+| The back button, the swipe back, the history menu | <Os name="iOS" /> |
+| The back arrow, the system back | <Os name="Android" /> |
+| The swipe down of the modal the screen is in, and its close button | Both |
+
+The commands of the app aren't held: the app has decided. So `goBack()` in Discard leaves, and so does a `switchTo` after a sign-out. Leaving the app isn't held either, as in React Navigation: on the first screen of the app the system back of <Os name="Android" /> leaves it, and the home gesture of <Os name="iOS" /> leaves it from any screen. To ask before the system back leaves the app, see [Asking before the user leaves the app](/api/back-and-gestures/usePreventLeave#leaving-the-app). A form in a modal, with Cancel, Save and this question, is walked through in [Forms in a modal](../flows/forms-in-a-modal).
+
+<DeviceVideo name="prevent-leave" />
+## Knowing the user went back {#popped}
+
+A screen that leaves its stack, by the back button, a swipe or `pop`, sends `screenPopped`. It is the place for what should happen once the user went back, such as keeping a draft for later instead of asking:
+
+```tsx
+useScreenEvent('screenPopped', () => {
+  saveDraft(text); // your own step
+});
+```
+
+More: [The way back](../containers/stack#back) of a stack, and [Every event](../fundamentals/lifecycle-and-events#events).
+
+## API {#api}
+
+<SectionApi id="back-and-gestures" />

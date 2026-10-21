@@ -1,0 +1,111 @@
+import { Os } from '@site/src/components/Intro';
+
+`AppRegistry` is React Native's `AppRegistry` with one change: `registerComponent` takes the navigation that
+[`createNavigation`](/api/starting-the-app/createNavigation) made, not a root component. You call it once, in
+`index.js`. Everything else on it, such as `registerHeadlessTask`, is React Native's own and works as React Native
+documents it.
+
+## Usage {#usage}
+
+```js title="index.js"
+import { AppRegistry } from '@apexnative/navigation';
+import { name } from './app.json';
+import { Navigation } from './src/Navigation';
+
+AppRegistry.registerComponent(name, Navigation);
+```
+
+When the native side launches the app, the navigation starts from `Navigation`: `willMount` runs under the splash
+screen, then the first root takes the window. There is no root component: each screen renders on its own.
+
+The second form passes a function that returns the navigation. Its module then loads at launch, not when `index.js`
+runs:
+
+```js title="index.js"
+import { AppRegistry } from '@apexnative/navigation';
+import { name } from './app.json';
+
+AppRegistry.registerComponent(
+  name,
+  () => require('./src/Navigation').Navigation,
+);
+```
+
+Use it when the same bundle also runs without the UI, such as a headless task on Android: the task then never loads
+the screens and what they import.
+
+## Signature {#signature}
+
+<ApiSignature data={data} name="AppRegistry" />
+
+It is an object: React Native's `AppRegistry`, spread, with `registerComponent` in place of React Native's.
+
+## Registering the app {#registering}
+
+### `registerComponent` {#registerComponent}
+
+<ApiMember data={data} of="AppRegistry" name="registerComponent" />
+
+Registers the app's navigation under the app's name. It takes:
+
+- **`key`**, the app's name, as in React Native, usually `name` of `app.json`. The navigation uses it in its
+  messages; React Native gets no component under it, since each screen is registered under its own name.
+- **`navigation`**, the value of `createNavigation`, or a function that returns it. The function is called once per
+  JavaScript runtime, at the first launch of that runtime.
+
+It returns `key`, as React Native's does.
+
+The app starts once the native side says it launched, which comes after the bundle ran. So the order of the lines in
+`index.js` doesn't matter: the navigation is registered by the time it is needed.
+
+- **A value that isn't from `createNavigation`**, such as a component passed by habit, fails at launch with an error
+  that says the call "expects the navigation made by createNavigation, or a function returning it".
+- **A second call** replaces the first, with a warning in development. An app has one navigation.
+
+## The rest of AppRegistry {#react-native}
+
+The other methods are React Native's, unchanged, so the app imports `AppRegistry` from one place. A headless task on
+Android, for example:
+
+```js title="index.js"
+import { AppRegistry } from '@apexnative/navigation';
+import { name } from './app.json';
+import { syncInbox } from './src/sync'; // your own async task
+
+AppRegistry.registerHeadlessTask('SyncInbox', () => syncInbox);
+AppRegistry.registerComponent(
+  name,
+  () => require('./src/Navigation').Navigation,
+);
+```
+
+## When it starts the app {#start}
+
+The native side tells JavaScript each time it launches, and `AppRegistry` starts the navigation each time:
+
+| Launch | What happens |
+| --- | --- |
+| Cold start | The function (if one) is called, then the start runs: `willMount`, the first root, `didMount`. |
+| JavaScript reload (development) | A new runtime: the same as a cold start. |
+| <Os name="Android" /> A new activity, same runtime | The function isn't called again; the last root comes back without `willMount`. |
+
+The details of each launch: [When the app launches again](/docs/fundamentals/starting-the-app#launches).
+
+## Registering with React Native's AppRegistry {#pitfall-react-native}
+
+```js
+// Don't: React Native's AppRegistry, with a root component
+import { AppRegistry } from 'react-native';
+AppRegistry.registerComponent(name, () => App);
+```
+
+React Native's `registerComponent` doesn't know the navigation, so nothing starts it and the splash screen stays.
+Import `AppRegistry` from `@apexnative/navigation`, and pass the navigation, not a component. An existing app that
+rendered a navigation container in `App` moves its providers to `appProvider` of `createNavigation`: see
+[Providers](/api/starting-the-app/createNavigation#providers-group).
+
+## See also {#see-also}
+
+- [`createNavigation`](/api/starting-the-app/createNavigation): what the navigation is made of.
+- [Starting the app](/docs/fundamentals/starting-the-app): the launch step by step, relaunches, failures.
+- [Installation](/docs/start/installation#existing-app): the files `setup` writes, `index.js` among them.

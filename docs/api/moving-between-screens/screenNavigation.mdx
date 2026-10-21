@@ -1,0 +1,327 @@
+`screenNavigation(screen)` gives the navigation of a screen to code outside React that knows which screen it acts
+for: a class a screen creates, a listener that gets the screen with an event, a `screenProvider`. It returns the same
+object as [`useNavigation()`](/api/moving-between-screens/useNavigation) in that screen, so its commands act from that
+screen and take no ids.
+
+## Usage {#usage}
+
+A chat screen creates a session object that lives outside React. When the other side ends the call, the session closes
+the screen it belongs to:
+
+```ts title="src/chat/ChatSession.ts"
+import { screenNavigation } from '@apexnative/navigation';
+import type { ScreenInfo } from '@apexnative/navigation';
+
+export class ChatSession {
+  constructor(private readonly screen: ScreenInfo) {}
+
+  // called by your own socket when the call ends
+  onEnded() {
+    screenNavigation(this.screen).goBack();
+  }
+}
+```
+
+```tsx title="src/screens/Chat.tsx"
+import { useState } from 'react';
+import { useScreen } from '@apexnative/navigation';
+import { ChatSession } from '../chat/ChatSession';
+
+function Chat() {
+  const screen = useScreen();
+  const [session] = useState(() => new ChatSession(screen));
+  // …
+}
+```
+
+When the call ends, Chat goes back, or its modal closes, even if the user has opened another tab meanwhile. With
+`navigation.goBack()` instead, the session would close whatever the user is looking at.
+
+A listener gets the screen with every screen event, so it can act on that screen. Here ⌘F on an iPad keyboard opens
+Search over whichever screen has the shortcut in its `keyCommands`:
+
+```ts
+navigation.on('keyCommandPressed', ({ screen, keyCommandId }) => {
+  if (keyCommandId === 'search') {
+    screenNavigation(screen).push('Search');
+  }
+});
+```
+
+## Signature {#signature}
+
+<ApiSignature data={data} name="screenNavigation" />
+
+It takes the screen as `{ id, name }` and returns a `ScreenNavigation`. A new object on every call: in a component,
+`useNavigation()` keeps one for the screen.
+
+## The screen it takes {#screen-info}
+
+The `screen` is a `ScreenInfo`, as `useScreen()` returns it, and as every screen event, `screenProvider` and
+`errorFallback` give it.
+
+### `id` {#id}
+
+<ApiMember data={data} of="ScreenInfo" name="id" />
+
+The id of this showing of the screen, made by the navigation: `Component12`. The commands go by it. A screen that has
+closed keeps its id, and its commands reject: "the screen 'Component12' is gone". Don't keep a `ScreenInfo` past the
+screen's life; drop it on `screenPopped` or when the screen unmounts.
+
+### `name` {#name}
+
+<ApiMember data={data} of="ScreenInfo" name="name" />
+
+The name of the screen in `screens`: `'Chat'`. The commands don't use it; it is there for your own checks and logs.
+
+## What it returns {#returns}
+
+Every member is that of [`useNavigation()`](/api/moving-between-screens/useNavigation), acting from the screen given.
+Each heading below links to its full description there.
+
+## This screen {#screen-group}
+
+### `screen` {#screen}
+
+<ApiMember data={data} of="ScreenNavigation" name="screen" />
+
+The screen given, as it was passed. See [`useNavigation().screen`](/api/moving-between-screens/useNavigation#screen).
+
+### `setOptions` {#setOptions}
+
+<ApiMember data={data} of="ScreenNavigation" name="setOptions" />
+
+Changes the options of the screen given, such as its title once a request ends. See [`useNavigation().setOptions`](/api/moving-between-screens/useNavigation#setOptions).
+
+## The stack {#stack-group}
+
+### `push` {#push}
+
+<ApiMember data={data} of="ScreenNavigation" name="push" />
+
+Shows a screen over the screen given, in its stack; resolves with the id of the new screen. See [`useNavigation().push`](/api/moving-between-screens/useNavigation#push).
+
+### `pop` {#pop}
+
+<ApiMember data={data} of="ScreenNavigation" name="pop" />
+
+Goes back to the screen before the one given. See [`useNavigation().pop`](/api/moving-between-screens/useNavigation#pop).
+
+### `popTo` {#popTo}
+
+<ApiMember data={data} of="ScreenNavigation" name="popTo" />
+
+Goes back to a screen of the stack, by its id. See [`useNavigation().popTo`](/api/moving-between-screens/useNavigation#popTo).
+
+### `popToRoot` {#popToRoot}
+
+<ApiMember data={data} of="ScreenNavigation" name="popToRoot" />
+
+Goes back to the first screen of the stack of the screen given. See [`useNavigation().popToRoot`](/api/moving-between-screens/useNavigation#popToRoot).
+
+### `replace` {#replace}
+
+<ApiMember data={data} of="ScreenNavigation" name="replace" />
+
+Shows a screen alone in the stack of the screen given, with no back. See [`useNavigation().replace`](/api/moving-between-screens/useNavigation#replace).
+
+### `setStack` {#setStack}
+
+<ApiMember data={data} of="ScreenNavigation" name="setStack" />
+
+Replaces the screens of the stack of the screen given. See [`useNavigation().setStack`](/api/moving-between-screens/useNavigation#setStack).
+
+### `canPop` {#canPop}
+
+<ApiMember data={data} of="ScreenNavigation" name="canPop" />
+
+Whether there is a screen under the one given. Answers at once. See [`useNavigation().canPop`](/api/moving-between-screens/useNavigation#canPop).
+
+## Going back {#back-group}
+
+### `goBack` {#goBack}
+
+<ApiMember data={data} of="ScreenNavigation" name="goBack" />
+
+What the back button would do on the screen given: `pop()`, or `dismiss()` of its modal or overlay. See [`useNavigation().goBack`](/api/moving-between-screens/useNavigation#goBack).
+
+### `canGoBack` {#canGoBack}
+
+<ApiMember data={data} of="ScreenNavigation" name="canGoBack" />
+
+Whether `goBack()` has something to do. See [`useNavigation().canGoBack`](/api/moving-between-screens/useNavigation#canGoBack).
+
+### `dismiss` {#dismiss}
+
+<ApiMember data={data} of="ScreenNavigation" name="dismiss" />
+
+Closes the modal or the overlay the screen given is in. See [`useNavigation().dismiss`](/api/moving-between-screens/useNavigation#dismiss).
+
+### `canDismiss` {#canDismiss}
+
+<ApiMember data={data} of="ScreenNavigation" name="canDismiss" />
+
+Whether the screen given is in a modal or an overlay. See [`useNavigation().canDismiss`](/api/moving-between-screens/useNavigation#canDismiss).
+
+## Modals and overlays {#modals-group}
+
+### `showModal` {#showModal}
+
+<ApiMember data={data} of="ScreenNavigation" name="showModal" />
+
+Shows a screen in a modal; the same from any screen. See [`useNavigation().showModal`](/api/moving-between-screens/useNavigation#showModal).
+
+### `dismissModal` {#dismissModal}
+
+<ApiMember data={data} of="ScreenNavigation" name="dismissModal" />
+
+Closes a modal by its id. See [`useNavigation().dismissModal`](/api/moving-between-screens/useNavigation#dismissModal).
+
+### `dismissAllModals` {#dismissAllModals}
+
+<ApiMember data={data} of="ScreenNavigation" name="dismissAllModals" />
+
+Closes every modal. See [`useNavigation().dismissAllModals`](/api/moving-between-screens/useNavigation#dismissAllModals).
+
+### `showOverlay` {#showOverlay}
+
+<ApiMember data={data} of="ScreenNavigation" name="showOverlay" />
+
+Shows a screen over everything. See [`useNavigation().showOverlay`](/api/moving-between-screens/useNavigation#showOverlay).
+
+### `dismissOverlay` {#dismissOverlay}
+
+<ApiMember data={data} of="ScreenNavigation" name="dismissOverlay" />
+
+Closes an overlay by its id. See [`useNavigation().dismissOverlay`](/api/moving-between-screens/useNavigation#dismissOverlay).
+
+### `dismissAllOverlays` {#dismissAllOverlays}
+
+<ApiMember data={data} of="ScreenNavigation" name="dismissAllOverlays" />
+
+Closes every overlay. See [`useNavigation().dismissAllOverlays`](/api/moving-between-screens/useNavigation#dismissAllOverlays).
+
+## Roots, tabs, split view, side menu {#containers-group}
+
+### `switchTo` {#switchTo}
+
+<ApiMember data={data} of="ScreenNavigation" name="switchTo" />
+
+Replaces the whole navigation with another root. See [`useNavigation().switchTo`](/api/moving-between-screens/useNavigation#switchTo).
+
+### `selectTab` {#selectTab}
+
+<ApiMember data={data} of="ScreenNavigation" name="selectTab" />
+
+Selects a tab of the tabs the screen given is in. See [`useNavigation().selectTab`](/api/moving-between-screens/useNavigation#selectTab).
+
+### `setTabBadge` {#setTabBadge}
+
+<ApiMember data={data} of="ScreenNavigation" name="setTabBadge" />
+
+The badge of the tab of the screen given, or of the tab with the id. See [`useNavigation().setTabBadge`](/api/moving-between-screens/useNavigation#setTabBadge).
+
+### `showInColumn` {#showInColumn}
+
+<ApiMember data={data} of="ScreenNavigation" name="showInColumn" />
+
+Shows a screen in a column of the split view the screen given is in. See [`useNavigation().showInColumn`](/api/moving-between-screens/useNavigation#showInColumn).
+
+### `showColumn` {#showColumn}
+
+<ApiMember data={data} of="ScreenNavigation" name="showColumn" />
+
+Shows a column of that split view. See [`useNavigation().showColumn`](/api/moving-between-screens/useNavigation#showColumn).
+
+### `hideColumn` {#hideColumn}
+
+<ApiMember data={data} of="ScreenNavigation" name="hideColumn" />
+
+Hides a column of that split view. See [`useNavigation().hideColumn`](/api/moving-between-screens/useNavigation#hideColumn).
+
+### `openMenu` {#openMenu}
+
+<ApiMember data={data} of="ScreenNavigation" name="openMenu" />
+
+Opens a menu of the side menu the screen given is in. See [`useNavigation().openMenu`](/api/moving-between-screens/useNavigation#openMenu).
+
+### `closeMenu` {#closeMenu}
+
+<ApiMember data={data} of="ScreenNavigation" name="closeMenu" />
+
+Closes the open menu of that side menu. See [`useNavigation().closeMenu`](/api/moving-between-screens/useNavigation#closeMenu).
+
+## The rest of the app {#app-group}
+
+### `setTheme` {#setTheme}
+
+<ApiMember data={data} of="ScreenNavigation" name="setTheme" />
+
+Changes the theme of the navigation. See [`useNavigation().setTheme`](/api/moving-between-screens/useNavigation#setTheme).
+
+### `setDirection` {#setDirection}
+
+<ApiMember data={data} of="ScreenNavigation" name="setDirection" />
+
+Changes the direction of the app. See [`useNavigation().setDirection`](/api/moving-between-screens/useNavigation#setDirection).
+
+### `getContext` {#getContext}
+
+<ApiMember data={data} of="ScreenNavigation" name="getContext" />
+
+The app's context now. See [`useNavigation().getContext`](/api/moving-between-screens/useNavigation#getContext).
+
+### `setContext` {#setContext}
+
+<ApiMember data={data} of="ScreenNavigation" name="setContext" />
+
+Changes the app's context. See [`useNavigation().setContext`](/api/moving-between-screens/useNavigation#setContext).
+
+### `getState` {#getState}
+
+<ApiMember data={data} of="ScreenNavigation" name="getState" />
+
+What the user sees now. See [`useNavigation().getState`](/api/moving-between-screens/useNavigation#getState).
+
+### `on` {#on}
+
+<ApiMember data={data} of="ScreenNavigation" name="on" />
+
+Listens to an event of the navigation; returns the function that stops. See [`useNavigation().on`](/api/moving-between-screens/useNavigation#on).
+
+### `getPendingLink` {#getPendingLink}
+
+<ApiMember data={data} of="ScreenNavigation" name="getPendingLink" />
+
+The link that waits, or `null`. See [`useNavigation().getPendingLink`](/api/moving-between-screens/useNavigation#getPendingLink).
+
+### `openPendingLink` {#openPendingLink}
+
+<ApiMember data={data} of="ScreenNavigation" name="openPendingLink" />
+
+Runs the waiting link now. See [`useNavigation().openPendingLink`](/api/moving-between-screens/useNavigation#openPendingLink).
+
+### `clearPendingLink` {#clearPendingLink}
+
+<ApiMember data={data} of="ScreenNavigation" name="clearPendingLink" />
+
+Forgets the waiting link. See [`useNavigation().clearPendingLink`](/api/moving-between-screens/useNavigation#clearPendingLink).
+
+## Where the screen comes from {#sources}
+
+| Where | How |
+| --- | --- |
+| A component of the screen | `useScreen()`, or `useNavigation()` directly. |
+| A screen event | `navigation.on(…)` and `listeners` give `event.screen`. |
+| A button's press | `onPress` gets `navigation` of its screen already. |
+| `screenProvider`, `errorFallback` | Their `screen` prop. |
+| A command | `push` and `showModal` resolve with an id; the name is the one you passed. |
+
+A screen of an overlay or of a side menu's menu acts from elsewhere, as in a component: the overlay from the screen the
+user sees, the menu from its center. See [The stack](/api/moving-between-screens/useNavigation#stack-group).
+
+## See also {#see-also}
+
+- [`useNavigation`](/api/moving-between-screens/useNavigation): the same object in a component.
+- [`navigation`](/api/moving-between-screens/navigation): the commands for the screen the user sees.
+- [Where the commands come from](/docs/fundamentals/moving-between-screens#where).

@@ -1,0 +1,354 @@
+import { Os } from '@site/src/components/Intro';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+`Tabs` builds the tab bar of an app: the sections side by side, Home, Inbox, Profile, one tap apart, each one where the
+user left it. It takes a [`Tab`](/api/tabs/Tab) for each section, and its methods set what is common to all of them:
+the tab the app opens on, when the tabs are created, the look of the items, and the tab bars of each platform.
+
+Each tab holds a stack of its own, so the user can go deep in Inbox, look at Home, and come back to Inbox where they
+were. The bar is the platform's:
+
+- <Os name="iOS" />: the system tab bar, Liquid Glass on iOS 26; more than five tabs on iPhone put the rest in a More
+  list.
+- <Os name="iPadOS" />: a tab bar at the top that can turn into a sidebar (iPadOS 18+).
+- <Os name="Android" />: the Material 3 bottom navigation, at most five tabs.
+
+<DeviceVideo name="tabs-stacks" />
+
+## Usage {#usage}
+
+```ts title="src/Navigation.ts"
+import { createNavigation, Tab, Tabs } from '@apexnative/navigation';
+import { HomeScreen } from './screens/Home';
+import { InboxScreen } from './screens/Inbox';
+import { ProfileScreen } from './screens/Profile';
+
+// SF Symbols on iOS, drawables of the app on Android
+const icons = {
+  home: { ios: 'house', android: 'ic_home' },
+  inbox: { ios: 'tray', android: 'ic_inbox' },
+  profile: { ios: 'person', android: 'ic_person' },
+};
+
+export const Navigation = createNavigation({
+  screens: {
+    Home: HomeScreen,
+    Inbox: InboxScreen,
+    Profile: ProfileScreen,
+  },
+  root: Tabs(
+    Tab('Home').label('Home').icon(icons.home),
+    Tab('Inbox').label('Inbox').icon(icons.inbox).id('inbox'),
+    Tab('Profile').label('Profile').icon(icons.profile),
+  ),
+});
+```
+
+The app opens on Home, with the tab bar at the bottom. A tap on Inbox shows Inbox; a `push` from Inbox goes into the
+stack of the Inbox tab, and the tab bar stays.
+
+A real app often opens on a tab other than the first, and creates the tabs as the user opens them:
+
+```ts
+root: Tabs(
+  Tab('Home').label('Home').icon(icons.home),
+  Tab('Inbox').label('Inbox').icon(icons.inbox).id('inbox'),
+)
+  .selected('inbox')
+  .lazy(),
+```
+
+Inbox shows first. Home is created the first time the user taps it.
+
+## Signature {#signature}
+
+<ApiSignature data={data} name="Tabs" />
+
+`Tabs` takes its tabs as arguments, in the order the bar shows them, each a `Tab(…)`; a screen name or a layout goes
+into a `Tab`, not into `Tabs` directly. It returns a `TabsElement`. Each method returns a new element, so a chain
+can be kept in a constant and built on:
+
+```ts
+const mainTabs = Tabs(Tab('Home'), Tab('Inbox')).lazy();
+const forGuests = mainTabs.selected(0);
+```
+
+How many tabs:
+
+- **One or more.** One tab shows a bar with one item.
+- **At most five on <Os name="Android" />.** A sixth fails the start with
+  `[navigation] Tabs show at most 5 tabs on Android; the layout has 6`, or a command with the same text after the
+  command's name (`[navigation] switchTo: tabs show …`): the Material bar can't hold more.
+- **More than five on iPhone** puts the fifth and the rest into a More tab of the system. iPad shows them all.
+
+The screens the tabs show are checked by the types where the layout is used (`root`, `roots`, `switchTo`), as for
+[`Stack`](/api/stack/Stack#typed).
+
+## Where tabs go {#where}
+
+Tabs are a root most of the time: `root`, a name of `roots`, `navigation.switchTo(…)`. They can also be the center of
+a side menu, or a modal over the root with `Root(…).modal(Tabs(…))`. A tab can hold any layout (see
+[`Tab`](/api/tabs/Tab#content)), but a stack can't hold tabs: a stack holds screens only.
+
+## The tabs {#content-group}
+
+### `selected()` {#selected}
+
+<ApiMember data={data} of="TabsElement" name="selected" />
+
+The tab the app opens on: its index from 0, or the id given with [`Tab().id()`](/api/tabs/Tab#id). Without it, the
+first tab.
+
+```ts
+Tabs(
+  Tab('Home'),
+  Tab('Inbox').id('inbox'),
+).selected('inbox');
+```
+
+An id keeps working when the tabs change order; an index doesn't. It sets the first tab only: after that, the user
+selects tabs, and the app with `navigation.selectTab('inbox')`. See
+[Selecting a tab](/docs/containers/tabs#select).
+
+### `lazy()` {#lazy}
+
+<ApiMember data={data} of="TabsElement" name="lazy" />
+
+Creates each tab the first time it shows, instead of all of them with the tabs. The app starts faster when the tabs
+are heavy, and a tab the user never opens costs nothing.
+
+```ts
+Tabs(Tab('Home'), Tab('Inbox'), Tab('Profile')).lazy();
+```
+
+The trade-off: the first switch to a tab waits for its screen to render, and a tab not created yet runs no code. A
+screen that should load data before the user opens it, or listen to events from the start, stays out of a lazy tab.
+Without `lazy()` every tab is created with the tabs. `options({ tabsAttachMode: 'afterInitialTab' })` is the middle
+way: the selected tab first, the others right after it.
+
+### `id()` {#id}
+
+<ApiMember data={data} of="TabsElement" name="id" />
+
+A fixed id for the tabs, in place of the generated one. The tab events (`tabSelected`, `tabPressed`,
+`tabLongPressed`) carry it as `bottomTabsId`, so a listener can tell two sets of tabs apart, such as the main tabs and
+tabs in a modal:
+
+```ts
+Tabs(Tab('Home'), Tab('Inbox')).id('main');
+```
+
+It is for the events only: the commands don't take it. `selectTab` and `setTabBadge` take the id of a tab,
+[`Tab().id()`](/api/tabs/Tab#id).
+
+## Look {#look-group}
+
+### `itemStyle()` {#itemStyle}
+
+<ApiMember data={data} of="TabsElement" name="itemStyle" />
+
+The look of every tab item at once: colors, font, icon size and insets. A tab's own
+[`itemStyle()`](/api/tabs/Tab#itemStyle) goes over it, key by key.
+
+```ts
+Tabs(Tab('Home'), Tab('Inbox')).itemStyle({
+  selectedIconColor: '#0A84FF',
+  selectedTextColor: '#0A84FF',
+  fontSize: 11,
+});
+```
+
+Without it, the items take the colors of the [theme](/docs/architecture/theme-and-context#theme): the selected one the
+primary color. The platforms read the keys differently: iOS 26 draws the unselected items in the system's colors and
+ignores `textColor` and `iconInsets`; `iconWidth`, `iconHeight` and `selectedFontSize` are Android's. Each key says
+so in [the options](/api/tabs/options).
+
+### `options()` {#options}
+
+<ApiMember data={data} of="TabsElement" name="options" />
+
+The options of the tab bar that no method covers: `titleDisplayMode`, `backgroundColor`, `drawBehind`, and on Android
+`layoutStyle`, `hideOnScroll`, `elevation`.
+
+```ts
+Tabs(Tab('Home'), Tab('Inbox')).options({
+  titleDisplayMode: 'alwaysShow',
+});
+```
+
+These are `bottomTabs` options: every key is in [the options](/api/tabs/options). A screen can change them while it
+shows, such as hiding the bar: `hideBottomTabs()` in its options. See
+[Screens without the tab bar](/docs/containers/tabs#hide).
+
+### `customRow()` {#customRow}
+
+<ApiMember data={data} of="TabsElement" name="customRow" />
+
+The row that holds tab items drawn by your own components, in place of the system's items. Each tab then names its
+component in `bottomTab.component`, a screen of `screens`; the row is the frame around them: its height, background,
+corners and margins.
+
+```ts
+Tabs(
+  Tab('Home').options({ component: { name: 'HomeTabItem' } }),
+  Tab('Inbox').options({ component: { name: 'InboxTabItem' } }),
+).customRow({ height: 64, backgroundEffect: 'glass' });
+```
+
+The component gets `selected`, `tabIndex` and `badge` as props, and the native side keeps selecting the tabs, hiding
+the bar and animating. Every tab must have a component: when only some do, a warning is logged and all tabs use the
+system's items. On iOS 26 the row takes the place of the system capsule; `minimize()` and the iPad sidebar don't work
+with it.
+
+## iOS and iPadOS {#ios-group}
+
+These methods do nothing on Android, and nothing on an iOS version below the one they name.
+
+### `minimize()` {#minimize}
+
+<ApiMember data={data} of="TabsElement" name="minimize" />
+
+<DeviceVideo name="tabs-ios26" devices={['ios']} />
+
+<Os name="iOS" /> 26+. The tab bar shrinks to the selected tab as the screen scrolls, and grows back:
+
+- `'onScrollDown'`: shrinks while the content scrolls down, as Apple Music does;
+- `'onScrollUp'`: shrinks while it scrolls up;
+- `'never'`;
+- `'automatic'`: the system's choice, the default. iOS 26.5 doesn't minimize with it.
+
+```ts
+Tabs(Tab('Home'), Tab('Inbox')).minimize('onScrollDown');
+```
+
+It follows the scroll view UIKit finds in the screen, the same one a large title follows. It doesn't work with tab
+items drawn by components ([`customRow()`](#customRow)).
+
+### `accessory()` {#accessory}
+
+<ApiMember data={data} of="TabsElement" name="accessory" />
+
+<Os name="iOS" /> 26+. A screen of `screens` above the tab bar, on every tab, as the mini player of Apple Music. It
+takes the screen's name and its props:
+
+```ts
+Tabs(Tab('Home'), Tab('Inbox'))
+  .minimize('onScrollDown')
+  .accessory('NowPlaying', { trackId: '7' });
+```
+
+UIKit gives it its size (48 points high). When the tab bar shrinks, the accessory moves next to it, and the accessory's
+screen gets the event `accessoryPlacementChanged` with `'inline'`, then `'regular'` when it goes back: a screen that shows less
+when inline listens to it. The name and the props are checked by the types like the tabs' screens.
+
+### `sidebar()` {#sidebar}
+
+<ApiMember data={data} of="TabsElement" name="sidebar" />
+
+<DeviceVideo name="tabs-ipad-sidebar" devices={['ipad']} />
+
+<Os name="iPadOS" /> 18+. How the tabs show on iPad:
+
+- `'sidebar'`: the tab bar at the top gets a sidebar button, and the sidebar lists every tab;
+- `'tabBar'`: the tab bar only;
+- `'automatic'`: the system's choice, the default.
+
+The second argument, `sidebarLayout`, says where the screen goes while the sidebar is beside it: `'tile'` (the
+default) to its right, or `'overlap'` under it.
+
+```ts
+Tabs(Tab('Home'), Tab('Inbox'), Tab('Settings')).sidebar('sidebar');
+```
+
+A pick in the sidebar is a tap on a tab: it sends the same events. iPhone always shows the tab bar. With
+`'overlap'` the screen keeps its width and only its safe area moves: React Native views don't follow the safe area by
+themselves, so keep the content inside it.
+
+### `customizable()` {#customizable}
+
+<ApiMember data={data} of="TabsElement" name="customizable" />
+
+<Os name="iPadOS" /> 18+, with `sidebar('sidebar')`. The user arranges the tabs: Edit in the sidebar moves tabs in
+the bar, removes them and adds them back. UIKit saves the arrangement under the id and restores it on the next launch.
+
+```ts
+Tabs(
+  Tab('Home').id('home'),
+  Tab('Inbox').id('inbox'),
+  Tab('Archive').id('archive').customization('optional'),
+)
+  .sidebar('sidebar')
+  .customizable('main-tabs');
+```
+
+- Give **every tab a fixed id**. The arrangement is saved by the tabs' ids; generated ones change between launches,
+  and a saved order would go to other tabs.
+- The id is unique in the app.
+- What each tab allows is its [`customization()`](/api/tabs/Tab#customization).
+- Indexes stay the layout's: `selected(1)`, `selectTab(1)` and the events count the tabs as written, whatever the user
+  arranged.
+
+## Android {#android-group}
+
+### `backBehavior()` {#backBehavior}
+
+<ApiMember data={data} of="TabsElement" name="backBehavior" />
+
+<Os name="Android" />. What the system back does on the first screen of a tab, where the stack has nothing to pop:
+
+- `'exit'`: leaves the app, as without this method;
+- `'first'`: goes to the first tab, then leaves the app from there;
+- `'previous'`: goes to the tab the user came from, back through the tabs they visited.
+
+```ts
+Tabs(Tab('Home'), Tab('Inbox')).backBehavior('first');
+```
+
+iOS has no system back: the method does nothing there.
+
+## One platform only {#platform-group}
+
+### `ios()` {#ios}
+
+<ApiMember data={data} of="TabsElement" name="ios" />
+
+Methods for iOS only. The function gets the tabs and returns them with more methods; on Android it isn't called.
+
+```ts
+Tabs(Tab('Home'), Tab('Inbox')).ios((tabs) =>
+  tabs.minimize('onScrollDown').sidebar('sidebar'),
+);
+```
+
+It keeps the platform's settings together and the chain readable. The methods of one platform already do nothing on
+the other; `ios()` matters for the shared methods with a different value on each platform, such as
+`options({ titleDisplayMode })`.
+
+### `android()` {#android}
+
+<ApiMember data={data} of="TabsElement" name="android" />
+
+Methods for Android only, as `ios()`:
+
+```ts
+Tabs(Tab('Home'), Tab('Inbox')).android((tabs) =>
+  tabs
+    .backBehavior('previous')
+    .options({ layoutStyle: 'compact', drawBehind: true }),
+);
+```
+
+## Over time {#over-time}
+
+- **Each tab keeps its stack** while the user looks at others: its screens stay mounted. `Tab().popToRootOnBlur()`
+  takes a tab back to its first screen when the user leaves it.
+- **The layout is read once.** Methods of `Tabs` set how the tabs start; the app changes them later with commands
+  (`selectTab`, `setTabBadge`) or with the options of a screen. Building `Tabs(…)` again and passing it to `switchTo`
+  makes new tabs with new stacks.
+- **Press handlers of `Tab().onPress()`** live as long as the tabs are shown, and go with them.
+
+## See also {#see-also}
+
+- [Tabs](/docs/containers/tabs): selecting a tab, presses, badges, the tab bar on each platform.
+- [`Tab`](/api/tabs/Tab), [`useTabPress`](/api/tabs/useTabPress), [the options](/api/tabs/options).
+- [An app with tabs](/docs/flows/an-app-with-tabs): a whole app, step by step.

@@ -1,0 +1,215 @@
+---
+title: Modals
+description: 'What a modal is, how to show one, the presentation styles, sheets with detents, popovers, how a modal closes and how to ask before it does.'
+---
+
+import { SectionStatus, SectionApi } from '@site/src/components/Api';
+import { Mark, Os } from '@site/src/components/Intro';
+import { MoveDemo } from '@site/src/components/Screens';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+<SectionStatus id="modals" />
+
+A modal is a task of its own over the app: writing a message, a form, the sign-in, a picker. The user finishes it or cancels it, and the app is as it was. `showModal` shows one, and `dismiss` closes it:
+
+```tsx title="src/screens/Inbox.tsx"
+import { Button } from 'react-native';
+import { useNavigation } from '@apexnative/navigation';
+
+function Inbox() {
+  const navigation = useNavigation();
+  return (
+    <Button
+      title="Write"
+      onPress={() => navigation.showModal('Compose')}
+    />
+  );
+}
+```
+
+Compose comes up from the bottom over Inbox: a sheet on iOS, the whole screen on Android. A swipe down on iOS, or the system back on Android, closes it.
+
+This page answers:
+
+1. [What a modal is](#what), and how it differs from a push.
+2. [How to show one](#show).
+3. [How it looks](#styles): a sheet, full screen, a form, a popover.
+4. [Sheets](#sheets) that stop at half and full height.
+5. [How a modal closes](#close), and [how to ask before it does](#ask).
+
+## What a modal is {#what}
+
+A push continues the way the user is going; a modal <Mark>interrupts it</Mark> for a moment. That is why a modal shows over everything, tabs and bars too, and why it ends as a whole: closing it closes all its screens at once.
+
+<MoveDemo kind="modal" />
+
+- **It has a stack of its own,** so its screens can push: a form with several steps is one modal. With `stack: false` the screen shows alone, without a top bar.
+- **The screen under it stays mounted.** Under a full-screen modal it is out of sight. Under a sheet it still shows, so it doesn't disappear at all. See [The life of a screen](../fundamentals/screens-and-props#lifecycle).
+- **Modals go one over another.** A modal can show another; each closes on its own, or all at once.
+
+## Showing a modal {#show}
+
+`showModal` takes the screen, then its props and the settings of the modal in one object:
+
+```ts
+navigation.showModal('Compose', {
+  props: { replyTo: messageId },
+  closeButton: true,
+});
+```
+
+Compose shows with a close button at the leading edge of its top bar. The settings:
+
+| Setting | What it does |
+| --- | --- |
+| `closeButton` | A close button on the first screen: the system one on iOS, an icon on Android. Needs the stack. |
+| `onDismiss` | Called once the modal is gone, whatever closed it: a swipe, a command, a new root. |
+| `stack` | `false`: the screen alone, without a stack and its top bar. |
+| `style`, `sheet`, `popover`, `contentSize` | How it looks: see [How a modal looks](#styles). |
+| `transition`, `options` | The animation, and the screen's options for this show. |
+
+`presentation.modal` of `createNavigation` sets these for every modal of the app, such as a close button everywhere: see [Defaults for the whole app](../fundamentals/moving-between-screens#presentation).
+
+## How a modal looks {#styles}
+
+`style` picks how the platform presents the modal:
+
+<DeviceVideo name="modal-styles" devices={['ios', 'ipad', 'android']} />
+
+```ts
+navigation.showModal('Compose', { style: 'fullScreen' });
+```
+
+Without `style`, a modal is a sheet on <Os name="iOS" /> and covers the whole screen on <Os name="Android" />.
+
+`'overFullScreen'` keeps the screen under the modal in place, so it shows through wherever the modal draws nothing: a dialog of your own, a card over a dimmed app. Give the modal's screen `backgroundColor('transparent')` in its options, so its own background doesn't hide the screen under it.
+
+### A form on iPad {#form}
+
+<Os name="iPadOS" /> A form sheet is a card in the middle of the screen. `contentSize` sets its width and height, or a height that follows the content:
+
+```ts
+navigation.showModal('EditProfile', {
+  style: 'formSheet',
+  contentSize: { width: 540, height: 'content' },
+});
+```
+
+On iPhone a form sheet is a sheet, and `contentSize` does nothing.
+
+### A popover {#popover}
+
+<Os name="iPadOS" /> A popover points at what opened it: a button of the bar by its id (`sourceButtonId`), or a view by its `nativeID` (`sourceNativeID`):
+
+```ts
+navigation.showModal('Filters', {
+  popover: { sourceButtonId: 'filter', arrowDirections: ['up'] },
+});
+```
+
+On iPhone it becomes a sheet, unless `adaptive: false` keeps it a popover. <Os name="Android" /> has no popovers: the modal covers the whole screen, as without `style`.
+
+<DeviceVideo name="modal-popover" devices={['ipad', 'ios']} />
+
+## Sheets {#sheets}
+
+A sheet can stop at several heights, its detents, as the sheets of the system apps do. The user drags it between them:
+
+<DeviceVideo name="modal-sheet" />
+
+```ts
+navigation.showModal('Places', {
+  sheet: { detents: ['medium', 'large'] },
+});
+```
+
+Places opens at half the height, the smallest detent, and the user drags it to the full height. A detent is `'medium'`, `'large'`, a height in points, or `'content'`, the height of the screen's content. The other keys of `sheet`:
+
+- **`selectedDetent`:** the detent the sheet opens at.
+- **`largestUndimmedDetent`:** up to this detent the screen under the sheet isn't dimmed and takes touches, as under the sheet of Maps.
+- **`grabber`:** the handle at the top.
+- **`expandsOnScroll: false`:** only the top drags the sheet, so a list inside it scrolls first.
+
+Each detent the user drags to sends `sheetDetentChanged`. The screen moves the sheet itself by changing its options, and the sheet follows with an animation:
+
+```ts
+navigation.setOptions({
+  modal: { sheet: { selectedDetent: 'large' } },
+});
+```
+
+On <Os name="Android" /> a sheet is the Material bottom sheet. It stops at half (`'medium'`) and full (`'large'`) height and at heights of its own; `'content'` stops at half.
+
+Sheets in a real app, step by step: [Bottom sheets](../flows/bottom-sheets).
+
+## How a modal closes {#close}
+
+| Who | How |
+| --- | --- |
+| The user | A swipe down on a sheet, the system back on Android, the close button. |
+| The modal itself | `dismiss()` from any of its screens closes the whole modal. |
+| Other code | `navigation.dismissModal(id)` by the id `showModal` resolved with; `dismissAllModals()` closes every one. |
+
+<DeviceVideo name="modal-close" />
+
+Most often a modal closes itself once its task is done: the message is sent, the form is saved. Here a modal to write a message closes after Send:
+
+```tsx title="src/screens/Compose.tsx"
+import { useState } from 'react';
+import { Button, TextInput, View } from 'react-native';
+import { useNavigation } from '@apexnative/navigation';
+
+function Compose() {
+  const navigation = useNavigation();
+  const [text, setText] = useState('');
+
+  const send = async () => {
+    await sendMessage(text); // your own request
+    await navigation.dismiss(); // the whole modal closes
+  };
+
+  return (
+    <View>
+      <TextInput value={text} onChangeText={setText} />
+      <Button title="Send" onPress={send} />
+    </View>
+  );
+}
+```
+
+In a modal of several steps, `dismiss()` on the last step closes them all at once: the user is back where they opened the modal.
+
+Whatever closed it, `onDismiss` of `showModal` runs, and the event `modalDismissed` follows. `onDismiss` is the place to update the screen that opened the modal:
+
+```ts
+navigation.showModal('Compose', {
+  onDismiss: () => refresh(), // your own step
+});
+```
+
+A new root closes the modals too: see [What a switch does](../fundamentals/switching-roots#switch).
+
+### Asking before closing {#ask}
+
+A modal with unsaved changes shouldn't close on a careless swipe. `usePreventLeave` keeps it on screen while its condition is true. The swipe down, the close button and the system back on Android call its handler instead, so the screen can ask:
+
+```tsx
+import { Alert } from 'react-native';
+import { usePreventLeave } from '@apexnative/navigation';
+
+// in Compose, after its state
+usePreventLeave(text.length > 0, () => {
+  Alert.alert('Discard the draft?', undefined, [
+    { text: 'Keep editing' },
+    { text: 'Discard', onPress: () => navigation.dismiss() },
+  ]);
+});
+```
+
+While the draft is empty, the modal closes as any other. Commands aren't held, so `dismiss()` in Discard closes it. The same hook holds the back of a stack: see [Keeping the user on a screen](../screen-ui/back-and-gestures#prevent).
+
+A form in a modal, step by step: [Forms in a modal](../flows/forms-in-a-modal).
+
+## API {#api}
+
+<SectionApi id="modals" />

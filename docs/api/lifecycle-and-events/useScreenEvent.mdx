@@ -1,0 +1,105 @@
+import { Os } from '@site/src/components/Intro';
+
+`useScreenEvent` listens to one event of the screen the component is in, by its name: the sheet the screen is in was
+dragged, the screen left its stack, a keyboard shortcut was pressed. It hears only this screen's events, and stops when
+the component unmounts. The other screen hooks are made of it.
+
+## Usage {#usage}
+
+```tsx title="src/screens/Filters.tsx"
+import { useState } from 'react';
+import { useScreenEvent } from '@apexnative/navigation';
+
+export function Filters() {
+  const [expanded, setExpanded] = useState(false);
+
+  useScreenEvent('sheetDetentChanged', ({ detent }) => {
+    setExpanded(detent === 'large');
+  });
+
+  return expanded ? <AllFilters /> : <MainFilters />; // your own
+}
+```
+
+Filters shows in a sheet. When the user drags the sheet to full height, it shows all the filters; dragged back down,
+the main ones.
+
+## Signature {#signature}
+
+<ApiSignature data={data} name="useScreenEvent" />
+
+**`name`** is the name of the event, the same as in `listeners` of `createNavigation` and in `navigation.on`. Only the
+events that belong to a screen are allowed: those that carry `screen`, and `accessoryPlacementChanged`. The type of
+`name` lists them, and the editor completes them.
+
+**`handler`** gets the event, typed by its name. The events of a screen carry it as `screen`: `{ id, name }`. The
+handler can change on every render: the call goes to the one of the last render, so it reads the current props and
+state, without `useCallback`.
+
+It returns nothing.
+
+## The events of a screen {#events}
+
+| Event | When | Its own hook |
+| --- | --- | --- |
+| `screenWillAppear` | The screen starts to come in. | |
+| `screenDidAppear` | The screen is in place. | [`useScreenAppear`](/api/lifecycle-and-events/useScreenAppear) |
+| `screenDidDisappear` | The screen is covered, or has left. | [`useScreenDisappear`](/api/lifecycle-and-events/useScreenDisappear) |
+| `screenPopped` | The screen left its stack: back, a swipe, `pop`. | |
+| `buttonPressed` | A button of its top bar or toolbar. | [`useNavigationButton`](/api/bar-buttons/useNavigationButton) |
+| `modalDismissed` | The modal it is in is gone. | |
+| `modalDismissAttempted` | A swipe tried to close its modal while it holds the user. | [`usePreventLeave`](/api/back-and-gestures/usePreventLeave) |
+| `searchChanged`, `searchSubmitted`, `searchCancelled`, `searchSuggestionPicked` | Its search field. | [`useSearchBar`](/api/search/useSearchBar) |
+| `sheetDetentChanged` | <Os name="iOS" /> The user dragged its sheet to a detent. | |
+| `keyCommandPressed` | <Os name="iOS" /> A keyboard shortcut of its options. | |
+| `titleRenamed` | <Os name="iOS" /> The user renamed its title. | |
+| `previewCompleted` | <Os name="iOS" /> A preview opened into it. | |
+| `accessoryPlacementChanged` | <Os name="iOS" /> 26+: the tab bar accessory this component renders moved. | |
+
+Where an event has its own hook, the hook reads better; `useScreenEvent` is for the others.
+
+### `screenWillAppear` {#will-appear}
+
+The one appearance event without a hook of its own. It comes when the move starts, before the screen is in place: the
+moment to start what should be ready while the screen slides in.
+
+```tsx
+useScreenEvent('screenWillAppear', () => {
+  prefetchDetails(); // your own
+});
+```
+
+### `screenPopped` {#popped}
+
+Comes when the screen leaves its stack, whatever took it out: the back button, a swipe, `pop`. Unlike
+`screenDidDisappear`, it doesn't come when the screen is only covered.
+
+```tsx
+useScreenEvent('screenPopped', () => {
+  saveDraft(text); // your own step
+});
+```
+
+## Pitfalls {#pitfalls}
+
+- **Only this screen's events.** An event of another screen never reaches the handler, even of a screen with the same
+  name. For the events of every screen, or the events that belong to no screen (`tabSelected`, `stateChanged`), use
+  [`useNavigationEvent`](/api/lifecycle-and-events/useNavigationEvent).
+- **A component of the bar is a screen of its own.** A component shown as a title, a button or a search results
+  screen is registered in `screens` and is a screen of its own: there the hook hears that component's events, not the
+  events of the screen whose bar it is in.
+- **Events while unmounted are lost.** The hook listens from the first effect of the component to its unmount. An
+  event that came before is not replayed.
+- **Outside a screen** the hook throws "This hook is for the screens of createNavigation".
+
+## Compared with React Navigation {#react-navigation}
+
+The nearest is `navigation.addListener(name, …)` in a `useEffect`, which returns the function that stops it. Here it is
+one call, without dependencies and without cleanup. The names differ: React Navigation's `focus`, `blur`,
+`beforeRemove`, `transitionStart` are events of its own navigators; here the events come from the platform, with the
+names in the table above.
+
+## See also {#see-also}
+
+- [Every event](/docs/fundamentals/lifecycle-and-events#events) and [where to listen](/docs/fundamentals/lifecycle-and-events#where).
+- [`useNavigationEvent`](/api/lifecycle-and-events/useNavigationEvent).

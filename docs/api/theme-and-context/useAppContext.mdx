@@ -1,0 +1,214 @@
+import { Os } from '@site/src/components/Intro';
+
+`useAppContext` reads the app's context in a component: the signed-in user, the language, the flags, the services that
+every screen shares. The component renders again when the part it reads changes, on whichever screen it is. It works
+in any component, on any screen, in `appProvider` and in the fallbacks; code outside React reads the same value with
+`navigation.getContext()`.
+
+## Usage {#usage}
+
+```tsx title="src/screens/Home.tsx"
+import { Text } from 'react-native';
+import { useAppContext } from '@apexnative/navigation';
+
+export function Home() {
+  const user = useAppContext((context) => context.user);
+  return <Text>Hello, {user?.name ?? 'guest'}</Text>;
+}
+```
+
+```ts title="src/Navigation.ts"
+import { createNavigation } from '@apexnative/navigation';
+import { HomeScreen } from './screens/Home';
+
+export type AppContext = {
+  user: { name: string } | null;
+  language: string;
+};
+
+const context: AppContext = { user: null, language: 'en' };
+
+export const Navigation = createNavigation({
+  screens: { Home: HomeScreen },
+  context,
+  root: 'Home',
+});
+```
+
+Home shows "Hello, guest". When a sign-in calls `navigation.setContext` with a user, Home shows the name at once, on
+every screen that shows Home, also the ones behind the screen on top.
+
+The function picks the part the component needs. Without it, the hook returns the whole context:
+
+```tsx
+const { user, language } = useAppContext();
+```
+
+That component renders again on every change of the context, of any key.
+
+## Signature {#signature}
+
+<ApiSignature data={data} name="useAppContext" />
+
+- **`select`**, optional: a function of the context that returns the part the component reads. It runs on every
+  render of the component and after every `setContext`, so it stays cheap: read a key, don't compute a list.
+- **Returns** what `select` returns, or the whole context without it.
+- **`Context`** is the type of the context: the one registered for the app (see [Typing it](#types)), or the type
+  of the function's parameter when the app registers none.
+
+## When a component renders again {#renders}
+
+The context is one value outside React, kept by the navigation. Every `useAppContext` subscribes to it, whatever React
+root it is in, and `navigation.setContext` tells every subscriber. Then each one compares what it read before with
+what it reads now, by `Object.is`:
+
+| The component reads | It renders again when |
+| --- | --- |
+| `useAppContext()` | `setContext` gives a new object, whatever changed in it. |
+| `useAppContext((c) => c.user)` | `c.user` is another value than before: another object, or `null`. |
+| `useAppContext((c) => c.user?.name)` | The name changes. A new user object with the same name renders nothing. |
+
+So the narrower the selection, the fewer renders: a change of the language doesn't render a component that reads the
+user. Select a value as deep as the component needs, and call the hook twice for two values:
+
+```tsx
+const name = useAppContext((c) => c.user?.name);
+const language = useAppContext((c) => c.language);
+```
+
+Every mounted screen counts, not only the one on top: the screens under it in the stack, the other tabs, a screen in
+a modal. A change renders the components that read it on all of them.
+
+## Changing the context {#set-context}
+
+The hook only reads. `navigation.setContext` is the one way to change the context, from a screen, from `willMount`, a
+listener or any module:
+
+```ts
+import { navigation } from '@apexnative/navigation';
+
+// a function of the value before: the other keys stay
+navigation.setContext((previous) => ({ ...previous, language: 'de' }));
+
+// a whole new value: what it leaves out is gone
+navigation.setContext({ user: null, language: 'en' });
+```
+
+`setContext` **replaces** the context; it doesn't merge into it. An object with one key drops every other
+key, and the components that read them get `undefined`. To change a part, pass a function and spread the value
+before, as above.
+
+The change is synchronous: right after `setContext`, `navigation.getContext()` returns the new value, and the readers
+render with React's next update.
+
+## Typing it {#types}
+
+`setup` and `init` write `navigation-env.d.ts`, which registers the app and its context. The type of the context is
+the type `Navigation.ts` exports, `AppContext` above, or the type of its `context`:
+
+```ts title="navigation-env.d.ts"
+declare module '@apexnative/navigation' {
+  interface Register {
+    app: typeof import('./Navigation').Navigation;
+    context: import('./Navigation').AppContext;
+  }
+}
+export {};
+```
+
+With it, `context` in every selector is an `AppContext`, and so is the value of `navigation.getContext()`,
+`navigation.setContext()` and the options. Without it, the context is `unknown`: type the parameter yourself,
+`useAppContext((c: AppContext) => c.user)`. The context is registered next to the app, not read from it, because the
+options of the screens are part of the app's type and would refer to it in a circle. See
+[Typing it](/docs/architecture/theme-and-context#types).
+
+## Outside React {#outside-react}
+
+A hook works only in a component. Code outside React, such as `willMount`, a route of `linking`, a listener, an API
+client or a store's action, reads the context with `navigation.getContext()`:
+
+```ts
+import { navigation } from '@apexnative/navigation';
+
+export async function request(path: string) {
+  const { language } = navigation.getContext();
+  return fetch(`https://api.example.com${path}`, {
+    headers: { 'Accept-Language': language },
+  });
+}
+```
+
+It reads the value once, at the call: nothing renders or runs again when it changes later. The options of a screen get
+the context too, as `(s, props, { context })`, once, when a command shows the screen; a title that should follow it
+reads it with this hook and sets it with `useScreenOptions` (see
+[Reading it](/docs/architecture/theme-and-context#read)).
+
+## Mistakes to avoid {#pitfalls}
+
+### A new object from the selector {#new-object}
+
+```tsx
+// Don't
+const { user, language } = useAppContext((c) => ({
+  user: c.user,
+  language: c.language,
+}));
+```
+
+The selector runs on every render and makes a new object each time, so the value never equals the one before. React
+reads it as a change on every render, warns that the result of `getSnapshot` should be cached, and stops with
+"Maximum update depth exceeded". The same goes for `c.items.filter(…)`, `c.items.map(…)` or `[c.a, c.b]` in the
+selector.
+
+Select each value with a hook of its own, or the whole context, and compute after:
+
+```tsx
+const user = useAppContext((c) => c.user);
+const language = useAppContext((c) => c.language);
+const items = useAppContext((c) => c.items);
+const unread = useMemo(() => items.filter((i) => !i.read), [items]);
+```
+
+### Changing the object in place {#mutation}
+
+```ts
+// Don't
+navigation.getContext().user = user;
+```
+
+The context is the same object as before, so `setContext` isn't called and nothing renders: the screens show the old
+user until something else changes. Give a new object, `navigation.setContext((c) => ({ ...c, user }))`.
+
+### setContext before the app starts {#before-start}
+
+The app sets its `context` from `createNavigation` when it launches. A `setContext` in a module's top-level code runs
+before that, and the launch replaces what it set. Change the context in `willMount`, which runs after the first value
+is in place and before the first screen.
+
+### The first value and relaunches {#time}
+
+The context is there from the launch: in `willMount`, in `root(context)` and in the first render of the first screen.
+It lives in the JavaScript runtime:
+
+- <Os name="Android" /> When the activity is recreated and the JavaScript keeps running, the screens come back with
+  the context as it was.
+- After a JavaScript reload, or when the app starts again, it starts from `context` of `createNavigation`. What
+  should outlive that, the app saves itself and puts back in `willMount`.
+
+## The context or a store {#store}
+
+The context is made for a few values that the whole app depends on and that change rarely: who the user is, the
+language, the flags, services created at the start. It has no actions, middleware or devtools, it isn't saved, and a
+change renders every reader on every mounted screen.
+
+Lists, feeds, messages and what a screen edits belong in a store or a query cache. A store kept in a module, such as
+Zustand, or Redux with its store imported, reaches every screen without the context; the context can hold the store
+as a service. See [The app's context](/docs/guides/app-context) for what to keep in it, and
+[State management](/docs/guides/state-management) for Redux, Zustand and others.
+
+## See also {#see-also}
+
+- [The context](/docs/architecture/theme-and-context#context): filling it, reading it, what goes in it.
+- [`context`](/api/starting-the-app/createNavigation#context) and
+  [`willMount`](/api/starting-the-app/createNavigation#willMount) of `createNavigation`.
+- [`useNavigationTheme`](/api/theme-and-context/useNavigationTheme): the theme, read the same way.

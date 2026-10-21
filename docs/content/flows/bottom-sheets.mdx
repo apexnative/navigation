@@ -1,0 +1,335 @@
+---
+title: Bottom sheets
+description: 'A sheet that stops at half and full height: its detents, a grabber, the screen under it kept usable, a list inside it, the detent the user picked, a pick back on the screen under it, and when a JavaScript sheet fits better.'
+---
+
+import { Mark, Os } from '@site/src/components/Intro';
+import { SheetDetents } from '@site/src/components/Screens';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+A bottom sheet is a panel that comes up from the bottom and stops partway: the places over a map, the filters of a list, the actions on a photo. The user drags it up for more and down to close it. In this guide you build one with the platform's own sheet. You end with:
+
+- a sheet that opens at half the height and drags to full height;
+- a map under it that the user can still pan;
+- a list in the sheet that scrolls without moving the sheet;
+- a sheet that grows from code, and a screen that knows how tall it is;
+- the place the user picked, back on the map.
+
+<DeviceVideo name="flow-sheet" />
+
+## What you need {#need}
+
+- An app set up with [Installation](../start/installation), with a Map screen (your own map component) and a Places screen for the sheet, each made with `defineScreen`.
+- iOS 15 or later for `'medium'` and `'large'`; iOS 16 for heights in points and `'content'`. Android has them all.
+- [Modals](../containers/modals#sheets) explains sheets among the other ways a modal looks.
+
+## How it will work {#plan}
+
+<SheetDetents />
+
+- **A sheet is a modal** with `sheet`: UIKit's sheet on iOS, the Material bottom sheet on Android. Its `detents` are the heights it stops at.
+- **Places is a screen of `screens`**, shown in the sheet with `showModal`. It is a React root like any screen: it reads the app's context and your stores, not a provider around Map.
+- **The screen in the sheet hears where the sheet is**, moves it from code, and closes it with `dismiss()`.
+
+## 1. Show a sheet {#show}
+
+`'medium'` is about half the screen, `'large'` the full height:
+
+```tsx title="src/screens/Map.tsx"
+import { Button, View } from 'react-native';
+import { defineScreen, useNavigation } from '@apexnative/navigation';
+
+function Map() {
+  const navigation = useNavigation();
+
+  const showPlaces = () =>
+    navigation.showModal('Places', {
+      stack: false,
+      sheet: { detents: ['medium', 'large'] },
+    });
+
+  return (
+    <View style={{ flex: 1 }}>
+      {/* your own map */}
+      <Button title="Places" onPress={showPlaces} />
+    </View>
+  );
+}
+
+export const MapScreen = defineScreen({
+  component: Map,
+  options: (s) => s.title('Map'),
+});
+```
+
+Tap Places: the sheet opens at the smallest detent, half the height. Drag it to full height and back, and down past half to close it.
+
+`stack: false` shows Places alone, without a stack and its top bar: a panel, not a page. Leave it out when the sheet pushes screens of its own, such as the details of a place.
+
+## 2. Show the grabber {#grabber}
+
+The grabber is the small handle at the top that tells the user the sheet moves:
+
+```ts
+sheet: { detents: ['medium', 'large'], grabber: true },
+```
+
+## 3. Keep the screen under it usable {#undimmed}
+
+By default the screen under a sheet is dimmed, and a tap on it does nothing. Over a map the user wants to pan while the places show. `largestUndimmedDetent` keeps the screen under it bright and touchable up to a detent:
+
+```ts
+sheet: {
+  detents: ['medium', 'large'],
+  grabber: true,
+  largestUndimmedDetent: 'medium',
+},
+```
+
+At half the height the map stays bright and takes touches; dragged to full height, the sheet dims it as usual. This is how the sheet of a maps app behaves.
+
+## 4. Put a list in it {#list}
+
+A list in a sheet competes with the sheet for the drag. By default a scroll up at the top of the list moves the sheet to its next detent first. `expandsOnScroll: false` gives the drag to the list, and only the top of the sheet moves the sheet:
+
+```ts
+sheet: {
+  detents: ['medium', 'large'],
+  grabber: true,
+  expandsOnScroll: false,
+},
+```
+
+Pick it when the list is the point of the sheet, such as a long list of places; keep the default when the sheet should grow as soon as the user reaches for more.
+
+## 5. Know where the sheet is {#event}
+
+A screen in a sheet may show more at full height: a search field, the details of a place. Each time the user drags the sheet to a detent, the screen gets `sheetDetentChanged`:
+
+```tsx title="src/screens/Places.tsx"
+import { useState } from 'react';
+import { FlatList, Text } from 'react-native';
+import { defineScreen, useScreenEvent } from '@apexnative/navigation';
+import { usePlaces } from '../places';
+
+function Places() {
+  const places = usePlaces(); // your own data
+  const [expanded, setExpanded] = useState(false);
+
+  useScreenEvent('sheetDetentChanged', ({ detent }) => {
+    setExpanded(detent === 'large');
+  });
+
+  return (
+    <FlatList
+      data={expanded ? places : places.slice(0, 5)}
+      renderItem={({ item }) => <Text>{item.name}</Text>}
+    />
+  );
+}
+
+export const PlacesScreen = defineScreen({ component: Places });
+```
+
+At half the height the sheet shows five places; dragged to full height, all of them.
+
+## 6. Move it from code {#move}
+
+The sheet moves to a detent when the screen changes `selectedDetent` in its options. A tap on Show all grows it to full height:
+
+```tsx title="src/screens/Places.tsx"
+const navigation = useNavigation();
+
+const showAll = () => {
+  setExpanded(true);
+  navigation.setOptions({
+    modal: { sheet: { selectedDetent: 'large' } },
+  });
+};
+```
+
+The sheet slides up to full height with an animation. The same `selectedDetent` in `showModal` makes a sheet open at full height instead of the smallest one.
+
+## 7. A sheet as tall as its content {#content}
+
+A few actions on a photo don't need half the screen. The `'content'` detent makes the sheet as tall as the screen's content:
+
+```ts
+navigation.showModal('PhotoActions', {
+  stack: false,
+  sheet: { detents: ['content'], grabber: true },
+});
+```
+
+The content is measured after every render, so the sheet follows it when it grows. It needs <Os name="iOS" /> 16; on <Os name="Android" /> the sheet stops at half the height instead, as the Material sheet has no height of its content. A screen that fills its parent (`flex: 1`) has no height of its own, so give the content of this screen its natural height.
+
+## 8. Close it with a pick {#close}
+
+The user drags the sheet down; on Android a tap on the dimmed screen under it closes it too. The screen in the sheet closes it with `dismiss()`, after a pick. The pick goes back to Map through a callback in the props:
+
+```tsx title="src/screens/Places.tsx"
+function Places({ onPick }: { onPick: (id: string) => void }) {
+  const navigation = useNavigation();
+
+  const pick = async (placeId: string) => {
+    onPick(placeId);
+    await navigation.dismiss();
+  };
+  // …
+}
+```
+
+```tsx title="src/screens/Map.tsx"
+const [placeId, setPlaceId] = useState<string | null>(null);
+
+navigation.showModal('Places', {
+  props: { onPick: setPlaceId },
+  stack: false,
+  sheet: { detents: ['medium', 'large'] },
+});
+```
+
+Tap a place: the sheet goes down, and Map has the place to center on. `onDismiss` of `showModal` runs once the sheet is gone, whatever closed it, for the code that waits for the sheet to close. A pick that other screens show too goes to a store or the app's context instead: see [Give the value back](./forms-in-a-modal#result).
+
+## Two sheets on a double tap {#double-tap}
+
+Two fast taps on Places show two sheets, one over the other: each tap is a `showModal` of its own. `showModal` resolves once the sheet is shown, so hold the second tap until then:
+
+```tsx title="src/screens/Map.tsx"
+const showing = useRef(false);
+
+const showPlaces = async () => {
+  if (showing.current) return;
+  showing.current = true;
+  try {
+    await navigation.showModal('Places', {/* … */});
+  } finally {
+    showing.current = false;
+  }
+};
+```
+
+## A sheet with a draft {#draft}
+
+A sheet that holds what the user typed, such as a note on a place, shouldn't close on a stray drag. `usePreventLeave` in its screen holds the drag down and the system back, and asks first: see [Forms in a modal](./forms-in-a-modal#prevent).
+
+## A native sheet or a JavaScript sheet {#js-sheet}
+
+The sheet here is the platform's own, shown as a modal: it covers the top bar and the tab bar, follows the system's drag and accessibility, and its screen is a screen of the app, with its own options and events.
+
+A sheet drawn in JavaScript, such as `@gorhom/bottom-sheet`, lives inside one screen's React content instead. It can't cover the native top bar and tab bar of that screen, which are outside React, but it can follow every frame of the drag with Reanimated. It needs Gesture Handler's root view in each screen, as each screen is a React root of its own. Pick it for a panel that is part of one screen and moves with its content; pick the native sheet for a task over the app. Wiring: [Gestures and animations](../guides/gestures-and-animations).
+
+## On each platform {#platforms}
+
+The sheet is <Os name="iOS" /> UIKit's sheet, and on <Os name="Android" /> the Material bottom sheet. They stop at the same detents and send the same event, with these differences:
+
+| | <Os name="iOS" /> | <Os name="Android" /> |
+| --- | --- | --- |
+| `'medium'`, `'large'` | Half and full height. | Half height, and full height under the status bar. |
+| A number | That height, in points. iOS 16+: iOS 15 leaves it out. | That height, in dp. |
+| `'content'` | The height of the content. iOS 16+: iOS 15 leaves it out. | Half the height: the Material sheet has no height of its content. |
+| The screen under it | Shrinks back a little at full height, as UIKit does. | Stays in place. |
+
+## The whole code {#files}
+
+```tsx title="src/screens/Map.tsx"
+import { useRef, useState } from 'react';
+import { Button, Text, View } from 'react-native';
+import { defineScreen, useNavigation } from '@apexnative/navigation';
+
+function Map() {
+  const navigation = useNavigation();
+  const [placeId, setPlaceId] = useState<string | null>(null);
+  const showing = useRef(false);
+
+  const showPlaces = async () => {
+    if (showing.current) return;
+    showing.current = true;
+    try {
+      await navigation.showModal('Places', {
+        props: { onPick: setPlaceId },
+        stack: false,
+        sheet: {
+          detents: ['medium', 'large'],
+          grabber: true,
+          largestUndimmedDetent: 'medium',
+          expandsOnScroll: false,
+        },
+      });
+    } finally {
+      showing.current = false;
+    }
+  };
+
+  return (
+    <View style={{ flex: 1 }}>
+      {/* your own map, centered on placeId */}
+      <Text>{placeId ?? 'No place picked'}</Text>
+      <Button title="Places" onPress={showPlaces} />
+    </View>
+  );
+}
+
+export const MapScreen = defineScreen({
+  component: Map,
+  options: (s) => s.title('Map'),
+});
+```
+
+```tsx title="src/screens/Places.tsx"
+import { useState } from 'react';
+import { Button, FlatList, View } from 'react-native';
+import {
+  defineScreen,
+  useNavigation,
+  useScreenEvent,
+} from '@apexnative/navigation';
+import { usePlaces } from '../places';
+
+function Places({ onPick }: { onPick: (id: string) => void }) {
+  const navigation = useNavigation();
+  const places = usePlaces();
+  const [expanded, setExpanded] = useState(false);
+
+  useScreenEvent('sheetDetentChanged', ({ detent }) => {
+    setExpanded(detent === 'large');
+  });
+
+  const showAll = () => {
+    setExpanded(true);
+    navigation.setOptions({
+      modal: { sheet: { selectedDetent: 'large' } },
+    });
+  };
+
+  const pick = async (placeId: string) => {
+    onPick(placeId);
+    await navigation.dismiss();
+  };
+
+  return (
+    <View style={{ flex: 1 }}>
+      {expanded ? null : (
+        <Button title="Show all" onPress={showAll} />
+      )}
+      <FlatList
+        data={expanded ? places : places.slice(0, 5)}
+        renderItem={({ item }) => (
+          <Button title={item.name} onPress={() => pick(item.id)} />
+        )}
+      />
+    </View>
+  );
+}
+
+export const PlacesScreen = defineScreen({ component: Places });
+```
+
+`usePlaces` is your own data. Both screens go into `screens` of `createNavigation`.
+
+## What's next {#next}
+
+- [Forms in a modal](./forms-in-a-modal): a modal that asks before it closes.
+- [Modals](../containers/modals#sheets): sheets and the other ways a modal looks.
+- [Lifecycle and events](../fundamentals/lifecycle-and-events#events): every event, `sheetDetentChanged` too.
+- [Gestures and animations](../guides/gestures-and-animations): Reanimated, Gesture Handler and JavaScript sheets.

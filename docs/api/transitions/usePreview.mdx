@@ -1,0 +1,158 @@
+import { Os } from '@site/src/components/Intro';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+<Os name="iOS" /> `usePreview` gives a view of a screen the preview of the screen it opens: a long press on the view
+shows that screen small, with a menu under it, and a tap on the preview pushes the screen. It is UIKit's context menu,
+the one Photos and Mail show. A component of a screen calls it, with the `nativeID` of the view. On Android it does
+nothing.
+
+## Usage {#usage}
+
+```tsx title="src/screens/Inbox.tsx"
+import { Pressable, Text } from 'react-native';
+import { navigation, usePreview } from '@apexnative/navigation';
+
+function Row({ id, subject }: { id: string; subject: string }) {
+  usePreview(`message-${id}`, {
+    screen: 'Details',
+    props: { id },
+    actions: [
+      {
+        id: 'archive',
+        title: 'Archive',
+        onPress: () => archive(id), // your own
+      },
+      {
+        id: 'delete',
+        title: 'Delete',
+        style: 'destructive',
+        onPress: () => remove(id), // your own
+      },
+    ],
+  });
+  return (
+    <Pressable
+      nativeID={`message-${id}`}
+      onPress={() => navigation.push('Details', { props: { id } })}
+    >
+      <Text>{subject}</Text>
+    </Pressable>
+  );
+}
+```
+
+A tap on a row pushes Details as usual. A long press lifts the row and shows Details small above it, with Archive and
+Delete under it. A tap on the preview pushes Details from there; a pick in the menu runs its `onPress`; a tap outside
+closes it all. With a pointer on iPad, a right click shows the same.
+
+<DeviceVideo name="preview" devices={['ios']} />
+
+## Signature {#signature}
+
+<ApiSignature data={data} name="usePreview" />
+
+- **`nativeID`**: the `nativeID` of a view of the same screen. The view has to be there within a moment of the
+  component mounting; it can be the component's own view, as above, or another one of the screen.
+- **`config`**: what the preview shows, below.
+- **Returns** nothing. The preview stays as long as the component is mounted, and goes when it unmounts.
+
+## What the preview shows {#config}
+
+### `screen` {#screen}
+
+<ApiMember data={data} of="PreviewConfig" name="screen" />
+
+The screen to preview and push, by its name in `screens`. It is pushed onto the stack of the screen that calls the
+hook, so that screen has to be in a stack. Its options apply as on any push: the preview shows it with them, and it
+keeps them once pushed.
+
+### `props` {#props}
+
+<ApiMember data={data} of="PreviewConfig" name="props" />
+
+The props of the screen, typed by its component, and required when the screen has required props, as in a `push`. A
+change of the props makes a new preview, with the screen rendered again.
+
+### `actions` {#actions}
+
+<ApiMember data={data} of="PreviewConfig" name="actions" />
+
+The menu under the preview. Each item is a `PreviewAction`:
+
+- `id`: the item's id, unique in the menu.
+- `title`: the text the user sees.
+- `style`: `'default'`, `'selected'` with a checkmark, or `'destructive'` in red.
+- `onPress`: runs when the user picks it. The menu closes; the screen isn't pushed.
+- `actions`: items of a submenu, shown when the user picks this one.
+
+```ts
+actions: [
+  {
+    id: 'move',
+    title: 'Move to',
+    actions: [
+      { id: 'work', title: 'Work', onPress: () => move(id, 'work') },
+      { id: 'home', title: 'Home', onPress: () => move(id, 'home') },
+    ],
+  },
+],
+```
+
+The `onPress` handlers are read when the user picks an item, so they can be new functions on every render; only a
+change of the ids, the titles or the styles makes a new menu. Without `actions`, the preview has no menu.
+
+### `width` {#width}
+
+<ApiMember data={data} of="PreviewConfig" name="width" />
+
+The width of the preview in points. By default the width of the screen that calls the hook.
+
+### `height` {#height}
+
+<ApiMember data={data} of="PreviewConfig" name="height" />
+
+The height of the preview in points. By default the height of the screen. A short screen, such as the first lines of
+a message, previews better with a height of its own:
+
+```ts
+usePreview(`message-${id}`, {
+  screen: 'Details',
+  props: { id },
+  height: 320,
+});
+```
+
+## When the screen renders {#time}
+
+The previewed screen is made and rendered **when the component mounts**, not at the long press: UIKit
+shows the preview at once, so it has to be ready. It renders like any screen, with its effects; it isn't on the
+stack until the user commits the preview. After a push, the view gets a new preview, rendered
+again, so the next long press works too.
+
+A screen with a [`key`](/api/screens-and-props/defineScreen#key) is no exception: the preview leaves the stack alone
+until the tap. If the stack has a screen with the same key by then, the tap goes back to that screen, as
+[`push`](/api/moving-between-screens/navigation#push) does, and the preview goes.
+
+So each `usePreview` costs one rendered screen while it is mounted. A list of a hundred rows with a preview each holds a
+hundred screens. Keep previews to what the user sees, such as the rows of a `FlatList`, which unmounts the rows that
+scroll away, and keep the previewed screen light to render.
+
+## Android {#android}
+
+<Os name="Android" /> Android has no context menu with a preview. The hook does nothing there: a long press on the
+view does what the view itself does, and no screen is rendered. For a menu on Android, handle `onLongPress` on the view
+yourself.
+
+## Mistakes to avoid {#pitfalls}
+
+- **The view has no `nativeID`, or another one.** The preview finds the view by it, in the screen that calls the hook;
+  without a match, a long press does nothing.
+- **Two views with the same `nativeID`** in one screen: give each row its own, with the item's id in it.
+- **A screen that isn't in a stack**, such as a single screen as the root: there is nothing to push onto, and a tap
+  on the preview pushes nothing. Put the screen in a stack.
+
+## See also {#see-also}
+
+- [Preview](/docs/architecture/transitions#preview) and [Zoom](/docs/architecture/transitions#zoom): transitions out
+  of a view.
+- [The zoom or the preview does nothing](/docs/help/troubleshooting#zoom).

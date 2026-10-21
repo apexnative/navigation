@@ -1,0 +1,448 @@
+---
+title: List and details
+description: 'A list that opens its items: a push on the phone, the list and the item side by side on iPad and wide Android screens, one call for both, a list that stays fresh after a change, and no second screen on a double tap.'
+---
+
+import { Mark, Os, Pair } from '@site/src/components/Intro';
+import { SplitColumns } from '@site/src/components/Screens';
+import DocTabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+A list that opens its items is the most common screen there is: the mail and a message, the contacts and a person, the orders and an order. In this guide you build it for every screen size with one call. You end with:
+
+- an Inbox list that opens a Message on the phone with a push, and back to the list;
+- a Message that loads itself from an id and puts the subject in its title;
+- on iPad and wide Android screens, the list and the message side by side;
+- a list that shows a message as read once it was opened, on the phone and side by side;
+- a row that opens one message, however fast the user taps it.
+
+<DeviceVideo name="flow-list-details" devices={['ios', 'ipad']} />
+
+## What you need {#need}
+
+- An app set up with [Installation](../start/installation).
+- The screens Inbox, Message and NoMessage.
+- Your own data: `useMessages()` for the list and `useMessage(id)` for one message, from your API or a query library. A later step moves them to a store, [Zustand](https://zustand.docs.pmnd.rs) 5, to keep the list fresh.
+- [Stack](../containers/stack) and [Split view](../containers/split-view) explain the parts this guide puts together.
+
+## How it will work {#plan}
+
+```text
+iPhone, narrow Android        iPad, wide Android
+┌──────────┐  push  ┌───────┐ ┌──────────┬─────────────┐
+│ Inbox    │ ─────▶ │Message│ │ Inbox    │ Message     │
+└──────────┘ ◀ back └───────┘ └──────────┴─────────────┘
+```
+
+<SplitColumns />
+
+- **Start with the phone**: a stack, and a push with the id of the message.
+- **Then a split view** around the same screens. One call, `showInColumn`, shows the message beside the list where there is room, and pushes it where there isn't.
+- **The message loads itself** from its id, so it is fresh, and opens from a link or a notification as well.
+
+## 1. Push the item on the phone {#push}
+
+Start with the phone. The root is the list in a stack; a tap on a row pushes the message, with its id as a prop:
+
+```ts title="Navigation.ts"
+import { createNavigation } from '@apexnative/navigation';
+import { InboxScreen } from './src/screens/Inbox';
+import { MessageScreen } from './src/screens/Message';
+
+export const Navigation = createNavigation({
+  screens: { Inbox: InboxScreen, Message: MessageScreen },
+  root: 'Inbox',
+});
+```
+
+```tsx title="src/screens/Inbox.tsx"
+import { Button, FlatList } from 'react-native';
+import { defineScreen, useNavigation } from '@apexnative/navigation';
+import { useMessages } from '../messages';
+
+function Inbox() {
+  const navigation = useNavigation();
+  const messages = useMessages(); // your own data
+
+  const open = (id: string) =>
+    navigation.push('Message', { props: { id } });
+
+  return (
+    <FlatList
+      data={messages}
+      renderItem={({ item }) => (
+        <Button title={item.subject} onPress={() => open(item.id)} />
+      )}
+    />
+  );
+}
+
+export const InboxScreen = defineScreen({
+  component: Inbox,
+  options: (s) => s.title('Inbox'),
+});
+```
+
+Tap a row: the message slides in, and the back button or the swipe back returns to the list, scrolled where it was. The list stays mounted under the message, with its state.
+
+## 2. Load the item from its id {#load}
+
+The message gets the id and loads what it shows:
+
+```tsx title="src/screens/Message.tsx"
+import { ActivityIndicator, Text } from 'react-native';
+import {
+  defineScreen,
+  useScreenOptions,
+} from '@apexnative/navigation';
+import { useMessage } from '../messages';
+
+function Message({ id }: { id: string }) {
+  const message = useMessage(id); // your own data
+
+  useScreenOptions((s) => s.title(message?.subject ?? ''));
+
+  if (!message) return <ActivityIndicator />;
+  return <Text>{message.body}</Text>;
+}
+
+export const MessageScreen = defineScreen({ component: Message });
+```
+
+The message comes in with a spinner and an empty title, then shows its body, and the subject goes into the top bar. `useScreenOptions` builds the options from the state of the component on each render, and sends them when they change. More: [From the state: useScreenOptions](../fundamentals/screen-options#use-screen-options).
+
+## 3. Put them side by side on iPad {#split}
+
+On a big screen the list and the message fit side by side. A split view puts them in columns, and `compact` says what a phone shows instead:
+
+```ts title="Navigation.ts"
+import { createNavigation, SplitView } from '@apexnative/navigation';
+import { NoMessageScreen } from './src/screens/NoMessage';
+
+export const Navigation = createNavigation({
+  screens: {
+    Inbox: InboxScreen,
+    Message: MessageScreen,
+    NoMessage: NoMessageScreen,
+  },
+  root: SplitView({
+    primary: 'Inbox', // the sidebar
+    secondary: 'NoMessage', // beside it, before the first pick
+    compact: 'Inbox', // iPhone and a narrow window
+  }),
+});
+```
+
+The column beside the list needs something to show before the first pick:
+
+```tsx title="src/screens/NoMessage.tsx"
+import { Text } from 'react-native';
+
+export function NoMessageScreen() {
+  return <Text>Pick a message on the left</Text>;
+}
+```
+
+Run it on an iPad: Inbox in the sidebar, "Pick a message on the left" beside it. On iPhone nothing changed. A screen without options can be a plain component, as `NoMessageScreen` is.
+
+## 4. Open the item in the column beside {#show-in-column}
+
+The list opens the message with `showInColumn` instead of `push`:
+
+```tsx title="src/screens/Inbox.tsx"
+const open = (id: string) =>
+  navigation.showInColumn('Message', { props: { id } });
+```
+
+<Mark>One call works on every screen size</Mark>:
+
+| Where | What the user sees |
+| --- | --- |
+| <Os name="iPadOS" /> | The message takes the place of what the column showed. A sidebar over it goes away. |
+| <Os name="iOS" /> iPhone, a narrow iPad window | The `compact` layout shows Inbox; the message is pushed over it, and back returns to the list. |
+| <Os name="Android" /> wide: a tablet, an unfolded phone, a phone in landscape | The list and the message in two panes, side by side. |
+| <Os name="Android" /> narrow | The `compact` layout, with a push, as on iPhone. |
+
+Each column has a stack of its own, so the message can push further, such as an attachment, inside its column: back returns to the message, and the list stays.
+
+## 5. Mark the open item {#selected}
+
+Side by side, the list shows which row is open. The list knows it, as it is the one that opened it:
+
+```tsx title="src/screens/Inbox.tsx"
+const [openId, setOpenId] = useState<string | null>(null);
+
+const open = (id: string) => {
+  setOpenId(id);
+  navigation.showInColumn('Message', { props: { id } });
+};
+```
+
+Each row then compares its id with `openId` to draw itself as selected. On the phone the list is under the message, so the mark is seen only on the way back.
+
+## 6. The sidebar {#sidebar}
+
+<Os name="iPadOS" /> In portrait the sidebar can cover the message or hide. `displayMode` sets how the split view starts, and `primaryColumn` the width of the list:
+
+```ts title="Navigation.ts"
+SplitView({ primary: 'Inbox', secondary: 'NoMessage' })
+  .displayMode('oneBesideSecondary')
+  .primaryColumn({ width: 320 });
+```
+
+The list stays beside the message, 320 points wide. The user shows and hides the sidebar with the button of the bar and a swipe; the app does it with `showColumn('primary')` and `hideColumn('primary')`. More: [How the sidebar shows](../containers/split-view#sidebar).
+
+## Pass the id, not the object {#ids}
+
+Props stay in JavaScript, so a whole message can go as a prop, and it is tempting: the screen has it at once. But it is a copy, taken at the tap.
+
+<Pair left="Not recommended" right="Recommended">
+
+```tsx
+navigation.push('Message', {
+  props: { message: item },
+});
+```
+
+```tsx
+navigation.push('Message', {
+  props: { id: item.id },
+});
+```
+
+</Pair>
+
+- **The copy goes stale.** A change made on the message, or a new version from the server, doesn't reach it, and the list and the message disagree.
+- **A link knows only the id.** `myapp://message/42` and a notification open the same screen with `{ id: '42' }`; a screen that needs the object can't be opened from them.
+
+A screen that wants the list's data at once, to show the subject before the body loads, reads it from the same cache or store by id: then there is one copy. For a link, a route with the screen's name pushes it with the params as props:
+
+```ts title="Navigation.ts"
+linking: {
+  prefixes: ['myapp://'],
+  routes: { 'message/:id': 'Message' },
+},
+```
+
+## The list after a change on the details {#refresh}
+
+The user opens a message, and the message marks itself as read. Back on the list, the row still looks unread: Inbox loaded its data before, and nothing told it. There are two ways to keep it right.
+
+<DocTabs groupId="list-refresh">
+<TabItem value="store" label="A store (Zustand)" default>
+
+Keep the messages in a store. The list and the message read the same one, so a change anywhere renders both, whatever React root each screen is in:
+
+```ts title="src/messages.ts"
+import { create } from 'zustand';
+
+type Message = {
+  id: string;
+  subject: string;
+  body: string;
+  read: boolean;
+};
+
+type MessagesState = {
+  messages: Message[];
+  markRead: (id: string) => void;
+};
+
+export const useMessageStore = create<MessagesState>()((set) => ({
+  messages: [],
+  markRead: (id) =>
+    set((s) => ({
+      messages: s.messages.map((m) =>
+        m.id === id ? { ...m, read: true } : m,
+      ),
+    })),
+}));
+```
+
+```tsx title="src/screens/Message.tsx"
+const message = useMessageStore((s) =>
+  s.messages.find((m) => m.id === id),
+);
+const markRead = useMessageStore((s) => s.markRead);
+
+useEffect(() => {
+  markRead(id); // and tell your server
+}, [id, markRead]);
+```
+
+The row turns read the moment the message opens: under it on the phone, beside it on iPad.
+
+</TabItem>
+<TabItem value="focus" label="Reload when the list shows">
+
+Keep the data per screen, and reload the list each time it appears again. `useFocusEffect` runs when the screen appears:
+
+```tsx title="src/screens/Inbox.tsx"
+import { useFocusEffect } from '@apexnative/navigation';
+
+function Inbox() {
+  const { messages, refetch } = useMessages(); // your own data
+  useFocusEffect(() => {
+    refetch();
+  });
+  // …
+}
+```
+
+Back from the message, the list reloads, and the row is read. On iPad and wide Android screens this isn't enough: the list never leaves the screen there, so it never appears again. Use the store there, or a query library that refreshes every screen using the same data (see [Data fetching](../guides/data-fetching)).
+
+</TabItem>
+</DocTabs>
+
+The app's context is not the place for the messages: it is made for what changes rarely, and each change renders every component that reads it on every screen. See [What goes in the context](../architecture/theme-and-context#context-roles).
+
+## Two taps open two screens {#double-tap}
+
+A user who taps a row twice, fast, gets two Message screens, one over the other: each tap is a push of its own, and back goes from the message to the same message. Hold the second tap until the first push is done; `push` resolves once the screen is in place:
+
+```tsx title="src/screens/Inbox.tsx"
+const opening = useRef(false);
+
+const open = async (id: string) => {
+  if (opening.current) return;
+  opening.current = true;
+  try {
+    await navigation.showInColumn('Message', { props: { id } });
+  } finally {
+    opening.current = false;
+  }
+};
+```
+
+Tap a row twice: one message comes in. The `finally` lets the row work again after a push that failed.
+
+## The item is gone {#missing}
+
+A message deleted on another device, or opened from an old link, loads as nothing. The screen says so instead of a spinner that never ends:
+
+```tsx title="src/screens/Message.tsx"
+if (message === null) return <Text>This message is gone</Text>;
+```
+
+Here `useMessage` gives `undefined` while it loads and `null` when the server has no such message; the back button returns to the list.
+
+## The whole code {#files}
+
+With the split view and the store.
+
+```ts title="Navigation.ts"
+import { createNavigation, SplitView } from '@apexnative/navigation';
+import { InboxScreen } from './src/screens/Inbox';
+import { MessageScreen } from './src/screens/Message';
+import { NoMessageScreen } from './src/screens/NoMessage';
+
+export const Navigation = createNavigation({
+  screens: {
+    Inbox: InboxScreen,
+    Message: MessageScreen,
+    NoMessage: NoMessageScreen,
+  },
+  root: SplitView({
+    primary: 'Inbox',
+    secondary: 'NoMessage',
+    compact: 'Inbox',
+  }).displayMode('oneBesideSecondary'),
+  linking: {
+    prefixes: ['myapp://'],
+    routes: { 'message/:id': 'Message' },
+  },
+});
+```
+
+```tsx title="src/screens/Inbox.tsx"
+import { useRef, useState } from 'react';
+import { FlatList, Pressable, Text } from 'react-native';
+import { defineScreen, useNavigation } from '@apexnative/navigation';
+import { useMessageStore } from '../messages';
+
+function Inbox() {
+  const navigation = useNavigation();
+  const messages = useMessageStore((s) => s.messages);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const opening = useRef(false);
+
+  const open = async (id: string) => {
+    if (opening.current) return;
+    opening.current = true;
+    setOpenId(id);
+    try {
+      await navigation.showInColumn('Message', { props: { id } });
+    } finally {
+      opening.current = false;
+    }
+  };
+
+  return (
+    <FlatList
+      data={messages}
+      renderItem={({ item }) => (
+        <Pressable
+          onPress={() => open(item.id)}
+          style={{ opacity: item.id === openId ? 0.5 : 1 }}
+        >
+          <Text style={{ fontWeight: item.read ? '400' : '700' }}>
+            {item.subject}
+          </Text>
+        </Pressable>
+      )}
+    />
+  );
+}
+
+export const InboxScreen = defineScreen({
+  component: Inbox,
+  options: (s) => s.title('Inbox'),
+});
+```
+
+```tsx title="src/screens/Message.tsx"
+import { useEffect } from 'react';
+import { Text } from 'react-native';
+import {
+  defineScreen,
+  useScreenOptions,
+} from '@apexnative/navigation';
+import { useMessageStore } from '../messages';
+
+function Message({ id }: { id: string }) {
+  const message = useMessageStore((s) =>
+    s.messages.find((m) => m.id === id),
+  );
+  const markRead = useMessageStore((s) => s.markRead);
+
+  useEffect(() => {
+    markRead(id);
+  }, [id, markRead]);
+
+  useScreenOptions((s) => s.title(message?.subject ?? ''));
+
+  if (!message) return <Text>This message is gone</Text>;
+  return <Text>{message.body}</Text>;
+}
+
+export const MessageScreen = defineScreen({ component: Message });
+```
+
+```tsx title="src/screens/NoMessage.tsx"
+import { Text } from 'react-native';
+
+export function NoMessageScreen() {
+  return <Text>Pick a message on the left</Text>;
+}
+```
+
+`src/messages.ts` is the store of [the list after a change](#refresh); filling it from your server is your own.
+
+## What's next {#next}
+
+- [Forms in a modal](./forms-in-a-modal): editing an item.
+- [An app with tabs](./an-app-with-tabs): a list in each tab.
+- [Split view](../containers/split-view): the columns, three of them, the inspector, Android's panes.
+- [Deep links](../guides/deep-links): opening an item from a link.
+- [Data fetching](../guides/data-fetching) and [State management](../guides/state-management): where the list's data lives.

@@ -1,0 +1,564 @@
+---
+title: The app context, and working without it
+description: 'What the app context is for, every way to read and change it, signing in and out with it, and the same app built with a store, with screen props, or with React context instead.'
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import { Mark } from '@site/src/components/Intro';
+
+Every app has a few facts that everything depends on: whether the user is signed in, who they are, the language. The first screen depends on them, the titles of the bars show them, a deep link waits for them. The navigation keeps such facts in one place, <Mark>the app context</Mark>, that the start of the app, the options of the screens, the links and every component read.
+
+Here you learn what it is, how to read and change it from every place, and how to run sign-in and sign-out with it. Then the same app without it: with a store, with screen props, with React context. You don't have to use it; by the end you know when it pays off.
+
+You should know [screens and props](../fundamentals/screens-and-props) and [switching roots](../fundamentals/switching-roots). The concept page is [Theme and context](../architecture/theme-and-context#context).
+
+## What the context is {#what}
+
+The context is one value, usually a small object, that the navigation keeps in the JavaScript runtime:
+
+```ts title="Navigation.ts"
+import { createNavigation } from '@apexnative/navigation';
+
+export type AppContext = {
+  user: { id: string; name: string } | null;
+  language: string;
+};
+
+const context: AppContext = { user: null, language: 'en' };
+
+export const Navigation = createNavigation({
+  screens: { Home: HomeScreen, Login: LoginScreen },
+  root: 'Home',
+  context,
+});
+```
+
+- **One value.** `context` of `createNavigation` is its first value; `navigation.setContext` replaces it. There is nothing else to it: no actions, no middleware.
+- **Read from everywhere.** Components with `useAppContext`, the start with `root(context)` and `initialRoot(context)`, the options of the screens, `when` of the links, any code with `navigation.getContext()`.
+- **Every reader renders again** when the part it reads changes, on every mounted screen.
+
+## Why it exists {#why}
+
+Each screen is a React root of its own (see [A root per screen](../architecture/one-tree#root-per-screen)). A React context made at the top of the app reaches none of them, and much of what needs the facts isn't React at all:
+
+| Who needs "is the user signed in?" | Is it React? |
+| --- | --- |
+| The first root, picked while the splash screen shows | No: `initialRoot` |
+| The title of a screen's bar | No: the screen's options |
+| A deep link that waits for the sign-in | No: `when` of `linking` |
+| The greeting on Home | Yes: a component |
+
+The context is the one value all four read, with no setup of their own. A store of your own reaches them too, through its own API; the [last part](#without) shows how.
+
+## What to keep in it {#keep}
+
+Few values that the whole app depends on and that change rarely: the session, the user's name and avatar, the language, feature flags, the plan of the account, services created once at the start. Lists, feeds, forms and anything that changes often go elsewhere. The full list, with examples of each: [What goes in the context](../architecture/theme-and-context#context-roles).
+
+## Set it up {#set-up}
+
+### Its type and first value {#type}
+
+Export the type from `Navigation.ts`, and give the first value to `createNavigation`, as [above](#what). The first value is there from the launch: in `willMount`, in `root(context)`, in the first render of the first screen.
+
+### Register the type {#register}
+
+`setup` and `init` write `navigation-env.d.ts`, which registers the app and the type of its context, exported from `Navigation.ts` as `AppContext`. Nothing to add by hand:
+
+```ts title="navigation-env.d.ts"
+// Made by apex-navigation setup: the types of the app's screens
+// for the navigation's commands. Don't edit.
+declare module '@apexnative/navigation' {
+  interface Register {
+    app: typeof import('./Navigation').Navigation;
+    context: import('./Navigation').AppContext;
+  }
+}
+export {};
+```
+
+From then on `useAppContext`, `navigation.getContext()`, `navigation.setContext()` and the options know the type. Without it, the context is `unknown`, and each reader types it: `useAppContext((c: AppContext) => c.user)`. See [Typing it](../architecture/theme-and-context#types).
+
+## Read it {#read}
+
+### In a component: useAppContext {#use-app-context}
+
+```tsx title="src/screens/Home.tsx"
+import { Text } from 'react-native';
+import { useAppContext } from '@apexnative/navigation';
+
+export function Home() {
+  const name = useAppContext((c) => c.user?.name);
+  return <Text>Hello, {name ?? 'guest'}</Text>;
+}
+```
+
+The function picks the part the component reads, and the component renders again only when that part changes. Without it, `useAppContext()` returns the whole context and renders on every change. It works in any component of any screen, in `appProvider`, `screenProvider` and the fallbacks. See [`useAppContext`](/api/theme-and-context/useAppContext#renders).
+
+### When the app starts {#at-start}
+
+The functions of the start get the context as their argument, as `willMount` left it:
+
+```ts title="Navigation.ts"
+export const Navigation = createNavigation({
+  screens: { Home: HomeScreen, Login: LoginScreen },
+  roots: {
+    login: Stack('Login'),
+    main: Tabs(Tab('Home'), Tab('Settings')),
+  },
+  context,
+  willMount: async () => {
+    const user = await loadUser(); // your own request
+    navigation.setContext((c) => ({ ...c, user }));
+  },
+  initialRoot: (context) => (context.user ? 'main' : 'login'),
+  didMount: (context) => {
+    if (context.user) prefetchHome(); // your own
+  },
+});
+```
+
+`root(context)` works the same way for an app with one root. `initialRoot` and `root` run after `willMount` resolves; `didMount` once the first root is shown.
+
+### In options {#options}
+
+The options of a screen, of a group and of the app are built from a chain that gets the context:
+
+```tsx title="src/screens/Home.tsx"
+export const HomeScreen = defineScreen({
+  component: Home,
+  options: (s, props, { context }) =>
+    s.title(context.user?.name ?? 'Home'),
+});
+```
+
+```ts title="Navigation.ts"
+options: (s, { theme, context }) => s.largeTitle(!context.user),
+```
+
+They read it <Mark>once</Mark>: a screen's options when a command shows the screen, the app's options at the start and on each `setTheme`. A later `setContext` doesn't build them again. A title that should follow the context reads it in the component and sets it with `useScreenOptions`:
+
+```tsx title="src/screens/Home.tsx"
+function Home() {
+  const name = useAppContext((c) => c.user?.name);
+  useScreenOptions((s) => s.title(name ?? 'Home'));
+  return <Feed />;
+}
+```
+
+See [From the state](../fundamentals/screen-options#use-screen-options).
+
+### In links {#links}
+
+`when` of `linking` decides from the context whether a link may run now. A link that comes while it is false waits, and runs by itself once a `setContext` lets it:
+
+```ts title="Navigation.ts"
+linking: {
+  prefixes: ['myapp://'],
+  when: (context) => context.user !== null,
+  routes: { 'chat/:chatId': 'Chat' },
+},
+```
+
+A signed-out user taps a link to a chat; the app shows Login, and the chat opens after the sign-in. See [Links that wait](./deep-links#when).
+
+### Outside React {#outside-react}
+
+Any code reads the context with `navigation.getContext()`: a listener, a route of a link, a notification handler, an API client.
+
+```ts title="src/api.ts"
+import { navigation } from '@apexnative/navigation';
+
+export function request(path: string) {
+  const { language } = navigation.getContext();
+  return fetch(`https://api.example.com${path}`, {
+    headers: { 'Accept-Language': language },
+  });
+}
+```
+
+It reads the value at the call. There is no subscription outside React: code that must run when the context changes runs from the place that changes it, or from a store with a subscription of its own.
+
+## Change it {#write}
+
+`navigation.setContext` is the one way. It takes the new value, or a function of the value before:
+
+```ts
+import { navigation } from '@apexnative/navigation';
+
+// a function of the value before: the other keys stay
+navigation.setContext((c) => ({ ...c, language: 'de' }));
+
+// a whole new value: what it leaves out is gone
+navigation.setContext({ user: null, language: 'en' });
+```
+
+It <Mark>replaces</Mark> the context; it doesn't merge into it. To change one key, pass a function and spread the rest. The change is synchronous: `getContext()` returns the new value right after, and the readers render with React's next update.
+
+It works from anywhere:
+
+```ts
+// willMount: before the first screen
+willMount: async () => {
+  const flags = await loadFlags(); // your own request
+  navigation.setContext((c) => ({ ...c, flags }));
+},
+
+// a screen: the user picks a language
+const pick = (language: string) =>
+  navigation.setContext((c) => ({ ...c, language }));
+
+// a listener of your auth library
+onSessionExpired(() => {
+  navigation.setContext((c) => ({ ...c, user: null }));
+});
+```
+
+### What renders again {#renders}
+
+After a `setContext`, each `useAppContext` compares what its function returns now with what it returned before, by `Object.is`, and renders when they differ:
+
+| The component reads | It renders again when |
+| --- | --- |
+| `useAppContext()` | Any `setContext` with a new object. |
+| `useAppContext((c) => c.user)` | `user` is another object, or `null`. |
+| `useAppContext((c) => c.user?.name)` | The name changes. |
+
+Every mounted screen counts: the screens under the top one, the other tabs, the screens under a modal. A `setContext` with the same object renders nothing.
+
+## Sign-in and sign-out with the context {#sign-in}
+
+The context holds the user; the roots follow it. One flow, on both sides of the comparison below:
+
+1. `willMount` loads the saved session and puts the user in.
+2. `initialRoot` picks `main` or `login` from it.
+3. A sign-in puts the user in, then switches to `main`.
+4. A sign-out switches to `login`, then takes the user out.
+
+<Tabs groupId="app-context">
+<TabItem value="context" label="With the context" default>
+
+```ts title="Navigation.ts"
+import {
+  createNavigation,
+  navigation,
+  Stack,
+  Tab,
+  Tabs,
+} from '@apexnative/navigation';
+
+export type AppContext = { user: User | null };
+
+export const Navigation = createNavigation({
+  screens: { Login: LoginScreen, Home: HomeScreen },
+  roots: {
+    login: Stack('Login'),
+    main: Tabs(Tab('Home'), Tab('Settings')),
+  },
+  context: { user: null } as AppContext,
+  willMount: async () => {
+    const user = await loadSavedUser(); // your own storage
+    navigation.setContext({ user });
+  },
+  initialRoot: (context) => (context.user ? 'main' : 'login'),
+});
+```
+
+```ts title="src/session.ts"
+import { navigation } from '@apexnative/navigation';
+
+export async function signIn(email: string, password: string) {
+  const user = await logIn(email, password); // your own request
+  navigation.setContext((c) => ({ ...c, user }));
+  await navigation.switchTo('main');
+}
+
+export async function signOut() {
+  await navigation.switchTo('login');
+  navigation.setContext((c) => ({ ...c, user: null }));
+}
+```
+
+```tsx title="src/screens/Home.tsx"
+function Home() {
+  const name = useAppContext((c) => c.user?.name);
+  return <Text>Hello, {name}</Text>;
+}
+```
+
+</TabItem>
+<TabItem value="store" label="With a store">
+
+```ts title="src/store.ts"
+import { create } from 'zustand';
+
+type Session = { user: User | null };
+
+export const useSession = create<Session>()(() => ({
+  user: null,
+}));
+```
+
+```ts title="Navigation.ts"
+import {
+  createNavigation,
+  Stack,
+  Tab,
+  Tabs,
+} from '@apexnative/navigation';
+import { useSession } from './src/store';
+
+export const Navigation = createNavigation({
+  screens: { Login: LoginScreen, Home: HomeScreen },
+  roots: {
+    login: Stack('Login'),
+    main: Tabs(Tab('Home'), Tab('Settings')),
+  },
+  willMount: async () => {
+    const user = await loadSavedUser(); // your own storage
+    useSession.setState({ user });
+  },
+  initialRoot: () =>
+    useSession.getState().user ? 'main' : 'login',
+});
+```
+
+```ts title="src/session.ts"
+import { navigation } from '@apexnative/navigation';
+import { useSession } from './store';
+
+export async function signIn(email: string, password: string) {
+  const user = await logIn(email, password); // your own request
+  useSession.setState({ user });
+  await navigation.switchTo('main');
+}
+
+export async function signOut() {
+  await navigation.switchTo('login');
+  useSession.setState({ user: null });
+}
+```
+
+```tsx title="src/screens/Home.tsx"
+function Home() {
+  const name = useSession((s) => s.user?.name);
+  return <Text>Hello, {name}</Text>;
+}
+```
+
+</TabItem>
+</Tabs>
+
+Both start a signed-in user on Home with no flash of Login, and both leave Login with nothing of the last user after a sign-out. The difference shows in the options and the links: with the context, `options: (s, props, { context })` and `when: (context) => …` read the user by themselves; with a store, they import it and call `useSession.getState()`.
+
+**Why the switch comes before the reset on sign-out:** the screens of the signed-in root are on display until the switch is done. Take the user out first, and they render once more without one.
+
+## Without the context {#without}
+
+The context is optional. An app with no `context` key works the same; `useAppContext()` returns `undefined`. Three ways to do without it, each with the same Home that greets the user.
+
+### With a store only {#only-store}
+
+A store kept in a module reaches every screen, and every place outside React imports it. The start reads it after `willMount`, the options read it when a command shows a screen:
+
+```ts title="Navigation.ts"
+import { useSession } from './src/store';
+
+export const Navigation = createNavigation({
+  // … screens and roots, as in the tab above
+  linking: {
+    prefixes: ['myapp://'],
+    routes: {
+      'chat/:chatId': ({ chatId }) => {
+        if (!useSession.getState().user) return; // dropped
+        navigation.push('Chat', { props: { chatId } });
+      },
+    },
+  },
+});
+```
+
+```tsx title="src/screens/Home.tsx"
+export const HomeScreen = defineScreen({
+  component: Home,
+  options: (s) =>
+    s.title(useSession.getState().user?.name ?? 'Home'),
+});
+```
+
+What you give up: a link that waits for the sign-in. `when` reads only the context, so a route checks the store itself and drops or keeps the link on its own. Mirror one flag into the context when you want waiting links: `navigation.setContext({ signedIn: true })` next to your store's sign-in.
+
+**Better when** the app already has a store, or its shared data is more than a few facts. Every library, step by step: [State management](./state-management).
+
+### With screen props only {#only-props}
+
+The user can travel as props: a root with a param, and props on each command. Nothing global:
+
+```ts title="Navigation.ts"
+import {
+  createNavigation,
+  Screen,
+  Stack,
+} from '@apexnative/navigation';
+
+let savedUser: User | null = null;
+
+export const Navigation = createNavigation({
+  screens: { Login: LoginScreen, Home: HomeScreen },
+  roots: {
+    login: Stack('Login'),
+    main: (user: User) => Stack(Screen('Home', { user })),
+  },
+  willMount: async () => {
+    savedUser = await loadSavedUser(); // your own storage
+  },
+  initialRoot: () =>
+    savedUser ? ['main', savedUser] : 'login',
+});
+```
+
+```tsx title="src/screens/Home.tsx"
+function Home({ user }: { user: User }) {
+  return (
+    <Button
+      title={`Hello, ${user.name}`}
+      onPress={() =>
+        navigation.push('Profile', { props: { user } })
+      }
+    />
+  );
+}
+```
+
+A sign-in calls `navigation.switchTo('main', user)`. Each screen gets the user from the one before it.
+
+What you give up: a change. When the user edits their name on Profile, Home still shows the old one, and every screen that should know passes it on by hand. Props are the value at the moment of the command.
+
+**Better when** the value belongs to one flow and doesn't change while it is open: the item a checkout is for, the chat a screen shows. See [Props](../fundamentals/screens-and-props#props).
+
+### With React context in appProvider {#react-context}
+
+With `appProvider`, every screen renders in one React tree, so a React context at the top reaches every screen, as in a React app:
+
+```tsx title="src/AppProvider.tsx"
+import { createContext, useContext, useState } from 'react';
+import type { ReactNode } from 'react';
+
+type Session = {
+  user: User | null;
+  setUser: (user: User | null) => void;
+};
+
+const SessionContext = createContext<Session | null>(null);
+
+export function AppProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  return (
+    <SessionContext.Provider value={{ user, setUser }}>
+      {children}
+    </SessionContext.Provider>
+  );
+}
+
+export const useSession = () => useContext(SessionContext)!;
+```
+
+```ts title="Navigation.ts"
+export const Navigation = createNavigation({
+  screens: { Login: LoginScreen, Home: HomeScreen },
+  root: 'Login',
+  appProvider: AppProvider,
+});
+```
+
+```tsx title="src/screens/Home.tsx"
+function Home() {
+  const { user } = useSession();
+  return <Text>Hello, {user?.name}</Text>;
+}
+```
+
+What you give up: everything outside the tree. `willMount`, `root`, the options, `when` of the links and a notification handler can't call `useSession`, so the first root can't depend on the user, and a link can't wait for the sign-in. As a `screenProvider` it is worse: each screen gets its own `useState`, and the screens share nothing.
+
+**Better when** the state lives and changes inside the screens only, and the app already runs in one tree for its other providers. See [One tree](../architecture/one-tree#one-tree).
+
+### Which to choose {#choose}
+
+| | The app context | A store | Screen props | React context in `appProvider` |
+| --- | --- | --- | --- | --- |
+| The first root reads it | Yes, as `initialRoot(context)` | Yes, imported | Only as the root's param | No |
+| The options read it | Yes, as `{ context }` | Yes, imported | Yes, as `props` | No |
+| A link waits for it | Yes, `when` | No | No | No |
+| Components render on a change | Yes | Yes | No | Yes |
+| Tools: actions, devtools, saving | No | Yes | No | No |
+
+Most apps do best with both: the data in a store, and in the context the few facts the start, the options and the links read, set next to the store's sign-in and sign-out.
+
+## Mistakes to avoid {#pitfalls}
+
+### Everything in the context {#everything}
+
+```ts
+// Don't
+socket.on('message', (message) =>
+  navigation.setContext((c) => ({
+    ...c,
+    messages: [...c.messages, message],
+  })),
+);
+```
+
+Each message gives a new context, and every reader on every mounted screen compares again; a reader of `messages` renders on each one, the screens behind the top one too. The context has no tools to make this cheap. Keep lists, feeds and drafts in a store or a query cache; see [Why not everything](../architecture/theme-and-context#context-why-not).
+
+### Services and other values that aren't data {#services}
+
+The context never leaves JavaScript, so it can hold anything: an API client, an analytics object, a function. Two things follow:
+
+- **It isn't saved.** To keep the session between launches, save the data part yourself and put it back in `willMount`. A service can't go through `JSON.stringify`; create it again at the start.
+- **A change inside a service renders nothing.** The context changes only with `setContext` and a new value; a service that changes its own fields doesn't tell the readers. Keep what components show as plain values in the context, or in a store.
+
+### Reading it before willMount {#before-will-mount}
+
+```ts
+// Don't: at the top level of a module
+const { language } = navigation.getContext();
+```
+
+The navigation sets `context` of `createNavigation` when the app launches, after the modules have run. At the top level of a module the context is still `undefined`, and a `setContext` there is replaced by the launch. Read it inside a function that runs later: `willMount`, `root`, a component, a handler. A value that `willMount` loads is there from `initialRoot` on.
+
+### A selector that returns a new object {#new-object}
+
+```tsx
+// Don't
+const { user, language } = useAppContext((c) => ({
+  user: c.user,
+  language: c.language,
+}));
+```
+
+The function gives a new object every time, so the value never equals the one before. React renders without end, and stops with "Maximum update depth exceeded". The same goes for `c.items.filter(…)` or `[c.a, c.b]`. Select each value with a hook of its own:
+
+```tsx
+const user = useAppContext((c) => c.user);
+const language = useAppContext((c) => c.language);
+```
+
+### Changing the object in place {#mutation}
+
+```ts
+// Don't
+navigation.getContext().user = user;
+```
+
+The context is the same object, so nothing renders, and the screens show the old user. Give a new object: `navigation.setContext((c) => ({ ...c, user }))`.
+
+### A title that doesn't follow the context {#title}
+
+A screen's `options: (s, props, { context })` read the context when the screen is shown. A sign-in later doesn't change the title of a screen already on display. Read it with `useAppContext` and set it with `useScreenOptions`, as in [In options](#options).
+
+## What's next {#next}
+
+- [State management](./state-management): Redux Toolkit, Zustand, Jotai, MobX and Valtio, step by step.
+- [Theme and context](../architecture/theme-and-context#context): the context next to the theme, and what goes in it.
+- [Deep links](./deep-links#when): links that wait for the context.
+- [`useAppContext`](/api/theme-and-context/useAppContext): the hook in full.

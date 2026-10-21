@@ -1,0 +1,105 @@
+name: Nightly
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  # Pull requests build the example with static libraries and with SwiftPM (ci.yml); these are the other ways
+  # apps link the library.
+  build-ios-cocoapods:
+    runs-on: macos-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: static frameworks
+            frameworks: static
+            prebuilt: 1
+          - variant: dynamic frameworks
+            frameworks: dynamic
+            prebuilt: 1
+          - variant: React Native from source
+            frameworks: ''
+            prebuilt: 0
+
+    name: build-ios-cocoapods (${{ matrix.variant }})
+
+    env:
+      XCODE_VERSION: 26
+      RCT_USE_RN_DEP: ${{ matrix.prebuilt }}
+      RCT_USE_PREBUILT_RNCORE: ${{ matrix.prebuilt }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Setup
+        uses: ./.github/actions/setup
+
+      - name: Use appropriate Xcode version
+        uses: maxim-lobanov/setup-xcode@60606e260d2fc5762a71e64e74b2174e8ea3c8bd # v1.6.0
+        with:
+          xcode-version: ${{ env.XCODE_VERSION }}
+
+      - name: Install pods
+        working-directory: example
+        run: |
+          # The Podfile links frameworks whenever USE_FRAMEWORKS is set, even to an empty value.
+          if [ -n "${{ matrix.frameworks }}" ]; then export USE_FRAMEWORKS=${{ matrix.frameworks }}; fi
+          bundle install
+          bundle exec pod install --project-directory=ios
+
+      - name: Build example for iOS
+        working-directory: example/ios
+        run: |
+          xcodebuild -workspace Showcase.xcworkspace -scheme Showcase -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            COMPILER_INDEX_STORE_ENABLE=NO build
+
+  # The library as npm ships it, in a new app on the latest Expo SDK after `expo prebuild`. Only the build is
+  # checked: the app keeps Expo's AppDelegate until the library has a config plugin.
+  build-ios-expo:
+    runs-on: macos-latest
+
+    env:
+      XCODE_VERSION: 26
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Setup
+        uses: ./.github/actions/setup
+
+      - name: Use appropriate Xcode version
+        uses: maxim-lobanov/setup-xcode@60606e260d2fc5762a71e64e74b2174e8ea3c8bd # v1.6.0
+        with:
+          xcode-version: ${{ env.XCODE_VERSION }}
+
+      - name: Pack the library
+        run: |
+          yarn prepare
+          npm pack --ignore-scripts --pack-destination "$RUNNER_TEMP"
+
+      - name: Create an Expo app with the library
+        working-directory: ${{ runner.temp }}
+        run: |
+          npx --yes create-expo-app@latest expo-check --template blank-typescript --yes
+          cd expo-check
+          npm install "$RUNNER_TEMP"/apexnative-navigation-*.tgz
+          node -e '
+            const fs = require("fs");
+            const config = JSON.parse(fs.readFileSync("app.json", "utf8"));
+            config.expo.ios = { ...config.expo.ios, bundleIdentifier: "dev.apexnative.expocheck" };
+            fs.writeFileSync("app.json", JSON.stringify(config, null, 2));
+          '
+          npx expo prebuild --platform ios
+
+      - name: Build the Expo app for iOS
+        working-directory: ${{ runner.temp }}/expo-check/ios
+        run: |
+          xcodebuild -workspace expocheck.xcworkspace -scheme expocheck -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            COMPILER_INDEX_STORE_ENABLE=NO build

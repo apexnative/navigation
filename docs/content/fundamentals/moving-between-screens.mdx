@@ -1,0 +1,291 @@
+---
+title: Moving between screens
+description: 'The moves between screens, where the commands come from, how a move finishes, how a screen gives a result back, and the defaults of every move.'
+---
+
+import { SectionStatus, SectionApi } from '@site/src/components/Api';
+import { Mark, Os } from '@site/src/components/Intro';
+import { Moves } from '@site/src/components/Screens';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+<SectionStatus id="moving-between-screens" />
+
+A list opens an item, a button opens a form over the app, a toast says that a message went out. Each is a move: a command that names a screen, and the platform shows it. A screen makes its moves with `useNavigation()`:
+
+```tsx title="src/screens/Home.tsx"
+import { Button } from 'react-native';
+import { useNavigation } from '@apexnative/navigation';
+
+export function Home() {
+  const navigation = useNavigation();
+  const open = () =>
+    navigation.push('Details', { props: { id: '42' } });
+  return <Button title="Open Details" onPress={open} />;
+}
+```
+
+A tap slides Details in over Home; the back button and the swipe back return to Home, with no code. This page is the map of the moves. It answers:
+
+1. [What moves there are](#moves), and what takes the user back from each.
+2. [Where the commands come from](#where): in a screen, and anywhere else.
+3. [How the app goes back](#back), and how it knows it can.
+4. [When a move is done](#done), and what happens when it can't be made.
+5. [How a screen gives a result back](#results).
+6. [How to set a move up](#settings), once for the whole app or for one command.
+
+Each move is shown here as it looks and works; its own page has the rest of the details.
+
+## The moves {#moves}
+
+A move <Mark>names a screen</Mark>, and the platform shows it in its own way. Six kinds cover every app; pick one to see it:
+
+<Moves />
+
+The way back is the platform's: the back button and the swipe of the stack, the swipe down of a sheet, the back button of Android. They work without any code; when the app goes back itself, see [Going back](#back).
+
+### Push a screen {#push}
+
+The stack is the main move of an app: the list opens an item, the item opens its comments. Each screen goes over the one before, and the user goes back one by one. <Mark>The screen under it stays mounted</Mark>, with its state and scroll.
+
+<DeviceVideo name="moves-push" />
+
+```ts
+navigation.push('Details', { props: { id: '42' } });
+```
+
+A stack is the root of the app, a tab, or the content of a modal. Going back to a screen further down, replacing the screens of a stack, the transitions: [Stack](../containers/stack).
+
+### Show a modal {#modal}
+
+A modal is a task of its own over the app: writing a message, a form, the sign-in. It has a stack of its own, so it can push its screens too, and it ends as a whole: <Mark>the user finishes or cancels it</Mark>, and the app is as it was.
+
+<DeviceVideo name="moves-modal" />
+
+```ts
+navigation.showModal('Compose', { closeButton: true });
+```
+
+Compose slides up over the app, with a close button that dismisses the modal. Under an <Os name="iOS" /> sheet the screen below still shows, so it doesn't disappear (see [The life of a screen](./screens-and-props#lifecycle)). The styles, the sheet with detents, a popover on iPad, a swipe that asks before closing: [Modals](../containers/modals).
+
+### Show an overlay {#overlay}
+
+An overlay shows over everything <Mark>without taking the place of any screen</Mark>: a toast, a banner, a call in progress. The user goes on with the screens under it.
+
+<DeviceVideo name="moves-overlay" />
+
+```ts
+navigation.showOverlay('Toast', { props: { text: 'Saved' } });
+```
+
+The touches, the keyboard and an overlay that closes itself: [Overlays](../containers/overlays).
+
+### Select a tab {#tab}
+
+Tabs are the sections of the app, side by side. <Mark>Each keeps its own stack</Mark>, so the user leaves Inbox deep in a thread, looks at Home, and comes back to the thread. The user picks a tab; the app picks one with `selectTab`, by its index or by the id the layout gave it, `Tab('Inbox').id('inbox')`.
+
+<DeviceVideo name="moves-tab" />
+
+```ts
+await navigation.selectTab('inbox');
+```
+
+The tab bar, badges, a second press on a tab, the iPad sidebar: [Tabs](../containers/tabs).
+
+### Show beside a list {#column}
+
+On iPad, a split view shows a list and the item next to it: the settings and the section, the mail and the message. `showInColumn` puts a screen into the column beside the list. <Mark>Where there is one column</Mark>, on iPhone, in a narrow window, on an Android phone, it pushes the screen over the list instead, so the same call works everywhere.
+
+<DeviceVideo name="moves-column" devices={['ipad']} />
+
+```ts
+navigation.showInColumn('Privacy');
+```
+
+Two or three columns and the sidebar: [Split view](../containers/split-view).
+
+### Replace everything {#root}
+
+`switchTo` replaces the whole navigation with another root: from the sign-in to the app, and back when the user signs out. <Mark>There is no way back</Mark> to the old root: its screens unmount.
+
+<DeviceVideo name="moves-root" />
+
+```ts
+navigation.switchTo('main');
+```
+
+The roots of the app and a root made on the go, such as the screens of a deep link: [Switching roots](./switching-roots). The whole sign-in flow: [Sign in and sign out](../flows/sign-in-and-sign-out).
+
+## Where the commands come from {#where}
+
+### In a screen: useNavigation {#use-navigation}
+
+`useNavigation()`, as in Home at the top of this page, gives the commands of the screen the component is in. They <Mark>act from this screen</Mark>: `push` goes into its stack, `dismiss` closes its modal, so they need no ids.
+
+The same object has the commands of the whole app too: `switchTo`, `dismissAllModals`, `getState`. A screen needs nothing else.
+
+### Anywhere else: navigation {#navigation}
+
+Code outside the screens, such as a timer, a store or the handler of a push notification, imports `navigation` from the package. It has the same commands, and they <Mark>act from the screen the user sees</Mark>: `push` goes into the stack the user is looking at, a modal's if one shows. Only `dismiss` and `setOptions` are missing: they need a screen of their own.
+
+```ts title="src/notifications.ts"
+import { navigation } from '@apexnative/navigation';
+
+export async function openChat(userId: string) {
+  await navigation.dismissAllModals();
+  await navigation.selectTab('inbox');
+  await navigation.push('Chat', { props: { userId } });
+}
+```
+
+Once the app is launching, a command waits for the first root, so a notification that launched the app is handled after it shows. Two places are too early:
+
+- **The top level of a module**, run while the bundle loads, before the launch: the command rejects.
+- **Inside `willMount`**: an awaited command never resolves, because the first root waits for `willMount`. Set the context there instead, and let `root` pick the screen.
+
+### Which one {#which}
+
+| | `useNavigation()` | `navigation` |
+| --- | --- | --- |
+| Where | In the components of a screen. | Anywhere: stores, notifications, code outside React. |
+| Acts from | This screen. | The screen the user sees. |
+| Before the app starts | Can't be called: there is no screen yet. | Waits for the first root. |
+
+The difference shows when the user moves on before the code runs. A screen loads data and then pushes Details; meanwhile the user selected another tab. `useNavigation()` pushes into the stack of the screen that asked, in the tab the user left; `navigation` pushes where the user is now. <Mark>In a screen, use `useNavigation()`</Mark>: the move stays where it was asked for.
+
+Code outside React that knows its screen, such as a class that a screen creates, gets the same object with `screenNavigation(screen)`. The `screen` is `{ id, name }`, as [`useScreen()`](./screens-and-props#use-screen) returns it.
+
+## Going back {#back}
+
+The user goes back with the platform's controls. The app goes back itself with the commands of a screen, after a save for example:
+
+| Command | What it does |
+| --- | --- |
+| `pop()` | Back to the screen under this one in its stack. |
+| `popTo(id)` | Back to a screen of this stack, by the id `push` resolved with. |
+| `popToRoot()` | Back to the first screen of this stack. |
+| `dismiss()` | Closes the modal or the overlay this screen is in, with all its screens. |
+| `goBack()` | <Mark>What the back button would do here</Mark>: `pop()` when there is a screen under this one, `dismiss()` when it is the first screen of a modal. |
+
+`goBack()` is for a screen that opens both ways, pushed in one place and in a modal in another: it doesn't need to know which.
+
+```tsx title="src/screens/Compose.tsx"
+function Compose() {
+  const navigation = useNavigation();
+  const send = async () => {
+    await sendMessage(); // your own request
+    // pushed: back to the screen under it; in a modal: it closes
+    await navigation.goBack();
+  };
+  return <Button title="Send" onPress={send} />;
+}
+```
+
+### Can it go back? {#can}
+
+Each way back has its check. They answer at once, without `await`, so a screen can choose what to render with them:
+
+| Check | `true` when |
+| --- | --- |
+| `canPop()` | There is a screen under this one in its stack. |
+| `canDismiss()` | The screen is in a modal or an overlay. |
+| `canGoBack()` | `goBack()` has something to do: one of the two above. |
+
+```tsx
+{navigation.canDismiss() && (
+  <Button title="Close" onPress={() => navigation.dismiss()} />
+)}
+```
+
+On `navigation` they answer for the screen the user sees.
+
+### Replacing a screen {#replace}
+
+`replace` shows a screen in place of the whole history of the stack: it comes in as a push does, and <Mark>it is alone in the stack</Mark>, so there is no back. It is for a point the user shouldn't go back from, such as a payment once it is made:
+
+```ts
+// on Payment, once the payment went through
+navigation.replace('OrderPlaced', { props: { orderId } });
+```
+
+To give the stack several screens at once, with back between them, `setStack('Inbox', 'Chat')` sets them: the last shows, back goes to the one before. See [Stack](../containers/stack#commands).
+
+## When a move is done {#done}
+
+Every command returns a promise, and it resolves <Mark>once the move is done</Mark>: the animation has ended, the screen is in place, and `navigation.getState()` already names it. `await` puts moves one after another, as in `openChat` above: each starts when the last has ended, from the screen the last one showed.
+
+`push` resolves with the id of the screen it showed; `showModal` and `showOverlay` with the id of what they showed, which `dismissModal` and `dismissOverlay` take.
+
+A command that can't be made rejects, with the command and the screen in the error, the same on iOS and Android:
+
+```ts
+await navigation.pop(); // on the first screen of its stack:
+// Error: [navigation] pop: Home is the first screen of its stack,
+// there is nothing to go back to
+```
+
+The other cases: the screen the command acts from is gone (closed while the code waited), or a name that isn't in `screens`.
+
+## A result back {#results}
+
+A screen that picks something, such as a color, a contact, a date, gives it back through a callback in its props. Props stay in JavaScript, so a function is a prop like any other (see [Props stay in JavaScript](./screens-and-props#props-in-js)):
+
+```tsx title="src/screens/ColorPicker.tsx"
+function ColorPicker({ onPick }: { onPick: (color: string) => void }) {
+  const navigation = useNavigation();
+  const pick = (color: string) => {
+    onPick(color);
+    navigation.pop();
+  };
+  return <Button title="Red" onPress={() => pick('red')} />;
+}
+```
+
+```ts
+// on the screen that asks; setColor is its own state
+navigation.push('ColorPicker', { props: { onPick: setColor } });
+```
+
+A tap on Red sets the color on the screen that asked, and the user is back on it. A result that more screens need, such as the signed-in user, belongs in the app's state: a context or a store.
+
+## Setting a move up {#settings}
+
+Each command that shows a screen takes, besides the props, the settings of this move and the options of the screen for this show:
+
+| Command | Its settings | Page |
+| --- | --- | --- |
+| `push`, `replace` | `transition`: how the screen comes in. | [Stack](../containers/stack), [Transitions](../architecture/transitions) |
+| `showModal` | `style`, `sheet`, `closeButton`, `onDismiss`, `transition`… | [Modals](../containers/modals) |
+| `showOverlay` | `blockTouches`: the app under it gets no touches. | [Overlays](../containers/overlays) |
+| `showInColumn` | `column`: which column of the split view. | [Split view](../containers/split-view) |
+| All of them | `options`: the screen's options for this show, over its own. | [Screen options](./screen-options) |
+
+Here Compose comes up as a sheet at half height; the user drags it to full height, and the close button dismisses it:
+
+```ts
+navigation.showModal('Compose', {
+  // a sheet that stops at half and at full height
+  sheet: { detents: ['medium', 'large'] },
+  closeButton: true,
+});
+```
+
+### Defaults for the whole app {#presentation}
+
+`presentation` of `createNavigation` sets every move up once, so the commands don't repeat it. A command's own settings go over it. Here every modal gets a close button:
+
+```ts title="Navigation.ts"
+export const Navigation = createNavigation({
+  // …
+  presentation: {
+    modal: { closeButton: true },
+  },
+});
+```
+
+## Next: screen options {#next}
+
+A move shows a screen with its options: the title, the buttons, the bars. [Screen options](./screen-options) shows where they come from, which win, and how a shown screen changes them.
+
+## API {#api}
+
+<SectionApi id="moving-between-screens" />

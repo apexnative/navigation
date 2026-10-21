@@ -1,0 +1,415 @@
+---
+title: Theme and context
+description: "Two things every screen shares: the theme, the colors of the bars and backgrounds, and the context, what every screen can rely on. Why the navigation keeps them, how to use them, and what belongs in them."
+---
+
+import { SectionStatus, SectionApi } from '@site/src/components/Api';
+import { Fit, Mark, Os, Pair } from '@site/src/components/Intro';
+import { ThemeMap } from '@site/src/components/Screens';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+<SectionStatus id="theme-and-context" />
+
+Every screen of an app shares a look and a few facts: the colors of the bars, the signed-in user, the language. The navigation keeps both for every screen. The **theme** is the colors of the bars, tabs and backgrounds. The **context** is a small object of the app that every screen reads. This page answers:
+
+1. [Why the navigation keeps them](#why), and not a React provider.
+2. [The theme](#theme): its colors, dark mode, changing it, Android's own colors.
+3. [The context](#context): filling it, reading it, typing it.
+4. [What goes in the context](#context-roles), and what goes elsewhere.
+
+## Why the navigation keeps them {#why}
+
+Each screen renders in a React root of its own, as the platform shows it (see [What a screen is](../fundamentals/screens-and-props#what)). A React provider around one screen doesn't reach the next one, and the bars aren't React at all. So what every screen shares sits <Mark>above the screens</Mark>, with the navigation. From there it reaches every screen, the options of every screen, and the native bars.
+
+Providers of your own, such as a store or a query client, have a place of their own: see [One tree](./one-tree).
+
+## The theme {#theme}
+
+The theme is the colors of the navigation: the bars, the tabs, the backgrounds. It is set once in `createNavigation`, and every screen takes it:
+
+```ts title="Navigation.ts"
+import { createNavigation } from '@apexnative/navigation';
+
+export const Navigation = createNavigation({
+  // … screens and root
+  theme: {
+    colors: {
+      primary: '#E76F51',
+      bar: '#1E2A44',
+      text: '#F3E9D2',
+      background: '#F3E9D2',
+    },
+  },
+});
+```
+
+Every top bar and the tab bar are navy with light titles; the buttons, the back arrow and the selected tab are orange.
+
+<ThemeMap />
+
+<DeviceVideo name="theme-switch" />
+
+A color left out keeps the platform's look. On iOS 26 a theme without `bar` keeps the bars on glass. On Android the bars take the colors of the app's Material 3 theme, neutral grays by default (see [Android's colors](#android)).
+
+The theme is the bottom layer of the options of every screen. A screen that needs its own look sets it in its options, and they go over the theme (see [Where a screen gets them](../fundamentals/screen-options#layers)).
+
+### Dark mode {#dark}
+
+A color can have a value for each appearance, `{ light, dark }`. The native side picks the one of the system's appearance, and <Mark>switches by itself</Mark> when the user turns dark mode on, with no render in JavaScript:
+
+```ts
+colors: {
+  bar: { light: '#FFFAF0', dark: '#101828' },
+  text: { light: '#1E2A44', dark: '#F3E9D2' },
+}
+```
+
+### Changing the theme {#set-theme}
+
+`navigation.setTheme` changes the theme while the app runs, such as when the user picks another one in the settings. The screens already shown take it too. It <Mark>replaces the whole theme</Mark>, so a color left out goes back to the platform's look. Keep each theme as a whole object, and pass one:
+
+```ts title="src/themes.ts"
+import type { NavigationTheme } from '@apexnative/navigation';
+
+export const ocean: NavigationTheme = {
+  colors: {
+    primary: '#2A9D8F',
+    bar: '#0B3C49',
+    text: '#F1FAEE',
+    background: '#F1FAEE',
+  },
+};
+```
+
+```ts title="src/screens/Settings.tsx"
+navigation.setTheme(ocean);
+```
+
+A screen whose own options set a color keeps it: its options go over the theme.
+
+### The theme in React content {#use-theme}
+
+React content that should match the bars reads the theme with `useNavigationTheme()`. Each color comes resolved for the current appearance, so it goes straight into a style. The component renders again when the theme changes, and when the appearance turns light or dark:
+
+```tsx title="src/Card.tsx"
+import { Text, View } from 'react-native';
+import { useNavigationTheme } from '@apexnative/navigation';
+
+export function Card({ title }: { title: string }) {
+  const { colors } = useNavigationTheme();
+  return (
+    <View style={{ backgroundColor: colors.bar, padding: 16 }}>
+      <Text style={{ color: colors.text }}>{title}</Text>
+    </View>
+  );
+}
+```
+
+A color the theme leaves out is `undefined` here, so the style falls back to its default.
+
+### The theme in options {#theme-options}
+
+The options of the app and of a screen can be built from the theme: their function gets `{ theme, context }` (see [The chain and plain objects](../fundamentals/screen-options#chain)). They differ in when they are built:
+
+| Options | Built |
+| --- | --- |
+| `options` of `createNavigation` | At the start, and again on every `setTheme`. |
+| A screen's own options | When a command shows the screen. A later `setTheme` doesn't build them again. |
+
+So a color that follows the theme belongs in the theme itself, or in the app's `options`.
+
+### Android's colors {#android}
+
+<Os name="Android" /> The bars, tabs, search, sheets and menus are Material 3 views. What the theme and the options leave out, they take from the app's Android theme, as every Material view of the app does. On an app made from React Native's template, `setup` makes the app's theme inherit `Theme.ApexNavigation`: Material 3 in neutral grays, light and dark, with no tint of its own.
+
+An app changes any of these colors in `styles.xml`. A color that differs in dark mode is a color resource with a second value in `values-night`, so the one style serves both modes:
+
+```xml title="android/app/src/main/res/values/styles.xml"
+<style name="AppTheme" parent="Theme.ApexNavigation">
+  <item name="colorSecondaryContainer">@color/selected_tab</item>
+</style>
+```
+
+```xml title="android/app/src/main/res/values/colors.xml"
+<color name="selected_tab">#FCE4D6</color>
+```
+
+```xml title="android/app/src/main/res/values-night/colors.xml"
+<color name="selected_tab">#5C3B2E</color>
+```
+
+The selected tab now sits on a peach pill in light mode, and a brown one in dark mode. What each Material 3 color paints:
+
+| Material 3 color | What takes it |
+| --- | --- |
+| `colorSurface` | The top bar. |
+| `colorOnSurface` | The title and the back arrow. |
+| `colorOnSurfaceVariant` | The subtitle and the "⋮" of the bar. |
+| `colorSurfaceContainer`, `colorSurfaceContainerLow`, `colorSurfaceContainerHigh` | The tab bar and the menus of the bar; a sheet; the search field. |
+| `colorSecondaryContainer` | The pill of the selected tab, the selected scope of the search. |
+| `colorPrimaryContainer` | The floating action button. |
+| `colorError` | The badges of the tabs. |
+
+The theme's `colors` and a screen's options go over these: `bar` over the top bar and the tab bar, `text` over the titles, `badge` over the badges.
+
+- **An app with a Material 3 theme of its own** keeps it, and the navigation takes its colors.
+- **An app with a theme that isn't Material 3** keeps it too. The bars, tabs, search and sheets then take `Theme.ApexNavigation` themselves, and follow the app's light or dark mode.
+- **An app that is only light** sets it in code: `AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)`.
+
+## The context {#context}
+
+The context is a small object of the app that <Mark>every screen, every option and the start of the app</Mark> can read: who the user is, the language, the flags of the app. The app gives its first value in `createNavigation`, and a component reads it with `useAppContext`:
+
+```ts title="Navigation.ts"
+import { createNavigation } from '@apexnative/navigation';
+
+export type AppContext = {
+  language: string;
+  user: { name: string } | null;
+};
+
+const context: AppContext = { language: 'en', user: null };
+
+export const Navigation = createNavigation({
+  // … screens and root
+  context,
+});
+```
+
+```tsx title="src/screens/Home.tsx"
+import { Text } from 'react-native';
+import { useAppContext } from '@apexnative/navigation';
+import type { AppContext } from '../../Navigation';
+
+export function Home() {
+  const user = useAppContext((c: AppContext) => c.user);
+  return <Text>Hello, {user?.name ?? 'guest'}</Text>;
+}
+```
+
+Home shows "Hello, guest", and the user's name once a sign-in puts the user in the context. Once `Navigation.ts` exports the type, [the generated file registers it](#types): `useAppContext`, `setContext` and the options know it by themselves, and the `AppContext` annotation goes; the examples below assume it.
+
+### Why it exists {#context-why}
+
+Some values are needed before any screen renders, and by every screen after it. Whether the user is signed in decides the first screen; the user's name goes into the title of a bar; the language changes every screen at once.
+
+In a React app such values sit in a provider at the top of the tree. Here each screen is a React root of its own, so a provider doesn't reach them, and the start of the app and the options of a screen aren't React at all. The context is <Mark>the one place all of them read</Mark>:
+
+| Who reads it | How |
+| --- | --- |
+| The start of the app | `root(context)`, `initialRoot(context)`: the first screen from the context. |
+| The options of a screen | `(s, props, { context })`: a title or a button from the context. |
+| A component of any screen | `useAppContext()`, which renders again when it changes. |
+| Code outside React | `navigation.getContext()`. |
+
+### Filling it {#context-fill}
+
+The context has a first value, and one way to change it:
+
+| Where | The context |
+| --- | --- |
+| `context` of `createNavigation` | The first value, there at once: while `willMount` runs, and in an app without `willMount`. Its type is the type of the context. |
+| `navigation.setContext` | <Mark>The only way to change it</Mark>: in `willMount` before the first screen, after a sign-in, from the settings. |
+
+A value the first screen depends on goes in during `willMount`, which runs while the splash screen shows. The first root is then built from it:
+
+```ts title="Navigation.ts"
+import { createNavigation, navigation } from '@apexnative/navigation';
+
+export const Navigation = createNavigation({
+  // … screens and roots
+  context,
+  willMount: async () => {
+    const user = await loadUser(); // your own check
+    navigation.setContext((previous) => ({ ...previous, user }));
+  },
+  initialRoot: (context) => (context.user ? 'main' : 'login'),
+});
+```
+
+A signed-in user starts on `main`, anyone else on `login`, and no screen shows before the check is done.
+
+`setContext` takes the new value, or a function of the value before. The function keeps the other keys:
+
+```ts title="src/screens/Login.tsx"
+const signIn = async (email: string, password: string) => {
+  const user = await logIn(email, password); // your own request
+  navigation.setContext((previous) => ({ ...previous, user }));
+  await navigation.switchTo('main');
+};
+```
+
+```ts title="src/screens/Settings.tsx"
+const changeLanguage = (language: string) =>
+  navigation.setContext((previous) => ({ ...previous, language }));
+```
+
+### Reading it {#read}
+
+`useAppContext` with a function picks the part a component needs, so the component renders only when that part changes. A change of the language doesn't render a component that reads the user. Without the function, it renders on every change of the context.
+
+The options of a screen read the context too, <Mark>once, when a command shows the screen</Mark>:
+
+```tsx title="src/screens/Home.tsx"
+export const HomeScreen = defineScreen({
+  component: Home,
+  options: (s, props, { context }) =>
+    s.title(context.user?.name ?? 'Home'),
+});
+```
+
+A later `setContext` doesn't change the title of a screen already shown. A title that should follow the context reads it in the component, with `useScreenOptions`, which applies options again on each render (see [From the state](../fundamentals/screen-options#use-screen-options)):
+
+```tsx title="src/screens/Home.tsx"
+function Home() {
+  const user = useAppContext((c) => c.user);
+  useScreenOptions((s) => s.title(user ? `Hi, ${user.name}` : 'Home'));
+  return <Feed />;
+}
+```
+
+The title changes the moment the user signs in or out, on every screen that shows Home.
+
+### Typing it {#types}
+
+TypeScript learns the type of the context from `navigation-env.d.ts`, the file `setup` and `init` write to type the commands (see [Typed commands](../start/installation#typed-commands)). It registers the app from `typeof Navigation`, and the context from the type or interface that `Navigation.ts` exports under the name `AppContext`, as above. A type of another name isn't picked up. Nothing to add by hand:
+
+```ts title="navigation-env.d.ts"
+// Made by apex-navigation setup: the types of the app's screens
+// for the navigation's commands. Don't edit.
+declare module '@apexnative/navigation' {
+  interface Register {
+    app: typeof import('./Navigation').Navigation;
+    context: import('./Navigation').AppContext;
+  }
+}
+export {};
+```
+
+Then `useAppContext()`, `getContext()`, `setContext()` and the options are typed with it. The context is registered on its own, not read from the app's type, because the options of the screens are part of that type and would refer to it in a circle.
+
+## What goes in the context {#context-roles}
+
+The context is made for <Mark>what the whole app depends on, and what changes rarely</Mark>. In an app it has four roles:
+
+| Role | For example |
+| --- | --- |
+| Where the user goes | Signed in or not, the onboarding done or not: the first root, and the root after a sign-in or a sign-out. |
+| What every screen shows the same | The user's name and avatar, the language, the plan of the account. |
+| What the app turns on and off | Feature flags and remote configuration, read once at the start. |
+| Services the screens use | Objects the app creates once at the start and every screen calls: dependency injection, without a global import. |
+
+### What to keep in it {#context-keep}
+
+<Fit
+  yesLabel="Keep in the context"
+  noLabel="Keep elsewhere"
+  yes={[
+    'The signed-in user: the id, the name, the avatar, the role.',
+    'The session: signed in or not, the onboarding done or not.',
+    'The language and the region.',
+    'Feature flags and remote configuration.',
+    'The plan or the entitlements of the account.',
+    'The environment: staging or production.',
+    'Services created once at the start.',
+  ]}
+  no={[
+    'Lists, messages, feeds: a store, or the cache of a query library.',
+    'What a screen edits, such as a form or a draft: the state of the screen.',
+    'What changes many times a second: a timer, a progress, a position.',
+    'Which screen shows: read it with getState, don’t mirror it.',
+    'Secrets such as tokens: the keychain or secure storage.',
+  ]}
+/>
+
+### In code {#context-examples}
+
+The same three cases, each as it goes wrong and as it goes right.
+
+**Data that keeps coming**, such as new messages, goes to a store. In the context, each message would render every screen that reads it:
+
+<Pair left="Not recommended" right="Recommended">
+
+```ts
+socket.on('message', (message) =>
+  navigation.setContext((c) => ({
+    ...c,
+    messages: [...c.messages, message],
+  })),
+);
+```
+
+```ts
+socket.on('message', (message) =>
+  messages.add(message), // your own store
+);
+```
+
+</Pair>
+
+**What one screen edits**, such as a draft, stays in that screen. In the context, each letter would render every screen that reads it:
+
+<Pair left="Not recommended" right="Recommended">
+
+```tsx
+<TextInput
+  onChangeText={(draft) =>
+    navigation.setContext((c) => ({
+      ...c,
+      draft,
+    }))
+  }
+/>
+```
+
+```tsx
+const [draft, setDraft] = useState('');
+
+<TextInput onChangeText={setDraft} />;
+```
+
+</Pair>
+
+**Who the user is** goes to the context once, when it changes, instead of every screen loading it again on its own:
+
+<Pair left="Not recommended" right="Recommended">
+
+```tsx
+function Profile() {
+  const [user, setUser] = useState(null);
+  useEffect(() => {
+    loadUser().then(setUser);
+  }, []);
+  return <Text>{user?.name}</Text>;
+}
+```
+
+```tsx
+function Profile() {
+  const user = useAppContext((c) => c.user);
+  return <Text>{user?.name}</Text>;
+}
+```
+
+</Pair>
+
+### Why not everything {#context-why-not}
+
+The context is made for few values that change rarely, and it behaves so:
+
+- **A change renders its readers on every screen.** A component that reads the changed part renders again on every mounted screen: the screens under the one on top and in the other tabs too. A list kept here renders the whole app on each new message.
+- **It isn't saved.** A new start of the app begins from `context` again. What should outlive a restart, the app saves itself, and puts back in `willMount`.
+- **It has no tools of a store.** No middleware, no devtools, no history of changes. A store has them, and the context can hold the store itself as a service.
+
+### Compared with the other places {#context-compared}
+
+| | The app's context | A store | React context in `appProvider` | `useState` |
+| --- | --- | --- | --- | --- |
+| Read by | Every screen, the options, the start, code outside React | Components, and code that imports it | Components inside the provider | One component |
+| Before the first screen | Yes | Yes | No | No |
+| Changes | Rarely, with `setContext` | Often, by its actions | By its provider | Often |
+| For | Who the user is, the language, the flags, services | The data of the app | State shared through React | One screen |
+
+## API {#api}
+
+<SectionApi id="theme-and-context" />

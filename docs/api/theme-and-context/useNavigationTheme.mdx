@@ -1,0 +1,103 @@
+import { Os } from '@site/src/components/Intro';
+
+`useNavigationTheme` gives a component the colors of the navigation's theme, the ones the bars and tabs use, so React
+content can match them: a card the color of the bar, a link the color of the buttons. Each color comes resolved for
+the current appearance, light or dark, ready for a style. It works in any component, on any screen.
+
+## Usage {#usage}
+
+```tsx title="src/components/Card.tsx"
+import type { ReactNode } from 'react';
+import { View } from 'react-native';
+import { useNavigationTheme } from '@apexnative/navigation';
+
+export function Card({ children }: { children: ReactNode }) {
+  const { colors } = useNavigationTheme();
+  return (
+    <View
+      style={{
+        backgroundColor: colors.bar,
+        borderColor: colors.border,
+        borderWidth: 1,
+        padding: 16,
+      }}
+    >
+      {children}
+    </View>
+  );
+}
+```
+
+With `theme: { colors: { bar: { light: '#FFFFFF', dark: '#1C1C1E' } } }` in `createNavigation`, the card is white in
+light mode and dark gray in dark mode, the same as the top bar above it. When the user turns dark mode on, the card
+changes with the bar.
+
+## Signature {#signature}
+
+<ApiSignature data={data} name="useNavigationTheme" />
+
+It takes nothing, and returns the theme as React content takes it.
+
+## The colors {#colors-group}
+
+### `colors` {#colors}
+
+<ApiMember data={data} of="ResolvedNavigationTheme" name="colors" />
+
+The colors of `theme` in `createNavigation`, as `navigation.setTheme` changed them since, by the same keys:
+
+- `primary`: the buttons of the top bar, the back button, the selected tab, the cursor of the search.
+- `background`: behind every screen.
+- `bar`: the top bar and the tab bar.
+- `text`: the titles.
+- `border`: the lines under the top bar and over the tab bar.
+- `badge`: the badges of the tabs.
+
+Each one is resolved this way:
+
+| In the theme | Here |
+| --- | --- |
+| A string, `'#0A84FF'` | The same string. |
+| `{ light, dark }` | The value for the current appearance. |
+| `{ light }` only, in dark mode | `undefined`. |
+| `PlatformColor(…)`, `DynamicColorIOS(…)` | As it is: a style takes it, and the platform resolves it. |
+| Left out | `undefined`. |
+
+A color the theme leaves out is `undefined`, not the color the platform draws the bar with: the hook knows the theme,
+not the native bar. A style with `undefined` falls back to its default, so give one where it matters:
+
+```tsx
+const { colors } = useNavigationTheme();
+const tint = colors.primary ?? '#007AFF';
+```
+
+## When a component renders again {#renders}
+
+The component renders again when:
+
+- **`navigation.setTheme`** changes the theme, from any screen;
+- **the appearance** turns light or dark, as React Native's `useColorScheme` reports it.
+
+The bars don't wait for this render: the native side picks the `{ light, dark }` values of the bars itself. React
+content that reads this hook follows with its own render.
+
+`setTheme` replaces the whole theme: a color the new one leaves out is `undefined` here, and the bars go back to the
+platform's look for it. See [Changing the theme](/docs/architecture/theme-and-context#set-theme).
+
+## In options {#options}
+
+The hook is for React content. The options of the app and of a screen get the theme as `{ theme }` in their function
+(see [The theme in options](/docs/architecture/theme-and-context#theme-options)). That theme is not resolved: a color
+there is still `{ light, dark }`, and the native side picks the value. Pass it as it is.
+
+## Android's own colors {#android}
+
+<Os name="Android" /> What the theme leaves out, the bars take from the app's Material 3 theme in `styles.xml`. This
+hook doesn't read those: give the color in `theme` when React content should match it. See
+[Android's colors](/docs/architecture/theme-and-context#android).
+
+## See also {#see-also}
+
+- [The theme](/docs/architecture/theme-and-context#theme): the colors, dark mode, changing it.
+- [`theme`](/api/starting-the-app/createNavigation#theme) of `createNavigation`.
+- [`useAppContext`](/api/theme-and-context/useAppContext): the app's context, read the same way.

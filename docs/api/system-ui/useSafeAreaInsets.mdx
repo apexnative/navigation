@@ -1,0 +1,192 @@
+import { Mark, Os } from '@site/src/components/Intro';
+
+`useSafeAreaInsets` tells a screen's component how much of its content the bars and the system still cover on each
+side, past what the screen keeps clear itself: the top bar, the tab bar, the status bar, the cutout, the home
+indicator, Android's navigation bar, the vertical bar of iPhone Duo. On an edge the screen pads (its
+[`safeArea`](/api/screen-options/ScreenOptions#safeArea)) it is 0; on an edge its content goes under, it is all of what
+covers it. So content that goes under the bars on purpose, such as a list that scrolls under them or a button pinned
+to the bottom of a photo, adds exactly this to its own padding. It works in a component of a screen.
+
+## Usage {#usage}
+
+A photo screen draws under the top bar and the status bar, and keeps its caption above the home indicator:
+
+```tsx title="src/screens/Photo.tsx"
+import { Image, Text, View } from 'react-native';
+import {
+  defineScreen,
+  useSafeAreaInsets,
+} from '@apexnative/navigation';
+
+function Photo({ uri, caption }: { uri: string; caption: string }) {
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={{ flex: 1, backgroundColor: 'black' }}>
+      <Image source={{ uri }} style={{ flex: 1 }} />
+      <Text
+        style={{
+          color: 'white',
+          padding: 16,
+          paddingBottom: 16 + insets.bottom,
+        }}
+      >
+        {caption}
+      </Text>
+    </View>
+  );
+}
+
+export const PhotoScreen = defineScreen({
+  component: Photo,
+  // no edge kept: the content goes under everything
+  options: (s) => s.safeArea(),
+});
+```
+
+The photo fills the screen to its edges; the caption sits above the home indicator <Os name="iOS" /> or the
+navigation bar <Os name="Android" />.
+
+## Signature {#signature}
+
+<ApiSignature data={data} name="useSafeAreaInsets" />
+
+It takes nothing, and returns the insets of the screen the component is in: points on iOS, dp on Android, the units
+of a React Native style on both.
+
+## The insets {#insets}
+
+Each side is how far into the screen's content something still covers it, once the screen's own padding is taken
+out:
+
+- **0 on an edge the screen pads.** The padding keeps the content clear already. On an iPhone, a screen with the
+  default edges pushed in a stack gets 0 on every side.
+- **All of what covers it on an edge the content goes under**: under a top bar it draws behind (`drawBehind`, a large
+  title, `hideOnScroll`), under the vertical bar of iPhone Duo, on every edge with `safeArea()`. On an iPhone, a screen
+  with a large title over tabs and `safeArea()` gets about top 168 and bottom 83: the status bar and the bar with its
+  large title, the tab bar and the home indicator. On iPhone Duo folded, a screen with the default edges gets right 84:
+  the vertical bar.
+
+### `top` {#top}
+
+<ApiMember data={data} of="EdgeInsets" name="top" />
+
+What still covers the top of the content: the status bar, the cutout and the top bar. 0 where the screen pads the top,
+as a screen below a top bar does by default. With `drawBehind`, `hideOnScroll` or a large title the screen goes under
+the bar, and the top is the bar's height and the status bar's; a screen that leaves the top out of its `safeArea`
+without a top bar gets the status bar's.
+
+### `bottom` {#bottom}
+
+<ApiMember data={data} of="EdgeInsets" name="bottom" />
+
+The home indicator <Os name="iOS" />, Android's navigation bar, and the tab bar or the toolbar, where the content goes
+under them. 0 where the screen pads the bottom, the default on Android and on iOS without a bar at the bottom.
+
+### `left` {#left}
+
+<ApiMember data={data} of="EdgeInsets" name="left" />
+
+What still covers the left side: the cutout or the rounded corners of the display in landscape, a system bar on that
+side, and the vertical bar of iPhone Duo when the system puts it on the left (a right-to-left app).
+
+### `right` {#right}
+
+<ApiMember data={data} of="EdgeInsets" name="right" />
+
+The same, on the right: on iPhone Duo, the vertical bar of a left-to-right app, which the screen goes under by default.
+
+## The insets and the safe area of the screen {#safe-area}
+
+The navigation keeps every screen in its safe area, on the edges of the screen's `safeArea` option: all four on
+Android, and on iOS every edge but one under a bar that shows (see
+[The safe area](/docs/screen-ui/system-ui#safe-area)). The insets are <Mark>what is left after that padding</Mark>, so
+adding them to the content never pads an edge twice:
+
+```tsx
+import { FlatList } from 'react-native';
+
+// in the screen's component
+const insets = useSafeAreaInsets();
+return (
+  <FlatList
+    data={items} // your own
+    renderItem={renderItem}
+    contentContainerStyle={{
+      paddingLeft: 16 + insets.left,
+      paddingRight: 16 + insets.right,
+    }}
+  />
+);
+```
+
+On an iPhone the sides are 0 and the rows have 16 points on each side. On iPhone Duo the list goes under the vertical
+bar, and its rows end 16 points before it.
+
+One thing pads by itself: on <Os name="iOS" /> a scroll view with `contentInsetAdjustmentBehavior="automatic"` keeps
+clear of the bars it goes under. Leave the inset out on those edges, or the rows start twice as far down (see
+[The first rows of a list hide under the top bar](/docs/help/troubleshooting#rows-under-bar)).
+
+## When it changes {#time}
+
+The first render already has the insets: the screen's content renders once the screen is laid out, and the hook reads
+them from the native side at once. After that the component renders again when they change: the device turns, a bar
+shows or hides, the window of an iPad app changes its size <Os name="iPadOS" />, iPhone Duo folds or opens and its
+vertical bar moves, `safeArea` changes. Each screen is measured on its own, so a screen in a sheet, in a tab or in a
+column of a split view gets its own insets, and so do the screens of `appProvider`.
+
+## Outside a screen {#outside-screen}
+
+The hook reads the screen the component is in. In a component that isn't in a screen, such as `appProvider` itself or
+a test that renders the component alone, it throws: "This hook is for the screens of createNavigation, and the
+component is not in one". In Jest, replace it with fixed insets (see [Testing](/docs/guides/testing#screens)).
+
+## And react-native-safe-area-context {#safe-area-context}
+
+`react-native-safe-area-context` has a hook of the same name. They answer different questions:
+
+| | This hook | `react-native-safe-area-context` |
+| --- | --- | --- |
+| Measures | The screen, with the navigation's bars | The view of its `SafeAreaProvider`, against the window |
+| Knows the top bar, tab bar, toolbar | Yes | No: it sees the system, not the bars of this library |
+| Knows which edges the screen keeps | Yes: 0 on an edge the screen pads | No: the whole inset, padded or not |
+| Needs a provider | No | `SafeAreaProvider` above the component |
+
+In a screen of this navigation, use this one. A screen needs no `SafeAreaView` and no safe area library. Code moved
+from that library, such as `paddingTop: insets.top`, keeps working with this hook: on a screen that pads the top it
+gets 0, and nothing is padded twice.
+
+Both can be in one app. A library such as a UI kit or a bottom sheet may call `react-native-safe-area-context` itself
+and need its provider. Each screen is a React root of its own, so a `SafeAreaProvider` in `index.js` doesn't reach
+them: give every screen one in `screenProvider`.
+
+```tsx title="src/Navigation.tsx"
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+
+export const Navigation = createNavigation({
+  // … screens and root
+  screenProvider: ({ children }) => (
+    <SafeAreaProvider>{children}</SafeAreaProvider>
+  ),
+});
+```
+
+The provider then measures its view inside the screen's safe area. With `appProvider`, keep the provider in
+`screenProvider` too: what `appProvider` renders stays in the hidden host the screens' content is moved out of, so a
+provider there measures that host, not a screen (see [One tree](/docs/architecture/one-tree#one-tree)).
+
+In a file that needs both hooks, rename one on import:
+
+```ts
+import { useSafeAreaInsets } from '@apexnative/navigation';
+import {
+  useSafeAreaInsets as useWindowInsets,
+} from 'react-native-safe-area-context';
+```
+
+## See also {#see-also}
+
+- [The safe area](/docs/screen-ui/system-ui#safe-area): the edges a screen keeps, and `safeArea` of
+  `createNavigation`.
+- [The vertical bar of iPhone Duo](/docs/screen-ui/system-ui#vertical-bar).
+- [The first rows of a list hide under the top bar](/docs/help/troubleshooting#rows-under-bar).
+- [Hiding the bar](/docs/screen-ui/top-bar#hide), [the large title](/docs/screen-ui/top-bar#large-title).

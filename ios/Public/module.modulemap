@@ -1,0 +1,8 @@
+// The ApexNavigation module for SwiftPM builds: the three public headers. CocoaPods generates its own
+// module map from public_header_files.
+module ApexNavigation {
+    header "ApexNavigation/ApexNavigation.h"
+    header "ApexNavigation/ANNAppDelegate.h"
+    header "ApexNavigation/ANNSceneDelegate.h"
+    export *
+}

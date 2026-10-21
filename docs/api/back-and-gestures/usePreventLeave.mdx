@@ -1,0 +1,193 @@
+import { Os, Pair } from '@site/src/components/Intro';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+`usePreventLeave` keeps the user on a screen while a condition is true, such as a draft with text or a form with
+unsaved changes. The ways the user goes back from the screen to another screen of the app call a handler instead, so
+the screen can ask first. Leaving the app isn't held, as in React Navigation: see
+[Asking before the user leaves the app](#leaving-the-app). It is called in a component of the screen it holds.
+
+## Usage {#usage}
+
+```tsx title="src/screens/Compose.tsx"
+import { useState } from 'react';
+import { Alert, TextInput } from 'react-native';
+import {
+  useNavigation,
+  usePreventLeave,
+} from '@apexnative/navigation';
+
+export function Compose() {
+  const navigation = useNavigation();
+  const [text, setText] = useState('');
+
+  usePreventLeave(text.length > 0, () => {
+    Alert.alert('Discard the draft?', undefined, [
+      { text: 'Keep editing', style: 'cancel' },
+      {
+        text: 'Discard',
+        style: 'destructive',
+        onPress: () => navigation.goBack(),
+      },
+    ]);
+  });
+
+  return <TextInput value={text} onChangeText={setText} multiline />;
+}
+```
+
+While the draft has text, back asks "Discard the draft?". Keep editing stays on the screen; Discard leaves, because a
+command of the app is never held. With an empty draft, back leaves at once, without a question.
+
+<DeviceVideo name="prevent-leave" />
+
+## Signature {#signature}
+
+<ApiSignature data={data} name="usePreventLeave" />
+
+**`prevent`**: whether to hold the user now. Pass the condition itself, `text.length > 0` or `isDirty`, and the hold
+follows it on every render: on while it is `true`, off as soon as it is `false`.
+
+**`onAttempt`**: called each time the user tries to leave while held. It gets no arguments: it doesn't say which way
+the user tried, and it doesn't have to, since the screen leaves with `goBack()` whatever the way was. It can change on
+every render; the call goes to the one of the last render, so it sees the current state.
+
+It returns nothing.
+
+## What it holds {#holds}
+
+| The user tries | <Os name="iOS" /> | <Os name="Android" /> |
+| --- | --- | --- |
+| The back button of the bar | Held | Held |
+| The swipe back, from the edge or the content | Held: the swipe doesn't start | — |
+| The history menu of a long press on back | Held | — |
+| The system back | — | Held |
+| The swipe down of the modal the screen is in | Held | Held |
+| The close button of the modal (`closeButton` of `showModal`) | Held | Held |
+
+Each held try calls `onAttempt` once. The screen stays as it was: no half-done transition, no sheet half down.
+
+### What it doesn't hold {#not-held}
+
+- **The commands of the app.** `goBack()`, `pop()`, `dismissModal()`, `switchTo()`: the app has decided. So Discard can
+  leave with `goBack()`, and a sign-out can replace the root without asking each screen.
+- **Moving elsewhere without leaving.** Another tab, a screen pushed over this one, the app going to the background:
+  the screen stays, with its state.
+- **Buttons of your own.** A Cancel button in the bar is the app's: its `onPress` decides what to do, and can ask the
+  same question. See [Forms in a modal](/docs/flows/forms-in-a-modal#prevent).
+- **Leaving the app.** On the first screen of the root the system back of Android leaves the app (or goes to another
+  tab, as `Tabs().backBehavior(…)` says): no screen of the app is left to go back to. On iOS the home gesture leaves
+  the app from any screen. A draft that must survive that is saved instead of asked about, with
+  [`useScreenDisappear`](/api/lifecycle-and-events/useScreenDisappear); on Android the first screen can also ask, with
+  `BackHandler`, below.
+
+### Asking before the user leaves the app {#leaving-the-app}
+
+<Os name="Android" /> To ask before the system back leaves the app from its first screen, listen to React Native's
+`BackHandler` on that screen. A listener runs before the navigation's own back: returning `true` keeps the user in the
+app, and `BackHandler.exitApp()` does the default back, which leaves the app from the first screen. Since it runs
+before every back of the app, it listens only while the first screen has the focus, in
+[`useFocusEffect`](/api/lifecycle-and-events/useFocusEffect):
+
+```tsx title="src/screens/Home.tsx"
+import { Alert, BackHandler } from 'react-native';
+import { useFocusEffect } from '@apexnative/navigation';
+
+export function Home() {
+  useFocusEffect(() => {
+    const subscription = BackHandler.addEventListener(
+      'hardwareBackPress',
+      () => {
+        Alert.alert('Leave the app?', undefined, [
+          { text: 'Stay', style: 'cancel' },
+          { text: 'Leave', onPress: () => BackHandler.exitApp() },
+        ]);
+        return true; // the user stays until they pick Leave
+      },
+    );
+    return () => subscription.remove();
+  });
+  // …
+}
+```
+
+On Home the system back asks "Leave the app?". When a screen is pushed over Home, or a modal shows, Home loses the
+focus and the listener goes, so the back of those screens works as usual. While Home has the focus, the listener also
+comes before the back that closes an open side menu or Home's search: return `false` while they are open, and the back
+closes them. iOS has no system back, and the home gesture can't be held.
+
+While the listener is registered, the navigation keeps the back for it, so on Home the system's animation back to the
+home screen doesn't play: the question takes its place. Pick Leave, and the app leaves at once. A listener added
+before `createNavigation` runs, by a module imported ahead of the navigation file, isn't counted and isn't called on
+the first screen. More:
+[Handling back yourself](/docs/screen-ui/back-and-gestures#back-handler).
+
+## Over time {#timing}
+
+The hold is set in a layout effect each time `prevent` changes, so it follows the render that changed the condition. When the component unmounts, the hold goes with it. A screen that turns `prevent` to `false` and
+then calls `goBack()` in the same handler leaves without asking, but there is no need to: `goBack()` is never held.
+
+## Pitfalls {#pitfalls}
+
+### Asking with the user already gone {#too-late}
+
+`useScreenDisappear` and `screenPopped` come once the user has left: too late to ask. Ask here; keep those for saving.
+
+### Two holds on one screen {#two-holds}
+
+Use one `usePreventLeave` per screen. Two of them set the same options, and the one that changed last wins: a second
+hook with `false` can take away the hold of the first. Combine the conditions into one: `usePreventLeave(dirty ||
+uploading, …)`.
+
+### Hiding the back button instead {#hiding}
+
+`backButton({ visible: false })` only hides the button: the swipe back, the system back and the swipe down of a sheet
+still leave, and the draft is lost. Hold the leave instead, which holds them all.
+
+### A hook outside a screen {#outside-a-screen}
+
+The hook holds the screen the component is in. In a component that isn't in one of the app's `screens`, it throws
+"This hook is for the screens of createNavigation".
+
+## Compared with React Navigation {#react-navigation}
+
+React Navigation's `usePreventRemove` is the same idea. Its callback gets the action the user tried, and the screen
+dispatches it to leave; here the screen leaves with a command, and commands are never held.
+
+<Pair left="React Navigation" right="This library">
+
+```tsx
+usePreventRemove(dirty, ({ data }) => {
+  Alert.alert('Discard?', undefined, [
+    { text: 'Keep', style: 'cancel' },
+    {
+      text: 'Discard',
+      onPress: () =>
+        navigation.dispatch(data.action),
+    },
+  ]);
+});
+```
+
+```tsx
+usePreventLeave(dirty, () => {
+  Alert.alert('Discard?', undefined, [
+    { text: 'Keep', style: 'cancel' },
+    {
+      text: 'Discard',
+      onPress: () => navigation.goBack(),
+    },
+  ]);
+});
+```
+
+</Pair>
+
+In React Navigation, `navigation.goBack()` from the app is held too, so code that leaves after saving has to turn the
+hold off first. Here it isn't. And the swipe back on iOS and the swipe down of a sheet are held by the platform itself,
+not undone after the gesture.
+
+## See also {#see-also}
+
+- [Keeping the user on a screen](/docs/screen-ui/back-and-gestures#prevent), [the ways back](/docs/screen-ui/back-and-gestures#ways).
+- [Forms in a modal](/docs/flows/forms-in-a-modal): Cancel, Save and this question in one screen.
+- [Asking before a modal closes](/docs/containers/modals#ask).

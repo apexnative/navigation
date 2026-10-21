@@ -1,0 +1,149 @@
+---
+title: Errors and loading
+description: "What a screen shows when it fails to render and while it waits for its data, where each kind of error goes, and what happens when the start of the app fails."
+---
+
+import { SectionStatus, SectionApi } from '@site/src/components/Api';
+import { Mark } from '@site/src/components/Intro';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+<SectionStatus id="errors-and-loading" />
+
+A screen can fail to render, or wait for its data. The navigation keeps both <Mark>inside the screen</Mark>: its bar stays, back works, and the rest of the app goes on. The app gives two components once, in `createNavigation`, and every screen uses them:
+
+```ts title="Navigation.ts"
+import { createNavigation } from '@apexnative/navigation';
+import { ErrorFallback } from './src/ErrorFallback';
+import { LoadingFallback } from './src/LoadingFallback';
+
+export const Navigation = createNavigation({
+  // … screens and root
+  errorFallback: ErrorFallback,
+  loadingFallback: LoadingFallback,
+});
+```
+
+<DeviceVideo name="errors-retry" />
+
+This page answers:
+
+1. [A screen that fails](#error), and how the user tries again.
+2. [A screen that loads](#loading).
+3. [Where the errors go](#on-error): render errors, handlers, commands.
+4. [When the start of the app fails](#start).
+
+## What a screen shows {#fallbacks}
+
+Both fallbacks are components of the app. Each gets the screen it is in, as `screen: { id, name }`, so it can differ for one screen. They render inside `screenProvider`, so they have what it provides, such as the theme of a UI kit.
+
+| | Shows | Without it |
+| --- | --- | --- |
+| `errorFallback` | In place of a screen that failed to render, with `retry`. | The screen is empty, and its bar stays. |
+| `loadingFallback` | In place of a screen that waits for its data (Suspense). | The screen is empty until the data comes. |
+
+## A screen that fails {#error}
+
+An error while a screen renders stays in that screen. The screen shows `errorFallback` in place of its content, with the error and `retry`, which renders the screen again:
+
+```tsx title="src/ErrorFallback.tsx"
+import { Button, Text, View } from 'react-native';
+import type { ErrorFallbackProps } from '@apexnative/navigation';
+
+export function ErrorFallback({ error, retry }: ErrorFallbackProps) {
+  return (
+    <View style={styles.center}>
+      <Text>Something went wrong</Text>
+      <Text style={styles.muted}>
+        {error instanceof Error ? error.message : String(error)}
+      </Text>
+      <Button title="Try again" onPress={retry} />
+    </View>
+  );
+}
+```
+
+The user sees the message and "Try again" under the screen's own bar. A tap renders the screen once more; if the cause is still there, the fallback comes back.
+
+- **The bar stays**, so the user can go back, as from any screen.
+- **The other screens go on**: the screen under it, the other tabs, a modal over it. In [one tree](./one-tree) too: each screen has an error boundary of its own, so one screen's error doesn't take the tree down.
+- **A provider that fails** is caught too. A second boundary around `screenProvider` shows the fallback without it.
+
+### Errors outside the render {#outside-render}
+
+An error in a press handler or in a promise isn't an error of the render. React doesn't catch it, and it goes to the global error handler of React Native, as in any app. A screen that should show such an error puts it in its state and throws it in the render, or shows it itself:
+
+```tsx
+const [error, setError] = useState<unknown>();
+if (error) throw error; // errorFallback shows it
+
+const save = () => saveProfile().catch(setError); // your own request
+```
+
+## A screen that loads {#loading}
+
+A screen that waits for its data with Suspense, such as React's `use` with a promise or a query library in its suspense mode, shows `loadingFallback` until the data comes:
+
+```tsx title="src/LoadingFallback.tsx"
+import { ActivityIndicator, View } from 'react-native';
+
+export function LoadingFallback() {
+  return (
+    <View style={styles.center}>
+      <ActivityIndicator />
+    </View>
+  );
+}
+```
+
+<Mark>The bar is there at once</Mark>, with its title and buttons: they come with the command, not with the data. Only the content waits, so the user can go back before the data comes.
+
+A screen whose code loads the first time it shows, with `{ load }` in `screens`, doesn't use it. The command waits for the code before the screen comes in, so the screen never shows half loaded. See [Loading a screen later](../fundamentals/screens-and-props#lazy).
+
+## Where the errors go {#on-error}
+
+Each kind of error goes to the place that can act on it:
+
+| The error | Goes to |
+| --- | --- |
+| A screen fails to render | `errorFallback` in the screen, and `onError`. |
+| The start of the app fails | `errorFallback` as the first screen, and `onError`. See [When the start fails](#start). |
+| A route of `linking` fails | `onError`; the app goes on. See [Deep links](../guides/deep-links). |
+| A command can't be made | Its promise rejects (see [When a move is done](../fundamentals/moving-between-screens#done)). Not `onError`. |
+| A press handler or a promise throws | React Native's global error handler, as in any app. |
+
+`onError` gets every error the navigation catches, with where it came from. It is the place to send them to a crash reporter of your app:
+
+```ts title="Navigation.ts"
+export const Navigation = createNavigation({
+  // …
+  onError: (error, source) => {
+    if (source.type === 'screen') {
+      report(error, { screen: source.screen.name }); // your reporter
+    } else if (source.type === 'link') {
+      report(error, { link: source.url });
+    } else {
+      report(error, { start: true });
+    }
+  },
+});
+```
+
+| `source.type` | The error |
+| --- | --- |
+| `'screen'` | A screen failed to render. `source.screen` is the screen, `source.componentStack` the components React was in. |
+| `'start'` | The start of the app failed: `willMount` threw, or the first root couldn't be built. |
+| `'link'` | A route of `linking` failed: its `start`, its `open`, or a command they made. `source.url` is the link. |
+
+Without `onError` the errors go to the console, as React and React Native report them.
+
+## When the start fails {#start}
+
+If `willMount` throws, such as with no network, or the first root can't be built, the app has no screen to show yet. The navigation shows `errorFallback` <Mark>as the first screen</Mark>, in place of the splash screen, with the error. Its `retry` runs the start again, from `willMount`.
+
+So a start that fails on a bad network doesn't leave the user on the splash screen: they see what happened, and try again when the network is back. A second failure shows its error in the same screen.
+
+Without `errorFallback`, the error goes to `onError`, or to React Native as an error of the app. The splash screen stays, and the next launch of the app tries again.
+
+## API {#api}
+
+<SectionApi id="errors-and-loading" />

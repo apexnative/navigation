@@ -1,0 +1,222 @@
+package dev.apexnative.navigation.viewcontrollers.stack
+
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.AnimatorSet
+import android.view.View
+import android.view.ViewGroup
+import androidx.core.view.WindowInsetsCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import dev.apexnative.navigation.options.LayoutAnimation
+import dev.apexnative.navigation.utils.whenContentMounted
+import dev.apexnative.navigation.viewcontrollers.component.ComponentViewController
+import dev.apexnative.navigation.viewcontrollers.externalcomponent.ExternalComponentViewController
+import dev.apexnative.navigation.viewcontrollers.stack.StackDisplay.Motion
+import dev.apexnative.navigation.viewcontrollers.viewcontroller.ViewController
+import dev.apexnative.navigation.views.animations.AnimationRules
+import dev.apexnative.navigation.views.animations.SideAnimator
+import dev.apexnative.navigation.views.element.ElementTransition
+import dev.apexnative.navigation.views.element.TargetsWait
+import dev.apexnative.navigation.views.stack.StackLayout
+
+/**
+ * What shows a stack ([StackDisplay]): the views of its screens in its [StackLayout] and their animators — the default
+ * transitions and the animations of their own with the transition's elements in a layer over the screens (one
+ * animator per screen, which owns them). A screen that waits lies under the current top, transparent and hidden from
+ * accessibility (the top keeps the touches); it moves under the bar as its transition starts, without leaving the
+ * container (no insets pass). Main thread only.
+ */
+internal class StackViews(private val stack: StackController) : StackDisplay {
+    private val animators = HashMap<ViewController<*>, Animator>()
+    // What goes back when a screen's animator ends or stops: the elements its transition carries.
+    private val cleanups = HashMap<ViewController<*>, () -> Unit>()
+
+    private val layout: StackLayout?
+        get() = stack.peekView()?.takeIf { !stack.isDestroyed }
+
+    override val hasView: Boolean
+        get() = layout != null
+
+    // A root under a full-screen modal is out of the window (the modal took its view out), so not shown; a stack in a
+    // modal or a root that waits to show is in a waiting layer.
+    override val isOnScreen: Boolean
+        get() = stack.isViewShown && !stack.isInWaitingLayer
+
+    override val canAnimate: Boolean
+        get() = isActivitySeen()
+
+    override fun isPlaced(screen: ViewController<*>): Boolean {
+        val view = screen.peekView() ?: return false
+        return layout?.holds(view) == true && view.visibility == View.VISIBLE
+    }
+
+    override fun placeWaiting(screen: ViewController<*>) {
+        val layout = layout ?: return
+        val view = screen.view
+        layout.giveInsets(view, insetsOf(screen))
+        layout.placeUnder(view, stack.currentChild?.peekView())
+        hide(view)
+    }
+
+    override fun placeLower(screen: ViewController<*>) {
+        val layout = layout ?: return
+        val view = screen.view
+        layout.giveInsets(view, insetsOf(screen))
+        layout.placeAtBottom(view)
+        hide(view)
+    }
+
+    override fun raise(screen: ViewController<*>) {
+        val layout = layout ?: return
+        val view = screen.view
+        layout.giveInsets(view, insetsOf(screen))
+        layout.placeUnderBar(view)
+        seen(view)
+    }
+
+    override fun reveal(screen: ViewController<*>, over: ViewController<*>) {
+        val layout = layout ?: return
+        val view = screen.view
+        layout.giveInsets(view, insetsOf(screen))
+        layout.placeUnder(view, over.peekView())
+        seen(view)
+    }
+
+    override fun hide(screen: ViewController<*>) {
+        screen.peekView()?.visibility = View.INVISIBLE
+    }
+
+    override fun detach(screen: ViewController<*>) {
+        stop(screen)
+        val view = screen.peekView() ?: return
+        SideAnimator.rest(view)
+        seen(view)
+        layout?.take(view)
+    }
+
+    override fun remove(screen: ViewController<*>) {
+        stop(screen)
+        val view = screen.peekView() ?: return
+        if (view.parent === layout) (view.parent as? ViewGroup)?.removeView(view)
+    }
+
+    override fun rest(screen: ViewController<*>) {
+        val view = screen.peekView() ?: return
+        SideAnimator.rest(view)
+        seen(view)
+    }
+
+    override fun animate(screen: ViewController<*>, motion: Motion, fromCurrent: Boolean, done: () -> Unit) {
+        stop(screen)
+        val view = screen.peekView() ?: return done()
+        val animator = StackTransitions.animator(view, motion, fromCurrent)
+        animator.addListener(object : AnimatorListenerAdapter() {
+            // Ended or cancelled by anything else than [stop]: the screen's part is done.
+            override fun onAnimationEnd(animation: Animator) {
+                if (animators[screen] === animator) animators.remove(screen)
+                done()
+            }
+        })
+        animators[screen] = animator
+        animator.start()
+    }
+
+    // The elements go into a layer over the screens, and back as the screen's animator ends or stops. A shared element
+    // without a duration takes the screen's fade: its own single `alpha`, else 300 ms.
+    override fun animateCustom(screen: ViewController<*>, custom: StackDisplay.Custom, done: () -> Unit) {
+        stop(screen)
+        val view = screen.peekView() ?: return done()
+        custom.alpha?.let { view.alpha = it }
+        val own = custom.side?.let { SideAnimator.build(view, it, SideAnimator.Base(alpha = custom.alpha)) }
+        val fade = if (own == null) StackTransitions.fade(view, custom.fade) else null
+        val elements = custom.elements?.let { elements ->
+            val layout = layout ?: return@let null
+            val fadeLength = custom.side?.takeIf(AnimationRules::isSingleAlpha)?.let(AnimationRules::lengthOf)
+            ElementTransition.startOrLog(
+                elements.animation, elements.from, elements.to, layout, null,
+                fadeLength ?: AnimationRules.SCREEN_FADE,
+            )
+        }
+        val parts = listOfNotNull(own, fade) + elements?.animators.orEmpty()
+        if (parts.isEmpty()) {
+            elements?.finish()
+            return done()
+        }
+        val set = AnimatorSet().apply { playTogether(parts) }
+        elements?.let { cleanups[screen] = it::finish }
+        set.addListener(object : AnimatorListenerAdapter() {
+            // Ended or cancelled by anything else than [stop]: the elements back, then the screen's part is done.
+            override fun onAnimationEnd(animation: Animator) {
+                if (animators[screen] === set) {
+                    animators.remove(screen)
+                    cleanups.remove(screen)?.invoke()
+                }
+                done()
+            }
+        })
+        animators[screen] = set
+        set.start()
+    }
+
+    override fun awaitTargets(
+        animation: LayoutAnimation,
+        from: ViewController<*>?,
+        to: ViewController<*>,
+        waiting: () -> Boolean,
+        done: () -> Unit,
+    ): () -> Unit = TargetsWait.start(animation, from, to, waiting, done)
+
+    override fun stop(screen: ViewController<*>) {
+        val animator = animators.remove(screen)
+        if (animator != null) {
+            animator.removeAllListeners()
+            animator.cancel()
+        }
+        cleanups.remove(screen)?.invoke()
+    }
+
+    override fun awaitPrepared(
+        screen: ViewController<*>,
+        waiting: () -> Boolean,
+        mounted: () -> Unit,
+        start: () -> Unit,
+    ) {
+        screen.whenContentMounted(
+            waiting = waiting,
+            mounted = {
+                // The frame of the mount: the screen shows transparent and lays out; its transition starts on the
+                // pre-draw of that frame.
+                screen.peekView()?.let {
+                    it.alpha = 0f
+                    it.visibility = View.VISIBLE
+                }
+                mounted()
+            },
+            start = start,
+        )
+    }
+
+    // A view that waits or renders under the others: transparent, without touches, unseen by accessibility.
+    private fun hide(view: View) {
+        view.alpha = 0f
+        view.visibility = View.VISIBLE
+        view.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+    }
+
+    private fun seen(view: View) {
+        view.visibility = View.VISIBLE
+        view.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
+    }
+
+    // The window insets a screen got last.
+    private fun insetsOf(screen: ViewController<*>): WindowInsetsCompat? = when (screen) {
+        is ComponentViewController -> screen.frame.windowInsets
+        is ExternalComponentViewController -> screen.frame.windowInsets
+        else -> null
+    }
+
+    // The frames of an animation come only while the activity can be seen (the display on, the app in front).
+    private fun isActivitySeen(): Boolean =
+        (stack.activity as? LifecycleOwner)?.lifecycle?.currentState?.isAtLeast(Lifecycle.State.STARTED) != false
+}

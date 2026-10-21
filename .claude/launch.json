@@ -1,0 +1,55 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "showcase-metro",
+      "runtimeExecutable": "yarn",
+      "runtimeArgs": [
+        "example",
+        "start",
+        "--port",
+        "8081"
+      ],
+      "port": 8081
+    },
+    {
+      "name": "showcase-metro-clean",
+      "runtimeExecutable": "yarn",
+      "runtimeArgs": [
+        "example",
+        "start",
+        "--port",
+        "8081",
+        "--reset-cache"
+      ],
+      "port": 8081
+    },
+    {
+      "name": "docs",
+      "runtimeExecutable": "yarn",
+      "runtimeArgs": [
+        "--cwd",
+        "docs",
+        "start",
+        "--port",
+        "3000",
+        "--no-open"
+      ],
+      "port": 3000
+    },
+    {
+      "name": "clips-metro",
+      "runtimeExecutable": "yarn",
+      "runtimeArgs": [
+        "example",
+        "start",
+        "--port",
+        "8082"
+      ],
+      "env": {
+        "APEX_CLIPS": "1"
+      },
+      "port": 8082
+    }
+  ]
+}

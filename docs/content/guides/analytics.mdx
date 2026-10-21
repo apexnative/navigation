@@ -1,0 +1,389 @@
+---
+title: Screen analytics
+description: 'Every screen the user sees, sent to Firebase Analytics, Segment, PostHog or Amplitude from one place: the names of the screens, the data of a screen, modals, tabs and sheets, and the time on a screen.'
+---
+
+import { Mark, Os } from '@site/src/components/Intro';
+import DocTabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+Analytics wants to know which screens the user sees, and for how long. Here you report every screen from one place in `createNavigation`, with no code in the screens, and add the data of a screen where it matters. You end with:
+
+- a screen view for every screen the user sees, from the first one;
+- the data of a screen, such as the id of a product, where you need it;
+- the time the user spent on a screen.
+
+## What you need {#need}
+
+- An analytics library set up in your app. This guide shows four, written against these versions: [`@react-native-firebase/analytics`](https://rnfirebase.io/analytics/usage) 26, [`@segment/analytics-react-native`](https://github.com/segmentio/analytics-react-native) 2, [`posthog-react-native`](https://posthog.com/docs/libraries/react-native) 4 and [`@amplitude/analytics-react-native`](https://amplitude.com/docs/sdks/analytics/react-native/react-native-sdk) 1.12. Their setup is in their own docs.
+- The events of a screen: [Lifecycle and events](../fundamentals/lifecycle-and-events).
+
+## How it will work {#plan}
+
+The platform moves the screens, and the navigation hears each move as an event. So screen tracking is a listener, not a component:
+
+- **One file, `src/analytics.ts`,** is the only one that knows your library. It has two functions: `screenView(name)` and `event(name, properties)`.
+- **`listeners` of `createNavigation`** call `screenView` for every screen that appears. They are attached before the first root, so the first screen counts too.
+- **A screen** sends its own data with a hook, only where that data matters.
+
+If you come from React Navigation: there the app keeps a ref to the container and reads the current route in `onStateChange`. Here there is no navigator state to read: the event carries the screen. Both side by side: [Why the events are outside React](../fundamentals/lifecycle-and-events#outside-react).
+
+## 1. One file for your analytics {#module}
+
+Put your library behind two functions. The rest of the guide calls only these, so a change of library is a change of this file.
+
+<DocTabs groupId="analytics-library">
+<TabItem value="firebase" label="Firebase" default>
+
+```ts title="src/analytics.ts"
+import {
+  getAnalytics,
+  logEvent,
+  logScreenView,
+} from '@react-native-firebase/analytics';
+
+type Properties = Record<string, string | number>;
+
+const analytics = getAnalytics();
+
+export function screenView(name: string) {
+  return logScreenView(analytics, {
+    screen_name: name,
+    screen_class: name,
+  });
+}
+
+export function event(name: string, properties?: Properties) {
+  return logEvent(analytics, name, properties);
+}
+```
+
+<Os name="iOS" /> Firebase reports screens by itself on iOS, from the view controllers it sees. The screens here are view controllers of the navigation, so it would report views with the navigation's class name, such as `ANNComponentViewController`, as their screen class, next to your own views. Turn that off, and keep the views of `screenView` only:
+
+```xml title="ios/MyApp/Info.plist"
+<key>FirebaseAutomaticScreenReportingEnabled</key>
+<false/>
+```
+
+</TabItem>
+<TabItem value="segment" label="Segment">
+
+```ts title="src/analytics.ts"
+import { createClient } from '@segment/analytics-react-native';
+
+type Properties = Record<string, string | number>;
+
+const segment = createClient({ writeKey: 'YOUR_WRITE_KEY' });
+
+export function screenView(name: string) {
+  return segment.screen(name);
+}
+
+export function event(name: string, properties?: Properties) {
+  return segment.track(name, properties);
+}
+```
+
+Use the client from this module, not `useAnalytics` of `AnalyticsProvider`: see [Your library's provider and hooks](#providers).
+
+</TabItem>
+<TabItem value="posthog" label="PostHog">
+
+```ts title="src/analytics.ts"
+import PostHog from 'posthog-react-native';
+
+type Properties = Record<string, string | number>;
+
+export const posthog = new PostHog('YOUR_PROJECT_KEY', {
+  host: 'https://us.i.posthog.com',
+});
+
+export function screenView(name: string) {
+  return posthog.screen(name);
+}
+
+export function event(name: string, properties?: Properties) {
+  posthog.capture(name, properties);
+}
+```
+
+PostHog's own screen capture, `captureScreens` in `autocapture` of `PostHogProvider`, is on by default and reads React Navigation's state, which this app doesn't have. With the provider, turn it off, `autocapture={{ captureScreens: false }}`, and let the listener report the screens.
+
+</TabItem>
+<TabItem value="amplitude" label="Amplitude">
+
+```ts title="src/analytics.ts"
+import {
+  init,
+  track,
+  trackScreenView,
+} from '@amplitude/analytics-react-native';
+
+type Properties = Record<string, string | number>;
+
+init('YOUR_API_KEY');
+
+export function screenView(name: string) {
+  trackScreenView(name);
+}
+
+export function event(name: string, properties?: Properties) {
+  track(name, properties);
+}
+```
+
+`trackScreenView` sends Amplitude's own screen event, `[Amplitude] Screen Viewed`, with the name as `[Amplitude] Screen Name`.
+
+</TabItem>
+</DocTabs>
+
+Nothing is sent yet: the next step calls `screenView`.
+
+## 2. Report every screen {#every-screen}
+
+`listeners` of `createNavigation` hear the events of the whole app, for as long as it runs. `screenDidAppear` comes each time a screen is in place, with the screen as `{ id, name }`:
+
+```ts title="Navigation.ts"
+import { createNavigation } from '@apexnative/navigation';
+import { screenView } from './src/analytics';
+import { HomeScreen } from './src/screens/Home';
+import { ProductScreen } from './src/screens/Product';
+
+export const Navigation = createNavigation({
+  screens: { Home: HomeScreen, Product: ProductScreen },
+  root: 'Home',
+  listeners: {
+    screenDidAppear: ({ screen }) => {
+      screenView(screen.name);
+    },
+  },
+});
+```
+
+The user opens the app, then a product, then goes back: analytics gets Home, Product, Home. The listeners are attached before the first root shows, so the first screen counts too, and no screen needs a line of its own.
+
+`screen.name` is the name in `screens`.
+
+## 3. Name the screens for analytics {#names}
+
+The names in `screens` are code names. When your analytics wants other ones, or should skip a screen, keep a map next to the listener:
+
+```ts title="src/analytics.ts"
+const names: Record<string, string | null> = {
+  Home: 'home',
+  Product: 'product_details',
+  Toast: null, // not a screen view
+};
+
+export function screenName(name: string): string | null {
+  return name in names ? names[name] : name;
+}
+```
+
+```ts title="Navigation.ts"
+screenDidAppear: ({ screen }) => {
+  const name = screenName(screen.name);
+  if (name) screenView(name);
+},
+```
+
+An overlay is a screen too, so a toast or a banner shown with `showOverlay` appears in the events: skip it here when it isn't a view. So does a [splash of your own](./splash-screen#own-splash), before the first screen, as `ApexNavigation.Splash`: add `'ApexNavigation.Splash': null` to the map.
+
+## 4. What counts as a view {#what-counts}
+
+`screenDidAppear` follows what the platform shows. Some moves bring a screen back, and some don't:
+
+| The user | `screenDidAppear` |
+| --- | --- |
+| Goes back to a screen | Comes again: the user sees it again. |
+| Selects a tab | Comes for the screen on top of that tab. |
+| Opens a full-screen modal, then closes it | Comes for the modal's screen, then again for the screen under it. |
+| <Os name="iOS" /> Opens a sheet, then closes it | Comes for the sheet's screen only. The screen under a sheet still shows, so it doesn't disappear and doesn't appear again. |
+
+To count only the first time each screen opens, not the returns, keep the ids: `screen.id` is <Mark>one showing</Mark> of a screen, and a return has the same id.
+
+```ts
+const seen = new Set<string>();
+
+// in listeners
+screenDidAppear: ({ screen }) => {
+  if (seen.has(screen.id)) return; // a return
+  seen.add(screen.id);
+  screenView(screen.name);
+},
+```
+
+### What the user looks at, sheets included {#state}
+
+When a view should be the screen the user is on, the sheet's screen while it is open and the screen under it once it closes, listen to `stateChanged` instead. It comes each time the screen the user sees changes, and overlays don't count:
+
+```ts
+let last: string | undefined;
+
+// in listeners
+stateChanged: ({ screen }) => {
+  if (!screen || screen.id === last) return;
+  last = screen.id;
+  screenView(screen.name);
+},
+```
+
+The user opens a sheet over Home and closes it: analytics gets the sheet's screen, then Home. A toast over Home sends nothing. More: [What the user sees now](../fundamentals/lifecycle-and-events#state).
+
+## 5. The data of a screen {#props}
+
+The events carry the screen, not its props. The data that matters, such as the id of a product, is known by the screen itself, so the screen sends it with `useScreenAppear`:
+
+```tsx title="src/screens/Product.tsx"
+import { useScreenAppear } from '@apexnative/navigation';
+import { event } from '../analytics';
+
+function Product({ productId }: { productId: string }) {
+  useScreenAppear(() => {
+    event('product_viewed', { productId });
+  });
+  // …
+}
+```
+
+Send it as an event of its own, next to the screen view of step 2, so the screen isn't counted twice. The hook hears only this screen, and stops when it unmounts.
+
+`useScreenAppear` comes each time the screen appears, as `screenDidAppear` does. A screen that can appear before its component has mounted, such as the first screen of the app, reports the first showing reliably with `useFocusEffect`, which runs at once when the screen already has the focus. It also runs again when a sheet over the screen goes, where `useScreenAppear` doesn't come.
+
+## 6. The time on a screen {#time}
+
+`screenDidDisappear` comes when the screen is covered or has left. With the time of each appearance kept by id, the listener sends how long the user stayed:
+
+```ts title="Navigation.ts"
+const shownAt = new Map<string, number>();
+
+export const Navigation = createNavigation({
+  // …
+  listeners: {
+    screenDidAppear: ({ screen }) => {
+      shownAt.set(screen.id, Date.now());
+      screenView(screen.name);
+    },
+    screenDidDisappear: ({ screen }) => {
+      const start = shownAt.get(screen.id);
+      if (start === undefined) return;
+      shownAt.delete(screen.id);
+      event('screen_time', {
+        screen: screen.name,
+        seconds: (Date.now() - start) / 1000,
+      });
+    },
+  },
+});
+```
+
+The user stays on Product for 12 seconds and goes back: analytics gets 12 seconds for Product. Time with the app in the background counts here too: see [The app in the background](#background).
+
+## 7. Tabs {#tabs}
+
+A tab change already comes as a screen view: the screen on top of the tab appears. To know which tab the user picked, as well, `tabSelected` has the index of the tab:
+
+```ts
+// in listeners
+tabSelected: ({ selectedTabIndex }) => {
+  event('tab_selected', { index: selectedTabIndex });
+},
+```
+
+## Listening from your analytics module {#on}
+
+`listeners` belong to `createNavigation`. Code that starts later, such as analytics that starts only after the user agreed to it, listens with `navigation.on`, and stops with the function it returns:
+
+```ts title="src/analytics.ts"
+import { navigation } from '@apexnative/navigation';
+
+let stop: (() => void) | undefined;
+
+export function startAnalytics() {
+  stop = navigation.on('screenDidAppear', ({ screen }) => {
+    screenView(screen.name);
+  });
+}
+
+export function stopAnalytics() {
+  stop?.();
+}
+```
+
+It hears the screens that appear from then on, not the one already on screen: send that one yourself, from `navigation.getState().screen`. In the Showcase, scenario 13.4 listens this way for 15 seconds.
+
+## Your library's provider and hooks {#providers}
+
+Segment's `AnalyticsProvider` with `useAnalytics`, and PostHog's `PostHogProvider` with `usePostHog`, keep the client in a React context. Without `appProvider`, <Mark>each screen is a React root of its own</Mark>, so a provider around the first screen doesn't reach the others, and the hook finds no client there.
+
+The client in a module, as in [step 1](#module), works in every screen and in the listeners, with no provider. When a component of yours needs the library's hook, give every screen the provider: [App context](./app-context) shows the ways.
+
+## The app in the background {#background}
+
+A screen under the app in the background still counts as shown: no `screenDidDisappear` comes when the user leaves the app. To stop the clock, end the view of the current screen when the app goes to the background, and start it again when it comes back, with React Native's `AppState`:
+
+```ts title="src/analytics.ts"
+import { AppState } from 'react-native';
+import { navigation } from '@apexnative/navigation';
+
+AppState.addEventListener('change', (state) => {
+  const screen = navigation.getState().screen;
+  if (!screen) return;
+  if (state === 'active') {
+    shownAt.set(screen.id, Date.now());
+  } else if (state === 'background') {
+    endView(screen); // sends the time, as screenDidDisappear does
+  }
+});
+```
+
+`endView` is the body of the `screenDidDisappear` listener of step 6, moved into a function both call. `getState()` is what the user sees now: the screen of the top modal, or of the root.
+
+## Testing the reports {#testing}
+
+The events come from the native side, so Jest can't make a screen appear. Test the parts that decide: `screenName` with the names of your screens, and a listener written as a function of its own, called with `{ screen: { id: '1', name: 'Home' } }`. That a real move sends a view is for a device: open the app with your library's debug view (Firebase DebugView, the live events of Segment, PostHog or Amplitude) and walk through the screens. More: [Testing](./testing).
+
+## The whole code {#code}
+
+With the file of your library from [step 1](#module), plus the names of step 3:
+
+```ts title="Navigation.ts"
+import { createNavigation } from '@apexnative/navigation';
+import { event, screenName, screenView } from './src/analytics';
+import { HomeScreen } from './src/screens/Home';
+import { ProductScreen } from './src/screens/Product';
+
+const shownAt = new Map<string, number>();
+
+export const Navigation = createNavigation({
+  screens: { Home: HomeScreen, Product: ProductScreen },
+  root: 'Home',
+  listeners: {
+    screenDidAppear: ({ screen }) => {
+      const name = screenName(screen.name);
+      if (!name) return;
+      shownAt.set(screen.id, Date.now());
+      screenView(name);
+    },
+    screenDidDisappear: ({ screen }) => {
+      const start = shownAt.get(screen.id);
+      if (start === undefined) return;
+      shownAt.delete(screen.id);
+      event('screen_time', {
+        screen: screen.name,
+        seconds: (Date.now() - start) / 1000,
+      });
+    },
+    tabSelected: ({ selectedTabIndex }) => {
+      event('tab_selected', { index: selectedTabIndex });
+    },
+  },
+});
+```
+
+## What's next {#next}
+
+- [Lifecycle and events](../fundamentals/lifecycle-and-events): every event, and [where to listen](../fundamentals/lifecycle-and-events#where).
+- [Error reporting](./error-reporting): your crash reporting library in this app.
+- [Tabs](../containers/tabs#events): the events of the tabs.
+- [Modals](../containers/modals#sheets): sheets, and what stays under them.

@@ -1,0 +1,157 @@
+---
+title: Toolbar and FAB
+description: 'Actions at the bottom of a screen, each platform its own way: the toolbar of iOS, the floating action button of Android, and one screen with both.'
+---
+
+import { SectionStatus, SectionApi } from '@site/src/components/Api';
+import { Mark, Os } from '@site/src/components/Intro';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+<SectionStatus id="toolbar-and-fab" />
+
+The top bar has room for a few actions. When a screen has more, or one main action such as Compose, each platform puts them at the bottom <Mark>in its own way</Mark>: a toolbar on iOS, a floating action button (FAB) on Android. This page answers:
+
+1. [Which one is for what](#which).
+2. [The toolbar](#toolbar) of iOS: its buttons and spaces.
+3. [The floating action button](#fab) of Android, and its actions.
+4. [One screen, both platforms](#both).
+
+## Which one is for what {#which}
+
+<DeviceVideo name="toolbar-fab" />
+
+They aren't the same control on two platforms: each is the way its platform does it. A mail app on iOS has Filter and Compose in the toolbar; on Android the same app has a Compose button floating over the list. So a screen gives each platform its own, and the other platform ignores it.
+
+## The toolbar {#toolbar}
+
+<Os name="iOS" /> The toolbar is a row of buttons at the bottom of the stack. It belongs to the stack as the top bar does, and <Mark>shows while the screen on top has buttons for it</Mark>: a screen without them has no toolbar.
+
+```ts title="src/screens/Mail.tsx"
+import { defineScreen } from '@apexnative/navigation';
+
+export const MailScreen = defineScreen({
+  component: Mail,
+  options: (s) =>
+    s.toolbar({
+      buttons: [
+        {
+          id: 'filter',
+          icon: { ios: 'line.3.horizontal.decrease' },
+          onPress: ({ navigation }) => navigation.push('Filters'),
+        },
+        { systemItem: 'flexibleSpace' },
+        {
+          id: 'compose',
+          icon: { ios: 'square.and.pencil' },
+          onPress: ({ navigation }) => navigation.showModal('Compose'),
+        },
+      ],
+    }),
+});
+```
+
+Filter sits at the leading edge and Compose at the trailing one. The buttons are [bar buttons](./bar-buttons), with `text`, `icon`, `menu`, `enabled`, `style` and `onPress`. Between them go spaces:
+
+| Item | What it does |
+| --- | --- |
+| `{ systemItem: 'flexibleSpace' }` | Takes the free width, and pushes the next buttons to the far side. |
+| `{ systemItem: 'fixedSpace' }` | A gap. On iOS 26 it also starts a new glass capsule. |
+| `{ systemItem: 'searchField' }` | iOS 26: the search field of the screen, between the buttons. See [Search](./search#toolbar). |
+
+On iOS 26 icons next to each other share one glass capsule; a text button has one of its own, and a `badge` doesn't show in the toolbar. `visible: false` hides the toolbar with its buttons.
+
+On iPhone with iOS 26 the floating tab bar takes the same place at the bottom. A screen with a toolbar inside [tabs](../containers/tabs) hides the tab bar with `hideBottomTabs()`.
+
+## The floating action button {#fab}
+
+<Os name="Android" /> The FAB is the main action of the screen, floating over the content at the bottom corner: compose, add, start.
+
+```ts
+s.fab({
+  id: 'compose',
+  icon: { android: 'ic_edit' },
+  onPress: ({ navigation }) => navigation.showModal('Compose'),
+});
+```
+
+A round button with a pencil floats at the bottom right; a press opens Compose. It is a Material FAB: with the app's Material 3 theme it has its shape and colors.
+
+| Option | What it does |
+| --- | --- |
+| `size` | `'regular'`, 56 dp, or `'mini'`, 40 dp. |
+| `alignHorizontally` | `'right'`, the default, or `'left'`. |
+| `hideOnScroll` | Hides as the content scrolls down, and comes back as it scrolls up. |
+| `backgroundColor`, `iconColor` | Its colors. Without them, the colors of the app's Material 3 theme. |
+| `visible: false` | Hides it. |
+
+### Actions {#fab-actions}
+
+A FAB with `actions` opens them above it on a press, each a small FAB with its own press:
+
+```ts
+s.fab({
+  id: 'new',
+  icon: { android: 'ic_add' },
+  scrimColor: 'rgba(0, 0, 0, 0.32)',
+  actions: [
+    {
+      id: 'new-message',
+      icon: { android: 'ic_edit' },
+      onPress: ({ navigation }) => navigation.showModal('Compose'),
+    },
+    {
+      id: 'new-folder',
+      icon: { android: 'ic_folder' },
+      onPress: ({ navigation }) => navigation.showModal('NewFolder'),
+    },
+  ],
+});
+```
+
+A press on + opens Message and Folder above it. `scrimColor` dims the screen while they show, as Material's speed dial does, and a tap on the dimmed screen closes them; without it nothing dims.
+
+## One screen, both platforms {#both}
+
+A screen with a main action gives it to each platform its own way, with `ios()` and `android()`:
+
+```ts title="src/screens/Mail.tsx"
+import {
+  defineScreen,
+  type ButtonPressHandler,
+} from '@apexnative/navigation';
+
+const compose: ButtonPressHandler = ({ navigation }) =>
+  navigation.showModal('Compose');
+
+export const MailScreen = defineScreen({
+  component: Mail,
+  options: (s) =>
+    s
+      .title('Mail')
+      .ios((s) =>
+        s.toolbar({
+          buttons: [
+            { systemItem: 'flexibleSpace' },
+            {
+              id: 'compose',
+              icon: { ios: 'square.and.pencil' },
+              onPress: compose,
+            },
+          ],
+        }),
+      )
+      .android((s) =>
+        s.fab({
+          id: 'compose',
+          icon: { android: 'ic_edit' },
+          onPress: compose,
+        }),
+      ),
+});
+```
+
+One handler serves both: the toolbar button on iOS, the FAB on Android. Both send the same `buttonPressed` with the id `compose`, so `useNavigationButton('compose', …)` in the component works on both too.
+
+## API {#api}
+
+<SectionApi id="toolbar-and-fab" />

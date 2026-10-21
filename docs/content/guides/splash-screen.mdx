@@ -1,0 +1,423 @@
+---
+title: Splash screen
+description: 'The splash screen from the tap on the icon to the first screen: one command makes the native one on iOS and Android, the navigation keeps it until the first screen is drawn, and a splash of your own in React Native can continue it with an animation.'
+---
+
+import { Mark, Os, Pair, Steps } from '@site/src/components/Intro';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+The splash screen is what the user sees between the tap on the app's icon and the first screen. Here you make it with one command, your logo on your color on both platforms, and keep it short. If a picture isn't enough, you continue it with a splash of your own in React Native: the logo moves, then the first screen comes in. You end with:
+
+- your logo on your color from the first frame of the launch, in the light and the dark appearance;
+- a splash screen that stays until the first screen is drawn, with no blank frame and no half-loaded screen in between;
+- if you want it, an animation that starts from the logo where the native splash left it, once per cold start.
+
+## What you need {#need}
+
+- An app with the navigation installed: the `apex-navigation` CLI comes with it. See [Installation](../start/installation).
+- Your logo on a transparent background: PNG, JPEG, WebP or SVG. A PNG, JPEG or WebP at least four times as wide as the logo on screen, 400 px for the default 100 points, since the densest Android screens draw it at 4×. A second logo for the dark appearance, with the same proportions, if the first one doesn't suit it.
+- The color behind the logo, and a second one for the dark appearance if you want it.
+- A native build after the command: the splash is in the native files, so a reload of the JavaScript doesn't show a new one.
+- How the app starts, `willMount` and the first root: [Starting the app](../fundamentals/starting-the-app#before).
+
+## How it will work {#plan}
+
+The system shows the splash screen before any of your code runs, so the native splash can only be a picture in the native files: the launch screen of iOS, the splash screen of Android. The command makes it, and the navigation <Mark>keeps it on screen</Mark> until the first screen is drawn. A splash of your own, a React component, can take its place on a cold start, for an animation or a progress.
+
+<Steps
+  items={[
+    { text: <>The user taps the icon, and the system shows the native splash at once.</>, code: 'SplashScreen.storyboard · ApexNavigationSplash' },
+    { text: <>React Native starts, and <code>willMount</code> loads what the first screen needs, under the splash.</>, code: 'await willMount()' },
+    { text: <>With a splash of your own, it takes the native splash's place with the same picture, and animates.</>, code: 'splash: { component }' },
+    { text: <>The first root comes in, and the splash goes.</>, code: 'root · initialRoot' },
+  ]}
+/>
+
+So you write no code to hide the splash screen, and the first screen never shows half-ready. Steps 1 to 3 make the native splash and keep it short; steps 4 and 5 add the one of your own.
+
+## 1. Make the native splash {#command}
+
+`splash` makes the splash screen of both platforms from a logo and a color:
+
+```bash title="Terminal"
+npx apex-navigation splash --logo assets/logo.png --background "#F3E9D2"
+```
+
+| Option | What it does |
+| --- | --- |
+| `--logo path` | The logo: PNG, JPEG, WebP or SVG. |
+| `--background color` | The color behind it; `#FFFFFF` by default. |
+| `--dark-logo path`, `--dark-background color` | The same for the dark appearance; without them the light ones show. |
+| `--logo-width n` | The logo's width on screen, in points on iOS and dp on Android; 100 by default. |
+
+Like `setup`, it shows each change and asks before it writes; `--dry-run` shows the changes only, `--yes` writes without asking, `--json` prints them for a script. It makes its images with [`sharp`](https://sharp.pixelplumbing.com), and offers to add it to your dev dependencies when the app doesn't have it. Every option and warning: [`splash`](./cli#splash) of the CLI.
+
+The command keeps its settings in `package.json`, under `apexNavigation.splash`. Run it again without options to make the splash from them, for example after a new logo; an option you give replaces its saved value:
+
+```bash title="Terminal"
+npx apex-navigation splash
+```
+
+## 2. Build the app and launch it cold {#check}
+
+Build the app again, as the command changed native files: `yarn ios` and `yarn android`, or a build from Xcode and Android Studio. Then quit the app and tap its icon. The user sees the logo on its color at once; it stays while the app starts, and the first screen takes its place.
+
+Switch the device to the dark appearance and launch it again: with `--dark-logo` and `--dark-background` the dark ones show.
+
+:::note
+
+iOS keeps the launch screen of an installed app in a cache, and shows the old one until the names of its images change. The command puts a hash of the logo and the colors into the names of what it writes, so a new splash shows after the next build. A launch screen you changed by hand in Xcode needs the app deleted and installed again.
+
+:::
+
+## 3. Keep the start short {#short}
+
+The splash screen stays as long as the start takes, so the start decides how long the user looks at it:
+
+- **Keep `willMount` to what the first screen needs:** the saved session, a flag of the first launch. Data that a screen shows loads in that screen.
+- **Load big screens later:** a screen in `screens` with `load` runs its code the first time it shows, not at the start. See [Loading a screen later](../fundamentals/screens-and-props#lazy).
+- **Leave the rest to `didMount`:** it runs once the first screen shows, such as a permission request. See [After the first screen](../fundamentals/starting-the-app#after).
+
+```ts title="Navigation.ts"
+import { createNavigation, navigation } from '@apexnative/navigation';
+
+export const Navigation = createNavigation({
+  // …
+  willMount: async () => {
+    // What the first screen needs: under the splash screen.
+    navigation.setContext({ signedIn: await isSignedIn() });
+  },
+  didMount: () => {
+    // What can wait: over the first screen.
+    askForNotifications(); // your own step
+  },
+});
+```
+
+The user sees the splash screen for as long as `isSignedIn` takes, then the first screen, then the system's permission dialog over it.
+
+A first screen that shows a spinner while it loads gives the user two waits: the splash, then the spinner. Load that in `willMount` instead, and the splash covers it; what `willMount` puts into the context, the first screen reads at once. See [The context](../architecture/theme-and-context#context).
+
+## 4. Add a splash of your own {#own-splash}
+
+The native splash is a picture: it can't move, and it can't show how far the start is. For that, `splash` of `createNavigation` adds a splash of your own in React Native. Its `component` takes the native splash's place on a cold start, while `willMount` runs, and the first root replaces it.
+
+Start with a component that draws what the native splash shows, the logo on its color, at the size `useSplash().logo` gives:
+
+```tsx title="src/screens/Splash.tsx"
+import { Image, StyleSheet, View } from 'react-native';
+import { useSplash } from '@apexnative/navigation';
+
+export function Splash() {
+  const { logo } = useSplash();
+  return (
+    <View style={styles.container}>
+      <Image
+        source={require('../../assets/logo.png')}
+        style={logo ?? styles.logo}
+        fadeDuration={0} // Android fades images in by default
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F3E9D2',
+  },
+  logo: { width: 100, height: 100 },
+});
+```
+
+Give it to `createNavigation`. It isn't one of `screens`: the navigation shows it itself.
+
+```ts title="src/Navigation.ts"
+import { createNavigation } from '@apexnative/navigation';
+import { HomeScreen } from './screens/Home';
+import { Splash } from './screens/Splash';
+
+export const Navigation = createNavigation({
+  screens: { Home: HomeScreen },
+  root: 'Home',
+  // highlight-next-line
+  splash: { component: Splash, minDuration: 800 },
+});
+```
+
+Quit the app and launch it. The native splash shows, then your component in its place with the same picture, so the user sees no change. Once `willMount` is done and 800 ms have passed, Home fades in over it.
+
+The logo lands on the native one because both are centered in the whole window at the same size. `useSplash().logo` is the size the command wrote into the native files, and the splash covers the whole window, under the status bar too, with no safe area. Without a splash made by the command, `logo` is `undefined`: give the size yourself, as `styles.logo` does here.
+
+## 5. Animate the logo {#animate}
+
+Now the logo moves: it shrinks a little, then grows and fades out. `hide: 'manual'` keeps the splash until the animation calls `hide()`:
+
+```tsx title="src/screens/Splash.tsx"
+import { useEffect, useRef } from 'react';
+import { Animated, StyleSheet, View } from 'react-native';
+import { useSplash } from '@apexnative/navigation';
+
+export function Splash() {
+  const { hide, logo } = useSplash();
+  const scale = useRef(new Animated.Value(1)).current;
+  const opacity = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    const to = (value: Animated.Value, toValue: number) =>
+      Animated.timing(value, {
+        toValue,
+        duration: 300,
+        useNativeDriver: true,
+      });
+    Animated.sequence([
+      to(scale, 0.9),
+      Animated.parallel([to(scale, 1.4), to(opacity, 0)]),
+    ]).start(() => hide());
+  }, [hide, scale, opacity]);
+
+  return (
+    <View style={styles.container}>
+      <Animated.Image
+        source={require('../../assets/logo.png')}
+        fadeDuration={0}
+        style={[
+          logo ?? styles.logo,
+          { opacity, transform: [{ scale }] },
+        ]}
+      />
+    </View>
+  );
+}
+
+// styles as in step 4
+```
+
+```ts title="src/Navigation.ts"
+splash: { component: Splash, hide: 'manual' },
+```
+
+The splash leaves when three things are done: `willMount`, `minDuration`, and with `hide: 'manual'` a call of `hide()`. So a quick start still plays the whole animation, and a slow one keeps the color on screen once the logo is gone, until `willMount` ends. The first root then comes in with `transition`, `'fade'` by default; any [root transition](/api/switching-roots/Root#transition) works, and a first root built with a transition of its own keeps it.
+
+On Android 12+ the system splash still covers the first moments of yours as it leaves, and Android 13 keeps it at least about half a second from the launch. `minDuration` counts from when your splash is drawn, so the start of a short animation can pass out of sight: begin it with a short pause, or make `minDuration` longer.
+
+An animation made with Reanimated or Lottie works the same way: the splash is a React root like a screen, and it calls `hide()` when its animation ends. Every key of `splash`: [`createNavigation`](/api/starting-the-app/createNavigation#splash); the hook: [`useSplash`](/api/starting-the-app/useSplash).
+
+## How the native splash stays {#how-long}
+
+<Steps
+  items={[
+    { text: <>The user taps the icon, and the system shows the splash screen at once.</> },
+    { text: <>React Native starts and runs your JavaScript.</> },
+    { text: <><code>willMount</code> runs: what the first screen needs, such as the saved session.</>, code: 'await willMount()' },
+    { text: <>The first root is drawn and takes the window; the splash screen goes.</>, code: 'root · initialRoot' },
+  ]}
+/>
+
+<DeviceVideo name="guide-splash" devices={['ios']} />
+
+Each platform keeps it its own way, with the same result: the user sees the splash's picture until the first screen, never an empty window.
+
+- <Os name="iOS" /> The system's launch screen goes with the app's first frame. The navigation puts a copy of the storyboard in its place, so the two look as one, and keeps it until the first root is set; the root shows once its content is drawn.
+- <Os name="Android" /> The activity starts with the splash theme, so the system splash screen (Android 12 and newer) or the starting window (before) shows the logo on its color. As the activity is created, the navigation switches it to your app's theme and holds back its frames until the first root is drawn, so the system splash stays meanwhile. Under the navigation, a copy of the splash fills the window until the first root is in place, so the system splash leaving shows the same picture.
+
+On Android, three more things:
+
+- **A first root that draws slowly.** The hold ends at most half a second after the first root is set, and the copy of the splash covers the rest. A root whose setRoot animation has `waitForRender: true`, such as a splash of your own, is waited for as long as it takes.
+- **A dialog ends the hold at once,** so it doesn't stay hidden behind the splash: an alert during `willMount`, React Native's red box and LogBox. So does a popup over the app, such as Metro's banner in a debug build.
+- **Android 7 to 9.** The app can't see its own dialogs there, so the navigation doesn't hold the window: the copy of the splash shows from the activity's first frame, the same picture.
+
+A link or a notification that launches the app doesn't change this: the splash screen stays until the first root, and that root can already be the screen the link opens. See [A link that launches the app](./deep-links#start-and-open) and [A tap that launches the app](./notifications#launch).
+
+## What the command writes {#files}
+
+The splash screen is native, so the command writes native files. This is also the list to follow when you make the splash by hand.
+
+<Os name="iOS" /> A launch storyboard and its images:
+
+- `SplashScreen.storyboard` next to `Info.plist`: the logo at its size, centered in the whole screen, on the color. It is added to the app's target in the Xcode project. The template's `LaunchScreen.storyboard` stays, unused.
+- In `Images.xcassets`, `SplashLogo-<hash>.imageset` (the logo at @1x, @2x and @3x, with its dark variant) and `SplashBackground-<hash>.colorset` (the color, with its dark variant). The sets of an older splash are removed.
+- In `Info.plist`, `UILaunchStoryboardName` set to `SplashScreen`, and `ApexNavigationSplashLogo`, the logo's size, which `useSplash().logo` reads:
+
+```xml title="ios/MyApp/Info.plist"
+<key>UILaunchStoryboardName</key>
+<string>SplashScreen</string>
+<key>ApexNavigationSplashLogo</key>
+<dict>
+  <key>height</key>
+  <real>100</real>
+  <key>width</key>
+  <real>100</real>
+</dict>
+```
+
+<Os name="Android" /> A splash theme over your app's theme:
+
+- `apex_navigation_splash_logo.png` in `drawable-mdpi` to `drawable-xxxhdpi`: the logo in the middle of a transparent square of 288 dp, the canvas of Android 12's splash icon; with a dark logo, the same in `drawable-night-*`.
+- `drawable/apex_navigation_splash.xml`: the color with the logo in the middle, the window's background before Android 12.
+- `values/apex_navigation_splash.xml`: the color, the logo's size in dp, which `useSplash().logo` reads, and the theme `ApexNavigationSplash`; `values-night/` has the dark color, `values-v31/` the theme with the attributes of Android 12's splash screen.
+- `android:theme="@style/ApexNavigationSplash"` on `MainActivity` in `AndroidManifest.xml`.
+
+```xml title="android/app/src/main/res/values-v31/apex_navigation_splash.xml"
+<style name="ApexNavigationSplash" parent="AppTheme">
+  <item name="android:windowBackground">
+    @drawable/apex_navigation_splash
+  </item>
+  <item name="android:windowSplashScreenBackground">
+    @color/apex_navigation_splash_background
+  </item>
+  <item name="android:windowSplashScreenAnimatedIcon">
+    @drawable/apex_navigation_splash_logo
+  </item>
+  <item name="apexNavigationPostSplashTheme">@style/AppTheme</item>
+  <item name="apexNavigationSplashBackground">
+    @color/apex_navigation_splash_background
+  </item>
+  <item name="apexNavigationSplashLogo">
+    @drawable/apex_navigation_splash_logo
+  </item>
+</style>
+```
+
+The last three attributes are the navigation's: `apexNavigationPostSplashTheme` is the theme the activity switches to as it is created, and the other two are what the copy of the splash draws under the navigation. No library is added: the navigation holds the splash with its own code, not with `core-splashscreen`.
+
+`doctor` checks that these files are made from the settings in `package.json`, so a splash changed on one platform only shows up, and warns when the logo doesn't fit Android's circle. See [`splash`](./cli#splash) of the CLI.
+
+## Light and dark {#dark}
+
+The native splash follows the appearance of the device by itself: the color and the logo sets of iOS have a dark variant, and Android picks `values-night` and `drawable-night-*`. A splash of your own follows it with `useColorScheme`, with the same colors and logos you gave the command:
+
+```tsx title="src/screens/Splash.tsx"
+import { Animated, useColorScheme, View } from 'react-native';
+
+const LOGO = require('../../assets/logo.png');
+const DARK_LOGO = require('../../assets/logo-dark.png');
+
+// in Splash
+const dark = useColorScheme() === 'dark';
+// …
+<View style={[styles.container, dark && styles.dark]}>
+  <Animated.Image
+    source={dark ? DARK_LOGO : LOGO}
+    // …
+  />
+</View>
+```
+
+Here `styles.dark` is `{ backgroundColor: '#101418' }`, the color of `--dark-background`.
+
+## A progress while the start loads {#progress}
+
+A splash of your own reads the app's context, as `willMount` changes it. A `willMount` that loads in several steps can report how far it is:
+
+```ts title="src/Navigation.ts"
+willMount: async () => {
+  await loadFonts(); // your own
+  navigation.setContext((c) => ({ ...c, progress: 0.5 }));
+  await loadSession(); // your own
+  navigation.setContext((c) => ({ ...c, progress: 1 }));
+},
+```
+
+```tsx title="src/screens/Splash.tsx"
+import { useAppContext } from '@apexnative/navigation';
+
+// in Splash: from 0 to 1, for a bar under the logo
+const progress = useAppContext((c) => c.progress ?? 0);
+```
+
+The splash renders again on each `setContext`, and the first root replaces it once `willMount` is done.
+
+## The splash of your own is outside the providers {#providers}
+
+The splash renders while `willMount` runs, before what `appProvider` and `screenProvider` may need is ready. So it is <Mark>a React root of its own</Mark>, outside both, also in [one tree](../architecture/one-tree):
+
+```tsx
+// Don't: the store's provider doesn't reach the splash.
+function Splash() {
+  const user = useSelector(selectUser); // throws: no provider
+  // …
+}
+```
+
+Give it what it needs another way: the app's context with `useAppContext`, which is there as `willMount` leaves it, or a provider inside the splash component itself. A component of a UI kit that needs its theme provider gets it there too.
+
+A splash that throws as it renders reports the error to `onError` as a screen would, and shows `errorFallback`; the start goes on, and the first root replaces it.
+
+## The splash in the navigation's state {#state}
+
+A splash of your own is a root of the navigation while it shows, with the screen `ApexNavigation.Splash`: the navigation state has it, and `screenDidAppear` of `listeners` comes for it before the first root. Skip it where you report screens, as in [Screen analytics](./analytics#names). Commands of `navigation` wait for the first root, so one called meanwhile acts from the first screen, not from the splash.
+
+## When the splash shows {#launches}
+
+The native splash belongs to a launch of the app; a splash of your own, to a cold start of its process.
+
+| Launch | The native splash | A splash of your own |
+| --- | --- | --- |
+| Cold start: the first launch, or after the system ended the app's process | Shows, until the first screen or your splash | Shows while `willMount` runs |
+| JavaScript reload (development) | Doesn't show: a blank screen until the first root | Doesn't show; `hide()` does nothing |
+| <Os name="Android" /> A new activity in the same JavaScript runtime | Shows for a moment, until the last root comes back | Doesn't show |
+
+After a reload, iOS shows the window's background (`window` of `createNavigation`), or the system background without one; Android shows the background of the app's theme. Test the splash with a cold start: quit the app, then tap its icon. More: [When the app launches again](../fundamentals/starting-the-app#launches).
+
+## When the start fails {#failure}
+
+When `willMount` throws, or the first root can't be built, the splash screen stays, and the next launch tries again. With `errorFallback`, that screen shows in the splash's place, the native one or yours, with a Try again; the start it runs again goes without the splash. An app whose `willMount` needs the network sets it, or the user looks at the splash screen with no way out. See [When the start fails](../fundamentals/starting-the-app#failure).
+
+A splash with `hide: 'manual'` that never calls `hide()` stays too: call it on every path, also when the animation is cut short. A `willMount` that never ends keeps any splash: in development the console warns after 10 seconds, `[navigation] willMount: still running after 10 s`.
+
+## In a development build {#development}
+
+- **A reload skips the splash of your own.** Quit the app and launch it to see it again.
+- <Os name="Android" /> **Metro's banner ends the hold.** Android takes the "Loading from Metro" banner for the app's first frame and lets its splash go, so the navigation stops holding then: the app's background and the banner show until the first screen, as without the hold. A release build has no banner, and the splash stays until the first screen. A red box or LogBox ends the hold too, and shows over the copy of the splash.
+
+## Android shows an icon, not a picture {#android-icon}
+
+<Os name="Android" /> From Android 12 the system splash screen is an icon in a circle on a color; it can't show a full-screen picture. Its icon is a square of 288 dp, and only a circle of 192 dp in the middle shows. A picture made for iOS's launch screen, with text or a photo, can't come to Android as it is. So the command makes the same look on both platforms: a logo on a color.
+
+Keep the whole logo inside the circle, or Android cuts its corners: the command and `doctor` warn when its diagonal is longer than 192 dp. Make `--logo-width` smaller, or give the logo room around it. The branding image at the bottom and an animated icon aren't made by the command.
+
+## A launch screen of your own {#custom}
+
+<Os name="iOS" /> The navigation keeps the storyboard that `UILaunchStoryboardName` names, whatever is in it. Edit `SplashScreen.storyboard` in Xcode for more than a logo on a color, and don't run `splash` again: it writes the storyboard anew. After a change by hand, delete the app and install it again, as iOS keeps the old launch screen in a cache.
+
+A launch screen made with the `UILaunchScreen` dictionary of `Info.plist`, without a storyboard, shows at launch, but the navigation can't make a copy of it: an empty window shows between it and the first screen. `doctor` warns about it; run `splash`, or name a storyboard.
+
+<Os name="Android" /> The system splash screen is an icon on a color whatever you do. A splash theme of your own works when it names your app's theme in `apexNavigationPostSplashTheme`, and the background and the logo in `apexNavigationSplashBackground` and `apexNavigationSplashLogo` for the copy, as in [What the command writes](#files).
+
+## Other splash screen libraries {#libraries}
+
+`react-native-bootsplash` and `expo-splash-screen` make the native files too, and hide the splash screen from JavaScript. Here the navigation hides it when the first root is drawn, so there is nothing to call:
+
+<Pair left="react-native-bootsplash" right="@apexnative/navigation">
+
+```tsx
+useEffect(() => {
+  // init: your own start
+  init().finally(() => {
+    BootSplash.hide({ fade: true });
+  });
+}, []);
+```
+
+```ts
+createNavigation({
+  // …
+  willMount: init, // your own start
+});
+```
+
+</Pair>
+
+The `SplashScreen.preventAutoHideAsync()` and `SplashScreen.hideAsync()` of `expo-splash-screen` go the same way. The only call left is `useSplash().hide()`, for a splash of your own with `hide: 'manual'`.
+
+Keep one tool making the splash screen. With `splash`, take the other library out: its files, its hide call, and for `react-native-bootsplash` its init call in `MainActivity` and the app delegate, so the two don't both set the activity's theme and the launch storyboard.
+
+## What's next {#next}
+
+- [Starting the app](../fundamentals/starting-the-app): `willMount`, `didMount` and the order of a launch.
+- [`useSplash`](/api/starting-the-app/useSplash) and [`splash`](/api/starting-the-app/createNavigation#splash) of `createNavigation`: every key.
+- [Errors and loading](../architecture/errors-and-loading#start): what the user sees when the start fails.
+- [Deep links](./deep-links#start-and-open): a link that launches the app on its screen.

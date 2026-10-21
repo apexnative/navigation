@@ -1,0 +1,66 @@
+---
+title: All guides
+description: 'Every guide and app flow by the task it answers: wiring a store or a fetch library, gestures, launch, links, notifications, errors, testing, and whole flows such as sign-in and tabs.'
+---
+
+Guides answer one task from start to finish, in your app: what to install, where each piece goes, what the user sees
+after each step, and what breaks. Find the task you have below.
+
+If you are new to the library, read [Quick start](../start/quick-start) and
+[Starting the app](../fundamentals/starting-the-app) first: the guides build on `createNavigation`, `defineScreen` and
+`navigation`.
+
+## Start here {#start}
+
+| I want to… | Guide |
+| --- | --- |
+| Build one screen properly: options, props, data, buttons, its lifecycle | [Building a screen](./building-a-screen) |
+| Understand where the app's data lives, and do it with or without the app's context | [The app context, and working without it](./app-context) |
+| Look up a command of the CLI: screens, links, the app icon, upgrades, AI agents | [The CLI](./cli) |
+
+## Wire your libraries {#libraries}
+
+By default each screen is a React root of its own, so a library that asks you to "wrap the app" needs one line of
+thought here. Each guide below shows where its provider goes and what to watch.
+
+| I use… | Guide |
+| --- | --- |
+| Redux Toolkit, Zustand, Jotai, MobX, Valtio | [State management](./state-management) |
+| TanStack Query, SWR, Apollo Client, RTK Query | [Data fetching](./data-fetching) |
+| Gesture Handler, Reanimated, a bottom sheet library, Keyboard Controller | [Gestures and animations](./gestures-and-animations) |
+| Sentry, Bugsnag, Crashlytics | [Error reporting](./error-reporting) |
+| i18next, a right-to-left language | [Right-to-left and languages](./right-to-left) |
+| Firebase Analytics, Segment, PostHog, Amplitude | [Screen analytics](./analytics) |
+| Jest, Maestro, Detox | [Testing](./testing) |
+
+## Launch and entry points {#entry}
+
+| I want to… | Guide |
+| --- | --- |
+| Make the splash screen, and keep it until the app's data is ready | [Splash screen](./splash-screen) |
+| Animate the logo before the first screen | [A splash of your own](./splash-screen#own-splash) |
+| Open a screen from a URL or a link to my web site | [Deep links](./deep-links) |
+| Open a screen when the user taps a notification | [Notifications that open a screen](./notifications) |
+
+## Whole app flows {#flows}
+
+A flow builds a common part of an app across several screens, with a clip of the result.
+
+| I want to build… | Flow |
+| --- | --- |
+| Sign-in and sign-out, with the right first screen at launch | [Sign-in and sign-out](../flows/sign-in-and-sign-out) |
+| Onboarding shown once | [Onboarding](../flows/onboarding) |
+| An app with tabs, each with its own stack | [An app with tabs](../flows/an-app-with-tabs) |
+| A list that opens details | [List and details](../flows/list-and-details) |
+| A form in a modal that warns about unsaved changes | [Forms in a modal](../flows/forms-in-a-modal) |
+| Bottom sheets with detents | [Bottom sheets](../flows/bottom-sheets) |
+| A search screen | [A search screen](../flows/a-search-screen) |
+
+## Coming from another library {#migration}
+
+- [From React Navigation](../migration/from-react-navigation)
+- [From Expo Router](../migration/from-expo-router)
+- [From react-native-navigation](../migration/from-react-native-navigation)
+
+Something not covered? [Troubleshooting](../help/troubleshooting) lists symptoms and fixes, and
+[an issue](https://github.com/apexnative/navigation/issues) is welcome.

@@ -1,0 +1,317 @@
+---
+title: A search screen
+description: 'A screen that searches with the search field of the platform: filtering as the user types, recent searches, results that open a screen, a search on the server that keeps up with the typing, suggestions, and a search tab.'
+---
+
+import { Mark, Os } from '@site/src/components/Intro';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+A search screen finds what the user types: notes, places, people. In this guide you build it with the platform's own field in the top bar, so it opens, cancels and looks as in system apps, and your screen only shows what matches. You end with:
+
+- a field in the top bar that filters a list as the user types;
+- recent searches while the field is empty, and a line when nothing matches;
+- results that open a screen, with back to the same results;
+- a search on the server that sends one request per pause, and never shows an old answer;
+- suggestions under the field, and a search tab.
+
+<DeviceVideo name="flow-search" />
+
+## What you need {#need}
+
+- An app set up with [Installation](../start/installation), with a Search screen and a Details screen.
+- Your own data: `useNotes()` for the notes on the device, or `searchNotes(text)` for a search on your server.
+- iOS 16 or later for suggestions; the rest works from iOS 15.
+- [Search](../screen-ui/search) explains the field: where it sits, scopes, tokens, a results screen of its own.
+
+## How it will work {#plan}
+
+```text
+┌ Search ─────────────────────┐
+│ [ Notes                 ]   │ ← the platform's field, in the top bar
+├─────────────────────────────┤
+│ empty     → recent searches │
+│ text      → what matches    │ ── tap ──▶ push('Details')
+│ no match  → "Nothing found" │
+└─────────────────────────────┘
+```
+
+- **The field belongs to the top bar**: `UISearchController` on <Os name="iOS" />, the Material 3 search on <Os name="Android" />. The screen turns it on in its options.
+- **The screen gets the text** with `useSearchBar`, keeps it in its own state, and renders what matches.
+- **The query is the screen's**, not the app's: `useState`, not the app's context or a store. The screen stays mounted under Details, so the query and the results are there on the way back.
+
+In React Navigation the search field of the header is `headerSearchBarOptions` of native-stack, with the same platform fields underneath. Here it is the `searchBar` option, and the events come to `useSearchBar`.
+
+## 1. Add the field {#field}
+
+A screen turns the field on in its options:
+
+```tsx title="src/screens/Search.tsx"
+import { Text } from 'react-native';
+import { defineScreen } from '@apexnative/navigation';
+
+function Search() {
+  return <Text>Type to search your notes</Text>;
+}
+
+export const SearchScreen = defineScreen({
+  component: Search,
+  options: (s) =>
+    s
+      .title('Search')
+      .searchBar({ visible: true, placeholder: 'Notes' }),
+});
+```
+
+The field shows under the title. Tap it: it opens with the keyboard, and Cancel (iOS) or back (Android) closes it.
+
+## 2. Filter as the user types {#filter}
+
+`useSearchBar` gives the screen the text. Keep it in state, and filter with it:
+
+```tsx title="src/screens/Search.tsx"
+import { useState } from 'react';
+import { FlatList, Text } from 'react-native';
+import { defineScreen, useSearchBar } from '@apexnative/navigation';
+import { useNotes } from '../notes';
+
+function Search() {
+  const notes = useNotes(); // your own data
+  const [query, setQuery] = useState('');
+
+  useSearchBar({
+    onChange: ({ text }) => setQuery(text),
+    onCancel: () => setQuery(''),
+  });
+
+  const words = query.trim().toLowerCase();
+  const results = notes.filter((note) =>
+    note.title.toLowerCase().includes(words),
+  );
+
+  return (
+    <FlatList
+      data={results}
+      renderItem={({ item }) => <Text>{item.title}</Text>}
+    />
+  );
+}
+```
+
+Type "sh": the list narrows with each letter. `onCancel` comes when the search closes, so the whole list comes back.
+
+## 3. Show something for an empty field {#empty}
+
+An empty field and a search with no result are two different moments: the first is a place for recent searches, the second for a line that says so.
+
+```tsx title="src/screens/Search.tsx"
+if (words === '') {
+  return <RecentSearches onPick={setQuery} />; // your own list
+}
+if (results.length === 0) {
+  return <Text>Nothing found for “{query}”</Text>;
+}
+```
+
+A pick in the recent searches runs that search. To show its text in the field too, set it in the options, as [Suggestions](#suggestions) below does.
+
+## 4. Open a result {#open}
+
+A result opens its screen with a push, as any list does:
+
+```tsx title="src/screens/Search.tsx"
+const navigation = useNavigation();
+
+const open = (id: string) =>
+  navigation.push('Details', { props: { id } });
+```
+
+Tap a note: Details comes in. Back returns to the search screen, which stayed mounted under Details, <Mark>with the same results</Mark>: its query is state of the screen.
+
+## 5. Search on the server {#server}
+
+A search on the server shouldn't send a request for every letter. Two ways:
+
+- **On the Search key.** `onSubmit` comes when the user taps Search on the keyboard. One request per search, and the user decides when.
+- **As the user types,** after a pause. One request when the user stops typing for a moment, not one per letter.
+
+```tsx title="src/screens/Search.tsx"
+const [results, setResults] = useState<Note[]>([]);
+
+useSearchBar({
+  onSubmit: async ({ text }) => {
+    setResults(await searchNotes(text)); // your own request
+  },
+  onCancel: () => setResults([]),
+});
+```
+
+The user types, taps Search, and the results show. For the search as the user types, see the next section: it has a trap.
+
+## Answers that come out of order {#out-of-order}
+
+The user types "sh", waits, then types "shop". Two requests go out, and the server may answer "shop" first and "sh" second: the screen then shows the results of "sh" under "shop" in the field. Number the requests, and keep only the answer to the last one:
+
+```tsx title="src/screens/Search.tsx"
+type Timer = ReturnType<typeof setTimeout>;
+
+const [results, setResults] = useState<Note[]>([]);
+const timer = useRef<Timer | undefined>(undefined);
+const last = useRef(0);
+
+const search = (text: string) => {
+  clearTimeout(timer.current);
+  timer.current = setTimeout(async () => {
+    const asked = ++last.current;
+    const found = await searchNotes(text); // your own request
+    if (asked === last.current) setResults(found);
+  }, 300);
+};
+
+useSearchBar({
+  onChange: ({ text }) => search(text),
+  onCancel: () => {
+    clearTimeout(timer.current);
+    last.current++; // an answer still on its way is dropped
+    setResults([]);
+  },
+});
+```
+
+Type "shop" fast: one request goes out, 300 ms after the last letter. Type "sh", wait, then "op": two go out, and only the answer to "shop" shows. A query library such as React Query does the same by keying the query on the text: see [Data fetching](../guides/data-fetching).
+
+## 6. Offer suggestions {#suggestions}
+
+<Os name="iOS" /> 16+ and <Os name="Android" />. Suggestions are a list under the field while the user types: completions, recent searches. The screen sets them from the text with `useScreenOptions`, and a pick comes to `onSuggestion` with its id:
+
+```tsx title="src/screens/Search.tsx"
+const navigation = useNavigation();
+
+useScreenOptions((s) =>
+  s.searchBar({
+    // completions: your own list of words for the text
+    suggestions: completions(query).map((title) => ({
+      id: title,
+      title,
+    })),
+  }),
+);
+
+useSearchBar({
+  onChange: ({ text }) => setQuery(text),
+  onSuggestion: (id) => {
+    setQuery(id);
+    navigation.setOptions({
+      topBar: { searchBar: { text: id } },
+    });
+  },
+});
+```
+
+Type "sh": "shopping" and "shoes" show under the field. Tap one: the field takes it, and the list shows its notes. A pick keeps the text the user typed, so `onSuggestion` puts the picked one in the field with `text`, which sends no `onChange`: the screen sets the query itself. The list goes when the user picks one or types on, and the next render sets new ones.
+
+## 7. Make it a search tab {#tab}
+
+In an app with tabs, search is often a tab of its own. `focus: true` opens the field with the keyboard when the screen is created, as on a screen made for searching:
+
+```ts title="Navigation.ts"
+Tab('Search')
+  .label('Search')
+  .icon({ ios: 'magnifyingglass', android: 'ic_search' })
+  .ios((tab) => tab.role('search')),
+```
+
+```ts title="src/screens/Search.tsx"
+s.searchBar({ visible: true, placeholder: 'Notes', focus: true });
+```
+
+Tap the Search tab: the field opens with the keyboard. <Os name="iOS" /> 26 draws a tab with the `'search'` role as a separate round button, and the tab bar gives its place to the search field when the tab is selected. Before iOS 26 the tab takes the system's search look. The role is for iOS only, so it goes in `.ios(…)`: on <Os name="Android" /> the tab is a usual one. More tabs: [An app with tabs](./an-app-with-tabs).
+
+## Recent searches across launches {#recent}
+
+The recent searches of step 3 are the user's, and they should outlive a restart. Keep them in the device's storage, read them as the screen mounts, and add the query on `onSubmit` or on a tap on a result. They don't belong in the app's context: only this screen reads them. A store fits when another screen shows them too, such as a Home with "Search again".
+
+## The whole code {#files}
+
+Filtering on the device, with recent searches and suggestions.
+
+```tsx title="src/screens/Search.tsx"
+import { useState } from 'react';
+import { FlatList, Pressable, Text } from 'react-native';
+import {
+  defineScreen,
+  useNavigation,
+  useScreenOptions,
+  useSearchBar,
+} from '@apexnative/navigation';
+import { completions, useNotes } from '../notes';
+import { RecentSearches } from './RecentSearches';
+
+function Search() {
+  const navigation = useNavigation();
+  const notes = useNotes();
+  const [query, setQuery] = useState('');
+
+  useScreenOptions((s) =>
+    s.searchBar({
+      suggestions: completions(query).map((title) => ({
+        id: title,
+        title,
+      })),
+    }),
+  );
+
+  useSearchBar({
+    onChange: ({ text }) => setQuery(text),
+    onCancel: () => setQuery(''),
+    onSuggestion: (id) => {
+      setQuery(id);
+      navigation.setOptions({
+        topBar: { searchBar: { text: id } },
+      });
+    },
+  });
+
+  const words = query.trim().toLowerCase();
+  const results = notes.filter((note) =>
+    note.title.toLowerCase().includes(words),
+  );
+
+  if (words === '') {
+    return <RecentSearches onPick={setQuery} />;
+  }
+  if (results.length === 0) {
+    return <Text>Nothing found for “{query}”</Text>;
+  }
+  return (
+    <FlatList
+      data={results}
+      renderItem={({ item }) => (
+        <Pressable
+          onPress={() =>
+            navigation.push('Details', { props: { id: item.id } })
+          }
+        >
+          <Text>{item.title}</Text>
+        </Pressable>
+      )}
+    />
+  );
+}
+
+export const SearchScreen = defineScreen({
+  component: Search,
+  options: (s) =>
+    s
+      .title('Search')
+      .searchBar({ visible: true, placeholder: 'Notes' }),
+});
+```
+
+`useNotes`, `completions` and `RecentSearches` are your own.
+
+## What's next {#next}
+
+- [Search](../screen-ui/search): where the field sits, scopes, tokens, a results screen of its own.
+- [List and details](./list-and-details): opening the results, on the phone and side by side.
+- [An app with tabs](./an-app-with-tabs): the tabs a search tab sits in.
+- [Data fetching](../guides/data-fetching): a search on the server with a query library.

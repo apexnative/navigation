@@ -1,0 +1,179 @@
+---
+title: One tree
+description: "How screens render: a React root per screen by default, a provider around every screen, or one tree with every screen inside the app's provider. How it differs from navigation in the React tree, and when to pick which."
+---
+
+import { SectionStatus, SectionApi } from '@site/src/components/Api';
+import { Mark, Os, Pair } from '@site/src/components/Intro';
+import { TreeModes } from '@site/src/components/Screens';
+
+<SectionStatus id="one-tree" />
+
+A React app usually has its providers at the top of one tree: a store, a query client, the theme of a UI kit. Screens of this navigation are the platform's own screens, each with React content of its own, so the app says where its providers go. A provider that every screen shares goes in `appProvider`:
+
+```tsx title="src/AppProvider.tsx"
+import type { ReactNode } from 'react';
+import {
+  QueryClient,
+  QueryClientProvider,
+} from '@tanstack/react-query';
+
+const queryClient = new QueryClient();
+
+export function AppProvider({ children }: { children: ReactNode }) {
+  return (
+    <QueryClientProvider client={queryClient}>
+      {children}
+    </QueryClientProvider>
+  );
+}
+```
+
+```ts title="Navigation.ts"
+import { createNavigation } from '@apexnative/navigation';
+import { AppProvider } from './src/AppProvider';
+
+export const Navigation = createNavigation({
+  screens: { Inbox: InboxScreen, Message: MessageScreen },
+  root: 'Inbox',
+  appProvider: AppProvider,
+});
+```
+
+Every screen now renders inside `AppProvider`, and reads the one query client. This page answers:
+
+1. [How it differs](#compare) from navigation that lives in the React tree.
+2. [How screens render](#modes): a root per screen, or one tree.
+3. [A root per screen](#root-per-screen), the default, and [a provider around every screen](#screen-provider).
+4. [One tree](#one-tree), with every screen inside the app's provider.
+5. [Which to pick](#which).
+
+## How it differs {#compare}
+
+When the navigation lives in the React tree, the screens are React components inside it, under the app's providers. A provider at the top reaches every screen by itself, because every screen is its child.
+
+Here the screens are the platform's. The platform's screen is created when a command shows it, and goes when the user leaves it. Each one needs React content of its own, and by default each gets <Mark>a React root of its own</Mark>. A provider at the top of one root doesn't reach the others, so the app says where its providers go:
+
+<Pair left="Navigation in the React tree" right="Native screens">
+
+```tsx
+<QueryClientProvider client={client}>
+  <NavigationRoot>
+    <Screen name="Inbox" />
+    <Screen name="Message" />
+  </NavigationRoot>
+</QueryClientProvider>
+```
+
+```tsx
+createNavigation({
+  screens: { Inbox, Message },
+  root: 'Inbox',
+  // every screen renders inside it
+  appProvider: AppProvider,
+});
+```
+
+</Pair>
+
+| | Navigation in the React tree | Here: a root per screen | Here: one tree |
+| --- | --- | --- | --- |
+| Where a screen renders | In the app's tree | In a React root of its own, inside its native screen | In the app's tree, shown in its native screen |
+| A provider at the top | Reaches every screen | Reaches nothing: `screenProvider` wraps each screen | Reaches every screen: `appProvider` |
+| Who moves the screens | React, with its state | The platform | The platform |
+| A screen that goes | Unmounts from the tree | Its root unmounts with the native screen | Its part of the tree unmounts with the native screen |
+
+So one tree gives back what a router in the React tree has, one set of providers for every screen, while the screens stay native.
+
+## How screens render {#modes}
+
+<TreeModes />
+
+The mode is set once, in `createNavigation`. With `appProvider` the app runs in one tree; without it each screen is a root of its own.
+
+## A root per screen {#root-per-screen}
+
+Without providers in `createNavigation`, each screen is a React root of its own. A store kept in a module is shared anyway, because every screen imports the same module:
+
+```ts title="src/cart.ts"
+import { create } from 'zustand';
+
+type Cart = { count: number; add(): void };
+
+export const useCart = create<Cart>((set) => ({
+  count: 0,
+  add: () => set((cart) => ({ count: cart.count + 1 })),
+}));
+```
+
+```ts title="Navigation.ts"
+export const Navigation = createNavigation({
+  screens: { Products: ProductsScreen, Cart: CartScreen },
+  root: 'Products',
+});
+```
+
+Products adds to the cart, and the Cart screen pushed later shows the same count: both read `useCart`, and nothing wraps them. The same goes for Redux with its store imported, or MobX.
+
+### A provider around every screen {#screen-provider}
+
+`screenProvider` wraps every screen on its own. It is the place for providers that hold no state the screens share, such as the theme of a UI kit or the language of a translation library:
+
+```tsx title="src/ScreenProvider.tsx"
+export function ScreenProvider({ children }: { children: ReactNode }) {
+  // the provider of your UI kit
+  return <UiKitProvider theme={uiTheme}>{children}</UiKitProvider>;
+}
+```
+
+```ts title="Navigation.ts"
+export const Navigation = createNavigation({
+  screens: { Products: ProductsScreen, Cart: CartScreen },
+  root: 'Products',
+  screenProvider: ScreenProvider,
+});
+```
+
+Each screen has its own copy of it, so state kept inside it is the screen's alone: a counter in it starts from zero on every screen, and is gone when the screen goes.
+
+`screenProvider` also gets the screen as `screen: { id, name }`, so it can differ for one screen. It renders inside the screen, so the screen's hooks, such as `useScreen` and `useNavigation`, work in it; `appProvider` is above every screen, and has none.
+
+## One tree {#one-tree}
+
+`appProvider` wraps the whole app once, and every screen renders inside it. It is the place for providers that hold <Mark>state the screens share in React context</Mark>, such as the query client of the example at the top of this page.
+
+The Inbox loads the messages; the Message screen pushed later reads the same query, and shows the message at once from the cache the Inbox filled:
+
+```tsx title="src/screens/Message.tsx"
+function Message({ id }: { id: string }) {
+  const { data } = useQuery({
+    queryKey: ['messages'],
+    queryFn: loadMessages, // your own request, the same as in Inbox
+  });
+  const message = data?.find((item) => item.id === id);
+  return <Text>{message?.body}</Text>;
+}
+```
+
+With a root per screen, each screen would need a client of its own: Message would start empty, and load the messages again.
+
+- **The screens stay native.** Each one is pushed, presented and put in tabs as any other, with its bars and gestures. Only its React content renders inside the app's tree, and its views show in the native screen.
+- **What `appProvider` holds lives as long as the app.** Screens come and go under it; a reload of the JavaScript starts it again.
+- **An error stays in its screen.** Each screen has an error boundary of its own, so one screen that fails doesn't take the tree down (see [A screen that fails](./errors-and-loading#error)).
+- **Native screens share it too.** The `useProps` hook of a [native screen](./native-screens#what) runs inside `appProvider`, so it reads the same query client.
+
+`appProvider` and `screenProvider` go together: the app's providers once, and inside them what each screen needs on its own.
+
+## Which to pick {#which}
+
+| The app has | Pick |
+| --- | --- |
+| No providers, or a store kept in a module | A root per screen: nothing to set. |
+| Providers without shared state, such as the theme of a UI kit | A root per screen, with `screenProvider`. |
+| State in React context that screens share, such as a query client or a provider-based store | One tree, with `appProvider`. |
+
+Every feature of the navigation works the same way in both: the Showcase runs each of its sections in either mode. One difference is in timing. <Os name="Android" /> A push in one tree renders the screen before it starts, so the screen comes in drawn, and the push starts later by the time React takes to render it (see [A push on Android, in one tree](./transitions#wait-one-tree)).
+
+## API {#api}
+
+<SectionApi id="one-tree" />

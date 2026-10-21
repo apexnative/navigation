@@ -1,0 +1,85 @@
+import { Os } from '@site/src/components/Intro';
+
+`useScreenDisappear` calls a handler each time the screen disappears: another screen covers it, the user goes to
+another tab, or the screen leaves. It is the place for a one-off step when the user moves away, such as saving a draft
+or pausing a player. It is called in a component of a screen.
+
+## Usage {#usage}
+
+```tsx title="src/screens/Compose.tsx"
+import { useState } from 'react';
+import { TextInput } from 'react-native';
+import { useScreenDisappear } from '@apexnative/navigation';
+import { saveDraft } from '../drafts'; // your own storage
+
+export function Compose() {
+  const [text, setText] = useState('');
+
+  useScreenDisappear(() => {
+    if (text) saveDraft(text);
+  });
+
+  return <TextInput value={text} onChangeText={setText} multiline />;
+}
+```
+
+When the user leaves Compose, for another tab or by going back, the draft is saved. The handler sees the text of the
+last render: it needs no `useCallback` and no ref.
+
+## Signature {#signature}
+
+<ApiSignature data={data} name="useScreenDisappear" />
+
+**`handler`** gets a `ScreenDidDisappearEvent`: `{ screen }`, the screen as `{ id, name }`. The handler can change on
+every render; the call goes to the one of the last render.
+
+It returns nothing.
+
+## When it is called {#timing}
+
+On the screen's `screenDidDisappear`: once the screen is no longer on screen, after the move has ended.
+
+| What happens | The handler |
+| --- | --- |
+| A screen is pushed over it | Called once the new screen covers it. |
+| Another tab is selected | Called. |
+| A modal that covers the whole screen | Called. |
+| A sheet over it: iOS page and form sheets, Android sheets | Not called: the screen still shows under the sheet. |
+| An overlay over it | Not called. |
+| The screen is popped or its modal dismissed | Called, then the component unmounts. |
+| The app goes to the background | <Os name="iOS" /> Not called. <Os name="Android" /> Called when the activity pauses. |
+
+### Without an appear before it {#without-appear}
+
+<Os name="iOS" /> When the user starts a swipe back and stops halfway, the screen under the top one started to
+appear (`screenWillAppear`), then disappears again. It gets `screenDidDisappear` without a `screenDidAppear` before
+it. A handler that undoes what an appear did checks that the appear happened, or uses
+[`useFocusEffect`](/api/lifecycle-and-events/useFocusEffect), whose cleanup runs only after its effect.
+
+## Pitfalls {#pitfalls}
+
+- **Not the place to keep the user.** By the time it is called the screen is gone: the user already left. To ask
+  before leaving a screen with unsaved changes, use
+  [`usePreventLeave`](/api/back-and-gestures/usePreventLeave).
+- **A sheet doesn't count.** Pausing a video here leaves it playing under a sheet. Pause it in the cleanup of
+  [`useFocusEffect`](/api/lifecycle-and-events/useFocusEffect), which runs under a sheet too, or read
+  [`useIsFocused`](/api/lifecycle-and-events/useIsFocused) for what the user is on.
+- **Not the background on iOS.** Saving on the way to the background, on both platforms, listens to `AppState` of
+  React Native.
+- **Popped screens.** A popped screen gets this event, then unmounts; asynchronous work started here outlives the
+  component, and the state it sets goes nowhere: save to storage or a store, not to the component. A step only for
+  a screen that left its stack is `screenPopped`, with [`useScreenEvent`](/api/lifecycle-and-events/useScreenEvent).
+- **Outside a screen** the hook throws.
+
+## Compared with React Navigation {#react-navigation}
+
+The nearest in React Navigation is a `blur` listener, `navigation.addListener('blur', …)`. `blur` comes when the
+screen loses focus, which also happens under a modal of any kind; `useScreenDisappear` follows the platform and comes
+only when the screen is no longer on screen.
+
+## See also {#see-also}
+
+- [`useScreenAppear`](/api/lifecycle-and-events/useScreenAppear),
+  [`useFocusEffect`](/api/lifecycle-and-events/useFocusEffect).
+- [The hooks of a screen](/docs/fundamentals/lifecycle-and-events#hooks),
+  [Knowing the user went back](/docs/screen-ui/back-and-gestures#popped).

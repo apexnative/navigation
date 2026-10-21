@@ -1,0 +1,176 @@
+import { Os } from '@site/src/components/Intro';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+`Stack` builds a stack of screens: the top one shows, and back goes to the one under it. It is the container the user
+moves deeper in: a list opens an item, the item opens its comments. You use it in a layout, wherever the app places
+content: the first root of `createNavigation`, a tab, the center of a side menu, a column of a split view, a modal over
+a root.
+
+On <Os name="iOS" /> and <Os name="iPadOS" /> the stack is a `UINavigationController`, with the system navigation bar,
+the back button and the swipe from the leading edge. On <Os name="Android" /> it is the library's own stack of views,
+with a Material top bar, the back arrow and the system back. One top bar serves every screen of the stack, and each
+screen gives it a title and buttons through its options.
+
+<DeviceVideo name="stack-push-back" />
+
+## Usage {#usage}
+
+```ts title="src/Navigation.ts"
+import { createNavigation, Stack } from '@apexnative/navigation';
+import { HomeScreen } from './screens/Home';
+import { DetailsScreen } from './screens/Details';
+
+export const Navigation = createNavigation({
+  screens: { Home: HomeScreen, Details: DetailsScreen },
+  root: Stack('Home'),
+});
+```
+
+The app opens on Home, with a top bar. `navigation.push('Details')` from Home slides Details in, and back returns to
+Home. `root: 'Home'` does the same: a screen named alone in the root gets a stack around it.
+
+A stack can also start deeper, with the screens under the top one in place, such as for a deep link. A screen with
+props goes as `Screen(name, props)`:
+
+```ts title="src/Navigation.ts"
+import {
+  createNavigation,
+  Screen,
+  Stack,
+} from '@apexnative/navigation';
+// … the screens' imports
+
+export const Navigation = createNavigation({
+  screens: { Inbox: InboxScreen, Chat: ChatScreen },
+  root: Stack('Inbox', Screen('Chat', { userId: '7' })),
+});
+```
+
+Chat shows; back goes to Inbox, which was there all along, mounted, with its state.
+
+## Signature {#signature}
+
+<ApiSignature data={data} name="Stack" />
+
+`Stack` takes its screens as arguments, **from the bottom one to the top one**, and returns a `StackElement`: a value a
+layout or a command takes. It has no methods of its own and no options: the options go on the screens (see
+[Options go on the screens](#options-on-screens)).
+
+## What it takes {#entries}
+
+Each argument is a `StackEntry`, one of two forms:
+
+| Entry | For |
+| --- | --- |
+| `'Details'` | A screen of `screens` (or of a group) without props. |
+| `Screen('Details', { id: '42' })` | A screen with its props, and, if needed, options or an id for this show. |
+
+Only screens: a stack holds no tabs, side menus or other stacks. To put a stack into tabs, it goes the other way
+round: `Tab(Stack('Inbox', 'Chat'))`.
+
+How many: one or more. The last one shows; each one under it is where back goes. A stack of one screen has no back
+button on its first screen.
+
+```ts
+Stack(
+  Screen('Inbox', { folder: 'work' }),
+  Screen('Chat', { userId: '7' }),
+  Screen('Profile', { userId: '7' }),
+);
+```
+
+Profile shows; back goes to Chat, then to Inbox. Each screen gets only its own props.
+
+### Checked by the types {#typed}
+
+`Stack` remembers in its type which screens it shows and with which props. The place that takes the layout checks them
+against the app's screens, once the app's type is registered (`Register`): `root` and `roots` of `createNavigation`,
+`navigation.switchTo`, `navigation.setStack`. A wrong name or a missing prop is a type error there:
+
+```ts
+// Details is defined with props { id: string }
+root: Stack('Home', Screen('Details', {})), // type error: no id
+```
+
+At run time a name that isn't in `screens` rejects the command, or fails the start, with
+`There is no screen 'Detail' in screens`.
+
+### `Screen(…).options()` {#options}
+
+<ApiMember data={data} of="StackEntry" name="options" />
+
+Options of the screen for this show only, over those of its `defineScreen`. The same screen pushed elsewhere keeps its
+own look.
+
+```ts
+Stack(
+  'Inbox',
+  Screen('Chat', { userId }).options((s) => s.hideBottomTabs()),
+);
+```
+
+The chain gets the props of the screen, as in `defineScreen`. See
+[Where a screen gets its options](/docs/fundamentals/screen-options#layers).
+
+### `Screen(…).id()` {#id}
+
+<ApiMember data={data} of="StackEntry" name="id" />
+
+A fixed id for the screen, in place of the generated one (`Component12`). A command that takes a screen id can then
+name it before it has one from `push`, such as `navigation.popTo('chat')` for a screen the stack started with. An id
+goes to one screen: a command that shows a second screen with it rejects, "the screen 'chat' shows already".
+
+## Where a stack goes {#where}
+
+A stack goes wherever the user moves on from a screen. In these places a screen named alone gets a stack by itself, so
+`Stack('Home')` and `'Home'` are the same there:
+
+| Place | Example |
+| --- | --- |
+| The first root | `root: Stack('Home')`, a name of `roots`, `navigation.switchTo(Stack('Login'))` |
+| A tab | `Tab(Stack('Inbox', 'Chat'))` |
+| The center of a side menu | `SideMenu({ left: 'Menu', center: Stack('Home') })` |
+| A column of a split view | `SplitView({ primary: 'Folders', secondary: 'PickAFolder' })` |
+| A modal over a root | `Root('Home').modal(Stack(Screen('Details', { id })))` |
+
+Where nothing moves on, a screen named alone stays a screen, without a stack and its top bar: the menus of a side
+menu, the inspector of a split view. Write `Stack('Menu')` there to give the menu a stack of its own.
+
+:::warning[`Screen(…)` alone has no stack]
+
+`Screen('Profile', { id })` is a screen shown on its own, even where a name would get a stack. `Tab(Screen('Profile',
+{ id }))` is a tab without a top bar, whose screen can't push. For a screen with props in a stack, wrap it:
+`Tab(Stack(Screen('Profile', { id })))`.
+
+:::
+
+`navigation.showModal('Details')` gives the modal its own stack; it takes a screen name, not a layout. A layout in a
+modal goes through `Root(…).modal(…)`. See [A root with a modal](/docs/fundamentals/switching-roots#with-modal).
+
+## Options go on the screens {#options-on-screens}
+
+The stack takes no options. The top bar, the back button and the transitions follow the screen on top, so a screen
+looks the same in every stack it is pushed into:
+
+- a screen's own options: `defineScreen({ options })`;
+- the options of many screens: a group in `groups`, or `presentation.push` of `createNavigation`;
+- the options of one show: `Screen(…).options()` above, or `push('Details', { options })`.
+
+See [Screen options](/docs/fundamentals/screen-options).
+
+## Over time {#over-time}
+
+- **The screens under the top stay mounted.** Their React state, scroll and effects live on while the user looks at
+  the screen above. A screen that should pause work while it is covered listens to its appear and disappear events.
+- **The stack is the native side's.** Commands change it (`push`, `pop`, `replace`, `setStack`), and so does the user
+  with back. Each `Stack(…)` makes new screens: building a stack again and passing it to `switchTo` replaces the
+  screens, it doesn't find the shown ones.
+- **When Android recreates the activity** while JavaScript keeps running, the app shows its last root again, as it was
+  built: the screens pushed since are gone. See [When Android brings the app back](/docs/fundamentals/switching-roots#android).
+
+## See also {#see-also}
+
+- [Stack](/docs/containers/stack): what a stack is, its commands, the way back, a whole stack for a deep link.
+- [Moving between screens](/docs/fundamentals/moving-between-screens): `push`, `pop` and the others.
+- [`Screen`](/api/screens-and-props/Screen), [`Root`](/api/switching-roots/Root),
+  [`createNavigation`](/api/starting-the-app/createNavigation#root).

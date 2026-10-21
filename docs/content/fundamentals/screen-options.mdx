@@ -1,0 +1,211 @@
+---
+title: Screen options
+description: 'What options are, where a screen gets them and which win, the chain, how options merge, and how a shown screen changes them.'
+---
+
+import { SectionStatus, SectionApi } from '@site/src/components/Api';
+import { Mark, Os } from '@site/src/components/Intro';
+import { OptionLayers } from '@site/src/components/Screens';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+<SectionStatus id="screen-options" />
+
+Profile needs a title in its bar, Settings a large title, a photo grid a Delete button that turns on with a selection. Options say what the platform draws for a screen and how the screen behaves: the title, the buttons, the bars, the back gesture, the status bar. A screen keeps its own next to its component:
+
+```tsx title="src/screens/Profile.tsx"
+import { defineScreen } from '@apexnative/navigation';
+
+export const ProfileScreen = defineScreen({
+  component: Profile,
+  options: (s) => s.title('Profile').largeTitle(),
+});
+```
+
+Wherever Profile shows, its bar reads Profile, in large type on iOS. This page answers:
+
+1. [What options are](#what), and why they aren't components.
+2. [Where a screen gets them](#layers), and which win.
+3. [How to write them](#chain): the chain and plain objects.
+4. [How they merge](#merge), and how to take one away.
+5. [How a shown screen changes them](#change): from a handler, or from its state.
+6. [Where each option is described](#map).
+
+## What options are {#what}
+
+The top bar, the tab bar, the back button are drawn by the platform, not by React (see [What a screen is](./screens-and-props#what)). Options are <Mark>what the app tells the platform about them</Mark>: data, such as a title, a color, a list of buttons.
+
+<DeviceVideo name="options-live" />
+
+Because they are data, they go to the native side with the command that shows the screen. The platform builds the screen with them, so <Mark>the title is there before the screen appears</Mark>: no frame without it, no jump when React renders.
+
+## Where a screen gets them {#layers}
+
+A screen gets options from several places, from the whole app down to this one showing. Each layer goes over the ones before it, so <Mark>the closer to the screen, the stronger</Mark>:
+
+<OptionLayers />
+
+Here the app turns large titles off, the settings group turns them on, and the screen names itself Profile. This one push makes the bar navy, and once the user has loaded, the screen sets `user.name` as its title.
+
+| Layer | Where | For |
+| --- | --- | --- |
+| Theme | `theme` of `createNavigation` | The colors of the bars, the tabs and the backgrounds. See [Theme and context](../architecture/theme-and-context). |
+| App defaults | `options` of `createNavigation` | What every screen has unless it says otherwise. |
+| Presentation | `options` of `presentation.push`, `.modal`, `.overlay` | Every pushed screen, every modal. See [Defaults for the whole app](./moving-between-screens#presentation). |
+| Group | `options` of a group | The screens of the group. See [Groups](./screens-and-props#groups). |
+| The screen | `defineScreen({ options })` | The screen itself, wherever it shows. |
+| The command | `options` of `push`, `showModal`… | This one showing. |
+| Its state | `setOptions`, `useScreenOptions` | What changes while the screen shows. See [Changing the options](#change). |
+
+The app defaults are the place for the look of the whole app, so a screen says only what is its own. Here no screen has a large title or the title of the screen below on its back button, unless it says so:
+
+```ts title="Navigation.ts"
+export const Navigation = createNavigation({
+  // …
+  options: (s) => s.largeTitle(false).backButton({ showTitle: false }),
+});
+```
+
+## The chain and plain objects {#chain}
+
+Every place that takes options takes a function that builds them with a chain, or an object.
+
+```ts
+options: (s) => s.title('Profile').largeTitle().hideBottomTabs(),
+```
+
+Each step of the chain adds options over the steps before, so the last one wins. The chain names the options screens use most; `options()` takes any other:
+
+```ts
+options: (s) =>
+  s.title('Profile').options({ topBar: { noBorder: true } }),
+```
+
+The function gets what the options can depend on:
+
+| Argument | What it is |
+| --- | --- |
+| `s` | The chain. |
+| `props` | The props of the screen. |
+| `{ theme, context }` | The theme of the navigation and the app's context. |
+
+```ts
+options: (s, props) => s.title(props.name),
+```
+
+The app defaults belong to no screen, so they have no props: their function is `(s, { theme, context })`.
+
+A plain object is the same options without the chain, such as options that come from JSON:
+
+```ts
+options: { topBar: { title: { text: 'Profile' } } },
+```
+
+### One platform only {#platforms}
+
+`ios()` and `android()` take steps for one platform; the other skips them.
+
+```ts
+options: (s) =>
+  s
+    .title('Profile')
+    .ios((s) => s.largeTitle())
+    .android((s) => s.statusBar({ style: 'light' })),
+```
+
+Options that exist on one platform only are marked on their pages, such as <Os name="iOS" /> `largeTitle`; the other platform ignores them.
+
+## How options merge {#merge}
+
+The layers and the steps of a chain merge by three rules:
+
+| Value | Merges |
+| --- | --- |
+| An object, such as `topBar` | Key by key: `{ topBar: { title } }` over `{ topBar: { subtitle } }` keeps both. |
+| Anything else: a list of buttons, a text, a color, an image | Replaces what was there: new buttons replace all the old ones. |
+| `undefined` | Keeps the value before. |
+
+So to take buttons away, a later layer gives an empty list: `s.rightButtons()`. An option whose page says so takes `null` to bring back the platform's default.
+
+## Changing the options of a shown screen {#change}
+
+Options can change while the screen shows: the title when the data loads, a button that turns on.
+
+### From a handler: setOptions {#set-options}
+
+`setOptions` of `useNavigation()` changes the options once, from an event: a press, an answer from the server. Here the user renames a profile, and once the new name is saved, the bar shows it:
+
+```tsx title="src/screens/Profile.tsx"
+import { TextInput } from 'react-native';
+import { useNavigation } from '@apexnative/navigation';
+
+function Profile() {
+  const navigation = useNavigation();
+
+  const rename = async (name: string) => {
+    await saveName(name); // your own request
+    navigation.setOptions((s) => s.title(name));
+  };
+
+  return (
+    <TextInput
+      placeholder="Name"
+      onSubmitEditing={(event) => rename(event.nativeEvent.text)}
+    />
+  );
+}
+```
+
+### From the state: useScreenOptions {#use-screen-options}
+
+`useScreenOptions` keeps the options in step with the state of the component, as React keeps the view. It builds them on each render, and applies them <Mark>when they change, before the screen paints</Mark>.
+
+Here the title of a photo grid counts the selected photos, and Delete is on only while some are selected:
+
+```tsx title="src/screens/Photos.tsx"
+import { useState } from 'react';
+import { useScreenOptions } from '@apexnative/navigation';
+
+function Photos() {
+  const [selected, setSelected] = useState<string[]>([]);
+
+  useScreenOptions((s) =>
+    s
+      .title(selected.length ? `${selected.length} selected` : 'Photos')
+      .rightButtons({
+        id: 'delete',
+        text: 'Delete',
+        enabled: selected.length > 0,
+        onPress: () => deletePhotos(selected), // your own delete
+      }),
+  );
+
+  return <PhotoGrid selected={selected} onSelect={setSelected} />;
+}
+```
+
+The title reads `2 selected` once the user picks two photos, and Delete turns on. Buttons in options take `onPress`, as here; the handler can change on every render. When the state decides the options, use `useScreenOptions`: the screen and its bar never disagree.
+
+## Where each option is described {#map}
+
+The options belong to the parts of the screen, and each part has its page:
+
+| Part | The chain | Page |
+| --- | --- | --- |
+| Top bar | `title`, `subtitle`, `largeTitle`, `topBar`, `hideTopBar` | [Top bar](../screen-ui/top-bar) |
+| Bar buttons | `leftButtons`, `rightButtons`, `centerButtons` | [Bar buttons](../screen-ui/bar-buttons) |
+| Back | `backButton`, `popGesture`, `hardwareBackButton` | [Back and gestures](../screen-ui/back-and-gestures) |
+| Search | `searchBar` | [Search](../screen-ui/search) |
+| Toolbar and FAB | `toolbar`, `fab` | [Toolbar and FAB](../screen-ui/toolbar-and-fab) |
+| The system | `statusBar`, `navigationBar`, `safeArea`, `orientation`, `backgroundColor`, `scrollEdgeEffect`, `keyCommands` | [System UI](../screen-ui/system-ui) |
+| Containers | `hideBottomTabs`, `bottomTabs`, `sideMenu` | [Tabs](../containers/tabs), [Side menu](../containers/side-menu) |
+| Transitions | `animations` | [Transitions](../architecture/transitions) |
+
+The options of the containers are a screen's too: `hideBottomTabs()` hides the tab bar <Mark>while this screen is on top</Mark>, and it comes back when the user goes back.
+
+## Next: switching roots {#next}
+
+Pushes, modals and options all happen inside one root. [Switching roots](./switching-roots) shows how the app replaces that root as a whole, such as from the sign-in to the app.
+
+## API {#api}
+
+<SectionApi id="screen-options" />

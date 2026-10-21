@@ -1,0 +1,57 @@
+import { Os } from '@site/src/components/Intro';
+
+`TestIDs` holds the ids of the views the navigation draws without an id from the app, so that an end-to-end test
+(Detox, Maestro, Appium) can find them. The app's own content takes `testID` as in any React Native app; the bars,
+the buttons and the tabs take theirs from the options. What is left is here.
+
+## Usage {#usage}
+
+An end-to-end test runs outside the app, so it uses the string the constant holds:
+
+```ts title="e2e/details.test.ts"
+it('opens Details and goes back', async () => {
+  await element(by.text('Open details')).tap();
+  await expect(element(by.id('details.topBar'))).toBeVisible();
+  await element(by.id('BackButton')).tap();
+  await expect(element(by.text('Open details'))).toBeVisible();
+});
+```
+
+Code that runs inside the app, or shares constants with the tests, imports it instead of repeating the string:
+
+```ts
+import { TestIDs } from '@apexnative/navigation';
+
+TestIDs.backButton; // 'BackButton'
+```
+
+## Signature {#signature}
+
+<ApiSignature data={data} name="TestIDs" />
+
+## The ids {#ids}
+
+### `backButton` {#backButton}
+
+<ApiMember data={data} of="TestIDs" name="backButton" />
+
+The back button of a stack's top bar: `'BackButton'`. The platform draws it, not the app, so the app can't give it a
+`testID` in its content.
+
+- <Os name="iOS" /> It is UIKit's own back button, and UIKit gives it this id. There is no public way to set another.
+- <Os name="Android" /> The navigation gives it the same id, so one test serves both platforms. A screen sets another
+  in its options: `s.backButton({ testID: 'details.back' })`.
+
+When two stacks show at once, such as the columns of a split view, two back buttons have the id. Find the one in the
+top bar of the screen, by the bar's `testID`:
+
+```ts
+await element(
+  by.id('BackButton').withAncestor(by.id('details.topBar')),
+).tap();
+```
+
+## See also {#see-also}
+
+- [Testing](/docs/guides/testing): the ids of the bars, buttons and tabs, screens in Jest, what only a device checks.
+- [Back and gestures](/docs/screen-ui/back-and-gestures): the back button and its options.

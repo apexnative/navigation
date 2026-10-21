@@ -1,0 +1,189 @@
+`nativeScreen` declares a screen whose UI is native, in SwiftUI, UIKit, Jetpack Compose or Android views, so that it
+goes in `screens` next to the React ones. Commands and layouts name it like any screen; its props go to the native
+side, and `useProps` keeps them filled with the app's data while it is open. You call it once per screen, in the
+screen's own module, usually written by `npx apex-navigation screen <Name> --native`.
+
+## Usage {#usage}
+
+```ts title="src/screens/Map.ts"
+import { nativeScreen } from '@apexnative/navigation';
+
+export interface MapProps {
+  latitude: number;
+  longitude: number;
+}
+
+export const MapScreen = nativeScreen<MapProps>('Map', {
+  options: (s) => s.title('Map'),
+});
+```
+
+```ts title="src/Navigation.ts"
+export const Navigation = createNavigation({
+  screens: { Home: HomeScreen, Map: MapScreen },
+  root: 'Home',
+});
+```
+
+```ts
+navigation.push('Map', {
+  props: { latitude: 52.52, longitude: 13.4 },
+});
+```
+
+The map slides in with "Map" in the top bar and the platform's back gesture, as a React screen would. The native view
+gets `latitude` and `longitude` as typed props (see [The generated code](/docs/architecture/native-screens#step-codegen)).
+
+A screen that shows the app's data, and calls back into it, adds `useProps`:
+
+```ts title="src/screens/Settings.ts"
+import { nativeScreen } from '@apexnative/navigation';
+import { useSettings } from '../settings'; // your own store
+
+export interface SettingsProps {
+  notifications: boolean;
+  onNotificationsChange: (on: boolean) => Promise<void>;
+}
+
+export const SettingsScreen = nativeScreen<SettingsProps>(
+  'Settings',
+  {
+    options: (s) => s.title('Settings'),
+    useProps: () => {
+      const notifications = useSettings((s) => s.notifications);
+      const save = useSettings((s) => s.saveNotifications);
+      return {
+        notifications,
+        onNotificationsChange: (on: boolean) => save(on),
+      };
+    },
+  },
+);
+```
+
+The switch of the native screen shows the value of the store. When the user turns it, the native side calls
+`onNotificationsChange`, the store saves, `useProps` returns the new value, and the switch draws it.
+
+## Signature {#signature}
+
+<ApiSignature data={data} name="nativeScreen" />
+
+- **`Props`**, the type parameter: the props of the screen. `codegen` makes Swift and Kotlin types of it, and the
+  commands that show the screen are checked against it.
+- **`nativeName`**: the name the screen is registered under natively.
+- **`definition`**, optional: `options`, `useProps` and `arrangement`.
+- **Returns** a `NativeScreen`, a value for `screens`. Its members are below; the app doesn't read them.
+
+## The screen {#screen-group}
+
+### `nativeName` {#nativeName}
+
+<ApiMember data={data} of="NativeScreen" name="nativeName" />
+
+The name of the native screen: the generated registration, or the app's own `registerNativeScreen` call, registers
+the SwiftUI view or Compose function under it. It is separate from the key in `screens`, which commands use:
+
+```ts
+screens: { Map: nativeScreen('MapScreen') },
+```
+
+Here `navigation.push('Map')` shows what is registered natively as `MapScreen`. The two are usually the same name.
+`npx apex-navigation doctor` tells when the generated code is behind the screens.
+
+### `props` {#props}
+
+<ApiMember data={data} of="NativeScreen" name="props" />
+
+Carries the type of the props, so that `navigation.push('Map', { props })` is checked against `MapProps`. It is never
+set and has no value at run time.
+
+The props a native screen takes are plain data, and functions that return a promise: each crosses to the native side.
+A type with no native form, such as `any`, a tuple, or a union of different types, stops `codegen` with the prop it is
+in. See [Types](/docs/architecture/native-screens#types).
+
+## How it shows {#show-group}
+
+### `options` {#options}
+
+<ApiMember data={data} of="NativeScreen" name="options" />
+
+The options of the screen, the same as `options` of `defineScreen`: an object, or a function
+`(s, props, { theme, context })` that builds them with the chain. They apply when a command shows the screen: the top
+bar, its buttons, the tab, the look of a modal.
+
+```ts
+options: (s) => s.title('Map').largeTitle(false),
+```
+
+The native view draws only the content; the bars are the navigation's, as on a React screen. A native screen changes
+its options later with `setOptions` of its `navigation` (see
+[Commands from a native screen](/docs/architecture/native-screens#commands)).
+
+### `useProps` {#useProps}
+
+<ApiMember data={data} of="NativeScreen" name="useProps" />
+
+A hook that gives the screen props from the app while it is open: values of a store or of the app's context, and the
+functions the native side calls. It gets the props of the command and returns an object; what it returns goes over
+them.
+
+- **It is a hook.** It runs in a React component of its own, which renders nothing, inside `appProvider` and
+  `screenProvider`, with the screen as `useScreen()` gives it. Any hook works in it: `useSelector`, `useQuery`,
+  `useAppContext`, `useNavigation`.
+- **The command waits for its first result**, so the native screen's first frame has the data. A hook that suspends
+  holds back its own command and nothing else.
+- **Every change goes to the native side.** When the hook renders again and returns other props, the screen gets
+  them: SwiftUI and Compose draw again.
+- **It stops with the screen.** When the user goes back, the component unmounts.
+
+A function in what it returns is called from the native side; its promise's result, or its error, goes back
+(see [Functions with results](/docs/architecture/native-screens#results)).
+
+#### When useProps throws {#useProps-errors}
+
+A `useProps` that throws before its first result makes the command fail: the push rejects, and the screen doesn't
+show. Later, the screen keeps the props it has. Either way the error goes to `onError` as an error of the screen.
+Catch what can fail inside the hook, and return props the screen can show:
+
+```ts
+// useQuery of @tanstack/react-query
+useProps: () => {
+  const { data } = useQuery({
+    queryKey: ['settings'],
+    queryFn: loadSettings, // your own
+  });
+  return {
+    notifications: data?.notifications ?? false,
+    onNotificationsChange: saveNotifications, // your own
+  };
+},
+```
+
+### `arrangement` {#arrangement}
+
+<ApiMember data={data} of="NativeScreen" name="arrangement" />
+
+A second screen beside or under this one in a large window, as [`arrangement`](/api/screens-and-props/defineScreen#arrangement)
+of `defineScreen`: on iPad, an open iPhone Duo, an Android tablet or an open foldable the two show as one entry of the
+stack, under this screen's bar; anywhere else this screen shows alone.
+
+```ts
+nativeScreen('Map', { arrangement: { secondary: 'Details' } });
+```
+
+The secondary can be a React screen or a native one. A native screen gets no `useArrangement`: on iOS 27.1 its code
+reads `arrangementViewController` of its view controller from UIKit. See
+[Native screens in a pair](/docs/containers/arrangement#native).
+
+## Where a native screen goes {#layouts}
+
+Anywhere a screen goes: pushed, in a modal, in a stack, as a tab, in a column of a split view, in a pair, as the
+first screen of the app. Its `useProps` then runs in a hidden React root that starts with the app, while `willMount` runs, so a native
+first screen doesn't wait for anything else. See [In layouts](/docs/architecture/native-screens#layouts).
+
+## See also {#see-also}
+
+- [Native screens](/docs/architecture/native-screens): how they talk to the app, one screen step by step, types,
+  commands.
+- [Pushing a native screen fails](/docs/help/troubleshooting#use-props).
+- [`screens`](/api/starting-the-app/createNavigation#screens) of `createNavigation`.

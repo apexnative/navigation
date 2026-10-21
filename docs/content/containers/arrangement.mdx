@@ -1,0 +1,339 @@
+---
+title: Arrangement
+description: 'Two screens as one screen of a stack: side by side on iPad, iPhone Duo open, Android tablets and open foldables, each on its side of the fold, and the main one alone on a phone.'
+---
+
+import { SectionStatus, SectionApi } from '@site/src/components/Api';
+import { Mark, Os, Pair } from '@site/src/components/Intro';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+<SectionStatus id="arrangement" />
+
+A profile and its details, a photo and the facts about it: on a phone the user sees one at a time, but a big screen has room for both. A pair puts a second screen beside the first <Mark>where the window is large</Mark>, and leaves the first alone everywhere else. A screen gets its pair with `arrangement`:
+
+```tsx title="src/screens/Profile.tsx"
+import { Text } from 'react-native';
+import { defineScreen } from '@apexnative/navigation';
+
+function Profile({ id }: { id: string }) {
+  return <Text>Profile {id}</Text>;
+}
+
+export const ProfileScreen = defineScreen({
+  component: Profile,
+  options: (s) => s.title('Profile'),
+  arrangement: { secondary: 'Details' },
+});
+```
+
+```ts title="Navigation.ts"
+import { createNavigation } from '@apexnative/navigation';
+import { DetailsScreen } from './src/screens/Details';
+import { HomeScreen } from './src/screens/Home';
+import { ProfileScreen } from './src/screens/Profile';
+
+export const Navigation = createNavigation({
+  screens: {
+    Home: HomeScreen,
+    Profile: ProfileScreen,
+    Details: DetailsScreen,
+  },
+  root: 'Home',
+});
+```
+
+```ts
+// in Home, on a tap
+navigation.push('Profile', { props: { id: '7' } });
+```
+
+On a phone Profile slides in alone, as it would without `arrangement`. On iPad and on an open iPhone Duo, Details comes in beside it, under Profile's bar; back takes both. This page answers:
+
+1. [What a pair is](#what).
+2. [Two ways to make one](#two-ways): on the screen, or under a name of its own.
+3. [What each device shows](#devices).
+4. [Split and overlay](#style), and [the props of the second screen](#secondary-props).
+5. [How the pair lies now](#use-arrangement), and [when the window changes](#time).
+6. [The bar of the pair](#bar), [native screens in a pair](#native), and [a pair or a split view](#split-view).
+
+<DeviceVideo name="duo-pair" devices={['duo']} />
+
+
+## What a pair is {#what}
+
+A pair is <Mark>one entry of a stack with two screens in it</Mark>: the primary, the screen the command names, and the secondary, beside it, under it or behind it. The native side lays the two out by the size of the window and by the fold of a device that folds, and the stack treats them as one screen:
+
+```text
+[Home]  ── push('Profile') ──▶  [Home, Profile + Details]
+        ◀──────── back ────────
+```
+
+- **Both are screens.** Each has its own id, props, events and hooks. `useNavigation()` in either acts on the stack, so a push from Details goes over the pair.
+- **The bar is the primary's**: its title, buttons, search field and toolbar. See [The bar of the pair](#bar).
+- **They come and go together.** The push shows both, back takes both.
+
+<Os name="iOS" /> 27.1 The pair is UIKit's `UIArrangementViewController`, which the system lays out on iPhone Duo and iPad. <Os name="Android" /> A container of the library does the same with the size of the window and the fold of a foldable.
+
+<Pair left="React Navigation" right="Here">
+
+```tsx
+// one screen renders both parts,
+// and measures the window itself
+function Profile({ route }) {
+  const { width } = useWindowDimensions();
+  const { id } = route.params;
+  return (
+    <View style={{ flexDirection: 'row' }}>
+      <ProfileContent id={id} />
+      {width >= 700 && <Details id={id} />}
+    </View>
+  );
+}
+```
+
+```ts
+// two screens; the native side
+// places them, at the fold too
+defineScreen({
+  component: Profile,
+  arrangement: { secondary: 'Details' },
+});
+```
+
+</Pair>
+
+React Navigation has no pair: one screen renders both parts and decides by the width. Here the two stay screens of their own, Details can be pushed alone too, and on a device that folds the system puts the boundary on the fold.
+
+## Two ways to make a pair {#two-ways}
+
+| | `arrangement` of a screen | `defineArrangement` |
+| --- | --- | --- |
+| Shown by | The screen's own name: `push('Profile')`. | A name of its own: `push('ProfileWithDetails')`. |
+| Settings | The secondary, its props, `style`. | Every setting: also `axes`, `fraction`, `primaryEdge`, `compact`. |
+| A window that isn't large | The primary alone, a plain screen. | The primary alone, or the pair with `compact: 'pair'`. |
+
+### On the screen {#on-the-screen}
+
+`arrangement` of `defineScreen` makes a screen the primary of a pair wherever it is shown by its name: `push`, `setStack`, `replace`, a layout, a link. It has no settings to tune: <Mark>outside a large window the screen is a plain screen</Mark>, as it is without `arrangement`, so it works on every device without a second thought. A [native screen](../architecture/native-screens) takes it too:
+
+```ts
+nativeScreen('Map', { arrangement: { secondary: 'Details' } });
+```
+
+### A pair of its own {#define-arrangement}
+
+`defineArrangement` pairs two screens of `screens` under a name of its own, with every setting. The two stay screens of their own: `push('Profile')` shows Profile as its own definition says, and `push('ProfileWithDetails')` shows this pair.
+
+```ts title="Navigation.ts"
+import {
+  createNavigation,
+  defineArrangement,
+} from '@apexnative/navigation';
+// … the screens
+
+export const Navigation = createNavigation({
+  screens: {
+    Home: HomeScreen,
+    Profile: ProfileScreen,
+    Details: DetailsScreen,
+    ProfileWithDetails: defineArrangement<{ id: string }>({
+      primary: 'Profile',
+      secondary: 'Details',
+      compact: 'pair', // a phone shows both too
+    }),
+  },
+  root: 'Home',
+});
+```
+
+```ts
+navigation.push('ProfileWithDetails', { props: { id: '7' } });
+```
+
+The type argument is the props of the pair, which the commands check as for any screen. The settings:
+
+- **`axes`**: `'horizontal'` side by side only, `'vertical'` one above the other only, `'both'` by default. Where the window allows neither, only the primary shows.
+- **`fraction`**: the primary's share of a split, above 0 and below 1, half by default. At a fold the fold decides.
+- **`primaryEdge`**: where the primary goes when an overlay goes side by side, `'trailing'` by default.
+- **`compact`**: what a window that isn't large shows: `'primary'`, the default, or `'pair'`.
+
+A pair has two screens, never more: in a `defineArrangement`, the primary's own `arrangement` doesn't count. Every key: [`defineArrangement`](/api/arrangement/defineArrangement).
+
+## What each device shows {#devices}
+
+A pair shows both screens in a <Mark>large window</Mark>: on <Os name="iOS" /> a window whose size classes are both regular, on <Os name="Android" /> a window at least 600 dp wide and 480 dp high, the sizes Material calls neither compact. With `arrangement`, or `compact: 'primary'`:
+
+| Device | What shows |
+| --- | --- |
+| iPhone, portrait and landscape | The primary alone. |
+| iPhone Duo folded | The primary alone. |
+| iPhone Duo open; iPad | The pair. An iPad window narrow enough to be compact shows the primary alone. |
+| Android phone, portrait and landscape | The primary alone. |
+| Android tablet; a foldable open | The pair. |
+| Partly folded in a large window: iPhone Duo, a foldable that opens like a book | The pair, each screen on its side of the fold. |
+| iOS before 27.1, or an app built with an older SDK | The primary alone. |
+
+Where only the primary shows, the secondary is still there, out of the window, and comes in when the window grows, as when the user opens iPhone Duo. Before iOS 27.1 there is no secondary at all: the primary is a plain screen.
+
+With `compact: 'pair'` of `defineArrangement` the pair shows everywhere: on a phone held upright, one above the other.
+
+## Split and overlay {#style}
+
+`style` says how the two share the window:
+
+- **`'split'`**, the default: side by side, or one above the other in a tall window; neither covers the other. On a partly folded device each takes one side of the fold.
+- **`'overlay'`**: the primary over the secondary, both full size, so the user sees the primary. On a partly folded device they go side by side, the primary at the trailing side.
+
+An overlay fits a screen that fills the window, and whose facts are worth the other half once the device is folded:
+
+```ts
+export const PhotoScreen = defineScreen({
+  component: Photo,
+  arrangement: { secondary: 'Details', style: 'overlay' },
+});
+```
+
+Open flat, the photo fills the window. Folded halfway, the photo takes one side and its details the other. On a phone, as with any pair of `arrangement`, the photo is alone.
+
+<DeviceVideo name="duo-pair-overlay" devices={['duo']} />
+
+
+## The props of the second screen {#secondary-props}
+
+The props of the command go to both screens. When the secondary takes other props, `secondaryProps` makes them from those of the show:
+
+```ts
+export const ProfileScreen = defineScreen({
+  component: Profile,
+  arrangement: {
+    secondary: 'Details',
+    secondaryProps: (props) => ({ itemId: props.id }),
+  },
+});
+```
+
+`push('Profile', { props: { id: '7' } })` gives Profile `{ id: '7' }` and Details `{ itemId: '7' }`. TypeScript checks the props of the command against Profile; what `secondaryProps` returns isn't checked against Details, so keep the two in line.
+
+**The two screens share no React state.** Each screen is a React root of its own, so a `useState` of Profile doesn't reach Details. Give both the same id and read the data from a store or the app's context, as two screens of a stack do (see [State management](../guides/state-management)). With `appProvider` both render inside it, so its providers reach both (see [One tree](../architecture/one-tree)).
+
+## How the pair lies now {#use-arrangement}
+
+A screen of a pair reads how it shows with `useArrangement()`. Here Profile offers a Details button only where Details isn't on screen already:
+
+```tsx title="src/screens/Profile.tsx"
+import { Button, View } from 'react-native';
+import {
+  defineScreen,
+  useArrangement,
+  useNavigation,
+} from '@apexnative/navigation';
+
+function Profile({ id }: { id: string }) {
+  const navigation = useNavigation();
+  const pair = useArrangement();
+  // Details is beside or under Profile
+  const detailsShown =
+    pair?.layout === 'sideBySide' || pair?.layout === 'stacked';
+
+  return (
+    <View>
+      {/* … the profile */}
+      {!detailsShown && (
+        <Button
+          title="Details"
+          onPress={() =>
+            navigation.push('Details', { props: { itemId: id } })
+          }
+        />
+      )}
+    </View>
+  );
+}
+
+export const ProfileScreen = defineScreen({
+  component: Profile,
+  arrangement: {
+    secondary: 'Details',
+    secondaryProps: (props) => ({ itemId: props.id }),
+  },
+});
+```
+
+On a phone the button pushes Details; on iPad Details is beside Profile, and the button is gone.
+
+| Field | What it says |
+| --- | --- |
+| `placement` | `'primary'` or `'secondary'`: which screen of the pair this one is. |
+| `layout` | `'sideBySide'`, `'stacked'` (one above the other), `'overlay'` (one over the other, both full size), or `'single'` (one screen in the window). |
+| `front` | In an overlay: this screen lies over the other one. |
+| `hidden` | With `'single'`: this screen is the one out of the window. |
+
+The hook gives `null` in a screen outside a pair. Where there is no secondary, before iOS 27.1, the primary gets `layout: 'single'`. It works in a component of a screen, as the other hooks of a screen do. Every value: [`useArrangement`](/api/arrangement/useArrangement).
+
+## When the window changes {#time}
+
+The user opens iPhone Duo, folds it halfway, makes an iPad window narrower, or unfolds an Android foldable: the pair lays its screens out again, and `useArrangement` renders with the new state.
+
+- **A secondary that leaves the window disappears**, and appears again when it comes back: `useScreenDisappear` and `useScreenAppear` run. It stays mounted meanwhile, with its state.
+- **The first render already has a state**: the one the shape of the window makes likely, side by side in a wide window, one above the other in a tall one, the primary alone outside a large window. The first layout gives the real one, and the screen renders again when it differs.
+
+## The bar of the pair {#bar}
+
+The stack shows one bar, and in a pair it is <Mark>the primary's</Mark>: its title, its buttons, its search field, its toolbar, and the options that change them later (`useScreenOptions`, `setOptions`). The system around the screen follows the primary too. What the secondary sets there has no effect:
+
+| Options of the secondary | Effect |
+| --- | --- |
+| `topBar`, `toolbar` | None: the bar and the toolbar are the primary's. |
+| `statusBar`, `layout.orientation` | None: the primary decides. |
+| <Os name="iOS" /> `layout.autoHideHomeIndicator`, `deferSystemGestures`, `verticalBars` | None: the primary decides. |
+| <Os name="Android" /> `navigationBar` | None: the primary decides. |
+| `layout.backgroundColor` | The secondary's own background, as on any screen. |
+
+A button that acts on Details goes in Profile's options, and reaches Details through the data they share, such as a store.
+
+## Native screens in a pair {#native}
+
+Either screen of a pair can be a [native screen](../architecture/native-screens): `nativeScreen` takes `arrangement` as `defineScreen` does, and `primary` and `secondary` can name a native screen. The bar is the primary's, as for React screens.
+
+`useArrangement` and `useReservedRegions` are React hooks, so a native screen doesn't get them. <Os name="iOS" /> Native code asks UIKit: the screen's view controller has `arrangementViewController` (iOS 27.1), the pair UIKit lays out, and its `stateForPlacement:` says how it lies. <Os name="Android" /> A native screen has no state of its pair.
+
+## A pair or a split view {#split-view}
+
+Both put screens side by side on a big screen. They answer different needs:
+
+| | [Split view](./split-view) | A pair |
+| --- | --- | --- |
+| What it is | The columns of the app, each with a stack of its own. | One entry of a stack: two screens. |
+| Where it goes | The root: `root`, `roots`, `switchTo`. | Wherever a screen is shown by its name: `push`, a layout, a link. |
+| The bar | One for each column. | One, the primary's. |
+| Back | Within a column. | Takes both screens. |
+| A pick | `showInColumn` shows it in the column beside. | The secondary stays the same: another pick pushes another pair. |
+| A phone | The `compact` layout, or the columns as one stack. | The primary alone. |
+| <Os name="iOS" /> | `UISplitViewController`. | `UIArrangementViewController`, iOS 27.1. |
+
+The mailboxes and messages of a mail app are a split view: the user picks, and the column beside shows the pick. A profile with its details, pushed from anywhere in the app, is a pair.
+
+## A pair that names a screen not in screens {#missing}
+
+`primary` and `secondary` are names of `screens`. A name that isn't there, or one that is a `defineArrangement` itself, stops the start of the app, and the error names the pair:
+
+```text
+[navigation] The pair of 'ProfileWithDetails' names 'Detail',
+which is not in screens
+```
+
+For a screen that [loads later](../fundamentals/screens-and-props#lazy), the check runs when a command shows it, and the command fails. A secondary's own `arrangement` doesn't count: a pair has two screens, and its secondary shows as a plain screen.
+
+## A screen with a key in a pair {#key}
+
+A screen's [`key`](../fundamentals/screens-and-props#key) is its place in a stack, and in a pair that place is the pair's: the screens of a pair go without their keys. A push of a screen with both `key` and `arrangement` shows a new pair each time, and doesn't go back to one in the stack. Where the native side shows no pairs, before iOS 27.1, the primary shows alone and keeps its key, as a plain screen does: a push with the same key goes back to it.
+
+## Read next {#next}
+
+- [The fold and the camera](../screen-ui/system-ui#reserved-regions): the fold within one screen, and the hinge.
+- [Split view](./split-view): the columns of an app on iPad.
+- [Native screens](../architecture/native-screens).
+
+## API {#api}
+
+<SectionApi id="arrangement" />

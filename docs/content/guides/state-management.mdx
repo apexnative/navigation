@@ -1,0 +1,1074 @@
+---
+title: State management
+description: 'Wire Redux Toolkit, Zustand, Jotai, MobX or Valtio into an app whose screens are native: one store for every screen, the first root from it, sign-out and saved state.'
+---
+
+import { Mark } from '@site/src/components/Intro';
+import PackageInstall from '@site/src/components/PackageInstall';
+
+An app keeps its data in a store: the signed-in user, the cart, the drafts. Here you connect your store to the screens, read and write it from a screen and from code outside React, pick the first root from it, reset it on sign-out, and save it between launches. You end with:
+
+- every screen reading and writing the same store, whichever stack, tab or modal it is in;
+- a first screen chosen from the saved state, with no flash of the sign-in screen;
+- a sign-out that switches to the sign-in screen and leaves no data of the old user behind.
+
+The first part is what every store shares with this navigation. Then each library has a part of its own, with the same steps in the same order; read only yours:
+
+| Your library | Its part |
+| --- | --- |
+| Redux Toolkit | [Redux Toolkit](#redux) |
+| Zustand | [Zustand](#zustand) |
+| Jotai | [Jotai](#jotai) |
+| MobX | [MobX](#mobx) |
+| Valtio | [Valtio](#valtio) |
+| Not chosen yet | [The libraries side by side](#compare), then [Which to pick](#which) |
+
+:::info[Versions]
+
+Written against `@reduxjs/toolkit` 2.13 with `react-redux` 9.3 and `redux-persist` 6, `zustand` 5.0, `jotai` 3.0, `mobx` 7.0 with `mobx-react-lite` 5.1, `valtio` 2.3, and `@react-native-async-storage/async-storage` 3.1 for the saved state.
+
+:::
+
+## What every store shares here {#shared}
+
+### Each screen is a React root {#roots}
+
+Every name in `screens` is registered with React Native's `AppRegistry`, and the native side starts <Mark>a React root of its own</Mark> for each screen it shows. A stack of three screens is three React roots; a tab bar with four tabs is four more. See [A root per screen](../architecture/one-tree#root-per-screen).
+
+So the usual React setup, one `<Provider>` around `<App />`, has nothing to wrap: there is no `<App />`. The JavaScript runtime is still one, and that decides how each store connects:
+
+| The store is | It reaches every screen |
+| --- | --- |
+| An object in a module (`create(…)`, `proxy(…)`, a MobX class, Jotai's default store) | By itself: every screen imports the same module. |
+| Read through a React provider (Redux's `<Provider>`) | When `appProvider` or `screenProvider` puts the provider around the screens. |
+
+### A store in a module reaches every screen {#module-store}
+
+A store created at the top level of a module exists once per JavaScript runtime. Every screen that imports it gets the same object, whatever root it renders in:
+
+```ts title="src/cart.ts"
+import { create } from 'zustand';
+
+type Cart = { items: string[]; add: (id: string) => void };
+
+export const useCart = create<Cart>()((set) => ({
+  items: [],
+  add: (id) => set((cart) => ({ items: [...cart.items, id] })),
+}));
+```
+
+Products adds an item; the Cart screen pushed later shows it. Nothing wraps either screen.
+
+A hook of a store subscribes the component that calls it to the store. The subscription doesn't care which React root the component is in: when the store changes, every subscribed component on every mounted screen renders again. That includes the screens under the top one in a stack, the other tabs and the screens under a modal, so <Mark>select the narrowest value</Mark> a component needs, as you would for a large React tree.
+
+### A provider wraps the screens in createNavigation {#providers}
+
+A library that reads its store from a React provider needs the provider around each screen. `createNavigation` has two places for it:
+
+```tsx title="src/StoreProvider.tsx"
+import type { ReactNode } from 'react';
+import { Provider } from 'react-redux';
+import { store } from './store';
+
+export function StoreProvider({ children }: { children: ReactNode }) {
+  return <Provider store={store}>{children}</Provider>;
+}
+```
+
+```ts title="Navigation.ts"
+export const Navigation = createNavigation({
+  // … screens and root
+  screenProvider: StoreProvider, // around each screen
+  // or: appProvider: StoreProvider, around all of them once
+});
+```
+
+- **`screenProvider`** wraps each screen in its own root. Each screen gets its own `<Provider>`, all with the one `store` of the module, so they share the data.
+- **`appProvider`** renders every screen in one React tree inside the provider (see [One tree](../architecture/one-tree#one-tree)). Pick it when the app has other providers that share state, such as a query client.
+
+:::warning[Create the store once, in a module]
+
+```tsx
+// Don't
+function StoreProvider({ children }: { children: ReactNode }) {
+  const [store] = useState(() => configureStore({ reducer }));
+  return <Provider store={store}>{children}</Provider>;
+}
+```
+
+As a `screenProvider`, this renders once for every shown screen, so each screen gets a store of its own: the cart filled on Products is empty on Cart. Create the store at the top level of a module and pass it in, as above.
+
+:::
+
+### Reading and writing outside React {#outside-react}
+
+Much of an app's state changes outside components: the start of the app, a deep link, a notification, a listener of the navigation. Every library below has a way to read and write its store without a hook; each part shows it. These are the places:
+
+```ts title="Navigation.ts"
+export const Navigation = createNavigation({
+  // … screens and roots
+  willMount: async () => {
+    // before the first root, while the splash screen shows
+  },
+  linking: {
+    prefixes: ['myapp://'],
+    routes: {
+      // a route of a link: any code, then commands
+      'cart/add/:productId': ({ productId }) => {},
+    },
+  },
+  listeners: {
+    // every screen that appears, for as long as the app runs
+    screenDidAppear: ({ screen }) => {},
+  },
+  didMount: () => {
+    // your notification library
+    onNotificationOpened((notification) => {});
+  },
+});
+```
+
+`willMount` and `didMount` run once per JavaScript runtime, so a subscription made there is made once. See [Deep links](./deep-links#routes) and [Notifications that open a screen](./notifications#running).
+
+### The first root from the store {#first-root}
+
+`root` and `initialRoot` can be functions. The navigation calls them <Mark>after `willMount` resolves</Mark>, so they read the store as the start left it:
+
+```ts title="Navigation.ts"
+export const Navigation = createNavigation({
+  screens: { Login, Home, Settings },
+  roots: {
+    login: Stack('Login'),
+    main: Tabs(Tab('Home'), Tab('Settings')),
+  },
+  willMount: async () => {
+    // load the saved state, or the user, into the store
+  },
+  initialRoot: () => (readUser() ? 'main' : 'login'),
+});
+```
+
+The splash screen stays until `willMount` resolves, then Home or Login shows; no screen flashes in between. `readUser()` here stands for your store's read outside React. The functions get the app's context as their argument; with a store they don't need it.
+
+### Signing in and out {#sign-in-out}
+
+Signed in and signed out are two roots, and `navigation.switchTo` replaces the whole window with one of them (see [Switching roots](../fundamentals/switching-roots#switch)). The screens of the old root go, and their React roots unmount with them; the store stays, because it lives in the JavaScript runtime, not in a screen.
+
+So a sign-out does two things: it switches to the sign-in root, and it resets the store, so the next user doesn't see the data of the last one. Switch first, then reset:
+
+```ts
+export async function signOut() {
+  await navigation.switchTo('login');
+  resetStore(); // your store's reset
+}
+```
+
+Reset first, and the signed-in screens, still on display for the switch, render once more with an empty store.
+
+### Saving the state between launches {#persist}
+
+A store lives in the JavaScript runtime: it is empty again after a JavaScript reload and on a new start of the app. On Android, when the activity is recreated while the JavaScript keeps running, the screens come back with the store as it was, and `willMount` doesn't run again.
+
+To keep a part of the store between launches, the libraries save it to a storage and read it back. Read it back <Mark>in `willMount`</Mark>: the first root waits for it, so the first screen renders with the saved state, and `initialRoot` can pick the root from it. A store that loads itself in the background would show the sign-in screen for a moment to a signed-in user.
+
+Save little: the session, the settings, a draft. Keep tokens and other secrets in the keychain or a secure storage, not in the saved store.
+
+### The store and the app's context {#context}
+
+The navigation has a small store of its own, the [app's context](./app-context): a value every screen, the options of the screens and the start of the app read. With a store of your own you don't need it. The one case where it helps: <Mark>links that wait for the sign-in</Mark>. `when` of `linking` reads the context, and a waiting link runs by itself when the context lets it. Mirror one flag into it when you use that:
+
+```ts
+navigation.setContext((c) => ({ ...c, signedIn: true }));
+```
+
+See [Without the context](./app-context#without) for the full comparison.
+
+## Redux Toolkit {#redux}
+
+Redux keeps the whole state in one store, and `react-redux` reads it through a `<Provider>`. The provider goes around the screens in `createNavigation`; the store goes in a module. The shared part of this page is [above](#shared).
+
+### Install {#redux-install}
+
+<PackageInstall name="@reduxjs/toolkit react-redux" />
+
+### Create the store {#redux-create}
+
+The session slice keeps the user. `signedOut` is one action that every slice resets on:
+
+```ts title="src/store/session.ts"
+import { createAction, createSlice } from '@reduxjs/toolkit';
+import type { PayloadAction } from '@reduxjs/toolkit';
+
+export type User = { id: string; name: string };
+
+export const signedOut = createAction('signedOut');
+
+const session = createSlice({
+  name: 'session',
+  initialState: { user: null as User | null },
+  reducers: {
+    signedIn(state, action: PayloadAction<User>) {
+      state.user = action.payload;
+    },
+  },
+  extraReducers: (builder) => {
+    builder.addCase(signedOut, () => ({ user: null }));
+  },
+});
+
+export const { signedIn } = session.actions;
+export default session.reducer;
+```
+
+```ts title="src/store/cart.ts"
+import { createSlice } from '@reduxjs/toolkit';
+import type { PayloadAction } from '@reduxjs/toolkit';
+import { signedOut } from './session';
+
+const cart = createSlice({
+  name: 'cart',
+  initialState: { items: [] as string[] },
+  reducers: {
+    added(state, action: PayloadAction<string>) {
+      state.items.push(action.payload);
+    },
+  },
+  extraReducers: (builder) => {
+    builder.addCase(signedOut, () => ({ items: [] }));
+  },
+});
+
+export const { added } = cart.actions;
+export default cart.reducer;
+```
+
+```ts title="src/store/index.ts"
+import { configureStore } from '@reduxjs/toolkit';
+import { useDispatch, useSelector } from 'react-redux';
+import session from './session';
+import cart from './cart';
+
+export const store = configureStore({
+  reducer: { session, cart },
+});
+
+export type RootState = ReturnType<typeof store.getState>;
+export type AppDispatch = typeof store.dispatch;
+export const useAppSelector = useSelector.withTypes<RootState>();
+export const useAppDispatch = useDispatch.withTypes<AppDispatch>();
+```
+
+### Connect it to the screens {#redux-connect}
+
+`useSelector` reads the store from `<Provider>`, so the provider wraps every screen. Without it, a screen fails with "could not find react-redux context value".
+
+```tsx title="src/StoreProvider.tsx"
+import type { ReactNode } from 'react';
+import { Provider } from 'react-redux';
+import { store } from './store';
+
+export function StoreProvider({ children }: { children: ReactNode }) {
+  return <Provider store={store}>{children}</Provider>;
+}
+```
+
+```ts title="Navigation.ts"
+import { createNavigation } from '@apexnative/navigation';
+import { StoreProvider } from './src/StoreProvider';
+
+export const Navigation = createNavigation({
+  screens: { Products, Cart },
+  root: 'Products',
+  screenProvider: StoreProvider,
+});
+```
+
+Each screen has a `<Provider>` of its own around one `store`, so they share every slice. `appProvider: StoreProvider` works the same way, with every screen in one tree (see [Providers](#providers)). Never create the store inside the provider.
+
+### Read and write in a screen {#redux-screen}
+
+```tsx title="src/screens/Products.tsx"
+import { Button } from 'react-native';
+import { useAppDispatch, useAppSelector } from '../store';
+import { added } from '../store/cart';
+
+export function Products() {
+  const count = useAppSelector((s) => s.cart.items.length);
+  const dispatch = useAppDispatch();
+  return (
+    <Button
+      title={`Add to cart (${count})`}
+      onPress={() => dispatch(added('42'))}
+    />
+  );
+}
+```
+
+Each press adds an item, and every screen that selects `s.cart.items` shows it, the Cart tab included.
+
+### Outside React {#redux-outside}
+
+The store has `getState`, `dispatch` and `subscribe`; import it anywhere:
+
+```ts title="Navigation.ts"
+import { navigation } from '@apexnative/navigation';
+import { store } from './src/store';
+import { added } from './src/store/cart';
+import { signedIn } from './src/store/session';
+
+export const Navigation = createNavigation({
+  // …
+  willMount: async () => {
+    const user = await loadUser(); // your own request
+    if (user) store.dispatch(signedIn(user));
+  },
+  linking: {
+    prefixes: ['myapp://'],
+    routes: {
+      'cart/add/:productId': ({ productId }) => {
+        store.dispatch(added(productId));
+        navigation.push('Cart');
+      },
+    },
+  },
+});
+```
+
+`myapp://cart/add/42` adds the item and opens the cart.
+
+### The first root and sign-out {#redux-roots}
+
+```ts title="Navigation.ts"
+export const Navigation = createNavigation({
+  screens: { Login, Products, Cart },
+  roots: {
+    login: Stack('Login'),
+    main: Tabs(Tab('Products'), Tab('Cart')),
+  },
+  screenProvider: StoreProvider,
+  willMount: async () => {
+    const user = await loadUser(); // your own request
+    if (user) store.dispatch(signedIn(user));
+  },
+  initialRoot: () =>
+    store.getState().session.user ? 'main' : 'login',
+});
+```
+
+```ts title="src/session.ts"
+import { navigation } from '@apexnative/navigation';
+import { store } from './store';
+import { signedIn, signedOut } from './store/session';
+import type { User } from './store/session';
+
+export async function signIn(user: User) {
+  store.dispatch(signedIn(user));
+  await navigation.switchTo('main');
+}
+
+export async function signOut() {
+  await navigation.switchTo('login');
+  store.dispatch(signedOut());
+}
+```
+
+One `signedOut` empties the session and the cart. See [Signing in and out](#sign-in-out) for why the reset comes after the switch.
+
+### Save the state {#redux-persist}
+
+<PackageInstall name="redux-persist @react-native-async-storage/async-storage" />
+
+`persistReducer` saves the slices on its list; `persistStore` reads them back. Call `persistStore` in `willMount`, and resolve when it is done:
+
+```ts title="src/store/index.ts"
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { combineReducers, configureStore } from '@reduxjs/toolkit';
+import {
+  FLUSH,
+  PAUSE,
+  PERSIST,
+  persistReducer,
+  PURGE,
+  REGISTER,
+  REHYDRATE,
+} from 'redux-persist';
+import session from './session';
+import cart from './cart';
+
+const reducer = persistReducer(
+  { key: 'root', storage: AsyncStorage, whitelist: ['session'] },
+  combineReducers({ session, cart }),
+);
+
+export const store = configureStore({
+  reducer,
+  middleware: (getDefault) =>
+    getDefault({
+      serializableCheck: {
+        ignoredActions: [
+          FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER,
+        ],
+      },
+    }),
+});
+```
+
+```ts title="Navigation.ts"
+import { persistStore } from 'redux-persist';
+
+export const Navigation = createNavigation({
+  // …
+  willMount: () =>
+    new Promise<void>((resolve) => {
+      persistStore(store, null, resolve);
+    }),
+  initialRoot: () =>
+    store.getState().session.user ? 'main' : 'login',
+});
+```
+
+The splash screen stays until the saved session is back, and a signed-in user starts on `main`. `PersistGate` isn't needed: `willMount` already holds the first screen. A sign-out's `signedOut` saves the empty session too.
+
+## Zustand {#zustand}
+
+A Zustand store is a hook made in a module, with no provider. Every screen imports it and reads the same store. The shared part of this page is [above](#shared).
+
+### Install {#zustand-install}
+
+<PackageInstall name="zustand" />
+
+### Create the store {#zustand-create}
+
+```ts title="src/store/session.ts"
+import { create } from 'zustand';
+
+export type User = { id: string; name: string };
+
+type Session = {
+  user: User | null;
+  signIn: (user: User) => void;
+  signOut: () => void;
+};
+
+export const useSession = create<Session>()((set) => ({
+  user: null,
+  signIn: (user) => set({ user }),
+  signOut: () => set({ user: null }),
+}));
+```
+
+```ts title="src/store/cart.ts"
+import { create } from 'zustand';
+
+type Cart = {
+  items: string[];
+  add: (id: string) => void;
+  clear: () => void;
+};
+
+export const useCart = create<Cart>()((set) => ({
+  items: [],
+  add: (id) => set((cart) => ({ items: [...cart.items, id] })),
+  clear: () => set({ items: [] }),
+}));
+```
+
+### Connect it to the screens {#zustand-connect}
+
+Nothing to connect. The store exists once in the JavaScript runtime, and each screen's root reads it:
+
+```ts title="Navigation.ts"
+import { createNavigation } from '@apexnative/navigation';
+
+export const Navigation = createNavigation({
+  screens: { Products, Cart },
+  root: 'Products',
+});
+```
+
+### Read and write in a screen {#zustand-screen}
+
+```tsx title="src/screens/Products.tsx"
+import { Button } from 'react-native';
+import { useCart } from '../store/cart';
+
+export function Products() {
+  const count = useCart((cart) => cart.items.length);
+  const add = useCart((cart) => cart.add);
+  return (
+    <Button
+      title={`Add to cart (${count})`}
+      onPress={() => add('42')}
+    />
+  );
+}
+```
+
+Each press adds an item; the Cart tab shows it. A selector that returns a new object or array each time, `(cart) => ({ items, add })`, makes React render without end: select one value per call, or wrap the selector in `useShallow` from `zustand/react/shallow`.
+
+### Outside React {#zustand-outside}
+
+The hook is also the store: `useCart.getState()`, `useCart.setState()`, `useCart.subscribe()`.
+
+```ts title="Navigation.ts"
+import { navigation } from '@apexnative/navigation';
+import { useCart } from './src/store/cart';
+import { useSession } from './src/store/session';
+
+export const Navigation = createNavigation({
+  // …
+  willMount: async () => {
+    const user = await loadUser(); // your own request
+    if (user) useSession.getState().signIn(user);
+  },
+  linking: {
+    prefixes: ['myapp://'],
+    routes: {
+      'cart/add/:productId': ({ productId }) => {
+        useCart.getState().add(productId);
+        navigation.push('Cart');
+      },
+    },
+  },
+});
+```
+
+### The first root and sign-out {#zustand-roots}
+
+```ts title="Navigation.ts"
+export const Navigation = createNavigation({
+  screens: { Login, Products, Cart },
+  roots: {
+    login: Stack('Login'),
+    main: Tabs(Tab('Products'), Tab('Cart')),
+  },
+  willMount: async () => {
+    const user = await loadUser(); // your own request
+    if (user) useSession.getState().signIn(user);
+  },
+  initialRoot: () =>
+    useSession.getState().user ? 'main' : 'login',
+});
+```
+
+```ts title="src/session.ts"
+import { navigation } from '@apexnative/navigation';
+import { useCart } from './store/cart';
+import { useSession } from './store/session';
+import type { User } from './store/session';
+
+export async function signIn(user: User) {
+  useSession.getState().signIn(user);
+  await navigation.switchTo('main');
+}
+
+export async function signOut() {
+  await navigation.switchTo('login');
+  useSession.getState().signOut();
+  useCart.getState().clear();
+}
+```
+
+When the session can end anywhere, such as a request that gets "401" from the server, call the same `signOut()` from there. It is a plain function, so your API client imports it like any module:
+
+```ts title="src/api.ts"
+import { signOut } from './session';
+
+export async function request(path: string) {
+  const response = await fetch(`https://api.example.com${path}`);
+  if (response.status === 401) await signOut();
+  return response;
+}
+```
+
+### Save the state {#zustand-persist}
+
+<PackageInstall name="@react-native-async-storage/async-storage" />
+
+The `persist` middleware saves the store. `skipHydration` keeps it from loading by itself when the module is imported; `willMount` loads it, so the first root reads it:
+
+```ts title="src/store/session.ts"
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
+
+export const useSession = create<Session>()(
+  persist(
+    (set) => ({
+      user: null,
+      signIn: (user) => set({ user }),
+      signOut: () => set({ user: null }),
+    }),
+    {
+      name: 'session',
+      storage: createJSONStorage(() => AsyncStorage),
+      skipHydration: true,
+    },
+  ),
+);
+```
+
+```ts title="Navigation.ts"
+willMount: async () => {
+  await useSession.persist.rehydrate();
+},
+initialRoot: () =>
+  useSession.getState().user ? 'main' : 'login',
+```
+
+A signed-in user starts on `main` with the saved user. `signOut()` saves the empty session.
+
+## Jotai {#jotai}
+
+Jotai keeps state in atoms, and the atoms' values in a store. Without a `<Provider>`, every hook uses Jotai's default store, which exists once in the JavaScript runtime, so <Mark>every screen shares it with no provider</Mark>. The shared part of this page is [above](#shared).
+
+### Install {#jotai-install}
+
+<PackageInstall name="jotai" />
+
+### Create the store {#jotai-create}
+
+```ts title="src/store.ts"
+import { atom, getDefaultStore } from 'jotai';
+
+export type User = { id: string; name: string };
+
+export const userAtom = atom<User | null>(null);
+export const cartAtom = atom<string[]>([]);
+
+// the store the hooks use when no Provider wraps them
+export const store = getDefaultStore();
+```
+
+### Connect it to the screens {#jotai-connect}
+
+Nothing to connect: leave out `<Provider>`.
+
+```ts title="Navigation.ts"
+export const Navigation = createNavigation({
+  screens: { Products, Cart },
+  root: 'Products',
+});
+```
+
+A `<Provider>` without a `store` creates a store of its own. As a `screenProvider` it would give each screen a separate store, and the screens would share nothing. When you need a provider, such as for tests, create the store once with `createStore()` in a module, and pass it: `<Provider store={store}>`.
+
+### Read and write in a screen {#jotai-screen}
+
+```tsx title="src/screens/Products.tsx"
+import { Button } from 'react-native';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { cartAtom } from '../store';
+
+export function Products() {
+  const count = useAtomValue(cartAtom).length;
+  const setCart = useSetAtom(cartAtom);
+  return (
+    <Button
+      title={`Add to cart (${count})`}
+      onPress={() => setCart((items) => [...items, '42'])}
+    />
+  );
+}
+```
+
+### Outside React {#jotai-outside}
+
+The store reads, writes and subscribes to any atom: `store.get(atom)`, `store.set(atom, value)`, `store.sub(atom, listener)`.
+
+```ts title="Navigation.ts"
+import { navigation } from '@apexnative/navigation';
+import { cartAtom, store, userAtom } from './src/store';
+
+export const Navigation = createNavigation({
+  // …
+  willMount: async () => {
+    const user = await loadUser(); // your own request
+    store.set(userAtom, user);
+  },
+  linking: {
+    prefixes: ['myapp://'],
+    routes: {
+      'cart/add/:productId': ({ productId }) => {
+        store.set(cartAtom, (items) => [...items, productId]);
+        navigation.push('Cart');
+      },
+    },
+  },
+});
+```
+
+### The first root and sign-out {#jotai-roots}
+
+```ts title="Navigation.ts"
+export const Navigation = createNavigation({
+  screens: { Login, Products, Cart },
+  roots: {
+    login: Stack('Login'),
+    main: Tabs(Tab('Products'), Tab('Cart')),
+  },
+  willMount: async () => {
+    store.set(userAtom, await loadUser()); // your own request
+  },
+  initialRoot: () => (store.get(userAtom) ? 'main' : 'login'),
+});
+```
+
+```ts title="src/session.ts"
+import { navigation } from '@apexnative/navigation';
+import { cartAtom, store, userAtom } from './store';
+import type { User } from './store';
+
+export async function signIn(user: User) {
+  store.set(userAtom, user);
+  await navigation.switchTo('main');
+}
+
+export async function signOut() {
+  await navigation.switchTo('login');
+  store.set(userAtom, null);
+  store.set(cartAtom, []);
+}
+```
+
+### Save the state {#jotai-persist}
+
+<PackageInstall name="@react-native-async-storage/async-storage" />
+
+Read the saved value into the atom in `willMount`, and save it on each change from then on:
+
+```ts title="Navigation.ts"
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+willMount: async () => {
+  const saved = await AsyncStorage.getItem('user');
+  store.set(userAtom, saved ? JSON.parse(saved) : null);
+  store.sub(userAtom, () => {
+    const user = store.get(userAtom);
+    AsyncStorage.setItem('user', JSON.stringify(user));
+  });
+},
+initialRoot: () => (store.get(userAtom) ? 'main' : 'login'),
+```
+
+`atomWithStorage` from `jotai/utils` saves an atom too, but with an asynchronous storage it starts from its initial value and loads the saved one on its own: the first root wouldn't see it. Load it in `willMount` as above when the first screen depends on it.
+
+## MobX {#mobx}
+
+A MobX store is an observable object, usually a class, created once in a module. `observer` components render again when what they read changes. `mobx-react-lite` has no provider; every screen imports the store. The shared part of this page is [above](#shared).
+
+### Install {#mobx-install}
+
+<PackageInstall name="mobx mobx-react-lite" />
+
+### Create the store {#mobx-create}
+
+```ts title="src/store.ts"
+import { makeAutoObservable } from 'mobx';
+
+export type User = { id: string; name: string };
+
+class Session {
+  user: User | null = null;
+  constructor() {
+    makeAutoObservable(this);
+  }
+  signIn(user: User) {
+    this.user = user;
+  }
+  signOut() {
+    this.user = null;
+  }
+}
+
+class Cart {
+  items: string[] = [];
+  constructor() {
+    makeAutoObservable(this);
+  }
+  add(id: string) {
+    this.items.push(id);
+  }
+  clear() {
+    this.items = [];
+  }
+}
+
+export const session = new Session();
+export const cart = new Cart();
+```
+
+`makeAutoObservable` makes the fields observable and the methods actions.
+
+### Connect it to the screens {#mobx-connect}
+
+Nothing to connect: the screens import `session` and `cart`.
+
+```ts title="Navigation.ts"
+export const Navigation = createNavigation({
+  screens: { Products, Cart },
+  root: 'Products',
+});
+```
+
+### Read and write in a screen {#mobx-screen}
+
+Wrap the component in `observer`; it renders again when a value it read changes:
+
+```tsx title="src/screens/Products.tsx"
+import { Button } from 'react-native';
+import { observer } from 'mobx-react-lite';
+import { cart } from '../store';
+
+export const Products = observer(function Products() {
+  return (
+    <Button
+      title={`Add to cart (${cart.items.length})`}
+      onPress={() => cart.add('42')}
+    />
+  );
+});
+```
+
+`defineScreen({ component: Products })` and the options of the screen take the `observer` component as they take any other.
+
+### Outside React {#mobx-outside}
+
+Read and call the store anywhere. `reaction` runs code when a value changes:
+
+```ts title="Navigation.ts"
+import { navigation } from '@apexnative/navigation';
+import { cart, session } from './src/store';
+
+export const Navigation = createNavigation({
+  // …
+  willMount: async () => {
+    const user = await loadUser(); // your own request
+    if (user) session.signIn(user);
+  },
+  linking: {
+    prefixes: ['myapp://'],
+    routes: {
+      'cart/add/:productId': ({ productId }) => {
+        cart.add(productId);
+        navigation.push('Cart');
+      },
+    },
+  },
+});
+```
+
+### The first root and sign-out {#mobx-roots}
+
+```ts title="Navigation.ts"
+export const Navigation = createNavigation({
+  screens: { Login, Products, Cart },
+  roots: {
+    login: Stack('Login'),
+    main: Tabs(Tab('Products'), Tab('Cart')),
+  },
+  willMount: async () => {
+    const user = await loadUser(); // your own request
+    if (user) session.signIn(user);
+  },
+  initialRoot: () => (session.user ? 'main' : 'login'),
+});
+```
+
+```ts title="src/session.ts"
+import { navigation } from '@apexnative/navigation';
+import { cart, session } from './store';
+import type { User } from './store';
+
+export async function signIn(user: User) {
+  session.signIn(user);
+  await navigation.switchTo('main');
+}
+
+export async function signOut() {
+  await navigation.switchTo('login');
+  session.signOut();
+  cart.clear();
+}
+```
+
+### Save the state {#mobx-persist}
+
+<PackageInstall name="@react-native-async-storage/async-storage" />
+
+Read the saved user in `willMount`, then save it with a `reaction` on each change:
+
+```ts title="Navigation.ts"
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { reaction } from 'mobx';
+
+willMount: async () => {
+  const saved = await AsyncStorage.getItem('user');
+  if (saved) session.signIn(JSON.parse(saved));
+  reaction(
+    () => session.user,
+    (user) => AsyncStorage.setItem('user', JSON.stringify(user)),
+  );
+},
+initialRoot: () => (session.user ? 'main' : 'login'),
+```
+
+## Valtio {#valtio}
+
+A Valtio store is a proxy object made in a module. Code changes it as a plain object; components read a snapshot of it with `useSnapshot`, and render again when what they read changes. No provider. The shared part of this page is [above](#shared).
+
+### Install {#valtio-install}
+
+<PackageInstall name="valtio" />
+
+### Create the store {#valtio-create}
+
+```ts title="src/store.ts"
+import { proxy } from 'valtio';
+
+export type User = { id: string; name: string };
+
+export const session = proxy({ user: null as User | null });
+export const cart = proxy({ items: [] as string[] });
+```
+
+### Connect it to the screens {#valtio-connect}
+
+Nothing to connect: the screens import the proxies.
+
+```ts title="Navigation.ts"
+export const Navigation = createNavigation({
+  screens: { Products, Cart },
+  root: 'Products',
+});
+```
+
+### Read and write in a screen {#valtio-screen}
+
+Read from the snapshot, write to the proxy:
+
+```tsx title="src/screens/Products.tsx"
+import { Button } from 'react-native';
+import { useSnapshot } from 'valtio';
+import { cart } from '../store';
+
+export function Products() {
+  const snap = useSnapshot(cart);
+  return (
+    <Button
+      title={`Add to cart (${snap.items.length})`}
+      onPress={() => cart.items.push('42')}
+    />
+  );
+}
+```
+
+The snapshot is read-only; a write to `snap` throws. Writes go to `cart`.
+
+### Outside React {#valtio-outside}
+
+The proxy is the store: read and write it anywhere. `subscribe(proxy, callback)` runs code on each change.
+
+```ts title="Navigation.ts"
+import { navigation } from '@apexnative/navigation';
+import { cart, session } from './src/store';
+
+export const Navigation = createNavigation({
+  // …
+  willMount: async () => {
+    session.user = await loadUser(); // your own request
+  },
+  linking: {
+    prefixes: ['myapp://'],
+    routes: {
+      'cart/add/:productId': ({ productId }) => {
+        cart.items.push(productId);
+        navigation.push('Cart');
+      },
+    },
+  },
+});
+```
+
+### The first root and sign-out {#valtio-roots}
+
+```ts title="Navigation.ts"
+export const Navigation = createNavigation({
+  screens: { Login, Products, Cart },
+  roots: {
+    login: Stack('Login'),
+    main: Tabs(Tab('Products'), Tab('Cart')),
+  },
+  willMount: async () => {
+    session.user = await loadUser(); // your own request
+  },
+  initialRoot: () => (session.user ? 'main' : 'login'),
+});
+```
+
+```ts title="src/session.ts"
+import { navigation } from '@apexnative/navigation';
+import { cart, session } from './store';
+import type { User } from './store';
+
+export async function signIn(user: User) {
+  session.user = user;
+  await navigation.switchTo('main');
+}
+
+export async function signOut() {
+  await navigation.switchTo('login');
+  session.user = null;
+  cart.items = [];
+}
+```
+
+### Save the state {#valtio-persist}
+
+<PackageInstall name="@react-native-async-storage/async-storage" />
+
+```ts title="Navigation.ts"
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { subscribe } from 'valtio';
+
+willMount: async () => {
+  const saved = await AsyncStorage.getItem('user');
+  if (saved) session.user = JSON.parse(saved);
+  subscribe(session, () => {
+    AsyncStorage.setItem('user', JSON.stringify(session.user));
+  });
+},
+initialRoot: () => (session.user ? 'main' : 'login'),
+```
+
+## The libraries side by side {#compare}
+
+| | Provider needed | Shared by every screen with no `appProvider` | Outside React |
+| --- | --- | --- | --- |
+| Redux Toolkit | Yes, `<Provider>` of `react-redux` | Yes, with the provider in `screenProvider` and the store in a module | `store.getState()`, `dispatch`, `subscribe` |
+| Zustand | No | Yes | `useStore.getState()`, `setState`, `subscribe` |
+| Jotai | No: the default store | Yes, without `<Provider>`, or with one store passed to it | `getDefaultStore()`: `get`, `set`, `sub` |
+| MobX | No | Yes | The store object; `reaction`, `autorun` |
+| Valtio | No | Yes | The proxy; `subscribe`, `snapshot` |
+
+Every one of them works with `appProvider` as well: the store doesn't change, and the screens render in one tree.
+
+## Which to pick {#which}
+
+The navigation works the same with each; pick by how your app thinks about its data.
+
+- **Already on one of them** — keep it. Nothing here asks for a change.
+- **Zustand** — the least to set up: no provider, one hook per store, and a store that is also its own API outside React.
+- **Redux Toolkit** — one store with actions, middleware and devtools, for a large app or a team that wants every change in one log. It is the one that needs a provider: put it in `screenProvider` or `appProvider`.
+- **Jotai** — small pieces of state that combine, read one atom at a time. Keep to the default store, or one store you create.
+- **MobX** — classes with observable fields and methods; components render only for what they read.
+- **Valtio** — a plain object you change in place, with renders for what a component reads.
+
+Whichever you pick, the data of the app lives in the store. The [app's context](./app-context) is for the few values the start, the options and the links read; a flag mirrored there is enough.
+
+## What's next {#next}
+
+- [The app context, and working without it](./app-context): what the navigation's own context is for.
+- [One tree](../architecture/one-tree): `appProvider` and `screenProvider` in depth.
+- [Switching roots](../fundamentals/switching-roots): the roots of signed in and signed out.
+- [Before the first screen](../fundamentals/starting-the-app#before): what `willMount` holds back.

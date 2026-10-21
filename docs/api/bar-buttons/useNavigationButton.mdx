@@ -1,0 +1,122 @@
+import { Os } from '@site/src/components/Intro';
+
+`useNavigationButton` handles the press of a button of the screen's bar in the component, by the button's `id`. It is
+for a press that needs the state of the component, such as Share sending the text the user typed. The button itself
+is declared in the screen's options; the hook only listens. It is called in a component of the screen.
+
+## Usage {#usage}
+
+```tsx title="src/screens/Note.tsx"
+import { useState } from 'react';
+import { Share, TextInput } from 'react-native';
+import {
+  defineScreen,
+  useNavigationButton,
+} from '@apexnative/navigation';
+
+export const NoteScreen = defineScreen({
+  component: Note,
+  options: (s) =>
+    s.rightButtons({
+      id: 'share',
+      icon: { ios: 'square.and.arrow.up', android: 'ic_share' },
+    }),
+});
+
+function Note() {
+  const [text, setText] = useState('');
+  useNavigationButton('share', () => Share.share({ message: text }));
+  return <TextInput value={text} onChangeText={setText} multiline />;
+}
+```
+
+The share icon is in the bar from the first frame. A tap shares the text the user has typed so far: the handler of the
+last render is called, so `text` is current without `useCallback` or a ref.
+
+## Signature {#signature}
+
+<ApiSignature data={data} name="useNavigationButton" />
+
+**`buttonId`**: the `id` of the button in the options, `'share'` above. The handler is called only for presses with
+this id, and only on this screen.
+
+**`handler`** gets a `ButtonPressedEvent`:
+
+- `buttonId`: the id that was pressed.
+- `selected`: for a `toggle` button <Os name="iOS" />, its new state; not set for other buttons.
+- `screen`: the screen, as `{ id, name }`.
+
+It returns nothing.
+
+## What it hears {#what-it-hears}
+
+A press is told by its id, so the same hook handles everything in the bar that has one:
+
+| Pressed | The id |
+| --- | --- |
+| A button of `leftButtons`, `rightButtons`, `centerButtons` | The button's `id`. |
+| A button of the toolbar | The button's `id`. |
+| An item of a button's `menu`, at any depth | The item's `id`. |
+| An item of the `overflowMenu` | The item's `id`. |
+| The FAB and its actions | Their `id`. |
+
+The ids of buttons and of menu items share one space on a screen: keep them different. A
+[component as a button](/docs/screen-ui/bar-buttons#component) sends no press: its own `onPress` is the press.
+
+A button of the app's default options, such as a Close on every modal, is on each screen; the hook in a screen hears
+the press on that screen's copy.
+
+### A toggle {#toggle}
+
+<Os name="iOS" /> A button with `toggle: true` switches on and off at each tap, and the event carries the new state:
+
+```tsx
+useNavigationButton('favorite', ({ selected }) => {
+  setFavorite(selected ?? false); // your own state
+});
+```
+
+## `onPress` or the hook {#onpress-or-hook}
+
+A button can also have `onPress` in the options. Both run when both are there; pick one per button.
+
+| The press needs | Use |
+| --- | --- |
+| Nothing of the component: open a screen, a menu | `onPress` in `defineScreen` options. It gets the screen's `navigation`. |
+| The state of the component | `useNavigationButton` in the component. |
+| State, and the button changes with it (on, off) | `onPress` in [`useScreenOptions`](/api/screen-options/useScreenOptions): the options and the press are built from the same render. |
+| To be heard by the whole app, for analytics | `buttonPressed` in `listeners`. |
+
+## Pitfalls {#pitfalls}
+
+- **The hook doesn't add the button.** Without a button of that id in the options, nothing shows and the hook never
+  runs. The id is a string; a typo is silent.
+- **Only while mounted.** The hook listens from the component's first effect. A button the user taps before a lazy part
+  of the screen mounted reaches no handler; put the hook in the screen's top component.
+- **One screen only.** A tap on the same button id on another screen, even of the same name, doesn't reach it.
+- **Outside a screen** the hook throws "This hook is for the screens of createNavigation".
+
+## Compared with React Navigation {#react-navigation}
+
+In React Navigation the header buttons are React components (`headerRight`), set with `navigation.setOptions` inside
+an effect, so they see the state:
+
+```tsx
+// React Navigation
+useLayoutEffect(() => {
+  navigation.setOptions({
+    headerRight: () => (
+      <Button title="Share" onPress={() => share(text)} />
+    ),
+  });
+}, [navigation, text]);
+```
+
+Here the button is the platform's own, declared once in the options; the component handles its press, and nothing is
+set again when `text` changes.
+
+## See also {#see-also}
+
+- [Where the press is handled](/docs/screen-ui/bar-buttons#press), [Menus](/docs/screen-ui/bar-buttons#menus),
+  [The overflow menu](/docs/screen-ui/bar-buttons#overflow).
+- [Buttons that change](/docs/screen-ui/bar-buttons#change) with the state of the screen.

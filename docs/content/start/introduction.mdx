@@ -1,0 +1,237 @@
+---
+title: Introduction
+description: 'What @apexnative/navigation is, how it differs from a router in the React tree, and which apps it fits.'
+---
+
+import { Cycle, Fit, Layers, Mark, Models, Os, Pair, Principles, Steps, Thesis } from '@site/src/components/Intro';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+`@apexnative/navigation` gives a React Native app the navigation of the platform itself: the stacks, tabs, sheets and gestures of iOS and Android. You describe the screens and how they are arranged in TypeScript; the native side shows them and reports back.
+
+```ts title="Navigation.ts"
+import { createNavigation } from '@apexnative/navigation';
+// your own components
+import { Details, Home } from './src/screens';
+
+export const Navigation = createNavigation({
+  screens: { Home, Details },
+  root: 'Home',
+});
+```
+
+<DeviceVideo name="intro-hero" />
+
+Home opens in a native stack. When Home calls `navigation.push('Details')`, Details slides in with the system transition, and the swipe back <Os name="iOS" /> or the back button <Os name="Android" /> returns to Home. The [Quick start](./quick-start) builds this app step by step.
+
+:::info[Early development]
+
+The package is not on npm yet, and the API can still change before 1.0.
+
+:::
+
+## Three ways to build navigation {#models}
+
+Navigation for React Native is built in one of three ways. They answer two questions differently: <Mark>who owns the navigation state</Mark>, and <Mark>how your code speaks to it</Mark>.
+
+All three can show native screens. The difference is not in how a screen is drawn, but in where the state lives, who decides what the user sees, and what your code has to say to change it.
+
+<Models
+  columns={[
+    { eyebrow: 'Model A', title: 'A router in the React tree' },
+    { eyebrow: 'Model B', title: 'Native navigation by commands' },
+    { eyebrow: 'Model C · this library', title: 'Native navigation, described in React' },
+  ]}
+  rows={[
+    {
+      label: 'State',
+      cells: [
+        'An object in the React tree. Native containers, when the router uses them, follow it.',
+        'The stack, the tabs and the modals of the OS.',
+        'The stack, the tabs and the modals of the OS. JavaScript reads them through events and hooks.',
+      ],
+    },
+    {
+      label: 'A screen',
+      cells: [
+        'A component in one shared React tree.',
+        'A component registered by name, with a React root of its own.',
+        'A component defined next to its options: a root of its own, or one shared tree when the app wants it.',
+      ],
+    },
+    {
+      label: 'Navigation is',
+      cells: [
+        'Navigators as components, or files and folders where every screen is a URL.',
+        'Layouts as JSON objects; every command takes the id of a screen.',
+        <>Builders: <code>Stack</code>, <code>Tabs</code>, <code>SideMenu</code>. A screen sends commands without ids.</>,
+      ],
+    },
+    {
+      label: 'Types',
+      cells: [
+        'Typed route params.',
+        'Screen names are strings; props are not checked.',
+        'Screen names, props and roots are checked by TypeScript.',
+      ],
+    },
+    {
+      label: 'Gestures',
+      cells: [
+        'Native or drawn in JS; either way, synced back into the React state.',
+        "The system's own.",
+        "The system's own: swipe back, the back button, dragging a sheet.",
+      ],
+    },
+    {
+      label: 'App logic',
+      cells: [
+        'Lives in providers of the render tree.',
+        'Listeners on one global navigation object.',
+        <>Outside rendering: <code>willMount</code>, the app's context as services, <code>navigation</code> outside React.</>,
+      ],
+    },
+    {
+      label: 'Native screens',
+      cells: [
+        'A native view inside a React screen.',
+        'Registered by hand on the native side.',
+        'SwiftUI, UIKit and Compose screens next to React screens, set up by the CLI.',
+      ],
+    },
+  ]}
+/>
+
+<Thesis eyebrow="The idea in one line">
+  The <Mark>platform</Mark> owns the navigation. <Mark>React</Mark> describes it.
+</Thesis>
+
+## Describe, don't command {#describe}
+
+When the platform owns the navigation, the app still has to speak to it. Commands with string ids and JSON layouts work, but every mistake in them shows up <Mark>at run time</Mark>: a wrong name, a missing prop, an id of a screen that is gone. The library keeps the native model and gives it a React API, so the same mistakes show up <Mark>in the editor</Mark>.
+
+<Pair left="Commands by id" right="A typed description">
+
+```js
+navigator.push(screenId, {
+  name: 'Details',
+  props: { id: 42 },
+});
+```
+
+```ts
+const navigation = useNavigation();
+navigation.push('Details', { props: { id: '42' } });
+// 'Detail' or a missing id: a TypeScript error
+```
+
+</Pair>
+
+## The platform already knows how to navigate {#platform}
+
+<Os name="iOS" /> and <Os name="iPadOS" /> have `UINavigationController`, `UITabBarController`, sheets with detents and `UISplitViewController`. <Os name="Android" /> has its back stack, the back button and the Material components. Each of them holds years of decisions about <Mark>gestures, accessibility, layout on every screen size, memory and multitasking</Mark>.
+
+A router that keeps its own model of the navigation has to mirror all of that into its state, and keep up with every release of the OS. The platform already does it. So the library gives React access to these containers instead of replacing them, and a new tab bar or toolbar of the OS arrives <Mark>with its beta</Mark>, not a year later.
+
+:::note
+
+The native look is a consequence, not the goal. The goal is native behavior: the same gestures, transitions, accessibility and memory use as in an app written in Swift or Kotlin.
+
+:::
+
+## Principles {#principles}
+
+Seven rules that every part of the API follows. When two of them pull apart, the order decides.
+
+<Principles
+  items={[
+    {
+      title: 'The platform leads',
+      text: <>Native stacks, tabs, sheets and gestures, not a web-style router. A URL is one entry point among push notifications, widgets and shortcuts.</>,
+    },
+    {
+      title: 'Native is the source of truth',
+      text: <>Navigation state, screen lifecycle, safe areas, keyboard and theme come from the OS.</>,
+    },
+    {
+      title: 'App lifecycle is first-class',
+      text: <>Cold start, splash, session restore, background and process death are explicit steps.</>,
+    },
+    {
+      title: 'New OS features, fast',
+      text: <>Support for new iOS and Android releases lands with the betas.</>,
+    },
+    {
+      title: 'Customization without losing native behavior',
+      text: <>Options of system components first, your own native components inside native containers next, custom JS UI last.</>,
+    },
+    {
+      title: 'Performance is a requirement',
+      text: <>Transitions and gestures run natively. JavaScript stays off the critical path.</>,
+    },
+    {
+      title: 'Rendering and logic apart',
+      text: <>React renders screens. The logic of the app (a socket, a session, services) lives outside the render tree: <code>navigation</code> works outside React, <code>willMount</code> prepares the app, and the app's context is a set of services, not a store.</>,
+    },
+  ]}
+/>
+
+## How it works {#how}
+
+The library has three layers. Your app describes the screens and the layout. A thin layer in JavaScript, the engine, turns that into commands. The platform does the navigation and sends events back.
+
+<Layers />
+
+The life of one `push`, from the tap to the next render:
+
+<Steps
+  items={[
+    { text: 'A screen of your app asks for the next one.', code: "navigation.push('Details')" },
+    { text: 'The engine turns it into a layout and sends it to the native side.' },
+    { text: 'The platform creates the container and the React root of the screen.' },
+    { text: "The transition runs natively, with the system's gestures." },
+    { text: 'Events come back, and hooks render again.', code: 'screenDidAppear · stateChanged' },
+  ]}
+/>
+
+## What it means for your code {#code}
+
+Four habits follow from the model. Each of them comes from the same fact: the platform, not React, holds the screens.
+
+- **Read the state, don't keep a copy.** The platform owns the stack, so a copy in React state goes stale after the first swipe back. Read it with [`useNavigationState`](../fundamentals/lifecycle-and-events#state), and listen to events instead of guessing.
+- **One React root per screen, by default.** Each screen renders on its own, so a provider around one screen doesn't reach the others. Providers for the whole app or for every screen go to `createNavigation`; with `appProvider`, all screens share one React tree. More: [One tree](../architecture/one-tree#modes).
+- **No safe area code.** Every screen keeps its content clear of the status bar, the cutout, the bars and the home indicator by itself, without `SafeAreaView` or a safe area library. The native side measures each screen, so the insets are right under a top bar, in a sheet and in a tab. More: [The safe area](../screen-ui/system-ui#safe-area).
+- **Native screens are screens like the others.** A SwiftUI, UIKit or Compose screen is pushed, presented and put in tabs the same way as a React screen. More: [Native screens](../architecture/native-screens).
+
+## When it fits {#fit}
+
+<Fit
+  yes={[
+    'Apps that should look and behave like the platform, on iPhone, iPad and Android.',
+    'Apps with native screens, or a team that also writes Swift or Kotlin.',
+    'Apps where startup, transitions and memory matter.',
+  ]}
+  no={[
+    'A web version of the same app: the web is not a target.',
+    'One identical, fully custom UI on every platform, drawn in JavaScript.',
+  ]}
+/>
+
+## How these docs are built {#docs}
+
+Each section of the sidebar is one part of the API, and goes the same way:
+
+<Cycle />
+
+The dot next to a section shows where it is.
+
+| Dot | Status |
+| --- | --- |
+| <span className="status-dot status-dot--stable" /> | Stable: checked on every platform |
+| <span className="status-dot status-dot--review" /> | In review: can still change |
+| <span className="status-dot status-dot--draft" /> | Draft |
+
+## Where to go next {#next}
+
+- **To try it:** [Installation](./installation) adds the navigation to a new app or the app you have, and the [Quick start](./quick-start) builds two screens in a stack.
+- **To learn the model:** [Starting the app](../fundamentals/starting-the-app), then [Screens and props](../fundamentals/screens-and-props).
+- **Coming from another library:** [From React Navigation](../migration/from-react-navigation), [From Expo Router](../migration/from-expo-router) and [From react-native-navigation](../migration/from-react-native-navigation) map what you use now to this API.

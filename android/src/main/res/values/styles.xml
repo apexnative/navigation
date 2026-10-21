@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+    The theme overlay of the top bar's own context (not the activity's theme), over the app's Material 3 theme
+    or the navigation's neutral one: Material 3's toolbar colors on the surface. The bar draws its own shadow
+    (`topBar.elevation`), so nothing here raises it.
+    -->
+    <style name="ThemeOverlay.ApexNavigation.TopBar" parent="ThemeOverlay.Material3.Toolbar.Surface" />
+
+    <!--
+    The popup theme of the bar's toolbars, for the "⋮" menu, when the app's Material 3 theme is fixed to light or to
+    dark and doesn't follow the device's mode: a day/night overlay that gives the menu Material 3's colors of the
+    current mode where the app's theme shows the other one, and leaves the app's colors in the mode it shows
+    (values-night has the dark side). An app theme that follows the mode needs none: the menu takes the bar's theme.
+    -->
+    <style name="ThemeOverlay.ApexNavigation.TopBar.PopupOverLight" parent="" />
+    <style name="ThemeOverlay.ApexNavigation.TopBar.PopupOverDark" parent="ThemeOverlay.Material3.Light" />
+</resources>

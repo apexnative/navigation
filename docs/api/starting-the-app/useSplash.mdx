@@ -1,0 +1,146 @@
+import { Os } from '@site/src/components/Intro';
+
+`useSplash` serves the splash of your own that [`splash`](/api/starting-the-app/createNavigation#splash) of
+`createNavigation` shows on a cold start. It gives the size of the native splash's logo, so an animation starts
+exactly where the native splash left the logo, and `hide()`, which lets the splash leave once its animation is done.
+You call it in the splash component.
+
+## Usage {#usage}
+
+The logo shrinks a little, then grows and fades out; the splash leaves when the animation ends:
+
+```tsx title="src/screens/Splash.tsx"
+import { useEffect, useRef } from 'react';
+import { Animated, StyleSheet, View } from 'react-native';
+import { useSplash } from '@apexnative/navigation';
+
+export function Splash() {
+  const { hide, logo } = useSplash();
+  const scale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.sequence([
+      Animated.timing(scale, {
+        toValue: 0.9,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scale, {
+        toValue: 1.4,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start(() => hide());
+  }, [hide, scale]);
+
+  return (
+    <View style={styles.container}>
+      <Animated.Image
+        source={require('../../assets/logo.png')}
+        fadeDuration={0} // Android fades images in by default
+        style={[logo ?? styles.logo, { transform: [{ scale }] }]}
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F3E9D2', // the --background of the native splash
+  },
+  logo: { width: 100, height: 100 },
+});
+```
+
+```ts title="src/Navigation.ts"
+export const Navigation = createNavigation({
+  // …
+  splash: { component: Splash, hide: 'manual' },
+});
+```
+
+On a cold start the native splash shows, then this component in its place with the same picture: the logo at the same
+size, in the same spot. The logo shrinks and grows; once the animation calls `hide()` and `willMount` is done, the
+first root fades in. The whole way, with the native splash the CLI makes: [Splash screen](/docs/guides/splash-screen).
+
+## Signature {#signature}
+
+<ApiSignature data={data} name="useSplash" />
+
+It takes nothing and returns a `Splash`. It doesn't depend on a screen, so any component can call it: the splash, a
+component inside it, or a screen. It returns the same object on every render, so `hide` can go into the dependencies
+of an effect without running it again.
+
+## The splash {#splash-group}
+
+### `hide()` {#hide}
+
+<ApiMember data={data} of="Splash" name="hide" />
+
+Lets the splash leave, with `hide: 'manual'` in `splash`. Call it when the animation ends:
+
+```ts
+Animated.timing(scale, { toValue: 1.4, useNativeDriver: true }).start(
+  () => hide(),
+);
+```
+
+`hide()` is one of three conditions, not an order: the splash leaves once `willMount` is done, `minDuration` has
+passed and `hide()` was called. So after an animation shorter than the start, the splash stays on screen until
+`willMount` ends: end the animation on a frame that can stay, such as the color alone.
+
+- **With `hide: 'auto'`,** the default, the splash doesn't wait for it, and a call does nothing more.
+- **Once the splash left,** or when no splash of your own shows (after a JavaScript reload, or without `splash`), it
+  does nothing. A screen can call it without checking.
+- **Before the splash shows,** a call counts: the splash then leaves as soon as the rest is done.
+
+A splash with `hide: 'manual'` that never calls it stays on screen for good, so call it on every path: also when an
+animation is stopped before its end (`start` calls back with `{ finished: false }` then).
+
+### `logo` {#logo}
+
+<ApiMember data={data} of="Splash" name="logo" />
+
+The size of the native splash's logo, `{ width, height }`: points on <Os name="iOS" />, dp on <Os name="Android" />,
+the same unit as a style in React Native. `npx apex-navigation splash` writes it into the native files with the
+splash, from `--logo-width` and the logo's proportions.
+
+The native splash centers the logo in the whole window, and the splash of your own covers the whole window too, under
+the status bar and with no safe area. So a logo of this size, centered in a view with `flex: 1`, lies exactly on the
+native one, and the change from one to the other doesn't show (`styles.container` as in the usage above):
+
+```tsx
+<View style={styles.container}>
+  <Image
+    source={require('../../assets/logo.png')}
+    style={logo}
+    fadeDuration={0}
+  />
+</View>
+```
+
+It is `undefined` when the native splash isn't made by the CLI: the template's launch screen, or a splash made by
+hand without its size. Give a size of your own then, `logo ?? { width: 100, height: 100 }`. The value is read once,
+when the JavaScript starts, from the app's build: a new splash shows its size after a native build.
+
+## Over time {#time}
+
+- **Once per cold start.** The splash of your own shows on the first launch of the app's process only: not after a
+  reload of the JavaScript, and not when <Os name="Android" /> gives the app a new activity while the JavaScript
+  runs. `logo` keeps its value then; `hide()` does nothing.
+- **Outside the providers.** The splash is a React root of its own, outside `appProvider` and `screenProvider`, which
+  may need what `willMount` prepares. The app's context is there: `useAppContext` reads it as `willMount` changes it.
+  See [The splash of your own is outside the providers](/docs/guides/splash-screen#providers).
+- **In the navigation's state** the splash is a root with the screen `ApexNavigation.Splash`, until the first root
+  replaces it; `screenDidAppear` comes for it as for a screen.
+
+## See also {#see-also}
+
+- [Splash screen](/docs/guides/splash-screen): the native splash with the CLI, how the navigation keeps it, and an
+  animation of your own.
+- [`splash`](/api/starting-the-app/createNavigation#splash) of `createNavigation`: `component`, `minDuration`,
+  `hide` and `transition`.
+- [Starting the app](/docs/fundamentals/starting-the-app#launches): what each kind of launch shows.

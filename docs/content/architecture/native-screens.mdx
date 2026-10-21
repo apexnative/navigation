@@ -1,0 +1,308 @@
+---
+title: Native screens
+description: "Screens written in SwiftUI, UIKit, Jetpack Compose or Android views, as full screens of the navigation next to React ones: how they talk to the app, when to make one, one screen from the command to the device, types, functions and commands."
+---
+
+import { SectionStatus, SectionApi } from '@site/src/components/Api';
+import { Mark, Os, Steps } from '@site/src/components/Intro';
+import { NativeBridge } from '@site/src/components/Screens';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+<SectionStatus id="native-screens" />
+
+A screen of the app doesn't have to be React. A native screen is written in SwiftUI or UIKit on iOS, in Jetpack Compose or Android views on Android, and it is <Mark>a full screen of the navigation</Mark>: pushed, presented, put in a tab or made the root, like any React screen. In JavaScript it is one line in `screens`:
+
+```ts title="src/screens/Map.ts"
+import { nativeScreen } from '@apexnative/navigation';
+
+export const MapScreen = nativeScreen('Map', {
+  options: (s) => s.title('Map'),
+});
+```
+
+`'Map'` is the name the native view is registered under; `navigation.push('Map')` shows it, with the bar and the back gesture of any screen. This page answers:
+
+1. [What a native screen is](#what), and how it talks to the app.
+2. [When to make one](#when).
+3. [One screen, step by step](#example): from the command to the device.
+4. [What happens when it shows](#flow).
+5. [Types](#types), [functions with results](#results) and [commands](#commands).
+6. [UIKit and Android views](#imperative), and [native screens in layouts](#layouts).
+
+## What a native screen is {#what}
+
+The navigation shows screens natively anyway: a React screen is the platform's screen with a React root inside. A native screen is the same platform's screen with <Mark>your SwiftUI view or Compose function inside</Mark> instead. The navigation draws its bar, moves it, and takes it back with the gesture, as for any screen; the user can't tell which is which.
+
+<DeviceVideo name="native-screen" />
+
+The app is still a React Native app: its data, its stores, its logic are in JavaScript. So a native screen keeps a line to it:
+
+<NativeBridge />
+
+- **Props go to it**: from the command that shows it, and from `useProps`, a hook that gives it the data of the app while it is open.
+- **Function calls come back**: a prop can be a function of the app, such as one that saves; the native screen calls it, and awaits its result.
+- **Commands come back**: it pushes, presents and goes back as a React screen does.
+
+## When to make one {#when}
+
+| A native screen for | For example |
+| --- | --- |
+| What the platform does best natively | A map, a camera, a chart with thousands of points, a screen of SwiftUI-only APIs. |
+| Code the app already has | A screen of the native app it grew from, kept as it is. |
+| A team that writes Swift or Kotlin | Each screen in the language its author knows best. |
+
+A screen that is a list, a form or a detail page is as fast in React. A native screen costs more: its UI is written twice, once per platform, and everything it gets from the app crosses as plain data. Make one when a reason above holds.
+
+## One screen, step by step {#example}
+
+A Settings screen in SwiftUI and Compose, with a switch for notifications. The switch shows a value of the app's store, and turning it saves through a function of the app.
+
+### 1. The command {#step-command}
+
+```bash
+npx apex-navigation screen Settings --native
+```
+
+It shows what it will write, asks, and writes:
+
+| File | What it is |
+| --- | --- |
+| `src/screens/Settings.ts` | The definition: the props and the options. |
+| `ios/<App>/Screens/SettingsScreen.swift` | The SwiftUI view, next to `AppDelegate.swift`; added to the Xcode project. |
+| `android/…/screens/SettingsScreen.kt` | The Compose function, in the app's package. With the first Compose screen, Compose is turned on in Gradle. |
+| `ApexNavigation.generated.swift`, `ApexNavigationGenerated.kt` | The props as native types, the registration of the screen, and `Screens`, the screens of the app for the [typed commands](#typed-commands) of native code. |
+| `Navigation.ts` | `Settings` added to `screens`. |
+| `package.json` | Under `apexNavigation`, what each native screen is made with. |
+
+### 2. The definition in TypeScript {#step-definition}
+
+The props are declared once, here. `useProps` fills them from the app while the screen is open:
+
+```ts title="src/screens/Settings.ts"
+import { nativeScreen } from '@apexnative/navigation';
+import { useSettings } from '../settings'; // your own store
+
+export interface SettingsProps {
+  notifications: boolean;
+  onNotificationsChange: (on: boolean) => Promise<void>;
+}
+
+export const SettingsScreen = nativeScreen<SettingsProps>(
+  'Settings',
+  {
+    options: (s) => s.title('Settings'),
+    useProps: () => {
+      const notifications = useSettings((state) => state.notifications);
+      const save = useSettings((state) => state.saveNotifications);
+      return {
+        notifications,
+        onNotificationsChange: (on: boolean) => save(on),
+      };
+    },
+  },
+);
+```
+
+`useProps` is a hook, so any hook works in it: a store, a query, `useAppContext`. It runs inside `appProvider` and `screenProvider` (see [One tree](./one-tree)). What it returns goes over the props of the command.
+
+### 3. The generated code {#step-codegen}
+
+`codegen` makes native types of the props, so the screen reads them typed. It runs with the command, and again after each change of the props:
+
+```bash
+npx apex-navigation codegen
+```
+
+```swift title="Generated (Swift)"
+struct SettingsProps {
+  let notifications: Bool
+  let onNotificationsChange: (Bool) async throws -> Void
+}
+```
+
+It also registers the screen under its name: the navigation finds it as it starts, with nothing to add in `AppDelegate` or `MainApplication`. `doctor` tells when the generated code is behind the props.
+
+### 4. The screen in SwiftUI {#step-swiftui}
+
+```swift title="SettingsScreen.swift"
+struct SettingsScreen: View {
+  @ObservedObject var screen: NativeScreen<SettingsProps>
+
+  var body: some View {
+    List {
+      Toggle("Notifications", isOn: Binding(
+        get: { screen.props.notifications },
+        set: { on in
+          Task { try await screen.props.onNotificationsChange(on) }
+        }
+      ))
+    }
+  }
+}
+```
+
+`screen.props` is published: when the store changes, `useProps` returns new props, and the view draws again.
+
+### 5. The screen in Compose {#step-compose}
+
+```kotlin title="SettingsScreen.kt"
+@Composable
+fun SettingsScreen(screen: NativeScreen<SettingsProps>) {
+  val props = screen.props
+  val scope = rememberCoroutineScope()
+  Switch(
+    checked = props.notifications,
+    onCheckedChange = { on ->
+      scope.launch { props.onNotificationsChange(on) }
+    },
+  )
+}
+```
+
+`screen.props` is Compose state: a new value composes the function again.
+
+### 6. Opening it {#step-open}
+
+From React, as any screen; TypeScript checks it as any screen:
+
+```ts
+navigation.push('Settings');
+```
+
+Settings slides in with its title in the bar, and the switch already shows the value of the store.
+
+## What happens when it shows {#flow}
+
+<Steps
+  items={[
+    { text: 'A command names the screen.', code: "push('Settings')" },
+    { text: 'useProps runs, in a component of its own inside the app’s providers, and returns the props.', code: 'useProps()' },
+    { text: 'The native side creates the screen with them: the first frame already has the data.', code: 'SettingsScreen(screen:)' },
+    { text: 'The user turns the switch: the screen calls the function of its props, and the app saves.', code: 'onNotificationsChange(on)' },
+    { text: 'The store changes, useProps returns new props, and the screen draws them.', code: 'screen.props' },
+    { text: 'The user goes back: the hook stops with the screen.', code: 'pop' },
+  ]}
+/>
+
+The command waits for the first result of `useProps`, so the screen never shows without its data. A `useProps` that throws makes the command waiting for it fail; later, the screen keeps the props it has. Either way the error goes to `onError` as an error of the screen (see [Where the errors go](./errors-and-loading#on-error)).
+
+## Types {#types}
+
+Each prop of TypeScript becomes a type of Swift and Kotlin:
+
+| TypeScript | Swift | Kotlin |
+| --- | --- | --- |
+| `string` | `String` | `String` |
+| `number` | `Double`; `Int` with the JSDoc tag `@int` | `Double`; `Int` with `@int` |
+| `boolean` | `Bool` | `Boolean` |
+| `'light' \| 'dark'` | `enum` | `enum class` |
+| `{ … }` | a `struct` of its own | a `data class` of its own |
+| `T[]` | `[T]` | `List<T>` |
+| `(x: T) => Promise<R>` | `(T) async throws -> R` | `suspend (T) -> R` |
+| `name?: T` | `T?` | `T?` |
+
+Every function is asynchronous on the native side, since its call goes to JavaScript and back. A type with no native form stops `codegen` with the prop it is in: `any` and `unknown`, a union of different types, a tuple, a function inside an object.
+
+## Functions with results {#results}
+
+A function of the props that returns a promise gives its result to the native side, and its error:
+
+```swift
+do {
+  items = try await screen.props.loadItems()
+} catch {
+  message = error.localizedDescription // the promise rejected
+}
+```
+
+```kotlin
+try {
+  items = screen.props.loadItems()
+} catch (error: Exception) {
+  message = error.message // the promise rejected
+}
+```
+
+## Commands from a native screen {#commands}
+
+A native screen gets `navigation` with the commands of the screen it is, as `useNavigation()` gives a React screen:
+
+```swift
+Button("Edit") {
+  Task { try await screen.navigation.push("EditSettings") }
+}
+Button("Close") {
+  Task { try await screen.navigation.pop() }
+}
+```
+
+Kotlin has the same as `suspend` functions. The commands:
+
+- **Show:** `push`, `showModal`, `showOverlay`, `showInColumn`, each with a screen of the app, typed as below, or with a screen name and its props.
+- **Go back:** `pop`, `popTo`, `popToRoot`, and `dismiss` for the modal or the overlay the screen is in.
+- **Change:** `setOptions`, `selectTab`, `setTabBadge`.
+
+### Typed commands {#typed-commands}
+
+`codegen` also writes the screens of the app as a type of each platform. A command from native code then names a screen and gives its props the way Swift and Kotlin check them, as TypeScript checks a command in JavaScript:
+
+```swift
+Button("Open") {
+  Task {
+    try await screen.navigation.push(.details(title: "Item"))
+  }
+}
+```
+
+```kotlin
+import dev.apexnative.navigation.generated.Screens
+import dev.apexnative.navigation.generated.push
+
+scope.launch {
+  screen.navigation.push(Screens.Details(title = "Item"))
+}
+```
+
+A wrong name or a missing prop is an error of the compiler, not of the app at run time.
+
+- **Swift:** `enum Screens`, a case for each screen with its props as values: `.details(title: "Item")`, or `.home` for a screen without props. The types of a screen's props, an enum or an object, are under its name: `Screens.Details.Tab`.
+- **Kotlin:** `sealed class Screens`, a `data class` for each screen with props and an `object` for each without: `Screens.Details(title = "Item")`, `Screens.Home`. The types of its props are inside it: `Screens.Details.Tab`.
+- **Which screens:** every screen of `screens` and of the groups, React and native, in an app that has native screens. An optional prop that is a function isn't in the value, as native code can't give a function.
+- **Which are left out:** a screen with a required prop that is a function, and one with a prop whose type has no native form (see [Types](#types)). `codegen` names each in a warning. Native code still opens it by its name, `push("Settings", props: [:])`, with its props as a plain dictionary or map.
+- **After a change** of the screens or their props, run `codegen` again; `doctor` says when the generated code is behind.
+
+## UIKit and Android views {#imperative}
+
+A screen of UIKit or Android views gets the same `screen`, and follows its props as they change:
+
+```swift title="SettingsViewController.swift"
+updates = screen.$props.sink { [weak self] props in
+  self?.toggle.isOn = props.notifications
+}
+```
+
+```kotlin title="SettingsScreen.kt"
+init {
+  show(screen.props)
+  screen.onChange(::show)
+}
+```
+
+Make one with `--ios uikit` or `--android views`; `--ios` or `--android` alone makes it for one platform.
+
+## In layouts {#layouts}
+
+A native screen goes wherever a screen goes: in a stack, as a tab, as the content of a modal, in a column of a split view, in a [pair](../containers/arrangement) beside another screen:
+
+```ts
+const main = Tabs(
+  Tab('Map').label('Map'), // a native screen
+  Tab('Inbox').label('Inbox'), // a React screen
+);
+```
+
+It can also be <Mark>the first screen of the app</Mark>, such as a native sign-in. Its `useProps` runs in a hidden React root that starts with the app, while `willMount` runs, so the first screen doesn't wait for anything else.
+
+## API {#api}
+
+<SectionApi id="native-screens" />

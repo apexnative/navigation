@@ -1,0 +1,167 @@
+import { Os } from '@site/src/components/Intro';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+`useSearchBar` gets what the user does in the search field of the screen's top bar: the text as it is typed, the
+Search key, the cancel, a picked suggestion. The field itself is the platform's, turned on in the screen's options;
+the hook only listens. It is called in a component of the screen.
+
+## Usage {#usage}
+
+```tsx title="src/screens/Inbox.tsx"
+import { useState } from 'react';
+import { FlatList, Text } from 'react-native';
+import { defineScreen, useSearchBar } from '@apexnative/navigation';
+import { useMessages } from '../data'; // your own data hook
+
+export const InboxScreen = defineScreen({
+  component: Inbox,
+  options: (s) =>
+    s
+      .title('Inbox')
+      .searchBar({ visible: true, placeholder: 'Search mail' }),
+});
+
+function Inbox() {
+  const messages = useMessages();
+  const [query, setQuery] = useState('');
+
+  useSearchBar({
+    onChange: ({ text }) => setQuery(text),
+    onCancel: () => setQuery(''),
+  });
+
+  const shown = messages.filter((message) =>
+    message.subject.toLowerCase().includes(query.toLowerCase()),
+  );
+
+  return (
+    <FlatList
+      data={shown}
+      contentInsetAdjustmentBehavior="automatic"
+      renderItem={({ item }) => <Text>{item.subject}</Text>}
+    />
+  );
+}
+```
+
+As the user types, the list keeps the messages that match; Cancel brings them all back. The handlers are those of the
+last render, so they need no `useCallback`.
+
+<DeviceVideo name="search-field" />
+
+## Signature {#signature}
+
+<ApiSignature data={data} name="useSearchBar" />
+
+It takes one object of handlers, each optional, and returns nothing. A handler left out is not called.
+
+## The handlers {#handlers}
+
+### `onChange` {#onChange}
+
+Called on every change of the text, and when the user picks a [scope](/docs/screen-ui/search#scopes) or deletes a
+[token](/docs/screen-ui/search#tokens). It gets a `SearchChangedEvent`:
+
+- `text`: the text of the field.
+- `isFocused`: whether the field has the keyboard.
+- `scope`: the `id` of the selected scope; not set without scopes.
+- `tokens`: the ids of the tokens left in the field <Os name="iOS" />; not set without tokens.
+- `screen`: the screen, as `{ id, name }`.
+
+```tsx
+useSearchBar({
+  onChange: ({ text, scope }) => setFilter({ text, scope }), // your own
+});
+```
+
+Setting the text from the app with the `text` option sends no `onChange`: the app knows the text it set.
+
+### `onSubmit` {#onSubmit}
+
+Called when the user presses the Search key of the keyboard; the keyboard hides. It gets a `SearchSubmittedEvent`:
+`text`, `scope`, `tokens` and `screen`, as `onChange`. The place for a search that runs on the server once the user is
+done typing:
+
+```tsx
+useSearchBar({
+  onSubmit: ({ text }) => runSearch(text), // your own request
+});
+```
+
+### `onCancel` {#onCancel}
+
+Called when the search closes, whatever closed it. It gets `{ screen }`. Reset the filter here, so the full list shows
+again.
+
+### `onSuggestion` {#onSuggestion}
+
+<Os name="iOS" /> 16+ and <Os name="Android" />: called when the user picks one of the `suggestions` of the search bar,
+with the suggestion's `id`. The text of the field stays as it was; the handler decides what the pick does, such as
+filling the field through `useScreenOptions` or opening a screen.
+
+```tsx
+useSearchBar({
+  onSuggestion: (id) => openSuggestion(id), // your own step
+});
+```
+
+## Searching from the server {#server}
+
+`onChange` comes on every key. A request per key floods the server and lets an older answer overwrite a newer one.
+Wait until the user pauses, and drop the answers of old queries:
+
+```tsx
+import { useEffect, useState } from 'react';
+
+// in the screen's component
+const [query, setQuery] = useState('');
+const [results, setResults] = useState<Mail[]>([]); // your own type
+useSearchBar({ onChange: ({ text }) => setQuery(text) });
+
+useEffect(() => {
+  let current = true;
+  const timer = setTimeout(async () => {
+    const found = await searchMail(query); // your own request
+    if (current) setResults(found);
+  }, 300);
+  return () => {
+    current = false;
+    clearTimeout(timer);
+  };
+}, [query]);
+```
+
+A data library does the same with the query as its key, such as React Query's `useQuery({ queryKey: ['search',
+query], … })`. A whole search screen, with recent searches and the server, is walked through in
+[A search screen](/docs/flows/a-search-screen#server).
+
+## Pitfalls {#pitfalls}
+
+- **The hook doesn't show the field.** Without `searchBar({ visible: true })` in the options, no field shows and no
+  handler runs.
+- **Closing the search is its own event.** Reset the screen's query in `onCancel`, as in the usage above, rather
+  than waiting for an `onChange` with empty text.
+- **A results screen hears its own events.** With `resultsComponent`, the component shown over the screen while it
+  searches calls `useSearchBar` itself; see [A results screen](/docs/screen-ui/search#results).
+- **Outside a screen** the hook throws "This hook is for the screens of createNavigation".
+
+## Compared with React Navigation {#react-navigation}
+
+React Navigation's native stack has the search field in the options, with its handlers there too:
+
+```tsx
+// React Navigation
+navigation.setOptions({
+  headerSearchBarOptions: {
+    onChangeText: (event) => setQuery(event.nativeEvent.text),
+  },
+});
+```
+
+Here the field is declared in the options without handlers, and the component listens with this hook: the handlers
+see the component's state without setting the options again.
+
+## See also {#see-also}
+
+- [Search](/docs/screen-ui/search): where the field sits, scopes, tokens, suggestions.
+- [A search screen](/docs/flows/a-search-screen).

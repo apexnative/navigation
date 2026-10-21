@@ -1,0 +1,4 @@
+<resources>
+    <!-- The space behind the porthole of the app icon. -->
+    <color name="ic_launcher_background">#101828</color>
+</resources>

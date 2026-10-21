@@ -1,0 +1,199 @@
+import { Os, Pair } from '@site/src/components/Intro';
+
+`useFocusEffect` runs work only while the screen has the focus: it has appeared, and nothing covers it. The work
+starts each time the screen gets the focus and stops each time it loses it, to a screen pushed over it, another tab,
+or a modal or a sheet over it. A timer, a subscription, a camera, a video: a covered screen keeps none of them running.
+It is called in a component of a screen.
+
+## Usage {#usage}
+
+```tsx title="src/screens/Inbox.tsx"
+import { useState } from 'react';
+import { FlatList, Text } from 'react-native';
+import { useFocusEffect } from '@apexnative/navigation';
+import { fetchMessages, type Message } from '../api'; // your own
+
+export function Inbox() {
+  const [messages, setMessages] = useState<Message[]>([]);
+
+  useFocusEffect(() => {
+    const load = () => fetchMessages().then(setMessages);
+    load();
+    const timer = setInterval(load, 30_000);
+    return () => clearInterval(timer);
+  });
+
+  return (
+    <FlatList
+      data={messages}
+      renderItem={({ item }) => <Text>{item.subject}</Text>}
+    />
+  );
+}
+```
+
+Inbox loads its messages once it is in place, then every 30 seconds. When the user pushes a message over it, or opens
+a sheet over it, the timer stops; back on Inbox, it loads at once and the timer starts again.
+
+The effect needs no `useCallback` and no dependencies: each time the screen gets the focus, the effect of the last
+render runs, so it reads the current props and state.
+
+## Signature {#signature}
+
+<ApiSignature data={data} name="useFocusEffect" />
+
+**`effect`** runs each time the screen gets the focus. It may return a cleanup function, which runs when the screen
+loses the focus and when the component unmounts. Each cleanup runs once, and the effect never runs twice without a
+cleanup between.
+
+It returns nothing.
+
+## When the effect runs {#timing}
+
+The screen has the focus while two things hold: it has appeared (its `screenDidAppear`, and no `screenDidDisappear`
+since), and it is in the layer the user is in: the top modal, or the root when no modal shows. A screen pushed over it
+or another tab makes it disappear; a modal or a sheet over it moves the user to another layer, though a sheet leaves
+the screen on screen.
+
+| What happens | The effect |
+| --- | --- |
+| The screen shows for the first time | Runs once the screen is in place: after the push, the modal or the launch has ended. |
+| A screen is pushed over it | Cleans up once the new screen covers it. |
+| The user comes back to it | Runs again once it is in place. |
+| A modal over it, a sheet too: iOS page and form sheets, Android sheets | Cleans up once the modal is in place; runs again once it is dismissed. |
+| An overlay over it | Nothing: overlays don't cover screens. |
+| Another tab is selected | Cleans up; runs again when the user goes back to this tab. |
+| A split view: the screens side by side | Runs in each screen that shows: they are all in the layer the user is in. |
+| A side menu opens over the center | Nothing: the center keeps the focus. |
+| The app goes to the background | <Os name="iOS" /> Nothing. <Os name="Android" /> Cleans up when the activity pauses, runs again when it resumes. |
+| The screen is popped or dismissed | Cleans up, then the component unmounts. |
+| A component mounts while its screen has the focus | Runs at once, without waiting for an appear. |
+| A component mounts under a sheet | Runs once the sheet goes. |
+
+A screen in an overlay has the focus while it shows: an overlay is over every layer.
+
+A relaunch, when Android makes the activity again while the JavaScript runs, makes the screens again too: the
+components mount anew and the effect runs with the first appear of the new screen. A reload of the JavaScript starts
+the whole app over.
+
+### After the move, not at its start {#after-the-move}
+
+The effect runs when the move has ended, not when it starts. The transition plays without the work of the effect in
+it, so a heavy first load doesn't make the push stutter. Work that has to be ready while the screen slides in starts
+on mount instead, with `useEffect`, or on `screenWillAppear` with
+[`useScreenEvent`](/api/lifecycle-and-events/useScreenEvent).
+
+### Under a sheet {#sheets}
+
+A sheet leaves the screen under it on screen, and the platform doesn't make it disappear: `useScreenDisappear` isn't
+called. The focus goes all the same, because the user is in the sheet: the effect cleans up once the sheet is in
+place, and runs again once it is dismissed. A video under a sheet pauses, and an Inbox under a sheet loads again when
+the sheet goes.
+
+Work that should go on under a sheet, such as a map that keeps tracking the user under a sheet of places, starts on
+mount instead, with `useEffect`, and stops on unmount. It then goes on under a pushed screen too.
+
+### Focus and `useIsFocused` {#is-focused}
+
+[`useIsFocused`](/api/lifecycle-and-events/useIsFocused) is `true` for one screen: the one the
+[navigation state](/api/lifecycle-and-events/useNavigationState#screen) shows. Most of the time that is the screen
+with the focus, and the two agree. They differ where several screens show in the layer the user is in: in a split
+view the effect runs in every column, and with a side menu open it keeps running in the center, while `useIsFocused`
+is `true` only for the screen the state shows.
+
+### In the background {#background}
+
+<Os name="iOS" /> going to the background doesn't make a screen disappear, so the effect keeps its work; the system
+suspends the app soon after. <Os name="Android" /> the screen disappears when the activity pauses, and appears again
+when it resumes. Work that must stop in the background on both platforms listens to `AppState` of React Native.
+
+## Pitfalls {#pitfalls}
+
+### A value that changes while the screen shows {#changing-values}
+
+The effect starts when the screen gets the focus, with the values of that moment. It doesn't start again when a prop
+or a state changes later, while the screen keeps the focus:
+
+```tsx
+// Don't: when `folder` changes, the old subscription stays
+useFocusEffect(() => {
+  const stop = subscribe(folder); // your own subscription
+  return stop;
+});
+```
+
+Work that depends on a value is a `useEffect` with that value, limited to the time the screen is focused, with
+[`useIsFocused`](/api/lifecycle-and-events/useIsFocused):
+
+```tsx
+const focused = useIsFocused();
+
+useEffect(() => {
+  if (!focused) return;
+  return subscribe(folder);
+}, [focused, folder]);
+```
+
+### Data that should only refresh, not run while shown {#refresh-only}
+
+A refresh each time the user comes back needs no cleanup and no running work: that is
+[`useScreenAppear`](/api/lifecycle-and-events/useScreenAppear).
+
+### Effects twice in development {#strict-mode}
+
+The library doesn't wrap screens in `<StrictMode>`. When the app does, in `screenProvider` or `appProvider`, React
+mounts each component twice in development: the hook cleans up the first run and starts again, so the work is still
+running once. Keep the cleanup complete, so a second start never doubles the work.
+
+### Outside a screen {#outside-a-screen}
+
+The hook belongs to a screen: called in a component that isn't inside one of the app's `screens`, it throws "This
+hook is for the screens of createNavigation". A component outside the screens, such as one rendered by
+`appProvider` around them, listens with [`useNavigationEvent`](/api/lifecycle-and-events/useNavigationEvent).
+
+## Compared with React Navigation {#react-navigation}
+
+The idea is React Navigation's `useFocusEffect`, and it follows the focus the same way: a modal of any kind takes it
+away. Two things differ.
+
+<Pair left="React Navigation" right="This library">
+
+```tsx
+useFocusEffect(
+  useCallback(() => {
+    const stop = subscribe(folder);
+    return stop;
+  }, [folder])
+);
+```
+
+```tsx
+useFocusEffect(() => {
+  const stop = subscribe(folder);
+  return stop;
+});
+```
+
+</Pair>
+
+- **No `useCallback`.** React Navigation runs the effect again when the callback changes, so it has to be memoized.
+  Here the effect runs when the screen gets the focus only, and the latest one is taken; the price is that a changed
+  `folder` doesn't restart it ([above](#changing-values)).
+- **When it runs.** React Navigation runs it when the screen gets focus, at the start of the transition. Here it runs
+  when the screen is in place, at the end.
+
+## The hooks of a screen compared {#compared}
+
+| Hook | Use it for |
+| --- | --- |
+| `useFocusEffect` | Work that runs while the screen has the focus, with a cleanup. |
+| [`useScreenAppear`](/api/lifecycle-and-events/useScreenAppear) | A one-off step each time the screen appears: a refresh, an analytics call. Not after a sheet. |
+| [`useScreenDisappear`](/api/lifecycle-and-events/useScreenDisappear) | A one-off step each time it disappears: save a draft. |
+| [`useIsFocused`](/api/lifecycle-and-events/useIsFocused) | Rendering differently while the user isn't on the screen. |
+
+## See also {#see-also}
+
+- [The hooks of a screen](/docs/fundamentals/lifecycle-and-events#hooks) and
+  [the order of the events in one move](/docs/fundamentals/lifecycle-and-events#order).
+- [The life of a screen](/docs/fundamentals/screens-and-props#lifecycle): mounted and on screen are two different
+  lines.

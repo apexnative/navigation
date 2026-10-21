@@ -1,0 +1,236 @@
+import { Os } from '@site/src/components/Intro';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+`SideMenu` builds a drawer beside the content of the app: the sections, the account, the settings, out of the way
+until the user pulls them in. It takes the content, its center, and a menu on the left, the right, or both. Its methods
+set how each menu opens and looks.
+
+- <Os name="iOS" />: the library's own drawer. By default the menu comes over the center, which dims; it can also
+  lie under the center, which moves aside.
+- <Os name="Android" />: the platform's `DrawerLayout`, the Material navigation drawer, over the center, the whole
+  height of the window.
+
+<DeviceVideo name="side-menu" />
+
+## Usage {#usage}
+
+```ts title="src/Navigation.ts"
+import { createNavigation, SideMenu } from '@apexnative/navigation';
+import { MenuScreen } from './screens/Menu';
+import { HomeScreen } from './screens/Home';
+import { SettingsScreen } from './screens/Settings';
+
+export const Navigation = createNavigation({
+  screens: {
+    Menu: MenuScreen,
+    Home: HomeScreen,
+    Settings: SettingsScreen,
+  },
+  root: SideMenu({ left: 'Menu', center: 'Home' }).left({
+    width: 300,
+  }),
+});
+```
+
+Home shows, with a top bar. A swipe from the left edge brings Menu in, 300 points wide; a tap on the center or the
+system back on Android closes it. A button in Home's top bar opens it with `navigation.openMenu('left')`, and a pick
+in Menu changes the center with `navigation.replace('Settings')`: see [A pick in the menu](/docs/containers/side-menu#pick).
+
+## Signature {#signature}
+
+<ApiSignature data={data} name="SideMenu" />
+
+`SideMenu` takes one object with its parts, and returns a `SideMenuElement`. Each method returns a new one. The screens
+of the parts are checked by the types where the layout is used (`root`, `roots`, `switchTo`).
+
+## The parts {#parts}
+
+Each part is a screen of `screens` by its name, `Screen(…)` with props, or a layout. A name gets a stack in the center
+and stays a screen in a menu, because the center is where the user moves on, and a menu is a list of where to go.
+
+### `center` {#part-center}
+
+<ApiMember data={data} of="SideMenuParts" name="center" />
+
+The content: what the user works in. Required. A screen named alone gets a stack, so it has a top bar and pushes, as
+in the root. It can be any layout: `center: Tabs(…)` gives an app with tabs and a drawer.
+
+```ts
+SideMenu({
+  left: 'Menu',
+  center: Tabs(Tab('Home'), Tab('Inbox')),
+});
+```
+
+### `left` {#part-left}
+
+<ApiMember data={data} of="SideMenuParts" name="left" />
+
+The menu at the left edge. A screen named alone stays a screen, without a top bar. A menu that opens sub-pages
+of its own takes a stack: `left: Stack('Menu')`.
+
+The commands of a menu screen act on the center: a `push` from the menu pushes in the center's stack, and the menu
+closes once the center has changed.
+
+### `right` {#part-right}
+
+<ApiMember data={data} of="SideMenuParts" name="right" />
+
+The menu at the right edge, such as filters for a list. The same as `left`. Opening one menu closes the other.
+
+```ts
+SideMenu({ left: 'Menu', center: 'Home', right: 'Filters' });
+```
+
+## Where a side menu goes {#where}
+
+A side menu is a root most of the time: `root`, a name of `roots`, `navigation.switchTo(…)`. It can also be the content
+of a tab, `Tab(SideMenu(…))`, or a modal over the root, `Root(…).modal(SideMenu(…))`. A stack can't hold it: a stack
+holds screens only.
+
+## The menus {#menus-group}
+
+### `left()` {#left}
+
+<ApiMember data={data} of="SideMenuElement" name="left" />
+
+The settings of the left menu:
+
+| Key | What | Platform |
+| --- | --- | --- |
+| `width` | The width of the menu, in points (dp on Android). 280 on iOS without it. | Both |
+| `enabled` | `false`: a swipe doesn't open it; `openMenu` still does. | Both |
+| `openMode` | `'aboveContent'` (the default): over the center, which dims. `'pushContent'`: under the center, which moves aside. | iOS |
+| `shouldStretchDrawer` | A pan past the width stretches the menu a little. On by default. | iOS |
+| `animationVelocity` | The speed of opening and closing, in points per second; 840 by default. | iOS |
+| `glass` | iOS 26: the menu on Liquid Glass, where its screen has no background of its own. | iOS |
+| `height` | The height of the menu. | Android |
+
+```ts
+SideMenu({ left: 'Menu', center: 'Home' }).left({
+  width: 300,
+  openMode: 'pushContent',
+});
+```
+
+On iOS Home moves aside and Menu shows under it; on Android the drawer slides over Home, which ignores `openMode`.
+
+A key a screen sets in its own options goes over this one while the screen is on top of the center, such as
+`enabled: false` on a map, where the swipe should pan: see
+[Where the swipe is off](/docs/containers/side-menu#swipe).
+
+`visible` opens and closes the menu too, but the commands `openMenu` and `closeMenu` are the way to do it: they
+resolve once the menu has moved.
+
+### `right()` {#right}
+
+<ApiMember data={data} of="SideMenuElement" name="right" />
+
+The settings of the right menu, the same keys as `left()`.
+
+```ts
+SideMenu({ center: 'Home', right: 'Filters' }).right({ width: 320 });
+```
+
+## iOS {#ios-group}
+
+These do nothing on Android, where the drawer opens with a swipe from its edge and slides over the center.
+
+### `gesture()` {#gesture}
+
+<ApiMember data={data} of="SideMenuElement" name="gesture" />
+
+<Os name="iOS" />. Where a swipe that opens a menu can start:
+
+- `'bezel'`: at the edge of the screen, the default;
+- `'entireScreen'`: anywhere on the center.
+
+```ts
+SideMenu({ left: 'Menu', center: 'Home' }).gesture('entireScreen');
+```
+
+The swipe back of the center's stack goes first: on a pushed screen the leading edge goes back, not to the menu, and
+on iOS 26 so does a pan toward the back from anywhere. With `'entireScreen'`, horizontal lists and carousels in the
+center compete with the menu: turn the menu's swipe off on those screens (`enabled: false`).
+
+### `animation()` {#animation}
+
+<ApiMember data={data} of="SideMenuElement" name="animation" />
+
+<DeviceVideo name="sidemenu-kinds" devices={['ios']} />
+
+<Os name="iOS" />. How a menu under the center (`openMode: 'pushContent'`) appears as the center moves aside:
+
+- `'parallax'`: the menu comes from half its width away, at half the center's speed;
+- `'slide'`: the menu slides in alongside the center;
+- `'slide-and-scale'`: it fades in and grows from 90% of its size;
+- `'door'`: it turns in like a door, hinged at the center's edge.
+
+```ts
+SideMenu({ left: 'Menu', center: 'Home' })
+  .left({ openMode: 'pushContent' })
+  .animation('parallax');
+```
+
+Without it the menu stays in place while the center moves off it. With `'aboveContent'` it changes nothing.
+
+## Other settings {#other-group}
+
+### `options()` {#options}
+
+<ApiMember data={data} of="SideMenuElement" name="options" />
+
+The `sideMenu` options as an object, the same keys as the methods above: `left`, `right`, `openGestureMode`,
+`animationType`. For options built elsewhere, such as from a config:
+
+```ts
+SideMenu({ left: 'Menu', center: 'Home' }).options({
+  left: { width: 300 },
+  openGestureMode: 'bezel',
+});
+```
+
+The options of the screens go on the screens. Every key is in [the options](/api/side-menu/options).
+
+### `ios()` {#ios}
+
+<ApiMember data={data} of="SideMenuElement" name="ios" />
+
+Methods for iOS only; on Android the function isn't called. It keeps the iOS look apart:
+
+```ts
+const main = SideMenu({ left: 'Menu', center: 'Home' })
+  .left({ width: 300 })
+  .ios((menu) =>
+    menu.left({ openMode: 'pushContent' }).animation('parallax'),
+  );
+```
+
+On iOS the center moves aside over a parallax menu; on Android the drawer slides over the center. The settings of a
+side merge, so `width: 300` stays on iOS.
+
+### `android()` {#android}
+
+<ApiMember data={data} of="SideMenuElement" name="android" />
+
+Methods for Android only; on iOS the function isn't called.
+
+```ts
+SideMenu({ left: 'Menu', center: 'Home' }).android((menu) =>
+  menu.left({ width: 280 }),
+);
+```
+
+## Over time {#over-time}
+
+- **The menu stays mounted** while it is closed: it renders once, with the side menu, and keeps its state between
+  openings. A menu that shows fresh data refreshes when it appears (`useScreenAppear`).
+- **The center keeps its stack** while the menu is open. A pick that should start a section over uses `replace` or
+  `setStack` from the menu.
+- **The settings of the layout are where the menu starts.** A screen changes them while it shows, with `sideMenu(…)`
+  in its options.
+
+## See also {#see-also}
+
+- [Side menu](/docs/containers/side-menu): opening and closing, a pick in the menu, the look on each platform.
+- [The options](/api/side-menu/options), [`Stack`](/api/stack/Stack), [`Tabs`](/api/tabs/Tabs).

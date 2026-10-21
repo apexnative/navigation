@@ -1,0 +1,82 @@
+---
+slug: introducing-navigation
+title: 'Introducing @apexnative/navigation'
+description: 'Why we are building native navigation for React Native where the platform owns the navigation and React describes it, and what it looks like in an app.'
+authors: [team]
+tags: [announcement]
+---
+
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+`@apexnative/navigation` gives a React Native app the navigation of the platform itself: the stacks, tabs, sheets,
+split views and gestures of iOS, iPadOS and Android. You describe the screens and how they are arranged in
+TypeScript; the native side shows them and reports back. This post is about why we built it this way, and where it
+goes next.
+
+<!-- truncate -->
+
+<DeviceVideo name="intro-hero" />
+
+## The platform already knows how to navigate
+
+`UINavigationController`, `UITabBarController`, sheets with detents, `UISplitViewController`, the Android back stack
+and the Material components hold years of decisions about gestures, accessibility, screen sizes, memory and
+multitasking. A router that keeps its own model of the navigation has to mirror all of it in JavaScript and keep up
+with every OS release.
+
+We went the other way. The platform owns the navigation state; React describes it. When iOS 26 brought the Liquid
+Glass tab bar and the minimized tab bar, an app with this library got them by setting an option, not by waiting for a
+JavaScript reimplementation.
+
+## Describe, don't command
+
+Native navigation libraries for React Native have existed for years, and they work: commands with screen ids and JSON
+layouts. Their weak spot is that every mistake shows up at run time, a wrong screen name, a missing prop, the id of a
+screen that is gone.
+
+So the API is typed end to end:
+
+```ts title="src/Navigation.ts"
+import { createNavigation, Tab, Tabs } from '@apexnative/navigation';
+
+export const Navigation = createNavigation({
+  screens: { Home: HomeScreen, Inbox: InboxScreen, Chat: ChatScreen },
+  root: Tabs(Tab('Home'), Tab('Inbox')),
+});
+```
+
+```tsx
+const navigation = useNavigation();
+navigation.push('Chat', { props: { chatId: '42' } });
+// 'Chats', or a missing chatId: a TypeScript error
+```
+
+The screen names, the props of each screen and the roots the app switches between are checked by TypeScript.
+
+## Logic outside the render tree
+
+In a React app everything tends to end up in one tree: the socket, the session, the services, each in a provider,
+each with re-render care. Here the app's life cycle is explicit. `willMount` runs while the splash screen shows and
+decides the first screen, `didMount` runs once it is shown, `navigation` works from anywhere (a notification
+handler, a link route, a store), and the app's context carries data and services every screen reads.
+
+By default each screen is a React root of its own, which keeps screens independent. When you want one tree, for a
+store or a query client, `appProvider` renders every screen inside it. Both are covered in
+[State management](/docs/guides/state-management) and [The app context](/docs/guides/app-context).
+
+## Native screens are first-class
+
+A SwiftUI, UIKit or Jetpack Compose screen sits next to React screens: pushed, presented and typed the same way, set
+up by the CLI. Teams adding React Native to a native app, or keeping a few screens native for performance, don't need
+a second navigation.
+
+## Where it is
+
+The library is in early development. It is not on npm yet, and the API can still change before 1.0. The docs are
+written ahead of the release, so you can read how everything works today:
+
+- [Quick start](/docs/start/quick-start): an app with a stack in a few minutes.
+- [Guides](/docs/guides/overview): state, data fetching, gestures, deep links, notifications, testing.
+- [From React Navigation](/docs/migration/from-react-navigation): the same app, piece by piece.
+
+Feedback is welcome on [GitHub](https://github.com/apexnative/navigation/issues).

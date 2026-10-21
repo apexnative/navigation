@@ -1,0 +1,437 @@
+---
+title: Glossary
+description: 'The words these docs use for the parts of the navigation, each in a sentence or two, with the page that explains it.'
+toc_max_heading_level: 2
+---
+
+import { Os } from '@site/src/components/Intro';
+
+The words these docs use for the parts of the navigation, from A to Z. Each entry says what the word means here, names the platform's own class where that helps, and links to the page that explains it. Where the pages use a second word for the same thing, the entry lists it as "also called".
+
+[A](#a) · [B](#b) · [C](#c) · [D](#d) · [E](#e) · [F](#f) · [G](#g) · [H](#h) · [I](#i) · [K](#k) · [L](#l) · [M](#m) · [N](#n) · [O](#o) · [P](#p) · [R](#r) · [S](#s) · [T](#t) · [V](#v) · [W](#w) · [Z](#z)
+
+## A {#a}
+
+### Accessory {#accessory}
+
+<Os name="iOS" /> 26: a screen of `screens` shown above the tab bar, such as the mini player of a music app. `Tabs().accessory('Player')` sets it, and it moves next to the tab bar when the bar shrinks. More: [The tab bar on each platform](../containers/tabs#platforms).
+
+### App defaults {#app-defaults}
+
+The `options` of `createNavigation`: what every screen has unless its own options say otherwise, such as no large titles anywhere. Also called the default options. More: [Where a screen gets them](../fundamentals/screen-options#layers).
+
+### appProvider {#app-provider}
+
+A component that `createNavigation` puts around the whole app once. With it, every screen renders in [one tree](#one-tree) inside it, so a store or a query client is shared. More: [One tree](../architecture/one-tree#one-tree).
+
+### AppRegistry {#app-registry}
+
+The package's own `AppRegistry`, which `index.js` uses in place of React Native's. It takes the navigation made by `createNavigation` instead of a root component, and starts it when the native side launches the app. More: [Starting the app](../fundamentals/starting-the-app).
+
+### Appear, disappear {#appear}
+
+A screen appears each time the user comes to see it, and disappears when another screen covers it or it leaves. This is the user's line of a screen's life, apart from React's [mount](#mounted): a covered screen stays mounted. More: [What a screen goes through](../fundamentals/lifecycle-and-events#screen).
+
+## B {#b}
+
+### Back button {#back-button}
+
+The button of the [top bar](#top-bar) that goes back one screen. It shows by itself on every screen but the first of a stack, and a screen sets its own look in its options. On <Os name="Android" /> it is an arrow without a title, the back arrow. More: [The back button](../screen-ui/back-and-gestures#back-button).
+
+### Badge {#badge}
+
+A number or a short text on the icon of a tab; a dot is a badge without text. `setTabBadge` changes it by the id of the tab. More: [Badges and dots](../containers/tabs#badges).
+
+### Bar button {#bar-button}
+
+A button of the top bar or of the toolbar: a text, an icon, a system item or a component, drawn by the platform. Its press is handled in `onPress` of the options or with `useNavigationButton`. More: [Bar buttons](../screen-ui/bar-buttons).
+
+### Builder {#builder}
+
+A function that makes a [layout](#layout): `Stack`, `Tabs` and `Tab`, `SideMenu`, `SplitView`, `Screen`, `Root`. Each one is a real container of the platform. More: [What a root can be](../start/quick-start#roots).
+
+## C {#c}
+
+### Center {#center}
+
+The content of a [side menu](#side-menu), what the user works in. It is a stack, so it pushes as the root does, and the commands of the menu act on it. More: [What a side menu is](../containers/side-menu#what).
+
+### Chain {#chain}
+
+The way options are written: `(s) => s.title('Profile').largeTitle()`. Each step adds options over the steps before it, so the last one wins; `options()` takes any option the chain doesn't name. More: [The chain and plain objects](../fundamentals/screen-options#chain).
+
+### Codegen {#codegen}
+
+`npx apex-navigation codegen`: makes Swift and Kotlin types from the props of [native screens](#native-screen), and registers the screens under their names. It runs again after each change of the props. More: [The generated code](../architecture/native-screens#step-codegen).
+
+### Column {#column}
+
+One part of a [split view](#split-view), side by side with the others, each with a stack of its own: `primary` (the [sidebar](#sidebar)), `supplementary`, `secondary` and `inspector`. `showInColumn` shows a screen in one. More: [Building a split view](../containers/split-view#build).
+
+### Command {#command}
+
+A call that asks the native side to change what shows: `push`, `showModal`, `switchTo`, `selectTab`. It returns a promise that resolves once the [move](#move) is done, and rejects with the reason when it can't be made. More: [When a move is done](../fundamentals/moving-between-screens#done).
+
+### Compact layout {#compact}
+
+What a split view shows where there is room for one column: on iPhone, in a narrow iPad window, on a narrow Android screen. `compact` of `SplitView` sets it. More: [A phone and a narrow window](../containers/split-view#compact).
+
+### Context {#context}
+
+The app's own small object that every screen, every option and the start of the app can read: the signed-in user, the language, flags, services. `context` of `createNavigation` is its first value, `navigation.setContext` is the only way to change it, and `useAppContext` reads it. Also called the app context. More: [The context](../architecture/theme-and-context#context).
+
+## D {#d}
+
+### Detent {#detent}
+
+A height a [sheet](#sheet) stops at: `'medium'` (about half), `'large'` (full), a number, or `'content'`, the height of the screen's content. The user drags the sheet between its detents. More: [Sheets](../containers/modals#sheets).
+
+### didMount {#did-mount}
+
+A function of `createNavigation` that runs once the first root is on screen: the place for what can wait, such as a permission request. It runs once per JavaScript runtime, not once per launch. More: [After the first screen](../fundamentals/starting-the-app#after).
+
+### Direction {#direction}
+
+Left to right or right to left, for the whole app: `direction` of `createNavigation`, changed with `navigation.setDirection`. The bars, the transitions and the swipe back follow it. More: [The direction of the app](../screen-ui/system-ui#direction).
+
+### doctor {#doctor}
+
+`npx apex-navigation doctor`: checks what the navigation needs in the app and on the machine, and gives a fix for each problem. More: [Check everything with doctor](../start/installation#doctor).
+
+## E {#e}
+
+### Edge effect {#edge-effect}
+
+<Os name="iOS" /> 26: the fade of content that scrolls under a bar. `scrollEdgeEffect` sets how it looks at each edge. More: [The edge of the scroll](../screen-ui/system-ui#scroll-edge).
+
+### Engine {#engine}
+
+The thin layer in JavaScript between your app and the native side. It turns layouts and options into JSON, sends the commands, and passes the events back. More: [How it works](../start/introduction#how).
+
+### errorFallback {#error-fallback}
+
+A component of the app shown in place of a screen that failed to render, with `retry`. When the start of the app fails, it is the first screen. More: [A screen that fails](../architecture/errors-and-loading#error).
+
+### Event {#event}
+
+What the native side tells JavaScript: a screen appeared, a button was pressed, a tab was selected, a sheet moved. Screens hear their own with hooks; the whole app with `listeners`, `navigation.on` and `useNavigationEvent`. More: [Every event](../fundamentals/lifecycle-and-events#events).
+
+## F {#f}
+
+### FAB {#fab}
+
+<Os name="Android" /> The floating action button: the main action of a screen, floating over the content at the bottom corner. The `fab` option sets it, with its actions. More: [The floating action button](../screen-ui/toolbar-and-fab#fab).
+
+### Focused {#focused}
+
+A screen has the focus while it has appeared and nothing covers it: `useFocusEffect` runs then. Under a sheet a screen still shows, so it doesn't [disappear](#appear), but it loses the focus: the user is in the sheet. `useIsFocused()` is `true` for one screen, the one the user sees. More: [The hooks of a screen](../fundamentals/lifecycle-and-events#hooks).
+
+### Fold {#fold}
+
+Where a device that folds bends its screen: iPhone Duo, an Android foldable. Partly folded, the screen divides there, and `useReservedRegions` gives the fold as `division`; a [pair](#pair) puts its screens on each side of it. Opened flat, the fold is not a division. More: [The fold and the camera](../screen-ui/system-ui#reserved-regions).
+
+### Form sheet {#form-sheet}
+
+<Os name="iPadOS" /> A modal as a card in the middle of the screen, `style: 'formSheet'`, sized with `contentSize`. On iPhone it is a [sheet](#sheet). More: [A form on iPad](../containers/modals#form).
+
+## G {#g}
+
+### Grabber {#grabber}
+
+The small handle at the top of a [sheet](#sheet) that tells the user the sheet moves: `sheet.grabber`. More: [Sheets](../containers/modals#sheets).
+
+### Group {#group}
+
+Screens listed in `groups` of `createNavigation` that share options, such as the sign-in screens without a top bar. A group gives options and nothing else: its screens are named like any other. More: [Screens that share options](../fundamentals/screens-and-props#groups).
+
+## H {#h}
+
+### Hinge {#hinge}
+
+The joint of a device that folds, with its state (closed, partly open, open) and its angle. `useHinge` and `useHingeChange` read it, for effects; the layout of a screen follows the [fold](#fold) and the [pairs](#pair). More: [The hinge](../screen-ui/system-ui#hinge).
+
+## I {#i}
+
+### Id of a screen {#screen-id}
+
+The id of one showing of a screen, such as `Component12`, made by the navigation. Two Profile screens pushed one over the other have the same name and two ids. `useScreen()` returns it, and `push` resolves with it. More: [Which screen a component is in](../fundamentals/screens-and-props#use-screen).
+
+### init {#init}
+
+`npx @apexnative/navigation init MyApp`: makes a new React Native app with the navigation set up, and a [starter](#starter) in place of the template's `App`. More: [A new app](../start/installation#new-app).
+
+### initialRoot {#initial-root}
+
+A function of `createNavigation` that picks the first of the [named roots](#roots) from the context, once `willMount` has set it. More: [One root, or named roots](../fundamentals/switching-roots#roots).
+
+### Inspector {#inspector}
+
+<Os name="iPadOS" /> 26: a column at the trailing edge of a split view, for facts about the item. Android leaves it out. More: [Building a split view](../containers/split-view#build).
+
+## K {#k}
+
+### Key {#key}
+
+`key` of `defineScreen`: the prop that makes a screen one per item within a stack. Pushing a chat that is in the stack already goes back to it instead of opening a copy. More: [One screen per item](../fundamentals/screens-and-props#key).
+
+### Keyboard shortcut {#keyboard-shortcut}
+
+<Os name="iOS" /> A key combination with a hardware keyboard, such as ⌘N, set with the `keyCommands` option. A press sends `keyCommandPressed`. More: [Keyboard shortcuts](../screen-ui/system-ui#shortcuts).
+
+## L {#l}
+
+### Large title {#large-title}
+
+<Os name="iOS" /> A big title under the row of the top bar that moves into the bar as the content scrolls. On <Os name="Android" /> the same option shows the large top app bar of Material 3. More: [The large title](../screen-ui/top-bar#large-title).
+
+### Large window {#large-window}
+
+A window with room for a [pair](#pair): on iOS both size classes regular (iPad, iPhone Duo open), on Android at least 600 dp wide and 480 dp high (a tablet, a foldable open). Any phone and iPhone Duo folded are not. More: [What each device shows](../containers/arrangement#devices).
+
+### Layout {#layout}
+
+A description of what the platform shows: a screen name, or a tree of [builders](#builder) such as `Tabs(Tab('Home'), Tab('Inbox'))`. A root is a layout, and so is the content of a tab, a modal or a column. More: [What a root is](../fundamentals/switching-roots#what).
+
+### Lazy tabs {#lazy-tabs}
+
+`Tabs().lazy()`: each tab is created the first time it shows, not with the tabs. More: [When tabs are created](../containers/tabs#lazy).
+
+### Liquid Glass {#liquid-glass}
+
+<Os name="iOS" /> 26: the see-through material of the bars, the tab bar and the buttons. A background color in the options takes it away. More: [The background and the border](../screen-ui/top-bar#background).
+
+### listeners {#listeners}
+
+Handlers of the [events](#event) of the whole app, in `createNavigation`. They are attached before the first root shows, so they hear the first screen too. More: [Where to listen](../fundamentals/lifecycle-and-events#where).
+
+### Loading a screen later {#load}
+
+`{ load: () => import('./screens/Settings') }` in `screens`: the code of the screen runs the first time a command shows it, not at the start. More: [Loading a screen later](../fundamentals/screens-and-props#lazy).
+
+### loadingFallback {#loading-fallback}
+
+A component of the app shown in place of a screen that waits for its data with Suspense. The bar is there at once; only the content waits. More: [A screen that loads](../architecture/errors-and-loading#loading).
+
+## M {#m}
+
+### Modal {#modal}
+
+A task of its own over the app, such as a form or a message to write. It shows over the tabs and the bars, has a stack of its own, and closes as a whole: `showModal`, `dismiss`. More: [Modals](../containers/modals#what).
+
+### Mounted {#mounted}
+
+In React's tree. A screen under another one stays mounted, with its state and scroll, though the user doesn't see it; it unmounts when it leaves its stack, its modal closes or a new root comes. More: [The life of a screen](../fundamentals/screens-and-props#lifecycle).
+
+### Move {#move}
+
+What the user sees when a [command](#command) shows a screen: a push, a modal, an overlay, a tab, a column beside a list, a new root. Each has its own way back. More: [The moves](../fundamentals/moving-between-screens#moves).
+
+## N {#n}
+
+### Native screen {#native-screen}
+
+A screen written in SwiftUI, UIKit, Jetpack Compose or Android views, defined with `nativeScreen`. It is pushed, presented and put in tabs like a React screen, and gets its props from the app. More: [Native screens](../architecture/native-screens#what).
+
+### navigation {#navigation}
+
+The object of the package for code outside the screens, such as a store or a notification handler. Its commands act from the screen the user sees; it has no `dismiss` and no `setOptions`, which need a screen of their own. A screen uses `useNavigation()` instead. More: [Anywhere else: navigation](../fundamentals/moving-between-screens#navigation).
+
+### navigation-env.d.ts {#navigation-env}
+
+The file at the root of the app that declares `Register`: it links the commands of the package to the screens of `Navigation.ts`, so names and props are checked, and can give the type of the context. More: [Typed commands](../start/installation#typed-commands).
+
+### Navigation state {#navigation-state}
+
+What the user sees now: the screen of the top modal, or of the root, and the selected tab. Overlays don't count. `getState()`, `useNavigationState` and the event `stateChanged` read it. More: [What the user sees now](../fundamentals/lifecycle-and-events#state).
+
+## O {#o}
+
+### One tree {#one-tree}
+
+The way of rendering where every screen renders in one React tree inside [`appProvider`](#app-provider), while the screens stay native. Without `appProvider`, each screen is a [React root](#react-root) of its own. More: [One tree](../architecture/one-tree#one-tree).
+
+### Options {#options}
+
+What the app tells the platform about a screen: its title, buttons, bars, back gesture, status bar. They are data, not components, and go to the native side with the command, so they apply before the screen appears. More: [What options are](../fundamentals/screen-options#what).
+
+### Overflow menu {#overflow-menu}
+
+The menu at the end of the top bar: "•••" on iOS 16+, "⋮" on Android. It holds the actions used less, and the right buttons the bar has no room for. More: [The overflow menu](../screen-ui/bar-buttons#overflow).
+
+### Overlay {#overlay}
+
+A screen shown over everything without taking the place of any: a toast, a banner, a mini player. `showOverlay` shows one, and touches where it draws nothing reach the app under it. More: [What an overlay is](../containers/overlays#what).
+
+## P {#p}
+
+### Pair {#pair}
+
+Two screens shown as one entry of a stack: the primary, whose bar shows, and the secondary beside it, under it or behind it, in a [large window](#large-window). Back takes both. `arrangement` of `defineScreen` or `defineArrangement` makes one; UIKit calls it an arrangement. More: [Arrangement](../containers/arrangement).
+
+### Popover {#popover}
+
+<Os name="iPadOS" /> A modal that points at the bar button or the view that opened it. On iPhone it becomes a sheet; on Android the modal covers the screen. More: [A popover](../containers/modals#popover).
+
+### Presentation {#presentation}
+
+`presentation` of `createNavigation`: the settings every push, modal and overlay starts from, such as a close button on every modal. A command's own settings go over it. More: [Defaults for the whole app](../fundamentals/moving-between-screens#presentation).
+
+### Presentation style {#presentation-style}
+
+How the platform presents a modal: `style` of `showModal`, such as `'fullScreen'`, `'formSheet'` or `'overFullScreen'`. Without it, a modal is a sheet on iOS and covers the screen on Android. More: [How a modal looks](../containers/modals#styles).
+
+### Preset {#preset}
+
+A named [transition](#transition) of a command: `'platform'`, `'fade'`, `'slideUp'`, `'slideFromEnd'`, `'scale'` or `'none'`. More: [Presets](../architecture/transitions#presets).
+
+### Preview {#preview}
+
+<Os name="iOS" /> A long press on a view shows the screen it opens, small, with a menu; a tap on it pushes the screen. `usePreview` sets it. More: [Preview](../architecture/transitions#preview).
+
+### Props {#props}
+
+The data of one showing of a screen, given by the command that shows it. They stay in JavaScript, so a prop can be a function, and TypeScript checks them against the component. In React Navigation and Expo Router the same data is a screen's params. More: [Props](../fundamentals/screens-and-props#props).
+
+## R {#r}
+
+### React root {#react-root}
+
+A React tree of its own. By default each screen renders in a React root of its own, inside the native screen the platform shows. It isn't a [root](#root) of the navigation. More: [A root per screen](../architecture/one-tree#root-per-screen).
+
+### Reserved region {#reserved-region}
+
+A part of a screen the hardware takes, inside the screen where the [safe area](#safe-area) doesn't reach: the [fold](#fold) of a partly folded device (`division`), a camera or a hinge over the screen (`occlusion`). `useReservedRegions` gives them. More: [The fold and the camera](../screen-ui/system-ui#reserved-regions).
+
+### Root {#root}
+
+What takes the window: the bottom layer of the app, under the modals and the overlays. It is a screen name or a [layout](#layout), given in `root` or as one of `roots`, and `switchTo` replaces it. More: [What a root is](../fundamentals/switching-roots#what).
+
+### Roots {#roots}
+
+`roots` of `createNavigation`: the parts of an app the user switches between, by name, such as `signedOut` and `signedIn`. A root can be a function that takes a param. Also called named roots. More: [One root, or named roots](../fundamentals/switching-roots#roots).
+
+### Route {#route}
+
+An entry of `linking.routes`: a path pattern, such as `'user/:userId'`, and what a link with it does. It is a screen name, a function, or `{ start, open, when }`. More: [Routes](../guides/deep-links#routes).
+
+## S {#s}
+
+### Safe area {#safe-area}
+
+The part of the screen that nothing covers: not the bars, the status bar, the cutout or the home indicator. The navigation keeps every screen in it by default, measured on the native side. More: [The safe area](../screen-ui/system-ui#safe-area).
+
+### Screen {#screen}
+
+Everything the user sees in the app: a list, its details, the settings. It is a screen of the platform with your component inside; the platform slides it in, draws its bars and takes it back. The app registers it under a name in `screens`, and commands show it by that name. More: [What a screen is](../fundamentals/screens-and-props#what).
+
+### screenProvider {#screen-provider}
+
+A component that `createNavigation` puts around each screen on its own. Each screen has its own copy of it, so state inside it belongs to that screen. More: [A provider around every screen](../architecture/one-tree#screen-provider).
+
+### Search field {#search-field}
+
+The platform's search field in the top bar: `UISearchController` on <Os name="iOS" />, the Material 3 search on <Os name="Android" />. The `searchBar` option turns it on, and `useSearchBar` gets its text. Also called the search bar. More: [Search](../screen-ui/search).
+
+### setup {#setup}
+
+`npx apex-navigation setup`: sets an app you have up for the navigation. It changes the native entry points, writes `Navigation.ts`, and installs the pods. More: [The app you have](../start/installation#existing-app).
+
+### Shared elements {#shared-elements}
+
+Views that move from one screen into the next during a push, named by their `nativeID`; the rest of the screen fades. More: [Shared elements](../architecture/transitions#shared).
+
+### Sheet {#sheet}
+
+A modal that comes up from the bottom and can stop at several heights, its [detents](#detent). It is UIKit's sheet on <Os name="iOS" /> and the Material bottom sheet on <Os name="Android" />. Also called a bottom sheet. More: [Sheets](../containers/modals#sheets).
+
+### Side menu {#side-menu}
+
+A menu that slides in beside the content: a [center](#center), and a menu on one side or both. `SideMenu` builds it. Also called a drawer. More: [What a side menu is](../containers/side-menu#what).
+
+### Sidebar {#sidebar}
+
+The first column of a split view on iPad, `primary`, which shows and hides beside the item. The tab bar of iPadOS 18+ can also turn into a sidebar. More: [How the sidebar shows](../containers/split-view#sidebar).
+
+### Splash screen {#splash-screen}
+
+The platform's own screen between the tap on the icon and the first screen: a storyboard on iOS, the system splash screen of the activity's theme on Android. `npx apex-navigation splash` makes it from a logo and colors, and the navigation keeps it until the first root is drawn. Also called the launch screen, iOS's name for it. A splash of your own in React Native can follow it on a cold start: `splash` of `createNavigation`. More: [Splash screen](../guides/splash-screen).
+
+### Split view {#split-view}
+
+Columns side by side on a big screen, each with a stack of its own: `UISplitViewController` on <Os name="iPadOS" />, two panes on <Os name="Android" />. Where there is room for one column, it shows its [compact layout](#compact). More: [What a split view is](../containers/split-view#what).
+
+### Stack {#stack}
+
+Screens one over another: the top one shows, back goes to the one under it, and the ones under it stay mounted. It is `UINavigationController` on <Os name="iOS" /> and the library's own stack of views on <Os name="Android" />, with one top bar for all its screens. More: [What a stack is](../containers/stack#what).
+
+### Starter {#starter}
+
+What `init` puts in place of the template's `App`: Home and Details in a stack, the app of the Quick start. More: [A new app](../start/installation#new-app).
+
+### Status bar {#status-bar}
+
+The system bar at the top of the screen, with the time and the battery. Each screen sets its own with the `statusBar` option, such as light text over a photo. More: [The status bar](../screen-ui/system-ui#status-bar).
+
+### Swipe back {#swipe-back}
+
+<Os name="iOS" /> The swipe from the left edge, and on iOS 26 from the content, that goes back following the finger. `popGesture` narrows it or turns it off. More: [The swipe back](../screen-ui/back-and-gestures#swipe).
+
+### System back {#system-back}
+
+<Os name="Android" /> The back of the system: a button, or a swipe from either edge. It closes a side menu or the search, pops a screen, or closes a modal, where the user is. More: [The system back of Android](../screen-ui/back-and-gestures#system-back).
+
+## T {#t}
+
+### Tab {#tab}
+
+A section of the app in [tabs](#tab-bar), with a stack of its own that it keeps while the user looks at other tabs. `Tab` builds one; a `Tab()` without content is a button that never becomes current. More: [What tabs are](../containers/tabs#what).
+
+### Tab bar {#tab-bar}
+
+The bar of the tabs: the system tab bar on <Os name="iOS" />, a bar at the top or a sidebar on <Os name="iPadOS" />, the Material 3 bottom navigation on <Os name="Android" />. Its options are `bottomTabs`. More: [The tab bar on each platform](../containers/tabs#platforms).
+
+### Theme {#theme}
+
+The colors of the navigation: the bars, the tabs, the backgrounds, with a value for light and dark. `theme` of `createNavigation` sets it, and `navigation.setTheme` replaces it as a whole. More: [The theme](../architecture/theme-and-context#theme).
+
+### Title component {#title-component}
+
+A React component in place of the title of the top bar, such as an avatar and a name. It is registered in `screens` and named in `title.component`. More: [A component in place of the title](../screen-ui/top-bar#title-component).
+
+### Toolbar {#toolbar}
+
+<Os name="iOS" /> A row of bar buttons at the bottom of a stack. It shows while the screen on top has buttons for it. More: [The toolbar](../screen-ui/toolbar-and-fab#toolbar).
+
+### Top bar {#top-bar}
+
+The bar at the top of a stack: it names the screen and holds the way back and the actions. It belongs to the stack, and each screen fills it through its options: `UINavigationBar` on <Os name="iOS" />, the Material 3 top app bar on <Os name="Android" />. More: [What the top bar is](../screen-ui/top-bar#what).
+
+### Transition {#transition}
+
+How a screen comes in and goes. By default it is the platform's own, which follows the finger; a command can ask for a [preset](#preset), shared elements, a zoom or an animation of its own. More: [Transitions](../architecture/transitions).
+
+## V {#v}
+
+### Vertical bar {#vertical-bar}
+
+<Os name="iOS" /> 27.1 The strip at the trailing edge of iPhone Duo's window that holds the status bar, the tab bar and the buttons of the bars, folded and open. The screen goes under it by default, as under a top bar; `layout.drawBehindVerticalBar: false` keeps the content off it, and `layout.verticalBars: false` keeps a screen's bars horizontal. More: [The vertical bar of iPhone Duo](../screen-ui/system-ui#vertical-bar), [Buttons on iPhone Duo](../screen-ui/bar-buttons#iphone-duo).
+
+## W {#w}
+
+### Waiting link {#waiting-link}
+
+A link whose `when` is false, such as a link to an order while the user is signed out. It waits until the context lets it run; `usePendingLink` gives it to a component. Also called the pending link, the API's word. More: [Links that wait](../guides/deep-links#when).
+
+### willMount {#will-mount}
+
+A function of `createNavigation` that runs before the first screen, while the splash screen shows: the place to load what the first screen needs. When it throws, the start of the app fails. More: [Before the first screen](../fundamentals/starting-the-app#before).
+
+### Window {#window}
+
+<Os name="iOS" /> What shows behind the screens, such as around a modal as it comes in. `window.backgroundColor` of `createNavigation` colors it. More: [The window](../screen-ui/system-ui#window).
+
+## Z {#z}
+
+### Zoom {#zoom}
+
+<Os name="iOS" /> 18+: a transition in which the next screen opens out of a view and shrinks back into it. On Android and older iOS the screen comes in with the platform's transition. More: [Zoom](../architecture/transitions#zoom).

@@ -1,0 +1,78 @@
+import { Os } from '@site/src/components/Intro';
+
+`useIsFocused` tells whether the user is on this screen: `true` while it is the screen the user sees, `false` while
+another screen, a tab or a modal of any kind is in front of it. The component renders again when it changes. It is
+called in a component of a screen.
+
+## Usage {#usage}
+
+```tsx title="src/screens/Clip.tsx"
+import { useIsFocused } from '@apexnative/navigation';
+import { Player } from '../Player'; // your own player
+
+export function Clip({ url }: { url: string }) {
+  const focused = useIsFocused();
+  return <Player source={url} paused={!focused} />;
+}
+```
+
+The clip plays while the user is on the screen, and pauses when a screen is pushed over it, when the user picks
+another tab, and when a sheet opens over it.
+
+## Signature {#signature}
+
+<ApiSignature data={data} name="useIsFocused" />
+
+It takes nothing and returns a boolean: whether the screen the component is in is `screen` of the
+[navigation state](/api/lifecycle-and-events/useNavigationState#screen).
+
+## What counts as focused {#what-counts}
+
+The navigation keeps the screen the user sees: the top screen of the top modal, or of the root down to the visible
+screen. `useIsFocused` compares it with this screen.
+
+| What happens | `useIsFocused()` |
+| --- | --- |
+| The user is on this screen | `true` |
+| A screen is pushed over it, another tab is picked | `false` |
+| A modal over it, a sheet too | `false`: the user is in the modal, though the screen shows under a sheet. |
+| An overlay over it | `true`: overlays don't count. |
+| The app in the background | Doesn't change. |
+
+It turns `true` when the screen is in place, once the move that brings it has ended, and `false` once the move that
+covers it has ended. Before the first screen of the app has appeared, it is `false`.
+
+## Pitfalls {#pitfalls}
+
+- **One render on each change.** The component renders again when the value changes, not on every move of the app.
+  Still, a screen high in the tree that reads it renders its whole content twice per visit; read it in the small
+  component that needs it, such as the player.
+- **Under a sheet it is `false`, the events say nothing.** `useScreenDisappear` follows the platform, which leaves a
+  screen under a sheet on screen. Work that should stop while the user is in a sheet goes in
+  [`useFocusEffect`](/api/lifecycle-and-events/useFocusEffect), which cleans up under a sheet too, or in a
+  `useEffect` that reads this hook, when it should also restart with a value:
+
+  ```tsx
+  // focused = useIsFocused(), folder a prop
+  useEffect(() => {
+    if (!focused) return;
+    return subscribe(folder); // your own subscription
+  }, [focused, folder]);
+  ```
+
+- **One screen at a time.** In a split view, or with a side menu open, several screens show, and only the one the
+  state shows reads `true`: the screen beside it reads `false`. `useFocusEffect` runs in each of them, see
+  [Focus and `useIsFocused`](/api/lifecycle-and-events/useFocusEffect#is-focused).
+- **Outside a screen** the hook throws. A component outside the screens reads
+  [`useNavigationState`](/api/lifecycle-and-events/useNavigationState) instead.
+
+## Compared with React Navigation {#react-navigation}
+
+The same idea and the same name as React Navigation's `useIsFocused`, with the same result under a modal. The
+difference is when it changes: React Navigation flips it at the start of the transition, here it flips when the
+transition has ended, as the platform reports what shows.
+
+## See also {#see-also}
+
+- [`useFocusEffect`](/api/lifecycle-and-events/useFocusEffect), [`useNavigationState`](/api/lifecycle-and-events/useNavigationState).
+- [What the user sees now](/docs/fundamentals/lifecycle-and-events#state).

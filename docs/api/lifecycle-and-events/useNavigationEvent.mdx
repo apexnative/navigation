@@ -1,0 +1,86 @@
+`useNavigationEvent` listens to an event of the whole navigation while the component is mounted: every screen that
+appears, every tab the user picks, every change of what the user sees. It works in any component that renders inside
+the app, not only in a screen, and hears the events of every screen.
+
+## Usage {#usage}
+
+```tsx title="src/components/TabHint.tsx"
+import { useState } from 'react';
+import { Text } from 'react-native';
+import { useNavigationEvent } from '@apexnative/navigation';
+
+export function TabHint() {
+  const [switches, setSwitches] = useState(0);
+
+  useNavigationEvent('tabSelected', ({ selectedTabIndex }) => {
+    if (selectedTabIndex !== 0) setSwitches((n) => n + 1);
+  });
+
+  if (switches < 3) return null;
+  return <Text>Tip: Home lists your recent items.</Text>;
+}
+```
+
+The hint counts the switches to another tab while it is mounted, and shows after the third.
+
+## Signature {#signature}
+
+<ApiSignature data={data} name="useNavigationEvent" />
+
+**`name`** is any event of the navigation, the same name as in `listeners` of `createNavigation` and in
+`navigation.on`: `screenDidAppear`, `tabSelected`, `modalDismissed`, `stateChanged`, … The full list with what each
+carries is in [Every event](/docs/fundamentals/lifecycle-and-events#events).
+
+**`handler`** gets the event, typed by its name. The events of a screen carry it as `screen`: `{ id, name }`. The
+handler can change on every render: the call goes to the one of the last render, so it needs no `useCallback`.
+
+It returns nothing. The listener starts when the component mounts and stops when it unmounts; a new `name` starts a
+new listener.
+
+## Which way to listen {#which}
+
+The same events can be heard in four places; each is narrower than the one before it.
+
+| Where | For |
+| --- | --- |
+| `listeners` of `createNavigation` | The whole run of the app, from the first screen: analytics, logging. |
+| `navigation.on(name, handler)` | Code outside React: a store, a service. Returns the function that stops it. |
+| `useNavigationEvent(name, handler)` | A component, for as long as it is mounted; any screen's events. |
+| [`useScreenEvent`](/api/lifecycle-and-events/useScreenEvent) and the screen hooks | A screen, for its own events. |
+
+A component that wants only its own screen's events uses `useScreenEvent`: `useNavigationEvent('screenDidAppear')`
+hears every screen of the app, and the handler would have to compare `event.screen.id` itself.
+
+## When it hears {#timing}
+
+- **From mount to unmount.** An event that came before the component mounted is not replayed; for the current state,
+  read [`useNavigationState`](/api/lifecycle-and-events/useNavigationState) or `navigation.getState()`.
+- **Under a covered screen too.** A screen pushed over the component's screen doesn't stop it: the component stays
+  mounted, so its handler keeps being called.
+- **`stateChanged`** comes from the state the navigation keeps: the handler reads the same state as
+  `navigation.getState()`.
+- **The bars' components aren't screens.** `screenWillAppear`, `screenDidAppear` and `screenDidDisappear` come only
+  for screens, not for a title, a button or a background component of a bar.
+
+## Pitfalls {#pitfalls}
+
+- **Each screen is a React root.** Without `appProvider` there is no component around the screens: every component
+  renders inside some screen and listens only while that screen is mounted. Listening for the whole run of the app
+  belongs to `listeners`, which need no component.
+- **A component in each screen listens once per screen.** A shared header that every screen renders and that calls
+  `useNavigationEvent('tabSelected', …)` gets each event once per mounted screen. Put app-wide work in `listeners` or
+  in a single component.
+- **Effects twice in development.** Under `<StrictMode>` React mounts the component twice: the hook stops the first
+  listener before the second starts, so each event still comes once.
+
+## Compared with React Navigation {#react-navigation}
+
+React Navigation hears the whole navigation through the container: `onStateChange` of `NavigationContainer`, and a
+ref for the current route. Here the events come from the platform; any component, and any code through
+`navigation.on`, listens without a ref or a provider. See
+[Why the events are outside React](/docs/fundamentals/lifecycle-and-events#outside-react).
+
+## See also {#see-also}
+
+- [Where to listen](/docs/fundamentals/lifecycle-and-events#where), [Every event](/docs/fundamentals/lifecycle-and-events#events).
+- [`listeners`](/api/starting-the-app/createNavigation#listeners) of `createNavigation`, [Analytics](/docs/guides/analytics).

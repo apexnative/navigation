@@ -1,0 +1,293 @@
+---
+title: Error reporting
+description: 'Every error of the app in Sentry, Bugsnag or Crashlytics, with the screen it happened on: onError, an error screen with Try again, the screens the user went through, and native crashes.'
+---
+
+import { Mark, Os } from '@site/src/components/Intro';
+
+A screen fails to render on a user's phone. The user should see a message and "Try again" under the screen's own bar, and you should see the error in your crash reporter, with the screen it happened on and the screens the user went through before it. You end with:
+
+- every error the navigation catches sent from one place, `onError`, with its screen;
+- an error screen with a retry, in place of a screen that failed;
+- the screens the user saw, as breadcrumbs of each report;
+- native crashes, from the first moment of the launch.
+
+The guide wires Sentry step by step, then shows the same steps for [Bugsnag](#bugsnag) and [Firebase Crashlytics](#crashlytics).
+
+:::info[Versions]
+
+Written against `@sentry/react-native` 8.31, `@bugsnag/react-native` 9.1 and `@react-native-firebase/crashlytics` 26 with its modular API. Know [Errors and loading](../architecture/errors-and-loading) first: where each kind of error goes.
+
+:::
+
+## How it will work {#how}
+
+Each kind of error reaches the reporter by its own way:
+
+| The error | Reaches the reporter through |
+| --- | --- |
+| A screen fails to render | `onError` of `createNavigation`, with the screen |
+| `willMount` or the first root fails | `onError`, with `type: 'start'` |
+| A route of `linking` fails | `onError`, with the link |
+| A press handler or a promise throws | React Native's global error handler, which the reporter's SDK hooks |
+| A command can't be made | Its own promise rejects: you catch it where it matters |
+| A native crash | The reporter's native SDK |
+
+The first three are caught by the navigation and never reach React Native's global handler, so <Mark>a reporter sees them only through `onError`</Mark>. That is the one line every reporter needs here.
+
+## 1. Start Sentry before anything else {#sentry-init}
+
+```sh
+npx @sentry/wizard@latest -i reactNative
+```
+
+The wizard installs `@sentry/react-native`, sets up the upload of source maps and debug symbols, and adds `Sentry.init`. Keep the init in a module of its own, imported first in `index.js`:
+
+```ts title="src/sentry.ts"
+import * as Sentry from '@sentry/react-native';
+
+Sentry.init({
+  dsn: 'https://<key>@<org>.ingest.sentry.io/<project>',
+});
+
+export { Sentry };
+```
+
+```js title="index.js"
+import './src/sentry';
+import { AppRegistry } from '@apexnative/navigation';
+import { Navigation } from './src/Navigation';
+
+AppRegistry.registerComponent('MyApp', () => Navigation);
+```
+
+Imports run in order, so Sentry starts before the modules of the screens load, and an error there is reported too. With `Sentry.init` in the body of `index.js`, after the imports, it would start after them.
+
+From now on Sentry reports by itself what reaches React Native's global handler: an error in a press handler, a promise nobody catches.
+
+## 2. Report what the navigation catches {#on-error}
+
+`onError` gets every error the navigation catches, with its source. Send it on, with the screen as a tag, so the reports of one screen group together:
+
+```ts title="src/Navigation.ts"
+import { createNavigation } from '@apexnative/navigation';
+import { Sentry } from './sentry';
+
+export const Navigation = createNavigation({
+  screens: { Home: HomeScreen, Profile: ProfileScreen },
+  root: 'Home',
+  onError: (error, source) => {
+    Sentry.captureException(error, (scope) => {
+      scope.setTag('source', source.type);
+      if (source.type === 'screen') {
+        scope.setTag('screen', source.screen.name);
+        scope.setContext('react', {
+          componentStack: source.componentStack,
+        });
+      }
+      if (source.type === 'link') {
+        scope.setContext('link', { url: source.url });
+      }
+      return scope;
+    });
+  },
+});
+```
+
+Profile throws while it renders: the user sees the error screen of the next step, and Sentry gets the error tagged `screen: Profile`, with the components React was in. A start that fails comes as `source: start`; a link whose route failed, with its URL.
+
+## 3. Show an error screen with a retry {#fallback}
+
+Without `errorFallback`, a screen that failed is empty under its bar. With it, the user sees what happened and tries again:
+
+```tsx title="src/ErrorFallback.tsx"
+import { Button, Text, View } from 'react-native';
+import type { ErrorFallbackProps } from '@apexnative/navigation';
+
+export function ErrorFallback({ retry }: ErrorFallbackProps) {
+  return (
+    <View style={{ flex: 1, justifyContent: 'center' }}>
+      <Text>Something went wrong. We have been told.</Text>
+      <Button title="Try again" onPress={retry} />
+    </View>
+  );
+}
+```
+
+```ts title="src/Navigation.ts"
+export const Navigation = createNavigation({
+  // …
+  errorFallback: ErrorFallback,
+});
+```
+
+`retry` renders the screen again; if the cause is still there, the fallback comes back, and `onError` gets the error again. When the start failed, the fallback is the first screen and `retry` runs the start again from `willMount`. More: [A screen that fails](../architecture/errors-and-loading#error).
+
+## Where Sentry.wrap goes {#sentry-wrap}
+
+Sentry's setup wraps the root component of the app: `export default Sentry.wrap(App)`. This app has no root component: `AppRegistry` takes the navigation, and each screen renders on its own.
+
+What `Sentry.wrap` adds is not error reporting. It wraps the component in Sentry's touch event boundary (taps as breadcrumbs), its profiler, and the provider of its feedback form. Errors don't need it; Sentry's docs say it isn't required for an app without one root component.
+
+- **With [one tree](../architecture/one-tree)**, `appProvider` is the root component of the screens' React content. Wrap it there:
+
+  ```ts
+  appProvider: Sentry.wrap(AppProvider),
+  ```
+
+  `Sentry.wrap` passes its props through, so the screens render inside it as before.
+
+- **With a root per screen**, leave it out. Wrapping `screenProvider` would start one profiler and one feedback provider for each screen.
+
+### Not Sentry.ErrorBoundary {#sentry-error-boundary}
+
+A `Sentry.ErrorBoundary` in `screenProvider` or `appProvider` looks like the place for errors of the screens, but it never sees them. Each screen has a boundary of its own, <Mark>inside</Mark> `screenProvider`, which catches the error first, shows `errorFallback`, and calls `onError`. Report through `onError`, as in step 2, and show the error with `errorFallback`.
+
+A boundary of your own deeper in a screen, around a widget that may fail, works as usual: it catches first, and the screen goes on.
+
+## 4. Breadcrumbs of the screens {#breadcrumbs}
+
+A report is easier to read with the screens the user went through before it. `listeners` hear every screen that appears, from the first one, for as long as the app runs:
+
+```ts title="src/Navigation.ts"
+export const Navigation = createNavigation({
+  // …
+  listeners: {
+    screenDidAppear: ({ screen }) => {
+      Sentry.addBreadcrumb({
+        category: 'navigation',
+        message: screen.name,
+        data: { id: screen.id },
+      });
+      Sentry.setTag('screen', screen.name);
+    },
+  },
+});
+```
+
+The user opens Home, Profile, then Settings, and Settings fails: the report lists the three screens, and every error, even one from a press handler, carries the tag of the screen last shown. A sheet over a screen appears as a screen of its own, so its name is the tag while it shows.
+
+Sentry's navigation integrations are written for other navigation libraries and don't hear this one's events; these listeners take their place. The names, and data of a screen worth adding, are covered in [Screen analytics](./analytics).
+
+## 5. Errors of commands {#commands}
+
+A command that can't be made, such as a push to a screen that isn't in `screens`, rejects its promise and leaves the app as it was. It doesn't go to `onError`. Where a failure matters, catch it:
+
+```ts
+navigation
+  .push('Profile', { props: { id } })
+  .catch((error) => Sentry.captureException(error));
+```
+
+A rejection nobody catches is reported by Sentry as an unhandled rejection. See [When a move is done](../fundamentals/moving-between-screens#done).
+
+## 6. Native crashes {#native}
+
+`@sentry/react-native` comes with Sentry's iOS and Android SDKs, and `Sentry.init` starts them: a crash of native code, the navigation's included, is reported with the native stack.
+
+They start when the JavaScript runs `Sentry.init`. A crash before that, early in the launch, needs the native SDKs started natively: put the options in `sentry.options.json` at the root of the project, and start them first thing in the launch:
+
+- <Os name="iOS" /> `[RNSentrySDK start];` at the top of `application:didFinishLaunchingWithOptions:` in `AppDelegate`, before React Native starts.
+- <Os name="Android" /> `RNSentrySDK.init(this)` in `onCreate` of `MainApplication`.
+
+Sentry's guide "Capture App Start Errors" has the details. Check the native side with `Sentry.nativeCrash()` in a release build.
+
+## Check it {#check}
+
+1. In a screen, `throw new Error('test')` in the render. The screen shows the error screen under its bar, and Sentry gets the error with `screen` set.
+2. Tap "Try again" after removing the throw (Fast Refresh): the screen renders.
+3. Go through three screens and throw in the third: the report has the three breadcrumbs.
+
+In development, LogBox reports the caught error too; the error screen is under it.
+
+## Bugsnag {#bugsnag}
+
+```sh
+npx @bugsnag/react-native-cli init
+```
+
+The CLI installs `@bugsnag/react-native` and puts the API key in the native projects. Bugsnag starts natively, then in JavaScript:
+
+- <Os name="iOS" /> `[Bugsnag start];` in `application:didFinishLaunchingWithOptions:` of `AppDelegate`.
+- <Os name="Android" /> `Bugsnag.start(this)` in `onCreate` of `MainApplication`, after `super.onCreate()`.
+
+```ts title="src/bugsnag.ts"
+import Bugsnag from '@bugsnag/react-native';
+
+Bugsnag.start();
+
+export { Bugsnag };
+```
+
+Import it first in `index.js`, as with Sentry. Then the same three places:
+
+```ts title="src/Navigation.ts"
+export const Navigation = createNavigation({
+  // …
+  onError: (error, source) => {
+    Bugsnag.notify(error as Error, (event) => {
+      event.addMetadata('navigation', { source: source.type });
+      if (source.type === 'screen') {
+        event.context = source.screen.name;
+        event.addMetadata('react', {
+          componentStack: source.componentStack,
+        });
+      }
+    });
+  },
+  listeners: {
+    screenDidAppear: ({ screen }) => {
+      Bugsnag.leaveBreadcrumb(screen.name, {}, 'navigation');
+    },
+  },
+});
+```
+
+`event.context` is what Bugsnag groups and shows a report by, so the screen's name there makes a failing screen stand out. Native crashes come from the native start above. Bugsnag's own navigation plugins are for other libraries; the listener takes their place.
+
+## Firebase Crashlytics {#crashlytics}
+
+```sh
+npm install @react-native-firebase/app
+npm install @react-native-firebase/crashlytics
+```
+
+React Native Firebase needs its native setup (the `GoogleService-Info.plist` and `google-services.json` files, the Crashlytics Gradle plugin): follow its install guide. Native crashes are then reported by Crashlytics itself. Errors the navigation catches go through `onError`:
+
+```ts title="src/Navigation.ts"
+import {
+  getCrashlytics,
+  log,
+  recordError,
+  setAttribute,
+} from '@react-native-firebase/crashlytics';
+
+const crashlytics = getCrashlytics();
+
+export const Navigation = createNavigation({
+  // …
+  onError: (error, source) => {
+    if (source.type === 'screen') {
+      setAttribute(crashlytics, 'screen', source.screen.name);
+    }
+    recordError(
+      crashlytics,
+      error instanceof Error ? error : new Error(String(error)),
+    );
+  },
+  listeners: {
+    screenDidAppear: ({ screen }) => {
+      log(crashlytics, `screen ${screen.name}`);
+    },
+  },
+});
+```
+
+`recordError` takes an `Error`, so a thrown value of another kind is wrapped. The lines of `log` go with the next report, as breadcrumbs. Crashlytics doesn't send reports from debug builds unless `crashlytics_debug_enabled` is set in `firebase.json`.
+
+## Related {#related}
+
+- [Errors and loading](../architecture/errors-and-loading): `errorFallback`, `loadingFallback`, `onError`.
+- [`onError`](/api/starting-the-app/createNavigation#onError) and [`errorFallback`](/api/starting-the-app/createNavigation#errorFallback) in the reference.
+- [Screen analytics](./analytics): the names of the screens, from the same listeners.
+- [Data fetching](./data-fetching#errors): request errors and Suspense.

@@ -1,0 +1,434 @@
+---
+title: Forms in a modal
+description: 'A form in a modal with Cancel and Save, a question before unsaved changes are lost, the keyboard, and the saved value back on the screen that opened it.'
+---
+
+import { Mark, Os } from '@site/src/components/Intro';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+import DocTabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+Editing a profile, writing a message, adding an address: a form is a task of its own, so it opens as a modal over the app. In this guide you build one the way system apps do it. You end with:
+
+- a modal with Cancel on the left of its top bar and Save on the right;
+- a Save that turns on only once something changed, and can't save twice;
+- a question before the user loses changes, whatever way they try to leave;
+- fields that stay above the keyboard;
+- the saved value back on the screen that opened the form.
+
+<DeviceVideo name="flow-form" />
+
+## What you need {#need}
+
+- An app set up with [Installation](../start/installation), with a Profile screen to open the form from.
+- An EditProfile screen, made with `defineScreen`, in `screens` of `createNavigation`.
+- Your own request that saves the change: `updateProfile` here.
+- [Modals](../containers/modals), [Bar buttons](../screen-ui/bar-buttons) and [Keeping the user on a screen](../screen-ui/back-and-gestures#prevent) explain the parts this guide puts together.
+
+## How it will work {#plan}
+
+```text
+Profile ── showModal('EditProfile', { name, onSave }) ──▶ the modal
+                                            ┌────────────────────────┐
+                                            │ Cancel  Edit    Save   │
+                                            │ [ name             ]   │
+                                            └────────────────────────┘
+Save   → updateProfile → onSave(value) → dismiss
+Cancel → no changes: dismiss · changes: ask first
+```
+
+- **The form is a modal with a stack of its own**, so it has a top bar for Cancel and Save, and could push a step.
+- **The buttons follow the state of the form** through `useScreenOptions`.
+- **`usePreventLeave`** holds every way the user leaves while there are changes, and asks.
+- **The value goes back** through a callback in the props, the app's context or a store: you pick in step 4.
+
+## 1. Open the form {#open}
+
+Profile opens EditProfile as a modal, and gives it the current name:
+
+```tsx title="src/screens/Profile.tsx"
+import { useState } from 'react';
+import { Button, Text, View } from 'react-native';
+import { defineScreen, useNavigation } from '@apexnative/navigation';
+
+function Profile() {
+  const navigation = useNavigation();
+  const [name, setName] = useState('Sam');
+
+  const edit = () =>
+    navigation.showModal('EditProfile', { props: { name } });
+
+  return (
+    <View>
+      <Text>{name}</Text>
+      <Button title="Edit" onPress={edit} />
+    </View>
+  );
+}
+
+export const ProfileScreen = defineScreen({
+  component: Profile,
+  options: (s) => s.title('Profile'),
+});
+```
+
+Tap Edit: the form comes up from the bottom, a sheet on iOS that leaves the top of Profile in sight, full screen on Android. The modal has <Mark>a stack of its own</Mark>, so the form has a top bar.
+
+## 2. Add Cancel and Save {#buttons}
+
+The buttons go in the top bar of the form. Save needs the state of the form, to know whether there is something to save, so the component sets them with `useScreenOptions`:
+
+```tsx title="src/screens/EditProfile.tsx"
+import { useState } from 'react';
+import { TextInput } from 'react-native';
+import {
+  defineScreen,
+  useNavigation,
+  useScreenOptions,
+} from '@apexnative/navigation';
+
+function EditProfile({ name }: { name: string }) {
+  const navigation = useNavigation();
+  const [value, setValue] = useState(name);
+  const changed = value !== name;
+
+  const save = async () => {}; // step 3
+
+  useScreenOptions((s) =>
+    s
+      .title('Edit profile')
+      .leftButtons({
+        id: 'cancel',
+        text: 'Cancel',
+        onPress: () => navigation.dismiss(),
+      })
+      .rightButtons({
+        id: 'save',
+        text: 'Save',
+        enabled: changed,
+        onPress: () => save(),
+      }),
+  );
+
+  return <TextInput value={value} onChangeText={setValue} />;
+}
+
+export const EditProfileScreen = defineScreen({
+  component: EditProfile,
+});
+```
+
+The form shows Cancel and a dimmed Save. Type a letter: Save turns on. `useScreenOptions` builds the options on each render and sends them only when they changed, and `onPress` always sees the state of the last render. More: [From the state: useScreenOptions](../fundamentals/screen-options#use-screen-options).
+
+## 3. Save and close {#save}
+
+Save sends the change, then closes the whole modal with `dismiss()`. While the request runs, Save is off, so a second tap doesn't save twice:
+
+```tsx title="src/screens/EditProfile.tsx"
+const [saving, setSaving] = useState(false);
+
+const save = async () => {
+  setSaving(true);
+  try {
+    await updateProfile({ name: value }); // your own request
+    await navigation.dismiss();
+  } catch {
+    setSaving(false);
+    Alert.alert('Could not save', 'Check the connection.');
+  }
+};
+
+// in useScreenOptions
+.rightButtons({
+  id: 'save',
+  text: 'Save',
+  enabled: changed && !saving,
+  onPress: () => save(),
+})
+```
+
+Tap Save: it dims, the modal goes down, and Profile is under it. When the request fails, the modal stays with what the user typed, and an alert says why.
+
+## 4. Give the value back {#result}
+
+Profile still shows the old name: the form saved it, but Profile has its own state. Pick how the value comes back:
+
+<DocTabs groupId="app-state">
+<TabItem value="callback" label="A callback" default>
+
+A callback in the props carries it back to the screen that opened the form. Props stay in JavaScript, so a function is a prop like any other (see [A result back](../fundamentals/moving-between-screens#results)):
+
+```tsx title="src/screens/Profile.tsx"
+const edit = () =>
+  navigation.showModal('EditProfile', {
+    props: { name, onSave: setName },
+  });
+```
+
+```tsx title="src/screens/EditProfile.tsx"
+await updateProfile({ name: value }); // your own request
+onSave(value);
+await navigation.dismiss();
+```
+
+Use it when only the opener shows the value.
+
+</TabItem>
+<TabItem value="context" label="The app's context">
+
+When the name is the signed-in user's, kept in the app's context, the form changes the context, and every screen that shows the user renders again: the profile, a greeting on Home, a title.
+
+```tsx title="src/screens/EditProfile.tsx"
+await updateProfile({ name: value }); // your own request
+navigation.setContext((c) => ({
+  ...c,
+  user: c.user && { ...c.user, name: value },
+}));
+await navigation.dismiss();
+```
+
+```tsx title="src/screens/Profile.tsx"
+const name = useAppContext((c) => c.user?.name);
+```
+
+Profile needs no state of its own and no callback. See [Sign in and sign out](./sign-in-and-sign-out#context).
+
+</TabItem>
+<TabItem value="store" label="A store (Zustand)">
+
+When the profile is in a store, the form writes it there, and every screen that reads it renders again:
+
+```ts title="src/profileStore.ts"
+import { create } from 'zustand';
+
+export const useProfile = create<{ name: string }>()(() => ({
+  name: 'Sam',
+}));
+```
+
+```tsx title="src/screens/EditProfile.tsx"
+await updateProfile({ name: value }); // your own request
+useProfile.setState({ name: value });
+await navigation.dismiss();
+```
+
+```tsx title="src/screens/Profile.tsx"
+const name = useProfile((s) => s.name);
+```
+
+</TabItem>
+</DocTabs>
+
+Tap Save: the modal goes, and Profile shows the new name.
+
+## 5. Ask before changes are lost {#prevent}
+
+A swipe down closes a sheet, and so does the system back on Android. A user who types a long text and swipes by mistake loses it. `usePreventLeave` holds every way the user leaves the screen while its condition is true, and calls its handler instead:
+
+```tsx title="src/screens/EditProfile.tsx"
+const discard = () =>
+  Alert.alert('Discard your changes?', undefined, [
+    { text: 'Keep editing', style: 'cancel' },
+    {
+      text: 'Discard',
+      style: 'destructive',
+      onPress: () => navigation.dismiss(),
+    },
+  ]);
+
+usePreventLeave(changed, discard);
+```
+
+| The user | With changes |
+| --- | --- |
+| Swipes the sheet down | <Os name="iOS" /> The sheet springs back, and the question shows. |
+| Presses the system back | <Os name="Android" /> The modal stays, and the question shows. |
+| Taps Discard | `dismiss()` closes the modal: the commands of the app aren't held. |
+| Saves | `dismiss()` after the save closes it the same way. |
+
+Without changes every way out works as usual, as `changed` is false.
+
+Cancel is a button of the form, not a way the system offers, so `usePreventLeave` doesn't hold it. It asks the same question itself:
+
+```tsx title="src/screens/EditProfile.tsx"
+.leftButtons({
+  id: 'cancel',
+  text: 'Cancel',
+  onPress: () => (changed ? discard() : navigation.dismiss()),
+})
+```
+
+## The keyboard {#keyboard}
+
+Cancel and Save are in the native top bar, so the keyboard never covers them. The fields are React content. <Os name="iOS" /> The screen keeps its size when the keyboard comes, and the keyboard covers its lower part: a field there is hidden while the user types. Put the form in a `ScrollView` that makes room for the keyboard:
+
+```tsx title="src/screens/EditProfile.tsx"
+<ScrollView
+  automaticallyAdjustKeyboardInsets
+  keyboardShouldPersistTaps="handled"
+>
+  <TextInput value={value} onChangeText={setValue} autoFocus />
+  {/* more fields */}
+</ScrollView>
+```
+
+`automaticallyAdjustKeyboardInsets` (iOS) scrolls the focused field above the keyboard; `keyboardShouldPersistTaps="handled"` lets a tap on a button in the form work while the keyboard is up; `autoFocus` opens the keyboard with the form. Check the form on Android too, with the field at the bottom of the screen. For more control, such as a bar over the keyboard, see [Gestures and animations](../guides/gestures-and-animations).
+
+## A result as a promise {#promise}
+
+Code that opens the form and wants to wait for the answer, such as `const name = await editName()`, wraps the modal in a promise. `onDismiss` runs once the modal is gone, whatever closed it, so a Cancel and a swipe give `null`:
+
+```ts title="src/editName.ts"
+import { navigation } from '@apexnative/navigation';
+
+export function editName(name: string) {
+  return new Promise<string | null>((resolve) => {
+    navigation.showModal('EditProfile', {
+      props: { name, onSave: resolve },
+      onDismiss: () => resolve(null),
+    });
+  });
+}
+```
+
+`onSave` resolves it first on a save; the `resolve(null)` after it changes nothing, as a promise resolves once.
+
+## Closed by something else {#closed-elsewhere}
+
+A sign-out, a notification that switches the root, or `dismissAllModals` from code closes the form without asking: `usePreventLeave` holds the user, not the app. When a draft matters, such as a long message, keep it outside the screen (a store, or the storage of the device) as the user types, and give it back the next time the form opens.
+
+## A form in steps {#steps}
+
+The modal has a stack, so a long form pushes its next step inside it: back goes to the step before, and `dismiss()` on the last step closes the whole modal with all its steps. Each step that holds changes has its own `usePreventLeave`. The values of the steps go into one place that every step reads, a store or the first step's callbacks, as each step is a screen of its own.
+
+## On iPad {#ipad}
+
+<Os name="iPadOS" /> A sheet as wide as the screen is a lot for one field. A form sheet is a card in the middle, and `contentSize` gives it a width and a height that follows the content:
+
+```tsx title="src/screens/Profile.tsx"
+navigation.showModal('EditProfile', {
+  props: { name, onSave: setName },
+  style: 'formSheet',
+  contentSize: { width: 540, height: 'content' },
+});
+```
+
+On iPhone a form sheet is the same sheet as before, and on Android the modal is unchanged.
+
+## The whole code {#files}
+
+With a callback; the other ways of step 4 differ in the lines the tabs show.
+
+```tsx title="src/screens/Profile.tsx"
+import { useState } from 'react';
+import { Button, Text, View } from 'react-native';
+import { defineScreen, useNavigation } from '@apexnative/navigation';
+
+function Profile() {
+  const navigation = useNavigation();
+  const [name, setName] = useState('Sam');
+
+  const edit = () =>
+    navigation.showModal('EditProfile', {
+      props: { name, onSave: setName },
+    });
+
+  return (
+    <View>
+      <Text>{name}</Text>
+      <Button title="Edit" onPress={edit} />
+    </View>
+  );
+}
+
+export const ProfileScreen = defineScreen({
+  component: Profile,
+  options: (s) => s.title('Profile'),
+});
+```
+
+```tsx title="src/screens/EditProfile.tsx"
+import { useState } from 'react';
+import { Alert, ScrollView, TextInput } from 'react-native';
+import {
+  defineScreen,
+  useNavigation,
+  usePreventLeave,
+  useScreenOptions,
+} from '@apexnative/navigation';
+import { updateProfile } from '../api';
+
+interface EditProfileProps {
+  name: string;
+  onSave: (name: string) => void;
+}
+
+function EditProfile({ name, onSave }: EditProfileProps) {
+  const navigation = useNavigation();
+  const [value, setValue] = useState(name);
+  const [saving, setSaving] = useState(false);
+  const changed = value !== name;
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await updateProfile({ name: value });
+      onSave(value);
+      await navigation.dismiss();
+    } catch {
+      setSaving(false);
+      Alert.alert('Could not save', 'Check the connection.');
+    }
+  };
+
+  const discard = () =>
+    Alert.alert('Discard your changes?', undefined, [
+      { text: 'Keep editing', style: 'cancel' },
+      {
+        text: 'Discard',
+        style: 'destructive',
+        onPress: () => navigation.dismiss(),
+      },
+    ]);
+
+  usePreventLeave(changed, discard);
+
+  useScreenOptions((s) =>
+    s
+      .title('Edit profile')
+      .leftButtons({
+        id: 'cancel',
+        text: 'Cancel',
+        onPress: () => (changed ? discard() : navigation.dismiss()),
+      })
+      .rightButtons({
+        id: 'save',
+        text: 'Save',
+        enabled: changed && !saving,
+        onPress: () => save(),
+      }),
+  );
+
+  return (
+    <ScrollView
+      automaticallyAdjustKeyboardInsets
+      keyboardShouldPersistTaps="handled"
+    >
+      <TextInput value={value} onChangeText={setValue} autoFocus />
+    </ScrollView>
+  );
+}
+
+export const EditProfileScreen = defineScreen({
+  component: EditProfile,
+});
+```
+
+`updateProfile` is your own request. Both screens go into `screens` of `createNavigation`.
+
+## What's next {#next}
+
+- [Bottom sheets](./bottom-sheets): a modal that stops at half the height.
+- [Modals](../containers/modals): styles, sheets, how a modal closes.
+- [Keeping the user on a screen](../screen-ui/back-and-gestures#prevent): `usePreventLeave` on a pushed screen too.
+- [Bar buttons](../screen-ui/bar-buttons#press): where a press is handled.

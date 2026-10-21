@@ -1,0 +1,169 @@
+---
+title: Stack
+description: 'What a stack is and where stacks live, how to build one, every command of a stack, the way back, and a whole stack at once for a deep link.'
+---
+
+import { SectionStatus, SectionApi } from '@site/src/components/Api';
+import { Mark, Os } from '@site/src/components/Intro';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+<SectionStatus id="stack" />
+
+The stack is the main container of an app: a list opens an item, the item opens its comments, and back goes the same way down. `Stack` builds one, and `push` and `pop` move in it:
+
+```ts title="Navigation.ts"
+import { createNavigation, Stack } from '@apexnative/navigation';
+import { HomeScreen } from './screens/Home';
+import { DetailsScreen } from './screens/Details';
+
+export const Navigation = createNavigation({
+  screens: { Home: HomeScreen, Details: DetailsScreen },
+  root: Stack('Home'),
+});
+```
+
+Home shows first, with a top bar. `navigation.push('Details')` from Home shows Details over it, and back returns to Home.
+
+This page answers:
+
+1. [What a stack is](#what), and where stacks live in an app.
+2. [How to build one](#build), starting with one screen or several.
+3. [The commands of a stack](#commands): push, back, replace.
+4. [The way back](#back): what the user does, and how the app knows.
+5. [A whole stack at once](#deep-link), for a deep link.
+
+## What a stack is {#what}
+
+A stack is <Mark>screens one over another</Mark>: the top one shows, and back goes to the one under it. The screens under the top one stay mounted, with their state and scroll, so back returns to them as they were.
+
+<DeviceVideo name="stack-push-back" />
+
+The stack is the platform's: a `UINavigationController` on <Os name="iOS" />, the library's own stack of views on <Os name="Android" />. It owns <Mark>one top bar</Mark> for all its screens. Each screen gives the bar its title and buttons through its options, so the bar changes with the screen as it comes in. See [Top bar](../screen-ui/top-bar).
+
+### Where stacks live {#where}
+
+Wherever the user moves on from a screen, there is a stack. A screen named alone in these places gets a stack around it, so it can push:
+
+| Place | The stack |
+| --- | --- |
+| The root | `root: 'Home'` is the same as `root: Stack('Home')`. |
+| Each tab | Each tab has its own stack, and keeps it while the user looks at other tabs. See [Tabs](./tabs). |
+| A modal | A modal has its own stack, unless `stack: false`. See [Modals](./modals). |
+| The center of a side menu, a column of a split view | The same as the root. See [Side menu](./side-menu), [Split view](./split-view). |
+
+Where nothing moves on, a screen stays on its own, without a stack and its top bar: the menus of a side menu, the inspector of a split view, an overlay.
+
+## Building a stack {#build}
+
+`Stack` takes its screens from the bottom one to the top one, each a screen of `screens` by its name. Most stacks start with one, as above.
+
+A stack can also start deeper, with the screens under the top one already in place. A screen with props goes as `Screen(name, props)`:
+
+```ts
+import { Screen, Stack } from '@apexnative/navigation';
+
+Stack('Inbox', Screen('Chat', { userId: '7' }));
+```
+
+Chat shows, and back goes to Inbox. A stack can start as deep as it needs, each screen with props of its own:
+
+```ts
+Stack(
+  Screen('Inbox', { folder: 'work' }),
+  Screen('Chat', { userId: '7' }),
+  Screen('Profile', { userId: '7' }),
+  Screen('Photo', { photoId: '42' }),
+);
+```
+
+Photo shows; back goes to Profile, Chat, then Inbox. Each screen gets only its own props, and TypeScript checks each against its screen.
+
+`Screen(…).options()` gives a screen options for this show only, over those of its definition:
+
+```ts
+Stack(
+  'Inbox',
+  Screen('Chat', { userId }).options((s) => s.hideBottomTabs()),
+);
+```
+
+The stack itself takes no options: they go on its screens, so a screen looks the same in every stack it is pushed into. A screen's own options go in `defineScreen`, those of many screens in a group or in `presentation.push`. See [Where a screen gets them](../fundamentals/screen-options#layers).
+
+## The commands of a stack {#commands}
+
+A screen's commands act on the stack the screen is in. Each one changes the screens of the stack, and <Mark>the top one is what the user sees</Mark>:
+
+<DeviceVideo name="stack-commands" />
+
+In a screen, `useNavigation` gives the commands:
+
+```tsx title="src/screens/Chat.tsx"
+import { Button, View } from 'react-native';
+import { useNavigation } from '@apexnative/navigation';
+
+function Chat({ userId }: { userId: string }) {
+  const navigation = useNavigation();
+
+  const openProfile = () =>
+    navigation.push('Profile', { props: { userId } });
+
+  return (
+    <View>
+      <Button title="Profile" onPress={openProfile} />
+      <Button title="Back" onPress={() => navigation.pop()} />
+    </View>
+  );
+}
+```
+
+Profile comes in over Chat; Back on either screen goes one screen down.
+
+- **`push`** resolves with the id of the new screen. `popTo` takes such an id: keep it to come back to that screen later.
+- **`popToRoot`** goes back to the first screen of the stack, past all the others at once.
+- **`replace`** leaves the new screen <Mark>alone in the stack</Mark>, so there is no back. It comes in as a push does. After a payment, `replace('OrderPlaced')`, so back can't lead to a second payment.
+- **`setStack`** gives the stack several new screens at once: the last one shows, and back goes down the others. The screens that were there unmount, even one with the same name.
+
+Code outside a screen, such as a store or a timer, uses the `navigation` object of the package: its commands act on the stack the user is looking at. See [Where the commands come from](../fundamentals/moving-between-screens#where).
+
+`goBack()` and the checks `canPop()` and `canGoBack()` work on stacks too: see [Going back](../fundamentals/moving-between-screens#back). The way a screen comes in, such as `push('Details', { transition: 'fade' })`: see [Transitions](../architecture/transitions).
+
+## The way back {#back}
+
+The user goes back with the platform's controls, and they work without code:
+
+| Platform | Back |
+| --- | --- |
+| <Os name="iOS" /> | The back button of the top bar, and the swipe from the leading edge. |
+| <Os name="Android" /> | The back arrow of the top bar, the back gesture and the system back. |
+
+When a screen leaves its stack by any of them, or by `pop`, it gets the event `screenPopped` before it unmounts. It is the place for what should happen when the user goes back, such as keeping a draft:
+
+```tsx
+import { useScreenEvent } from '@apexnative/navigation';
+
+useScreenEvent('screenPopped', () => {
+  saveDraft(text); // your own step
+});
+```
+
+A custom back button, a swipe turned off, a screen that asks before the user leaves: see [Back and gestures](../screen-ui/back-and-gestures).
+
+## A whole stack at once {#deep-link}
+
+A deep link opens a screen deep in the app. The screens the user would have passed on the way go under it, so back works as if they came by hand. `setStack` builds that stack in one command:
+
+```ts
+await navigation.setStack(
+  'Inbox',
+  Screen('Chat', { userId }),
+  Screen('Profile', { userId }),
+);
+```
+
+Profile shows; back goes to Chat, then to Inbox. Every screen of the new stack is new, so a link carries what each screen needs in its props. A link that lands in another tab or in another root builds the whole root: see [A root made on the go](../fundamentals/switching-roots#on-the-go) and [Deep links](../guides/deep-links).
+
+A full app with a list and its details, step by step: [List and details](../flows/list-and-details).
+
+## API {#api}
+
+<SectionApi id="stack" />

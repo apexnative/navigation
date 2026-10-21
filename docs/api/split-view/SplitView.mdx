@@ -1,0 +1,328 @@
+import { Os } from '@site/src/components/Intro';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+`SplitView` puts a list and its item side by side on a big screen: the folders and the files, the mail and the
+message, the settings and a section. It takes the columns, each with a stack of its own, and its methods set how they
+share the width and how the sidebar shows and hides.
+
+- <Os name="iPadOS" />: the system's `UISplitViewController`, two or three columns, and on iPadOS 26 an inspector at
+  the trailing edge. A narrow window, when the app shares the screen, shows one column.
+- <Os name="iOS" /> on iPhone: one column at a time, the `compact` layout or the columns as one stack.
+- <Os name="Android" />: two panes, the primary and the secondary, side by side when the width takes both (a tablet, a
+  phone in landscape), one over the other on a narrower screen.
+
+<DeviceVideo name="split-view" devices={['ipad']} />
+
+## Usage {#usage}
+
+```ts title="src/Navigation.ts"
+import { createNavigation, SplitView } from '@apexnative/navigation';
+import { FoldersScreen } from './screens/Folders';
+import { PickAFolderScreen } from './screens/PickAFolder';
+import { FolderScreen } from './screens/Folder';
+
+export const Navigation = createNavigation({
+  screens: {
+    Folders: FoldersScreen, // the list of folders
+    PickAFolder: PickAFolderScreen, // before the first pick
+    Folder: FolderScreen, // a picked folder
+  },
+  root: SplitView({
+    primary: 'Folders',
+    secondary: 'PickAFolder',
+    compact: 'Folders',
+  })
+    .displayMode('oneBesideSecondary')
+    .primaryColumn({ width: 320 }),
+});
+```
+
+On iPad, Folders shows in a sidebar 320 points wide, and PickAFolder beside it. A tap on a folder calls
+`navigation.showInColumn('Folder', { props: { folderId } })`: Folder takes PickAFolder's place. On iPhone the app
+shows Folders alone, and the same call pushes Folder over it. See
+[Showing beside the list](/docs/containers/split-view#show).
+
+## Signature {#signature}
+
+<ApiSignature data={data} name="SplitView" />
+
+`SplitView` takes one object with its columns, and returns a `SplitViewElement`. Each method returns a new one. The
+screens of the columns are checked by the types where the layout is used (`root`, `roots`, `switchTo`).
+
+## The columns {#columns}
+
+Each column is a screen of `screens` by its name, `Screen(…)` with props, or a layout. A screen alone, by its name or
+with `Screen(…)`, gets a stack in every column but the inspector, so a column pushes and has its top bar.
+
+### `primary` {#primary}
+
+<ApiMember data={data} of="SplitViewColumns" name="primary" />
+
+The leading column: the sidebar, the list. Required.
+
+### `secondary` {#secondary}
+
+<ApiMember data={data} of="SplitViewColumns" name="secondary" />
+
+The column beside the list, where a pick shows. Required. Before the first pick it needs something to show, such as a
+screen that says "Pick a folder". `showInColumn` replaces it.
+
+### `supplementary` {#supplementary}
+
+<ApiMember data={data} of="SplitViewColumns" name="supplementary" />
+
+<Os name="iPadOS" />. A middle column, for three levels: folders, files, a file. A pick in the sidebar goes to it with
+`showInColumn(…, { column: 'supplementary' })`.
+
+```ts
+SplitView({
+  primary: 'Folders',
+  supplementary: 'Files',
+  secondary: 'PickAFile',
+});
+```
+
+Android has no middle column and leaves it out: there the split view is `primary` and `secondary` only, so a
+three-column app gives Android a layout that works with two, or a `compact` one.
+
+### `inspector` {#inspector}
+
+<ApiMember data={data} of="SplitViewColumns" name="inspector" />
+
+<Os name="iPadOS" /> 26+. A column at the trailing edge, for facts about the item, shown and hidden with
+`navigation.showColumn('inspector')` and `hideColumn('inspector')`. A screen named alone stays a screen, without a
+stack. Android leaves it out.
+
+### `compact` {#compact}
+
+<ApiMember data={data} of="SplitViewColumns" name="compact" />
+
+What shows where there is room for one column: iPhone, a narrow iPad window, a narrow Android screen. A layout of its
+own, usually the list:
+
+```ts
+SplitView({
+  primary: 'Folders',
+  secondary: 'PickAFolder',
+  compact: 'Folders',
+});
+```
+
+`showInColumn` pushes over it there, and back returns to the list. Without `compact`, the columns collapse into one
+stack, with [`compactTopColumn()`](#compactTopColumn) on top on iOS, and on Android the secondary pane slides over the
+primary one.
+
+## Where a split view goes {#where}
+
+A split view is the root of an app most of the time: `root`, a name of `roots`, `navigation.switchTo(…)`. It is meant
+for the whole window: the columns share its width. A stack can't hold it: a stack holds screens only.
+
+## Columns on iPad {#ipad-group}
+
+These are read by iOS only, unless the method says Android.
+
+### `displayMode()` {#displayMode}
+
+<ApiMember data={data} of="SplitViewElement" name="displayMode" />
+
+Which columns show when the split view starts:
+
+- `'oneBesideSecondary'`: the sidebar beside the item;
+- `'oneOverSecondary'`: the sidebar over the item;
+- `'secondaryOnly'`: the item alone;
+- with three columns, `'twoBesideSecondary'`, `'twoOverSecondary'`, `'twoDisplaceSecondary'`;
+- `'auto'`: UIKit's choice for the width, the default.
+
+The older names `'visible'`, `'hidden'` and `'overlay'` still work.
+
+```ts
+SplitView({ primary: 'Folders', secondary: 'PickAFolder' })
+  .displayMode('oneBesideSecondary');
+```
+
+It is where the split view starts. The user changes it with the sidebar button and the swipe; the app with
+`navigation.showColumn` and `hideColumn`. Each change sends `splitViewDisplayModeChanged` (iOS only).
+
+### `splitBehavior()` {#splitBehavior}
+
+<ApiMember data={data} of="SplitViewElement" name="splitBehavior" />
+
+How a shown sidebar shares the width with the item:
+
+- `'tile'`: beside it, the item narrower;
+- `'overlay'`: over it;
+- `'displace'`: pushing the item aside, partly off the screen;
+- `'automatic'`: UIKit's choice for the width, the default.
+
+```ts
+SplitView({ primary: 'Folders', secondary: 'PickAFolder' })
+  .splitBehavior('tile');
+```
+
+On iPadOS 26 the sidebar and the inspector float over the secondary column, which gets their room as its safe area.
+
+### `primaryColumn()` {#primaryColumn}
+
+<ApiMember data={data} of="SplitViewElement" name="primaryColumn" />
+
+The sidebar's width and edge:
+
+- `width`, `minWidth`, `maxWidth`: in points. UIKit keeps the width between the two limits.
+- `edge`: `'leading'` (the default) or `'trailing'`, to put the sidebar on the right.
+- `background`: `'sidebar'` gives the column the sidebar material. Mac Catalyst only.
+
+```ts
+SplitView({ primary: 'Folders', secondary: 'PickAFolder' })
+  .primaryColumn({ width: 320, minWidth: 280 });
+```
+
+<Os name="Android" /> reads `width` too: the width of the primary pane in dp, 360 by default. The panes are side by
+side when the window is at least that width plus 360 dp wide.
+
+### `supplementaryColumn()` {#supplementaryColumn}
+
+<ApiMember data={data} of="SplitViewElement" name="supplementaryColumn" />
+
+The widths of the middle column: `width`, `minWidth`, `maxWidth`, in points. With a `supplementary` column only.
+
+```ts
+SplitView({
+  primary: 'Folders',
+  supplementary: 'Files',
+  secondary: 'PickAFile',
+}).supplementaryColumn({ width: 360 });
+```
+
+### `inspectorColumn()` {#inspectorColumn}
+
+<ApiMember data={data} of="SplitViewElement" name="inspectorColumn" />
+
+<Os name="iPadOS" /> 26+. The widths of the inspector column, and `visible` to start with it shown:
+
+```ts
+SplitView({
+  primary: 'Folders',
+  secondary: 'PickAFolder',
+  inspector: 'Info',
+}).inspectorColumn({ width: 300, visible: false });
+```
+
+The inspector starts hidden; `navigation.showColumn('inspector')` brings it.
+
+### `showsSecondaryOnlyButton()` {#showsSecondaryOnlyButton}
+
+<ApiMember data={data} of="SplitViewElement" name="showsSecondaryOnlyButton" />
+
+With three columns, a button that shows the secondary column alone, for reading at full width. Off by default.
+
+```ts
+SplitView({
+  primary: 'Folders',
+  supplementary: 'Files',
+  secondary: 'PickAFile',
+}).showsSecondaryOnlyButton(true);
+```
+
+## Showing and hiding the sidebar {#sidebar-group}
+
+### `displayModeButton()` {#displayModeButton}
+
+<ApiMember data={data} of="SplitViewElement" name="displayModeButton" />
+
+The button in the top bar that shows and hides the sidebar:
+
+- `'automatic'`: UIKit's, the default; it hides the button with `presentsWithGesture(false)`;
+- `'always'`: always there;
+- `'never'`: never; the app shows and hides the columns itself.
+
+```ts
+SplitView({ primary: 'Folders', secondary: 'PickAFolder' })
+  .displayModeButton('never');
+```
+
+### `presentsWithGesture()` {#presentsWithGesture}
+
+<ApiMember data={data} of="SplitViewElement" name="presentsWithGesture" />
+
+A swipe from the edge shows the hidden sidebar. On by default; `false` leaves the sidebar to the button and to code.
+
+```ts
+SplitView({ primary: 'Folders', secondary: 'PickAFolder' })
+  .presentsWithGesture(false);
+```
+
+<Os name="Android" /> reads it too: with `false` the user can't slide the panes when one is over the other.
+
+## A phone and a narrow window {#compact-group}
+
+### `compactTopColumn()` {#compactTopColumn}
+
+<ApiMember data={data} of="SplitViewElement" name="compactTopColumn" />
+
+Which column is on top when the split view has one column and no `compact` layout:
+
+- `'primary'`: the list, and a pick pushes the item over it;
+- `'secondary'`: the item, with back to the list.
+
+Without it, UIKit's choice on iOS, the primary pane on Android.
+
+```ts
+SplitView({ primary: 'Folders', secondary: 'Folder' })
+  .compactTopColumn('primary');
+```
+
+<Os name="Android" /> reads it as the pane that shows first on a narrow screen: with `'secondary'` the secondary pane
+starts over the primary one.
+
+## Other settings {#other-group}
+
+### `options()` {#options}
+
+<ApiMember data={data} of="SplitViewElement" name="options" />
+
+The `splitView` options as an object, the same keys the methods set. For options built elsewhere:
+
+```ts
+SplitView({ primary: 'Folders', secondary: 'PickAFolder' }).options({
+  displayMode: 'oneBesideSecondary',
+  width: 320,
+});
+```
+
+The options of the screens go on the screens. Every key is in [the options](/api/split-view/options).
+
+### `ios()` {#ios}
+
+<ApiMember data={data} of="SplitViewElement" name="ios" />
+
+Methods for iOS only; on Android the function isn't called. For a width that differs by platform:
+
+```ts
+SplitView({ primary: 'Folders', secondary: 'PickAFolder' })
+  .ios((split) => split.primaryColumn({ width: 320 }))
+  .android((split) => split.primaryColumn({ width: 280 }));
+```
+
+### `android()` {#android}
+
+<ApiMember data={data} of="SplitViewElement" name="android" />
+
+Methods for Android only; on iOS the function isn't called. Android reads three settings: `primaryColumn({ width })`,
+`presentsWithGesture()` and `compactTopColumn()`.
+
+## Over time {#over-time}
+
+- **The width changes while the app runs**: the user resizes the window on iPad or turns an Android phone. The split
+  view goes between columns and one column by itself, and the screens stay. Code that calls `showInColumn` doesn't need
+  to know which it is.
+- **Each column keeps its stack** while the others change. `showInColumn` replaces what a column shows; it doesn't
+  push over it where there are columns.
+- **The methods set where the split view starts.** The user and `showColumn` / `hideColumn` change the columns later;
+  `splitViewDisplayModeChanged` reports it on iOS.
+
+## See also {#see-also}
+
+- [Split view](/docs/containers/split-view): showing beside the list, the sidebar, a phone and a narrow window,
+  Android.
+- [List and details](/docs/flows/list-and-details): a whole list-and-details app, step by step.
+- [The options](/api/split-view/options), [`Stack`](/api/stack/Stack).

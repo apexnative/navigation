@@ -1,0 +1,48 @@
+import { CodeTabs } from '@site/src/components/Api';
+
+## Set it {#set}
+
+In the definition of the screen, from the screen while it shows, or for every screen of the app. The screen's own options go over the app defaults, and the options set while it shows go over both, key by key. More: [Screen options](/docs/fundamentals/screen-options#layers).
+
+<CodeTabs
+  tabs={[
+    {
+      label: 'Definition',
+      file: 'src/screens/Profile.tsx',
+      code: `export const ProfileScreen = defineScreen({
+  component: Profile,
+  options: (s) =>
+    s
+      .title('Profile')
+      .largeTitle()
+      .topBar({ background: { color: '#F3E9D2' }, noBorder: true }),
+});`,
+    },
+    {
+      label: 'From the screen',
+      file: 'src/screens/Profile.tsx',
+      code: `useScreenOptions((s) => s.subtitle(online ? 'Online' : 'Offline'));`,
+    },
+    {
+      label: 'App defaults',
+      file: 'Navigation.ts',
+      code: `export const Navigation = createNavigation({
+  screens: { Home: HomeScreen, Profile: ProfileScreen },
+  root: 'Home',
+  options: (s) => s.topBar({ noBorder: true }),
+});`,
+    },
+  ]}
+/>
+
+## Chain methods {#chain}
+
+Short ways to set the most common keys in an options chain.
+
+| Method | Sets |
+| --- | --- |
+| `s.title(text \| title)` | `topBar.title`; a string is its text. |
+| `s.subtitle(text \| subtitle)` | `topBar.subtitle`; a string is its text. |
+| `s.largeTitle(on = true)` | `topBar.largeTitle`; `true` shows it, an object sets it. |
+| `s.hideTopBar(hidden = true)` | `topBar.visible`: `false` hides the bar. |
+| `s.topBar(options)` | Any keys of `topBar`. |

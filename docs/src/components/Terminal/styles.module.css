@@ -1,0 +1,50 @@
+/* The brand colors of the CLI (cli/ui.js): coral, yellow, cream, navy, muted, faint. */
+
+.screen {
+  margin: 0;
+  padding: 16px 18px 18px;
+  background: transparent;
+  border-radius: 0;
+  font-family: var(--an-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: #f3ebdd;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+/* The banner's blocks touch, as in a terminal. */
+.banner {
+  line-height: 1.18;
+  margin-bottom: 14px;
+  white-space: pre;
+}
+
+.coral {
+  color: #e8704f;
+}
+
+.yellow {
+  color: #f2b33d;
+}
+
+.cream {
+  color: #f3ebdd;
+}
+
+.muted {
+  color: #8a8f9c;
+}
+
+.faint {
+  color: #5b627a;
+}
+
+.glass {
+  background: #2a3352;
+}
+
+.bold {
+  font-weight: 700;
+  color: #f3ebdd;
+}

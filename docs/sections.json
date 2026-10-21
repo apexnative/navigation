@@ -1,0 +1,808 @@
+{
+  "groups": [
+    {
+      "id": "start",
+      "title": "Getting started",
+      "sections": [
+        {
+          "id": "introduction",
+          "title": "Introduction",
+          "guide": true
+        },
+        {
+          "id": "installation",
+          "title": "Installation",
+          "guide": true
+        },
+        {
+          "id": "quick-start",
+          "title": "Quick start",
+          "guide": true
+        }
+      ]
+    },
+    {
+      "id": "fundamentals",
+      "title": "Fundamentals",
+      "sections": [
+        {
+          "id": "starting-the-app",
+          "title": "Starting the app",
+          "status": "stable",
+          "showcase": [
+            "19.4",
+            "19.5"
+          ],
+          "pages": [
+            "createNavigation",
+            "AppRegistry",
+            "usePendingLink",
+            "useSplash"
+          ],
+          "types": [
+            "NavigationApp",
+            "NavigationConfig",
+            "Presentation",
+            "WindowOptions",
+            "LinkingConfig",
+            "LinkRoute",
+            "LinkRouteConfig",
+            "LinkHandler",
+            "LinkInfo",
+            "LinkParams",
+            "PendingLink",
+            "SplashConfig",
+            "Splash",
+            "SplashLogo"
+          ]
+        },
+        {
+          "id": "screens-and-props",
+          "title": "Screens and props",
+          "status": "draft",
+          "showcase": [
+            "19.3",
+            "14.2"
+          ],
+          "pages": [
+            "defineScreen",
+            "Screen",
+            "useScreen"
+          ],
+          "types": [
+            "ScreenDefinition",
+            "Screens",
+            "ScreenEntry",
+            "ScreenGroup",
+            "ScreenInfo",
+            "Register",
+            "ScreenName",
+            "ScreenProps",
+            "ShowArgs",
+            "ScreenElement",
+            "LayoutElement",
+            "LayoutContent"
+          ]
+        },
+        {
+          "id": "moving-between-screens",
+          "title": "Moving between screens",
+          "status": "draft",
+          "showcase": [
+            "12.3",
+            "13.4"
+          ],
+          "pages": [
+            "useNavigation",
+            "screenNavigation",
+            "navigation"
+          ],
+          "types": [
+            "ScreenNavigation",
+            "AppNavigation"
+          ],
+          "memberGroups": {
+            "screen": "Screens and props",
+            "push": "Stack",
+            "pop": "Stack",
+            "popTo": "Stack",
+            "popToRoot": "Stack",
+            "showInColumn": "Split view",
+            "showModal": "Modals",
+            "dismiss": "Modals",
+            "dismissModal": "Modals",
+            "dismissAllModals": "Modals",
+            "showOverlay": "Overlays",
+            "dismissOverlay": "Overlays",
+            "dismissAllOverlays": "Overlays",
+            "setOptions": "Screen options",
+            "selectTab": "Tabs",
+            "setTabBadge": "Tabs",
+            "switchTo": "Switching roots",
+            "setTheme": "Theme and context",
+            "getContext": "Theme and context",
+            "setContext": "Theme and context",
+            "getState": "Lifecycle and events",
+            "on": "Lifecycle and events",
+            "getPendingLink": "Starting the app",
+            "openPendingLink": "Starting the app",
+            "clearPendingLink": "Starting the app",
+            "replace": "Stack",
+            "setStack": "Stack",
+            "canPop": "Stack",
+            "goBack": "Stack",
+            "canGoBack": "Stack",
+            "canDismiss": "Modals",
+            "showColumn": "Split view",
+            "hideColumn": "Split view",
+            "openMenu": "Side menu",
+            "closeMenu": "Side menu",
+            "setDirection": "Theme and context"
+          }
+        },
+        {
+          "id": "screen-options",
+          "title": "Screen options",
+          "status": "draft",
+          "showcase": [],
+          "pages": [
+            "ScreenOptions",
+            "useScreenOptions"
+          ],
+          "types": [
+            "OptionsChain",
+            "ScreenOptionsInput",
+            "OptionsEnvironment",
+            "Options",
+            "Color",
+            "ImageResource",
+            "PlatformIcon"
+          ]
+        },
+        {
+          "id": "switching-roots",
+          "title": "Switching roots",
+          "status": "draft",
+          "showcase": [
+            "19.1",
+            "19.2",
+            "17.4"
+          ],
+          "pages": [
+            "Root"
+          ],
+          "types": [
+            "RootParam",
+            "RootTarget",
+            "RootValue",
+            "RootsMap",
+            "RootElement",
+            "RootLayout",
+            "RootTransition"
+          ]
+        },
+        {
+          "id": "lifecycle-and-events",
+          "title": "Lifecycle and events",
+          "status": "draft",
+          "showcase": [
+            "13"
+          ],
+          "pages": [
+            "useNavigationEvent",
+            "useScreenAppear",
+            "useScreenDisappear",
+            "useFocusEffect",
+            "useIsFocused",
+            "useScreenEvent",
+            "useNavigationState"
+          ],
+          "types": [
+            "NavigationEvents",
+            "NavigationEventName",
+            "NavigationListeners",
+            "ScreenEventName",
+            "NavigationState",
+            "ScreenWillAppearEvent",
+            "ScreenDidAppearEvent",
+            "ScreenDidDisappearEvent"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "containers",
+      "title": "Containers",
+      "sections": [
+        {
+          "id": "stack",
+          "title": "Stack",
+          "status": "draft",
+          "showcase": [
+            "12"
+          ],
+          "pages": [
+            "Stack"
+          ],
+          "types": [
+            "StackElement",
+            "StackEntry",
+            "PushConfig"
+          ]
+        },
+        {
+          "id": "tabs",
+          "title": "Tabs",
+          "status": "draft",
+          "showcase": [
+            "9",
+            "13.3"
+          ],
+          "pages": [
+            "Tabs",
+            "Tab",
+            "useTabPress"
+          ],
+          "options": [
+            "bottomTabs",
+            "bottomTab"
+          ],
+          "types": [
+            "TabsElement",
+            "TabElement",
+            "TabItemStyle",
+            "OptionsBottomTabs",
+            "OptionsBottomTabsAccessory",
+            "BottomTabsCustomRowOptions",
+            "ShadowOptions",
+            "OptionsBottomTab",
+            "DotIndicatorOptions",
+            "TabPressEvent",
+            "TabPressHandler",
+            "TabSelectedEvent",
+            "TabPressedEvent",
+            "TabLongPressedEvent",
+            "AccessoryPlacementChangedEvent"
+          ]
+        },
+        {
+          "id": "modals",
+          "title": "Modals",
+          "status": "draft",
+          "showcase": [
+            "7"
+          ],
+          "options": [
+            "modal",
+            "modalPresentationStyle",
+            "modalTransitionStyle"
+          ],
+          "types": [
+            "ModalConfig",
+            "ModalOptions",
+            "OptionsModalSheet",
+            "OptionsModalSheetDetent",
+            "OptionsModalPopover",
+            "OptionsModalPresentationStyle",
+            "OptionsModalTransitionStyle",
+            "ModalDismissedEvent",
+            "ModalDismissAttemptedEvent",
+            "SheetDetentChangedEvent"
+          ]
+        },
+        {
+          "id": "overlays",
+          "title": "Overlays",
+          "status": "draft",
+          "showcase": [
+            "8"
+          ],
+          "options": [
+            "overlay"
+          ],
+          "types": [
+            "OverlayConfig",
+            "OverlayOptions"
+          ]
+        },
+        {
+          "id": "side-menu",
+          "title": "Side menu",
+          "status": "draft",
+          "showcase": [
+            "10"
+          ],
+          "pages": [
+            "SideMenu"
+          ],
+          "options": [
+            "sideMenu"
+          ],
+          "types": [
+            "SideMenuElement",
+            "SideMenuParts",
+            "OptionsSideMenu",
+            "SideMenuSide"
+          ]
+        },
+        {
+          "id": "split-view",
+          "title": "Split view",
+          "status": "draft",
+          "showcase": [
+            "11"
+          ],
+          "pages": [
+            "SplitView"
+          ],
+          "options": [
+            "splitView"
+          ],
+          "types": [
+            "SplitViewElement",
+            "SplitViewColumns",
+            "ColumnConfig",
+            "SplitColumn",
+            "OptionsSplitView",
+            "OptionsSplitViewColumn",
+            "SplitViewDisplayModeChangedEvent"
+          ]
+        },
+        {
+          "id": "arrangement",
+          "title": "Arrangement",
+          "status": "draft",
+          "showcase": [
+            "11.7"
+          ],
+          "pages": [
+            "defineArrangement",
+            "useArrangement"
+          ],
+          "types": [
+            "Arrangement",
+            "ArrangementDefinition",
+            "ScreenArrangement",
+            "ArrangementState"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "screen-ui",
+      "title": "Screen UI",
+      "sections": [
+        {
+          "id": "top-bar",
+          "title": "Top bar",
+          "status": "draft",
+          "showcase": [
+            "1"
+          ],
+          "options": [
+            "topBar"
+          ],
+          "types": [
+            "OptionsTopBar",
+            "OptionsTopBarTitle",
+            "OptionsTopBarSubtitle",
+            "OptionsTopBarLargeTitle",
+            "OptionsTopBarBackground",
+            "OptionsTopBarScrollEdgeAppearance",
+            "OptionsTopBarScrollEdgeAppearanceBackground",
+            "OptionsTopBarScrollEdgeAppearanceTitle",
+            "TitleRenamedEvent"
+          ]
+        },
+        {
+          "id": "bar-buttons",
+          "title": "Bar buttons",
+          "status": "draft",
+          "showcase": [
+            "2",
+            "13.2"
+          ],
+          "pages": [
+            "useNavigationButton"
+          ],
+          "options": [
+            "topBar.leftButtons",
+            "topBar.rightButtons",
+            "topBar.centerButtons",
+            "topBar.overflowMenu",
+            "topBar.verticalBarKeeps",
+            "topBar.customizationId",
+            "topBar.leftButtonColor",
+            "topBar.rightButtonColor",
+            "topBar.leftButtonBackgroundColor",
+            "topBar.rightButtonBackgroundColor",
+            "topBar.leftButtonDisabledColor",
+            "topBar.rightButtonDisabledColor",
+            "topBar.centerButtonColor",
+            "topBar.centerButtonDisabledColor",
+            "topBar.animateLeftButtons",
+            "topBar.animateRightButtons"
+          ],
+          "types": [
+            "NavigationButton",
+            "ButtonPressHandler",
+            "NavigationButtonMenu",
+            "NavigationMenuItem",
+            "NavigationSubmenu",
+            "OptionsTopBarButton",
+            "OptionsTopBarButtonMenu",
+            "OptionsTopBarButtonMenuItem",
+            "OptionsTopBarButtonSubmenu",
+            "OptionsTopBarButtonMenuElement",
+            "SystemItemIcon",
+            "IconInsets",
+            "IconBackgroundOptions",
+            "ButtonPressEvent",
+            "ButtonPressedEvent"
+          ]
+        },
+        {
+          "id": "back-and-gestures",
+          "title": "Back and gestures",
+          "status": "draft",
+          "showcase": [
+            "3"
+          ],
+          "options": [
+            "topBar.backButton",
+            "popGesture",
+            "hardwareBackButton"
+          ],
+          "types": [
+            "OptionsTopBarBackButton",
+            "HardwareBackButtonOptions",
+            "ScreenPoppedEvent"
+          ],
+          "pages": [
+            "usePreventLeave"
+          ]
+        },
+        {
+          "id": "search",
+          "title": "Search",
+          "status": "draft",
+          "showcase": [
+            "4"
+          ],
+          "pages": [
+            "useSearchBar"
+          ],
+          "options": [
+            "topBar.searchBar"
+          ],
+          "types": [
+            "OptionsSearchBar",
+            "OptionsSearchBarScope",
+            "OptionsSearchBarToken",
+            "OptionsSearchBarSuggestion",
+            "SearchChangedEvent",
+            "SearchSubmittedEvent",
+            "SearchCancelledEvent",
+            "SearchSuggestionPickedEvent"
+          ]
+        },
+        {
+          "id": "toolbar-and-fab",
+          "title": "Toolbar and FAB",
+          "status": "draft",
+          "showcase": [
+            "5"
+          ],
+          "options": [
+            "toolbar",
+            "fab"
+          ],
+          "types": [
+            "OptionsToolbar",
+            "ToolbarOptions",
+            "OptionsToolbarSpace",
+            "OptionsToolbarSearchField",
+            "NavigationFab",
+            "OptionsFab"
+          ]
+        },
+        {
+          "id": "system-ui",
+          "title": "System UI",
+          "status": "draft",
+          "showcase": [
+            "6"
+          ],
+          "pages": [
+            "useSafeAreaInsets",
+            "useReservedRegions",
+            "useHinge",
+            "useHingeChange"
+          ],
+          "options": [
+            "layout",
+            "statusBar",
+            "navigationBar",
+            "scrollEdgeEffect",
+            "keyCommands",
+            "blurOnUnmount"
+          ],
+          "types": [
+            "OptionsLayout",
+            "SafeAreaEdge",
+            "LayoutOrientation",
+            "NavigationDirection",
+            "OptionsStatusBar",
+            "NavigationBarOptions",
+            "OptionsScrollEdgeEffect",
+            "OptionsScrollEdge",
+            "OptionsKeyCommand",
+            "EdgeInsets",
+            "KeyCommandPressedEvent",
+            "ReservedRegion",
+            "ReservedRegions",
+            "Hinge"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "architecture",
+      "title": "App architecture",
+      "sections": [
+        {
+          "id": "theme-and-context",
+          "title": "Theme and context",
+          "status": "draft",
+          "showcase": [
+            "15"
+          ],
+          "pages": [
+            "useNavigationTheme",
+            "useAppContext"
+          ],
+          "types": [
+            "NavigationTheme",
+            "ResolvedNavigationTheme",
+            "RegisteredContext",
+            "AppOptionsInput"
+          ]
+        },
+        {
+          "id": "one-tree",
+          "title": "One tree",
+          "status": "draft",
+          "showcase": [
+            "16"
+          ],
+          "types": [
+            "AppProvider",
+            "ScreenProvider"
+          ]
+        },
+        {
+          "id": "errors-and-loading",
+          "title": "Errors and loading",
+          "status": "draft",
+          "showcase": [
+            "14"
+          ],
+          "types": [
+            "ErrorFallbackProps",
+            "LoadingFallback",
+            "NavigationErrorSource"
+          ]
+        },
+        {
+          "id": "transitions",
+          "title": "Transitions",
+          "status": "draft",
+          "showcase": [
+            "17"
+          ],
+          "pages": [
+            "usePreview"
+          ],
+          "options": [
+            "animations"
+          ],
+          "types": [
+            "Transition",
+            "TransitionPreset",
+            "AnimationOptions",
+            "ScreenAnimationOptions",
+            "StackAnimationOptions",
+            "StackPushAnimationOptions",
+            "ModalAnimationOptions",
+            "EnterExitAnimationOptions",
+            "ViewAnimationOptions",
+            "TopBarAnimationOptions",
+            "OptionsAnimationPropertyConfig",
+            "Interpolation",
+            "ElementTransition",
+            "ElementAnimation",
+            "AppearingElementAnimation",
+            "DisappearingElementAnimation",
+            "SharedElementTransition",
+            "ZoomTransitionOptions",
+            "PreviewAction",
+            "PreviewConfig",
+            "PreviewCompletedEvent"
+          ]
+        },
+        {
+          "id": "native-screens",
+          "title": "Native screens",
+          "status": "draft",
+          "showcase": [
+            "18"
+          ],
+          "pages": [
+            "nativeScreen"
+          ],
+          "types": [
+            "NativeScreen"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "flows",
+      "title": "App flows",
+      "sections": [
+        {
+          "id": "sign-in-and-sign-out",
+          "title": "Sign in and sign out",
+          "guide": true
+        },
+        {
+          "id": "onboarding",
+          "title": "Onboarding",
+          "guide": true
+        },
+        {
+          "id": "an-app-with-tabs",
+          "title": "An app with tabs",
+          "guide": true
+        },
+        {
+          "id": "list-and-details",
+          "title": "List and details",
+          "guide": true
+        },
+        {
+          "id": "forms-in-a-modal",
+          "title": "Forms in a modal",
+          "guide": true
+        },
+        {
+          "id": "bottom-sheets",
+          "title": "Bottom sheets",
+          "guide": true
+        },
+        {
+          "id": "a-search-screen",
+          "title": "A search screen",
+          "guide": true
+        }
+      ]
+    },
+    {
+      "id": "guides",
+      "title": "Guides",
+      "sections": [
+        {
+          "id": "overview",
+          "title": "All guides",
+          "guide": true
+        },
+        {
+          "id": "building-a-screen",
+          "title": "Building a screen",
+          "guide": true
+        },
+        {
+          "id": "app-context",
+          "title": "The app context, and working without it",
+          "guide": true
+        },
+        {
+          "id": "state-management",
+          "title": "State management",
+          "guide": true
+        },
+        {
+          "id": "data-fetching",
+          "title": "Data fetching",
+          "guide": true
+        },
+        {
+          "id": "gestures-and-animations",
+          "title": "Gestures and animations",
+          "guide": true
+        },
+        {
+          "id": "splash-screen",
+          "title": "Splash screen",
+          "guide": true
+        },
+        {
+          "id": "deep-links",
+          "title": "Deep links",
+          "guide": true
+        },
+        {
+          "id": "notifications",
+          "title": "Notifications that open a screen",
+          "guide": true
+        },
+        {
+          "id": "analytics",
+          "title": "Screen analytics",
+          "guide": true
+        },
+        {
+          "id": "error-reporting",
+          "title": "Error reporting",
+          "guide": true
+        },
+        {
+          "id": "right-to-left",
+          "title": "Right-to-left and languages",
+          "guide": true
+        },
+        {
+          "id": "testing",
+          "title": "Testing",
+          "status": "draft",
+          "showcase": [],
+          "pages": [
+            "TestIDs"
+          ]
+        },
+        {
+          "id": "cli",
+          "title": "The CLI",
+          "guide": true
+        }
+      ]
+    },
+    {
+      "id": "migration",
+      "title": "Migration",
+      "sections": [
+        {
+          "id": "from-react-navigation",
+          "title": "From React Navigation",
+          "guide": true
+        },
+        {
+          "id": "from-expo-router",
+          "title": "From Expo Router",
+          "guide": true
+        },
+        {
+          "id": "from-react-native-navigation",
+          "title": "From react-native-navigation",
+          "guide": true
+        }
+      ]
+    },
+    {
+      "id": "help",
+      "title": "Help",
+      "sections": [
+        {
+          "id": "glossary",
+          "title": "Glossary",
+          "guide": true
+        },
+        {
+          "id": "troubleshooting",
+          "title": "Troubleshooting",
+          "guide": true
+        }
+      ]
+    }
+  ]
+}

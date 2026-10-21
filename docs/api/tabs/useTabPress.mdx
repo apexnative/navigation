@@ -1,0 +1,101 @@
+import { Os } from '@site/src/components/Intro';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+`useTabPress` calls a handler when the user taps the tab of this screen, while the screen is the one the tab shows.
+It is how a tab's screen reacts to a tap on its own tab: refetch the feed, reset a filter, count the taps. You call
+it in a component of a screen.
+
+## Usage {#usage}
+
+```tsx title="src/screens/Inbox.tsx"
+import { FlatList, Text } from 'react-native';
+import { defineScreen, useTabPress } from '@apexnative/navigation';
+import { useMessages } from '../data'; // your own data hook
+
+function Inbox() {
+  const { messages, refetch } = useMessages();
+
+  useTabPress(({ wasSelected }) => {
+    if (wasSelected) refetch();
+  });
+
+  return (
+    <FlatList
+      data={messages}
+      renderItem={({ item }) => <Text>{item.subject}</Text>}
+    />
+  );
+}
+
+export const InboxScreen = defineScreen({ component: Inbox });
+```
+
+The user is on Inbox and taps the Inbox tab again: the list scrolls to the top, as the platforms do by themselves,
+and the messages load again. A tap that switches to Inbox from another tab doesn't reload: `wasSelected` is `false`
+there.
+
+<DeviceVideo name="tab-repress" />
+
+## Signature {#signature}
+
+<ApiSignature data={data} name="useTabPress" />
+
+It takes one function and returns nothing. The handler can be a new function on every render: the hook always calls
+the latest one, so it sees the current props and state without a dependency list. It stops listening when the
+component unmounts.
+
+## The press {#event}
+
+The handler gets a `TabPressEvent`:
+
+### `wasSelected` {#wasSelected}
+
+<ApiMember data={data} of="TabPressEvent" name="wasSelected" />
+
+`true` for a tap on the tab that was already selected: the second tap, which apps use to scroll to the top or reload.
+`false` for the tap that switched to this tab from another one.
+
+### `index` {#index}
+
+<ApiMember data={data} of="TabPressEvent" name="index" />
+
+The tab's place in `Tabs(…)`, from 0, in the order the layout lists them, also when the user rearranged the tabs on
+iPad.
+
+### `screenId` {#screenId}
+
+<ApiMember data={data} of="TabPressEvent" name="screenId" />
+
+The id of the screen on top of the tab's stack: this screen, since the hook hears only the taps that reach it.
+
+## Which screen hears the tap {#which-screen}
+
+The tap goes to **the screen on top of the tab's stack** at the moment of the tap. A screen under a pushed one
+doesn't hear it:
+
+| The tab shows | A tap on the selected tab |
+| --- | --- |
+| Inbox alone | Inbox's handler runs with `wasSelected: true`; the list scrolls to the top. |
+| Inbox → Chat | Chat's handler runs; then the stack goes back to Inbox. Inbox's doesn't run. |
+
+The second row is `popToRootOnPress`, on by default. A screen that wants every tap on its tab, whatever is on top,
+listens at the tab instead, with [`Tab().onPress()`](/api/tabs/Tab#onPress).
+
+## What it is not for {#not-for}
+
+- **Scrolling to the top.** Both platforms do it on a second tap, unless `Tab().popToRootOnPress(false)`. A handler
+  that scrolls too would scroll twice.
+- **Changing what a tap does.** The native side has acted when the handler runs: the tab is selected, the stack went
+  back. To keep a tap from selecting the tab, use [`Tab().selectOnPress(false)`](/api/tabs/Tab#selectOnPress).
+- **Code outside a screen.** It throws in a component that isn't in a screen: "This hook is for the screens of
+  createNavigation". Outside React, listen with `listeners.tabPressed` of `createNavigation` or `navigation.on`. See
+  [Every event](/docs/fundamentals/lifecycle-and-events#events).
+- **Screens that aren't in tabs.** In a modal or a root without tabs the handler never runs.
+
+<Os name="iPadOS" /> A pick in the iPad sidebar counts as a tap on the tab.
+
+## See also {#see-also}
+
+- [A press on a tab](/docs/containers/tabs#press): the second tap, button tabs, `selectOnPress`.
+- [`Tab`](/api/tabs/Tab#onPress), [`Tabs`](/api/tabs/Tabs).
+- [Lifecycle and events](/docs/fundamentals/lifecycle-and-events): the other hooks of a screen.

@@ -1,0 +1,241 @@
+---
+title: Lifecycle and events
+description: 'The events of a screen and of the whole app, their order in one move, where to listen to them, what the user sees now, and every event the navigation sends.'
+---
+
+import { SectionStatus, SectionApi } from '@site/src/components/Api';
+import { Mark, Os, Pair } from '@site/src/components/Intro';
+import { EventScopes, EventTimeline } from '@site/src/components/Screens';
+
+<SectionStatus id="lifecycle-and-events" />
+
+An inbox loads new messages each time the user comes back to it; a video stops when another screen covers it; analytics logs every screen the user opens. The platform runs the navigation, so JavaScript learns what happened from events: a screen appeared, the user pressed a button of the bar, picked a tab, swiped a sheet down. A screen hears its own with hooks:
+
+```tsx title="src/screens/Inbox.tsx"
+import { useScreenAppear } from '@apexnative/navigation';
+
+function Inbox() {
+  useScreenAppear(() => {
+    refetch(); // your own request
+  });
+  // …
+}
+```
+
+Inbox loads its messages when it first shows, and again each time the user comes back to it. This page answers:
+
+1. [What a screen goes through](#screen), and the order of the events in one move.
+2. [The hooks of a screen](#hooks): to refresh on appear, to stop work while covered.
+3. [Where to listen](#where): in a screen, in any component, outside React, for the whole run.
+4. [What the user sees now](#state).
+5. [Every event](#events) the navigation sends.
+
+## What a screen goes through {#screen}
+
+A screen mounts once and appears many times: each time the user comes back to it from a screen over it, from another tab, from a modal. <Mark>Mounted and on screen are two different lines</Mark>, as [The life of a screen](./screens-and-props#lifecycle) shows. The events follow the second line:
+
+| Event | When |
+| --- | --- |
+| `screenWillAppear` | The screen starts to come in: the move begins. |
+| `screenDidAppear` | The screen is in place: the move has ended. |
+| `screenDidDisappear` | The screen is covered, or has left. |
+
+### The order in one move {#order}
+
+Home pushes Details. Each screen and the app get their events in this order:
+
+<EventTimeline />
+
+- **Details** gets `screenWillAppear` when the move starts, and `screenDidAppear` when it ends.
+- **Home** gets `screenDidDisappear` once Details covers it. It stays mounted.
+- **The app**: once the move has ended, `stateChanged` tells that Details is now the screen the user sees, and then `push` resolves. Code after `await navigation.push('Details')` reads Details in `getState()`.
+
+Back from Details plays it in reverse: Home appears again, Details disappears and unmounts.
+
+## The hooks of a screen {#hooks}
+
+Inside a screen, hooks listen to the events of that screen only, and stop when it unmounts:
+
+| Hook | Runs |
+| --- | --- |
+| `useFocusEffect(effect)` | The effect each time the screen gets the focus; its cleanup each time it loses it. |
+| `useScreenAppear(handler)` | Each time the screen appears. |
+| `useScreenDisappear(handler)` | Each time it disappears. |
+| `useIsFocused()` | Not an event: `true` while the user is on this screen. |
+| `useScreenEvent(name, handler)` | Any other event of this screen, by its name in [Every event](#events). |
+
+**Work that goes on only while the user is on the screen**, such as a timer, a subscription, a camera, belongs in `useFocusEffect`. It starts when the screen gets <Mark>the focus</Mark>: the screen has appeared, and nothing covers it. It stops when the screen loses it: a screen pushed over it, another tab, a modal or a sheet over it. A covered screen costs nothing.
+
+```tsx
+import {
+  useFocusEffect,
+  useIsFocused,
+  useScreenEvent,
+} from '@apexnative/navigation';
+
+// in a screen
+useFocusEffect(() => {
+  const timer = setInterval(reload, 30_000); // your own reload
+  return () => clearInterval(timer);
+});
+```
+
+The timer stops while a pushed screen or a sheet covers this one, and starts again when the user comes back. Screens side by side in a split view keep the focus, each of them: see [When the effect runs](/api/lifecycle-and-events/useFocusEffect#timing).
+
+**Fresh data each time the user comes back** is `useScreenAppear`, as in Inbox at the top of this page.
+
+**What renders differently while the screen isn't in front** reads `useIsFocused()`: `true` while this is the screen the user sees, the one of [the navigation state](#state). Under a sheet the screen still shows and doesn't disappear, but the user is in the sheet: `useIsFocused()` is `false`, and `useFocusEffect` has cleaned up.
+
+```tsx
+const focused = useIsFocused();
+return <Player paused={!focused} />; // your own player
+```
+
+**Any other event of the screen** has its name. Here a screen in a sheet shows more once the user drags the sheet to full height:
+
+```tsx
+useScreenEvent('sheetDetentChanged', ({ detent }) => {
+  setExpanded(detent === 'large');
+});
+```
+
+The events of the parts of a screen have hooks of their own on their pages: `useNavigationButton` on [Bar buttons](../screen-ui/bar-buttons), `useSearchBar` on [Search](../screen-ui/search), `useTabPress` on [Tabs](../containers/tabs).
+
+## Where to listen {#where}
+
+The same events can be heard in four places. Each one is <Mark>a narrower scope</Mark> than the one around it:
+
+<EventScopes />
+
+**For the whole run**, such as the screens for analytics, `listeners` of `createNavigation`. They work from the first screen, before any component mounts:
+
+```ts title="Navigation.ts"
+export const Navigation = createNavigation({
+  // …
+  listeners: {
+    // your own analytics
+    screenDidAppear: ({ screen }) => trackScreen(screen.name),
+  },
+});
+```
+
+**From code outside React**, such as a store, `navigation.on`. It returns the function that stops listening:
+
+```ts
+import { navigation } from '@apexnative/navigation';
+
+const stop = navigation.on('modalDismissed', () => {
+  refreshBadge(); // your own step
+});
+// later
+stop();
+```
+
+**In a component that isn't a screen**, or for the events of every screen, `useNavigationEvent`. It listens while the component is mounted:
+
+```tsx
+import { useNavigationEvent } from '@apexnative/navigation';
+
+// in any component
+useNavigationEvent('tabSelected', ({ selectedTabIndex }) => {
+  setLastTab(selectedTabIndex);
+});
+```
+
+**In a screen**, for its own events, the [hooks above](#hooks).
+
+### Why the events are outside React {#outside-react}
+
+When the navigation lives in the React tree, its state is React state. Every move updates it at the top of the tree, the navigators render again, and code that wants to know the current screen reaches it through a ref passed around the app.
+
+Here the platform moves the screens, and the events come from it. JavaScript only hears them, so <Mark>listening costs no render and no provider</Mark>:
+
+<Pair left="React Navigation" right="Events from the platform">
+
+```tsx
+const ref =
+  createNavigationContainerRef();
+
+<NavigationContainer
+  ref={ref}
+  onStateChange={() => {
+    const route =
+      ref.current?.getCurrentRoute();
+    trackScreen(route?.name);
+  }}
+>
+```
+
+```ts
+createNavigation({
+  // …
+  listeners: {
+    screenDidAppear: ({ screen }) =>
+      trackScreen(screen.name),
+  },
+});
+```
+
+</Pair>
+
+- **A move renders nothing by itself.** No React state changes when the user goes from screen to screen. A component renders on a move only when it reads `useNavigationState`, and only when the part it picked changes.
+- **No ref and no provider.** Listeners are plain functions, in `createNavigation`, a store or a service. Code outside React needs nothing passed down to it.
+- **From the first screen, across the whole app.** `listeners` are attached before the first root shows, so the first screen is heard too. They don't belong to a root, a tab or a modal, so they don't unmount with one: one listener hears every screen of the app, for as long as it runs.
+
+## What the user sees now {#state}
+
+The navigation keeps one small state: <Mark>the screen the user sees, and the selected tab</Mark>. It is the screen of the top modal, or of the root down to the visible one; overlays don't count.
+
+```ts
+navigation.getState();
+// { screen: { id: 'Component12', name: 'Details' }, tab: 1 }
+```
+
+The state changes at the end of a move, and a command resolves after it: after `await navigation.showModal('Login')`, `getState()` names Login, and the next command acts from there.
+
+`useNavigationState` gives it to a component and renders again when it changes. A function picks the part the component needs, so it renders only when that part changes:
+
+```tsx
+import { useNavigationState } from '@apexnative/navigation';
+
+function MiniPlayer() {
+  const name = useNavigationState((state) => state.screen?.name);
+  if (name === 'Player') return null; // the full player shows
+  return <PlayerBar />;
+}
+```
+
+`stateChanged` is the same as an event, for `listeners` and `navigation.on`.
+
+## Every event {#events}
+
+Every event has a name, the same in `listeners`, `navigation.on`, `useNavigationEvent` and `useScreenEvent`. The events of a screen carry it as `screen`: `{ id, name }`.
+
+| Event | When | Page |
+| --- | --- | --- |
+| `screenWillAppear` | A screen starts to come in. | [This page](#screen) |
+| `screenDidAppear` | A screen is in place. | [This page](#screen) |
+| `screenDidDisappear` | A screen is covered, or has left. | [This page](#screen) |
+| `screenPopped` | A screen left its stack: back, a swipe, `pop`. | [Stack](../containers/stack) |
+| `buttonPressed` | A button of the top bar or the toolbar. | [Bar buttons](../screen-ui/bar-buttons) |
+| `tabSelected` | A tab became current. | [Tabs](../containers/tabs) |
+| `tabPressed`, `tabLongPressed` | A press on a tab. | [Tabs](../containers/tabs) |
+| `modalDismissed` | A modal is gone, whatever closed it. | [Modals](../containers/modals) |
+| `modalDismissAttempted` | A swipe tried to close a modal that doesn't let it. | [Modals](../containers/modals) |
+| `sheetDetentChanged` | The user dragged a sheet to a detent. | [Modals](../containers/modals) |
+| `searchChanged`, `searchSubmitted`, `searchCancelled` | The search field. | [Search](../screen-ui/search) |
+| `searchSuggestionPicked` | The user picked a suggestion of the search field (iOS 16+ and Android). | [Search](../screen-ui/search) |
+| `splitViewDisplayModeChanged` | <Os name="iOS" /> The columns of a split view showed or hid. | [Split view](../containers/split-view) |
+| `accessoryPlacementChanged` | <Os name="iOS" /> 26+: the accessory of the tab bar moved. | [Tabs](../containers/tabs) |
+| `titleRenamed` | <Os name="iOS" /> The user renamed the title. | [Top bar](../screen-ui/top-bar) |
+| `previewCompleted` | <Os name="iOS" /> A preview opened into its screen. | [Transitions](../architecture/transitions) |
+| `keyCommandPressed` | <Os name="iOS" /> A keyboard shortcut. | [System UI](../screen-ui/system-ui) |
+| `stateChanged` | What the user sees changed. | [This page](#state) |
+
+## Next: the containers {#next}
+
+That is the core of the navigation: screens, moves, options, roots and events. The containers that hold the screens come next, from the main one: [Stack](../containers/stack), then [Tabs](../containers/tabs) and [Modals](../containers/modals).
+
+## API {#api}
+
+<SectionApi id="lifecycle-and-events" />

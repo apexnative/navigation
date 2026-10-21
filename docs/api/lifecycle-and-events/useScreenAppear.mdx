@@ -1,0 +1,90 @@
+import { Os } from '@site/src/components/Intro';
+
+`useScreenAppear` calls a handler each time the screen appears: the first time it shows, and each time the user comes
+back to it. It is the place for a one-off step on every visit, such as fresh data or an analytics call. It is called in
+a component of a screen.
+
+## Usage {#usage}
+
+```tsx title="src/screens/Inbox.tsx"
+import { useScreenAppear } from '@apexnative/navigation';
+import { useMessages } from '../data'; // your own data hook
+
+export function Inbox() {
+  const { messages, refetch } = useMessages();
+
+  useScreenAppear(() => {
+    refetch();
+  });
+
+  return <MessageList messages={messages} />; // your own list
+}
+```
+
+Inbox loads its messages when it first shows, and again each time the user comes back to it from a message, from
+another tab, or from a full-screen modal.
+
+## Signature {#signature}
+
+<ApiSignature data={data} name="useScreenAppear" />
+
+**`handler`** gets a `ScreenDidAppearEvent`: `{ screen }`, the screen as `{ id, name }`, the same that
+[`useScreen`](/api/screens-and-props/useScreen) gives. Most handlers don't need it. The handler can change on every
+render: the call goes to the one of the last render, so it reads the current props and state without `useCallback`.
+
+It returns nothing.
+
+## When it is called {#timing}
+
+On the screen's `screenDidAppear`: when the screen is in place, after the move that brought it has ended.
+
+| What happens | The handler |
+| --- | --- |
+| The screen shows for the first time | Called once the push, the modal or the launch has ended. |
+| The user comes back to it: back, a tab, a full-screen modal dismissed | Called again. |
+| A sheet over it goes away | Not called: the screen stayed on screen under the sheet. |
+| An overlay over it goes away | Not called. |
+| The app comes back from the background | <Os name="iOS" /> Not called. <Os name="Android" /> Called when the activity resumes. |
+
+A relaunch on Android, which makes the activity and its screens again, mounts the components anew; the new screen
+appears, and the handler is called.
+
+The handler is called only while the component is mounted. A component that mounts while its screen already shows
+doesn't get the appear that came before it; a component that needs to start at once and each time the screen gets
+the focus is [`useFocusEffect`](/api/lifecycle-and-events/useFocusEffect).
+
+## Pitfalls {#pitfalls}
+
+- **It isn't the same as mount.** A screen mounts once and appears many times. Work for the life of the screen goes
+  in `useEffect`; work for each visit goes here.
+- **No cleanup.** A return value is ignored. Work that runs while the screen shows and stops when it is covered, such
+  as a timer, is [`useFocusEffect`](/api/lifecycle-and-events/useFocusEffect).
+- **After the move.** The handler runs once the screen is in place. A loading state set here shows after the
+  transition: the screen slides in with what it already has.
+- **A refresh on every visit costs requests.** When the data seldom changes, check how old it is first, or let the
+  data library decide (React Query's `staleTime`).
+- **Outside a screen** the hook throws. Every screen's appear, for example for analytics, is `screenDidAppear` in
+  `listeners` of `createNavigation`, or [`useNavigationEvent`](/api/lifecycle-and-events/useNavigationEvent).
+
+## Compared with React Navigation {#react-navigation}
+
+React Navigation has no hook of this name; the nearest is a `focus` listener:
+
+```tsx
+// React Navigation
+useEffect(
+  () => navigation.addListener('focus', () => refetch()),
+  [navigation]
+);
+```
+
+Here it is one call, with no dependencies. The `focus` event of React Navigation comes when the screen gets focus, at
+the start of the transition; `useScreenAppear` comes at its end.
+
+## See also {#see-also}
+
+- [`useScreenDisappear`](/api/lifecycle-and-events/useScreenDisappear),
+  [`useFocusEffect`](/api/lifecycle-and-events/useFocusEffect),
+  [`useScreenEvent`](/api/lifecycle-and-events/useScreenEvent) for `screenWillAppear`.
+- [The hooks of a screen](/docs/fundamentals/lifecycle-and-events#hooks),
+  [Analytics](/docs/guides/analytics#every-screen) for every screen of the app.

@@ -1,0 +1,546 @@
+import { Os } from '@site/src/components/Intro';
+
+`ScreenOptions` is the chain that builds the options of a screen: its title, its buttons, its bars, the back gesture,
+the status bar. You don't create it: every place that takes options as a function hands you one, usually named `s`,
+and you return it with your steps added.
+
+```ts
+options: (s) => s.title('Profile').largeTitle().hideBottomTabs(),
+```
+
+It is the `s` of `defineScreen({ options })`, of `options` in `createNavigation`, in `groups` and in `presentation`, of
+the `options` of a command (`push`, `showModal`…), of `Screen(…).options()`, of `setOptions` and of
+`useScreenOptions`.
+
+## Usage {#usage}
+
+```tsx title="src/screens/Profile.tsx"
+import { defineScreen } from '@apexnative/navigation';
+
+function Profile({ userId }: { userId: string }) {
+  // …
+}
+
+export const ProfileScreen = defineScreen({
+  component: Profile,
+  options: (s, props) =>
+    s
+      .title('Profile')
+      .largeTitle()
+      .rightButtons({
+        id: 'edit',
+        text: 'Edit',
+        onPress: ({ navigation }) =>
+          navigation.push('EditProfile', {
+            props: { userId: props.userId },
+          }),
+      }),
+});
+```
+
+Profile shows with a large title on iOS (a regular one on Android) and an Edit button that opens EditProfile. The options go to the native side with the command that shows the screen, so the bar is
+complete in the first frame: no title pops in after React renders.
+
+How it works:
+
+- **Each step returns a new chain**, with its options merged over those of the steps before. The last one wins.
+- **Objects merge key by key, the rest replaces**: `title` then `subtitle` keeps both, a second `rightButtons(…)`
+  replaces the buttons of the first. `undefined` keeps what was there.
+- **The steps are shortcuts** of the `Options` object: `title('Profile')` is `{ topBar: { title: { text: 'Profile' } } }`.
+  [`options()`](#options) takes any option the steps don't name.
+
+## Signature {#signature}
+
+<ApiSignature data={data} name="ScreenOptions" />
+
+The function that gets the chain gets two more arguments in `defineScreen`, a group or a command: the props of the
+screen, and `{ theme, context }`. The app's defaults have no props: `(s, { theme, context })`. `setOptions` and
+`useScreenOptions` get the chain alone; a component has its props and theme at hand.
+
+## Title {#title-group}
+
+### `title` {#title}
+
+<ApiMember data={data} of="ScreenOptions" name="title" />
+
+The title in the top bar. A text, or an object with its look: `color`, `fontSize`, `fontWeight`, `fontFamily`, or a
+React `component` in place of the text.
+
+```ts
+s.title('Inbox');
+s.title({ text: 'Inbox', color: '#0A84FF' });
+```
+
+The title of the previous screen is also what iOS shows on the back button, unless `backButton` says otherwise. See
+[The title](/docs/screen-ui/top-bar#title).
+
+### `subtitle` {#subtitle}
+
+<ApiMember data={data} of="ScreenOptions" name="subtitle" />
+
+A second line under the title: a text, or an object with its look.
+
+```ts
+s.title('Chat').subtitle('online');
+```
+
+### `largeTitle` {#largeTitle}
+
+<ApiMember data={data} of="ScreenOptions" name="largeTitle" />
+
+<Os name="iOS" /> The large title over the content, which shrinks into the bar as the list scrolls. `largeTitle()`
+turns it on, `largeTitle(false)` off; an object sets its look.
+
+```ts
+s.title('Settings').largeTitle();
+```
+
+Android ignores it. With a large title, the screen leaves the top edge out of its safe area by itself. See
+[The large title](/docs/screen-ui/top-bar#large-title).
+
+## Top bar {#top-bar-group}
+
+### `topBar` {#topBar}
+
+<ApiMember data={data} of="ScreenOptions" name="topBar" />
+
+Any option of the top bar, for those the steps don't name: its background, its border, `drawBehind`, the title menu.
+
+```ts
+s.topBar({ noBorder: true, background: { color: '#F2F2F7' } });
+```
+
+It merges with the other top bar steps, in order. Every key: [Top bar options](/api/top-bar/options).
+
+### `hideTopBar` {#hideTopBar}
+
+<ApiMember data={data} of="ScreenOptions" name="hideTopBar" />
+
+Hides the top bar of this screen; `hideTopBar(false)` shows it. The value can come from state, in
+`useScreenOptions`:
+
+```ts
+useScreenOptions((s) => s.hideTopBar(fullScreen));
+```
+
+The bar of the screen under it comes back when the user goes back. Without a bar there is no back button: give the
+user a way back on screen. See [Hiding the bar](/docs/screen-ui/top-bar#hide).
+
+### `backButton` {#backButton}
+
+<ApiMember data={data} of="ScreenOptions" name="backButton" />
+
+The back button of this screen: its `title`, `showTitle`, `icon`, `color`, `visible`, and on iOS its `displayMode`.
+
+```ts
+s.backButton({ showTitle: false });
+```
+
+On iOS the back button shows on the next screen, with this screen's title, so a `title` here is what the screens pushed
+over this one show. See [The back button](/docs/screen-ui/back-and-gestures#back-button).
+
+## Buttons {#buttons-group}
+
+Bar buttons take `onPress`, which gets the [`navigation`](/api/moving-between-screens/useNavigation) of their screen.
+The function stays in JavaScript; the native side gets the button's `id`. Every button needs an `id`.
+
+### `leftButtons` {#leftButtons}
+
+<ApiMember data={data} of="ScreenOptions" name="leftButtons" />
+
+The buttons at the leading edge of the top bar, one argument each, in order.
+
+```ts
+s.leftButtons({
+  id: 'cancel',
+  systemItem: 'cancel',
+  onPress: ({ navigation }) => navigation.dismiss(),
+});
+```
+
+`leftButtons()` with no argument takes the buttons away. See [Bar buttons](/docs/screen-ui/bar-buttons).
+
+### `rightButtons` {#rightButtons}
+
+<ApiMember data={data} of="ScreenOptions" name="rightButtons" />
+
+The buttons at the trailing edge of the top bar. A button has a `text`, an `icon` (an image, or `{ ios, android }` with
+an SF Symbol and a drawable), or a `systemItem`; `enabled: false` dims it; a `menu` opens on a tap, with an `onPress` for each item.
+
+```ts
+s.rightButtons({
+  id: 'share',
+  icon: { ios: 'square.and.arrow.up', android: 'ic_share' },
+  onPress: () => share(), // your own
+});
+```
+
+A later `rightButtons(…)` replaces all of them, so a screen that changes one button gives the whole list again. See
+[What a button can be](/docs/screen-ui/bar-buttons#kinds).
+
+### `centerButtons` {#centerButtons}
+
+<ApiMember data={data} of="ScreenOptions" name="centerButtons" />
+
+<Os name="iOS" /> Buttons in the middle of the top bar, in place of the title, such as a segmented choice. Android
+ignores them. See [Center buttons](/docs/screen-ui/bar-buttons#center).
+
+```ts
+s.centerButtons(
+  { id: 'all', text: 'All' },
+  { id: 'unread', text: 'Unread' },
+);
+```
+
+### `toolbar` {#toolbar}
+
+<ApiMember data={data} of="ScreenOptions" name="toolbar" />
+
+<Os name="iOS" /> A row of buttons at the bottom of the stack, while this screen is on top. Its buttons take `onPress`;
+`{ systemItem: 'flexibleSpace' }` between them pushes the next ones to the far side.
+
+```ts
+s.toolbar({
+  buttons: [
+    { id: 'filter', icon: { ios: 'line.3.horizontal.decrease' } },
+    { systemItem: 'flexibleSpace' },
+    { id: 'compose', icon: { ios: 'square.and.pencil' } },
+  ],
+});
+```
+
+Android ignores it; the [FAB](#fab) is its main action there. See [The toolbar](/docs/screen-ui/toolbar-and-fab#toolbar).
+
+### `fab` {#fab}
+
+<ApiMember data={data} of="ScreenOptions" name="fab" />
+
+<Os name="Android" /> The floating action button: the main action of the screen, at the bottom corner. It and each of
+its `actions` take `onPress`.
+
+```ts
+s.fab({
+  id: 'compose',
+  icon: { android: 'ic_edit' },
+  onPress: ({ navigation }) => navigation.showModal('Compose'),
+});
+```
+
+iOS ignores it. One screen can set both a toolbar and a FAB, each for its platform. See
+[The floating action button](/docs/screen-ui/toolbar-and-fab#fab).
+
+## Search {#search-group}
+
+### `searchBar` {#searchBar}
+
+<ApiMember data={data} of="ScreenOptions" name="searchBar" />
+
+A search field in the top bar. The screen hears the text with `useSearchBar`.
+
+```ts
+s.title('Inbox').searchBar({
+  visible: true,
+  placeholder: 'Search mail',
+});
+```
+
+See [Search](/docs/screen-ui/search).
+
+## The screen and the system {#system-group}
+
+### `backgroundColor` {#backgroundColor}
+
+<ApiMember data={data} of="ScreenOptions" name="backgroundColor" />
+
+The background of the screen, behind its React content. A color, or `{ light, dark }`.
+
+```ts
+s.backgroundColor({ light: '#FFFFFF', dark: '#000000' });
+```
+
+Without it, the `background` of the theme. See [Backgrounds](/docs/screen-ui/system-ui#backgrounds).
+
+### `safeArea` {#safeArea}
+
+<ApiMember data={data} of="ScreenOptions" name="safeArea" />
+
+The edges on which the screen keeps its content out of the safe area: under the bars, the status bar, the home
+indicator, a cutout. One argument per edge: `'top'`, `'right'`, `'bottom'`, `'left'`; none for content that goes
+edge to edge.
+
+```ts
+s.safeArea('top', 'bottom'); // a form
+s.safeArea(); // a full-screen photo
+```
+
+Without it: all four on Android, and on iOS every edge but those where the content goes under a bar: the top bar,
+a bar at the bottom, the vertical bar at the side of iPhone Duo. `useSafeAreaInsets()` gives what the screen doesn't
+pad. See [The safe area](/docs/screen-ui/system-ui#safe-area).
+
+### `orientation` {#orientation}
+
+<ApiMember data={data} of="ScreenOptions" name="orientation" />
+
+The orientations the screen allows, one argument each: `'portrait'`, `'landscape'`, `'all'`, and on Android the sensor
+values. The screen the user sees decides; when the current orientation isn't allowed, the screen rotates.
+
+```ts
+s.orientation('landscape'); // a video player
+```
+
+<Os name="iOS" /> On iPad it applies only to an app that requires full screen; an app with multitasking rotates with
+the device. See [Orientation](/docs/screen-ui/system-ui#orientation).
+
+### `verticalBars` {#verticalBars}
+
+<ApiMember data={data} of="ScreenOptions" name="verticalBars" />
+
+<Os name="iOS" /> 27.1 On iPhone Duo the system puts the buttons of the bars, the tab bar and the status bar in a
+vertical bar at the side. `false` keeps the bars of this screen and the status bar horizontal, as on any iPhone.
+
+```ts
+s.verticalBars(false); // the bars at the top, as on any iPhone
+```
+
+Set it once for a screen: Apple asks apps not to switch it with the state of the screen. See
+[Buttons on iPhone Duo](/docs/screen-ui/bar-buttons#iphone-duo).
+
+### `statusBar` {#statusBar}
+
+<ApiMember data={data} of="ScreenOptions" name="statusBar" />
+
+The status bar while this screen shows: `style` (`'light'` or `'dark'` text), `visible`, and on Android its
+`backgroundColor` and `drawBehind`.
+
+```ts
+s.statusBar({ style: 'light' }); // over a dark photo
+```
+
+See [The status bar](/docs/screen-ui/system-ui#status-bar).
+
+### `navigationBar` {#navigationBar}
+
+<ApiMember data={data} of="ScreenOptions" name="navigationBar" />
+
+<Os name="Android" /> The system navigation bar at the bottom while this screen shows: `backgroundColor`, `visible`,
+`drawBehind`.
+
+```ts
+s.navigationBar({ backgroundColor: '#000000' });
+```
+
+See [The bottom of the system](/docs/screen-ui/system-ui#bottom).
+
+### `scrollEdgeEffect` {#scrollEdgeEffect}
+
+<ApiMember data={data} of="ScreenOptions" name="scrollEdgeEffect" />
+
+<Os name="iOS" /> iOS 26: the fade of the content under the bars, drawn by the scroll views of the screen. `style`
+(`'automatic'`, `'soft'`, `'hard'`), `hidden`, or per edge with `top` and `bottom`.
+
+```ts
+s.scrollEdgeEffect({ style: 'hard' });
+```
+
+See [The edge of the scroll](/docs/screen-ui/system-ui#scroll-edge).
+
+### `keyCommands` {#keyCommands}
+
+<ApiMember data={data} of="ScreenOptions" name="keyCommands" />
+
+<Os name="iOS" /> Keyboard shortcuts while this screen shows, one argument each. A press sends `keyCommandPressed` with
+the shortcut's `id`; the `title` is what iPad lists while the user holds ⌘.
+
+```ts
+s.keyCommands({
+  id: 'new',
+  input: 'n',
+  modifiers: ['command'],
+  title: 'New Message',
+});
+```
+
+See [Keyboard shortcuts](/docs/screen-ui/system-ui#shortcuts).
+
+### `layout` {#layout}
+
+<ApiMember data={data} of="ScreenOptions" name="layout" />
+
+Any option of the screen's layout the steps don't name, such as `autoHideHomeIndicator` on iOS or `adjustResize` on
+Android. `safeArea`, `backgroundColor` and `orientation` are steps of their own over it.
+
+```ts
+s.layout({ autoHideHomeIndicator: true }); // a video player
+```
+
+Every key: [System UI options](/api/system-ui/options).
+
+## Going back {#back-group}
+
+### `popGesture` {#popGesture}
+
+<ApiMember data={data} of="ScreenOptions" name="popGesture" />
+
+<Os name="iOS" /> The swipe back to the screen under this one. `false` turns it off; `'edge'` keeps the swipe from the
+edge only, so the content's own horizontal gestures (a carousel, a slider) aren't taken over, as they can be by the
+full-width swipe of iOS 26.
+
+```ts
+s.popGesture('edge');
+```
+
+The back button still works; to keep the user on a screen, use `usePreventLeave`. See
+[The swipe back](/docs/screen-ui/back-and-gestures#swipe).
+
+### `hardwareBackButton` {#hardwareBackButton}
+
+<ApiMember data={data} of="ScreenOptions" name="hardwareBackButton" />
+
+<Os name="Android" /> What the system back does on the first screen of a tab: `bottomTabsOnPress` is `'exit'` (leave
+the app), `'first'` (go to the first tab) or `'previous'` (go to the tab before).
+
+```ts
+s.hardwareBackButton({ bottomTabsOnPress: 'first' });
+```
+
+For the whole tabs, `Tabs().backBehavior(…)` says the same once. See
+[The system back of Android](/docs/screen-ui/back-and-gestures#system-back).
+
+## Transitions {#transitions-group}
+
+### `animations` {#animations}
+
+<ApiMember data={data} of="ScreenOptions" name="animations" />
+
+How this screen comes in when it is pushed (`push`) and goes when it is popped (`pop`), in detail. For the usual cases
+the `transition` of `push` is shorter. A command's `transition` goes over the screen's own `animations`, and the
+`options.animations` of the command go over the `transition`.
+
+```ts
+s.animations({ push: { enabled: false }, pop: { enabled: false } });
+```
+
+The screen shows and leaves without an animation. See [Animations of your own](/docs/architecture/transitions#custom).
+
+## The containers {#containers-group}
+
+The options of the tabs and of the side menu are a screen's too: they apply while this screen is on top, and the
+container's own come back when the user leaves it.
+
+### `hideBottomTabs` {#hideBottomTabs}
+
+<ApiMember data={data} of="ScreenOptions" name="hideBottomTabs" />
+
+Hides the tab bar while this screen is on top; `hideBottomTabs(false)` shows it. A chat pushed from Inbox takes the
+whole height:
+
+```ts
+s.title('Chat').hideBottomTabs();
+```
+
+The tab bar comes back when the user goes back to Inbox. See
+[Screens without the tab bar](/docs/containers/tabs#hide).
+
+### `bottomTabs` {#bottomTabs}
+
+<ApiMember data={data} of="ScreenOptions" name="bottomTabs" />
+
+Any option of the tab bar, while this screen is on top. Every key: [Tabs options](/api/tabs/options).
+
+```ts
+// iOS 26: the tab bar shrinks while this screen scrolls down
+s.bottomTabs({ minimizeBehavior: 'onScrollDown' });
+```
+
+### `sideMenu` {#sideMenu}
+
+<ApiMember data={data} of="ScreenOptions" name="sideMenu" />
+
+The side menu while this screen is on top, such as no swipe to open it on a screen with its own horizontal gestures:
+
+```ts
+s.sideMenu({ left: { enabled: false } });
+```
+
+`navigation.openMenu('left')` still opens it. See [Where the swipe is off](/docs/containers/side-menu#swipe).
+
+## Any option {#any-group}
+
+### `options` {#options}
+
+<ApiMember data={data} of="ScreenOptions" name="options" />
+
+Any options, as the `Options` object: for those no step names, and for options that come as an object, such as from
+JSON. It merges over the steps before it, as every step does.
+
+```ts
+s.title('Profile').options({ blurOnUnmount: true });
+```
+
+## Platforms {#platforms-group}
+
+### `ios` {#ios}
+
+<ApiMember data={data} of="ScreenOptions" name="ios" />
+
+Steps for iOS only: the function gets the chain and returns it with its steps; on Android it isn't called.
+
+```ts
+s.title('Profile')
+  .ios((s) => s.largeTitle())
+  .android((s) => s.statusBar({ style: 'light' }));
+```
+
+Options of one platform need no `ios()`: the other platform ignores them. Use it for a value both platforms take but
+should differ.
+
+### `android` {#android}
+
+<ApiMember data={data} of="ScreenOptions" name="android" />
+
+Steps for Android only; on iOS the function isn't called.
+
+```ts
+s.android((s) => s.backgroundColor('#FAFAFA'));
+```
+
+## The chain returns a new value {#immutable}
+
+Each step returns a new chain and leaves the one it was called on as it was. A step whose result isn't returned is lost:
+
+```ts
+// Don't: the title is lost
+options: (s) => {
+  s.title('Inbox');
+  return s;
+},
+```
+
+Return the last step. To add a step only sometimes, keep the result:
+
+```ts
+options: (s, props) => {
+  const base = s.title('Inbox');
+  return props.editable
+    ? base.rightButtons({ id: 'edit', text: 'Edit' })
+    : base;
+},
+```
+
+## Taking an option away {#remove}
+
+Options merge, so leaving a step out of a later layer doesn't remove what an earlier one set. Set the empty value:
+
+- buttons: `rightButtons()` with no argument;
+- the top bar or the tab bar: `hideTopBar(false)`, `hideBottomTabs(false)`;
+- a title or a color: give the value you want.
+
+This matters most with `useScreenOptions`: a render that stops calling `.rightButtons(…)` leaves the old buttons in
+place.
+
+## See also {#see-also}
+
+- [Screen options](/docs/fundamentals/screen-options): where a screen gets its options and which win.
+- [`useScreenOptions`](/api/screen-options/useScreenOptions): options from the state of a screen.
+- [Top bar](/docs/screen-ui/top-bar), [Bar buttons](/docs/screen-ui/bar-buttons),
+  [System UI](/docs/screen-ui/system-ui): what each option looks like.

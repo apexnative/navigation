@@ -1,0 +1,171 @@
+---
+title: Split view
+description: 'Columns side by side on iPad, how to build them, how a pick shows beside the list, how the sidebar shows and hides, and what iPhone and Android show.'
+---
+
+import { SectionStatus, SectionApi } from '@site/src/components/Api';
+import { Mark, Os } from '@site/src/components/Intro';
+import { SplitColumns } from '@site/src/components/Screens';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+<SectionStatus id="split-view" />
+
+On a big screen a list and its item fit side by side: the mail and the message, the settings and the section, the folders and the files. A split view puts them in columns, and `SplitView` builds one:
+
+```ts title="Navigation.ts"
+import { createNavigation, SplitView } from '@apexnative/navigation';
+import { FoldersScreen } from './screens/Folders';
+import { PickAFolderScreen } from './screens/PickAFolder';
+import { FolderScreen } from './screens/Folder';
+
+export const Navigation = createNavigation({
+  screens: {
+    Folders: FoldersScreen, // the list of folders
+    PickAFolder: PickAFolderScreen, // until the user picks one
+    Folder: FolderScreen, // a picked folder
+  },
+  root: SplitView({
+    primary: 'Folders', // the sidebar
+    secondary: 'PickAFolder', // beside it, before the first pick
+  }),
+});
+```
+
+On iPad, Folders shows in a sidebar and PickAFolder beside it. On iPhone the same app shows one column at a time.
+
+This page answers:
+
+1. [What a split view is](#what), and its columns.
+2. [How to build one](#build).
+3. [How a pick shows beside the list](#show).
+4. [How the sidebar shows and hides](#sidebar).
+5. [What a phone and a narrow window show](#compact), and [Android](#android).
+
+## What a split view is {#what}
+
+A split view is columns side by side, each <Mark>with a stack of its own</Mark>. A pick in one column shows its item in the next. On <Os name="iPadOS" /> it is the system's `UISplitViewController`; <Os name="Android" /> has two panes of its own, see [Android](#android). Two screens that come together as one screen of a stack, such as a profile and its details, are a pair instead: see [A pair or a split view](./arrangement#split-view).
+
+<DeviceVideo name="split-view" devices={['ipad']} />
+
+<SplitColumns />
+
+## Building a split view {#build}
+
+`SplitView` takes its columns, and each column names a screen of `screens`, as in the example above. The column beside the list needs something to show <Mark>before the first pick</Mark>. There it is a screen with one line:
+
+```tsx title="src/screens/PickAFolder.tsx"
+import { Text } from 'react-native';
+
+function PickAFolder() {
+  return <Text>Pick a folder on the left</Text>;
+}
+```
+
+Once the user picks a folder, the folder takes its place: see [Showing beside the list](#show). The columns:
+
+- **`primary`** and **`secondary`** are needed; the others are not.
+- **`supplementary`** <Os name="iPadOS" /> adds the middle column: `primary: 'Folders', supplementary: 'Files', secondary: 'File'`.
+- **`inspector`** <Os name="iPadOS" /> 26 adds a column at the trailing edge, for facts about the item.
+- **`compact`** is what an iPhone and a narrow window show: see [A phone and a narrow window](#compact).
+
+A screen alone, by its name or with `Screen(…)`, gets a [stack](./stack) in each column, as in the root; the inspector is a screen on its own. Android has no middle column or inspector, and leaves them out.
+
+## Showing beside the list {#show}
+
+A pick in a column shows its item with `showInColumn`, from the screen where the user picked it. The item goes into the column beside, `secondary` by default, in place of what the column showed:
+
+```tsx title="src/screens/Folders.tsx"
+import { Button, FlatList } from 'react-native';
+import { useNavigation } from '@apexnative/navigation';
+
+function Folders() {
+  const navigation = useNavigation();
+  const folders = useFolders(); // your own data
+
+  const open = (folderId: string) =>
+    navigation.showInColumn('Folder', { props: { folderId } });
+
+  return (
+    <FlatList
+      data={folders}
+      renderItem={({ item }) => (
+        <Button title={item.name} onPress={() => open(item.id)} />
+      )}
+    />
+  );
+}
+```
+
+A tap on a folder shows it beside the list, in place of PickAFolder. The column comes into view: a sidebar over it goes away. The folder is the first screen of its column's stack: a `push` from it opens the next screen inside that column, with the list still beside it.
+
+With three columns, a pick in the sidebar goes to the middle, `column: 'supplementary'`, and a pick there to `secondary`:
+
+```ts
+navigation.showInColumn('Files', {
+  props: { folderId },
+  column: 'supplementary',
+});
+```
+
+<Mark>Where there is one column</Mark>, on iPhone, in a narrow window and on a narrow Android screen, the same call pushes the screen over the list, and back returns to it: the back button, and `pop()` from the screen (`canPop()` is true there). That pop animates as the system back does, whatever `animations.pop`. One call works everywhere.
+
+A whole list-and-details app, step by step: [List and details](../flows/list-and-details).
+
+## How the sidebar shows {#sidebar}
+
+<Os name="iPadOS" /> The split view's methods set how the sidebar shows:
+
+| Method | What it sets |
+| --- | --- |
+| `displayMode(…)` | How it starts: `'oneBesideSecondary'` side by side, `'oneOverSecondary'` the sidebar over the item, `'secondaryOnly'` the item alone. With three columns, `'twoBesideSecondary'` and the others. |
+| `splitBehavior(…)` | How a shown sidebar shares the space: `'tile'` beside, `'overlay'` over, `'displace'` pushing the item aside. |
+| `primaryColumn({ width, edge })` | The width of the sidebar, and `edge: 'trailing'` to put it on the right. |
+| `displayModeButton(…)`, `presentsWithGesture(…)` | The button of the bar that shows and hides the sidebar, and the swipe that brings it. |
+
+```ts
+const main = SplitView({ primary: 'Folders', secondary: 'PickAFolder' })
+  .displayMode('oneBesideSecondary')
+  .primaryColumn({ width: 320 });
+```
+
+The sidebar stays beside the item, 320 points wide.
+
+The app shows and hides a column itself with `showColumn` and `hideColumn`, such as an inspector behind a button:
+
+```ts
+await navigation.showColumn('inspector');
+await navigation.hideColumn('primary'); // the item alone
+```
+
+Each change, by the user or by the app, sends `splitViewDisplayModeChanged` (iOS only).
+
+## A phone and a narrow window {#compact}
+
+On iPhone, and on iPad when the app shares the screen in a narrow window, there is room for one column. The columns collapse into one stack, in one of two ways:
+
+<DeviceVideo name="split-compact" devices={['ipad']} />
+
+| The split view has | One column shows |
+| --- | --- |
+| `compact: 'Folders'` | That layout: Folders, and `showInColumn` pushes over it. |
+| No `compact` | The columns as one stack, with `compactTopColumn` on top: a pick in Folders pushes the folder, and back returns to Folders. |
+
+`compact` is the simpler one: the phone gets a layout of its own, as an app designed for the phone.
+
+```ts
+SplitView({
+  primary: 'Folders',
+  secondary: 'PickAFolder',
+  compact: 'Folders', // iPhone and a narrow window
+});
+```
+
+## Android {#android}
+
+<Os name="Android" /> The split view shows the primary and the secondary pane side by side when the width takes both: a tablet, a phone in landscape. On a narrower screen it shows the `compact` layout, or without it the secondary pane over the primary one. `showInColumn` works the same way on both platforms.
+
+Android reads three settings: the width of the primary pane (`primaryColumn({ width })`, 360 by default), `presentsWithGesture` and `compactTopColumn`. The others are iOS only.
+
+## API {#api}
+
+<SectionApi id="split-view" />

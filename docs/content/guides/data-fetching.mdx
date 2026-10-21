@@ -1,0 +1,498 @@
+---
+title: Data fetching
+description: 'TanStack Query, SWR, Apollo Client and RTK Query with native screens: where the client and its provider go, loading before a screen shows, refreshing when a screen shows again, Suspense and errors.'
+---
+
+import { Mark, Os } from '@site/src/components/Intro';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+An Inbox loads the messages; a tap pushes a Message screen that should show the message at once, from what the Inbox already loaded, and refresh it when the user comes back. Any fetch library does this here, as in any React Native app. What changes is where its client and its provider go, because <Mark>each screen is a React root of its own</Mark> by default, and when a screen counts as shown, because the platform keeps the screens of a stack mounted. You end with:
+
+- one cache that every screen reads, so a pushed screen starts with the data the screen under it loaded;
+- data loaded before the screen shows, when you know what it needs;
+- a refresh when the user comes back to a screen, and no work for the screens behind it;
+- a loading state and an error screen with "Try again", under the screen's own bar.
+
+The first part is the same for every library. Then each library has a part of its own, with the same steps: [TanStack Query](#tanstack-query), [SWR](#swr), [Apollo Client](#apollo), [RTK Query](#rtk-query). Read the first part, then the part of yours.
+
+:::info[Versions]
+
+Written against TanStack Query 5.104, SWR 2.5, Apollo Client 4.3, Redux Toolkit 2.13 and React Native 0.85+. The pages to know first: [One tree](../architecture/one-tree) and [Errors and loading](../architecture/errors-and-loading).
+
+:::
+
+## How it works here {#how}
+
+1. **One client, at module level.** The cache lives in the client. One client for the app means one cache for every screen.
+2. **Its provider wraps the screens** through `createNavigation`: in `appProvider` (one tree) or in `screenProvider` (each screen). Not in `index.js`, where nothing renders.
+3. **Screens get ids in their props**, and read the data from the cache by the id.
+4. **Loading starts early** where you know what comes next: in `didMount`, or right before a `push`.
+5. **A screen refreshes when it shows again** with `useFocusEffect`, and stops polling while it is covered.
+6. **Suspense and errors** show `loadingFallback` and `errorFallback` inside the screen.
+
+## One client, at module level {#client}
+
+With navigation in the React tree, apps often create the client inside the root component. Here there is no root component of the app: each screen renders on its own, or inside `appProvider`. Create the client once, in a module of its own, and import it where it is needed:
+
+```ts title="src/queryClient.ts"
+import { QueryClient } from '@tanstack/react-query';
+
+export const queryClient = new QueryClient();
+```
+
+A module is loaded once per JavaScript runtime, so every screen, `willMount`, a link route and a listener get the same client. That also makes the client usable outside React: prefetch from `didMount`, clear the cache on sign-out from a listener.
+
+## Where the provider goes {#provider}
+
+The provider of a fetch library only hands the client to its hooks through a React context. A context doesn't cross React roots, so the provider must wrap the screens themselves. Two places, both in `createNavigation`:
+
+| | `appProvider` | `screenProvider` |
+| --- | --- | --- |
+| How many | One for the app; every screen renders inside it ([one tree](../architecture/one-tree)) | One per shown screen, each in the screen's own root |
+| The client | The one from your module | The one from your module, the same in every screen |
+| For | Any library | A library whose provider only passes the client on |
+
+Both share the cache, as long as the client comes from the module. The usual pick is `appProvider`: the library's provider mounts once, as in any React app.
+
+```tsx title="src/AppProvider.tsx"
+import type { ReactNode } from 'react';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from './queryClient';
+
+export function AppProvider({ children }: { children: ReactNode }) {
+  return (
+    <QueryClientProvider client={queryClient}>
+      {children}
+    </QueryClientProvider>
+  );
+}
+```
+
+```ts title="src/Navigation.ts"
+export const Navigation = createNavigation({
+  screens: { Inbox: InboxScreen, Message: MessageScreen },
+  root: 'Inbox',
+  appProvider: AppProvider,
+});
+```
+
+### A client created inside screenProvider {#per-screen-client}
+
+`screenProvider` renders once for every shown screen. A client created in it is <Mark>a new client for each screen</Mark>:
+
+```tsx
+// Don't: every screen gets an empty cache of its own
+screenProvider: ({ children }) => {
+  const [client] = useState(() => new QueryClient());
+  return (
+    <QueryClientProvider client={client}>
+      {children}
+    </QueryClientProvider>
+  );
+},
+```
+
+The Inbox loads the messages, the pushed Message starts empty and loads them again, and back on the Inbox nothing the Message changed shows. Nothing fails, so the bug shows only as extra requests and stale screens. Import the client from its module instead, as above.
+
+## Ids in props, not objects {#ids}
+
+A screen can get the whole message in its props: props stay in JavaScript, so any value works ([Props stay in JavaScript](../fundamentals/screens-and-props#props-in-js)). But a screen gets its props once, when it shows. A message passed as an object is a copy: when the cache refreshes it, the screen still shows the old one. Pass the id, and read the data from the cache:
+
+```ts
+// Don't: the screen keeps this copy, however the data changes
+navigation.push('Message', { props: { message } });
+
+// Do: the screen reads the message by its id, and follows the cache
+navigation.push('Message', { props: { id: message.id } });
+```
+
+A link that opens the screen has only the id too (`myapp://message/42`), so a screen that reads by id works from a link without a second code path. See [Deep links](./deep-links).
+
+## Loading before the screen shows {#prefetch}
+
+Three places, by when the data is needed:
+
+| Where | When it runs | For |
+| --- | --- | --- |
+| `willMount` | Before the first root, while the splash screen shows | What decides the first screen: the user, a token. The first root waits for it. |
+| `didMount` | Once the first root shows | What the first screens will need. Nothing waits. |
+| Before a `push` | When the user taps | The data of the screen that comes in. |
+
+`willMount` holds the splash screen, so keep fetches out of it unless the first screen can't show without them. A prefetch before a push starts the request and doesn't wait for it: the push starts at once, and the screen reads the request already in flight.
+
+```ts
+const open = (id: string) => {
+  prefetchMessage(id); // starts the request, see your library below
+  navigation.push('Message', { props: { id } });
+};
+```
+
+The bar of Message comes in with the push, with its title and buttons; the content shows the data as soon as it is there, often before the transition ends.
+
+## When the user comes back to a screen {#refetch}
+
+The screens of a stack stay mounted under the screen pushed over them. When the user goes back, nothing mounts again, so a library that fetches on mount doesn't fetch. `useFocusEffect` runs each time the screen gets the focus: when it appears, and when a sheet over it goes:
+
+<DeviceVideo name="refetch-on-focus" devices={['ios']} />
+
+```tsx title="src/useRefreshOnFocus.ts"
+import { useRef } from 'react';
+import { useFocusEffect } from '@apexnative/navigation';
+
+export function useRefreshOnFocus(refresh: () => void) {
+  const first = useRef(true);
+  useFocusEffect(() => {
+    // the first appearance: the query has just loaded on mount
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    refresh();
+  });
+}
+```
+
+The first appearance is skipped because the library loads on mount by itself. The user pushes a message, reads it, goes back: the Inbox refreshes once it is in place.
+
+- **Compared with React Navigation:** `useFocusEffect` here needs no `useCallback`: each time the screen gets the focus, the effect of the last render runs. The libraries' React Native guides that wire React Navigation's `useFocusEffect` and `useIsFocused` work the same with this library's hooks of the same names.
+- **A sheet over the screen** takes the focus away, though the screen still shows under it (iOS page and form sheets, Android sheets): the polling stops while the user is in the sheet, and the screen refreshes when the sheet goes. See [When the effect runs](/api/lifecycle-and-events/useFocusEffect#timing).
+- **The app comes back from the background:** that is the app's focus, not the screen's, and the navigation has no part in it. Wire it with React Native's `AppState`, as each library's part below shows.
+
+## Screens the user doesn't see {#hidden}
+
+The screens under the top one, and the other tabs, are mounted and keep their subscriptions. A screen that polls every 10 seconds polls under five pushed screens too. Stop the work while the screen is covered, with `useIsFocused`, which is true while the screen is the one the user sees, or with the cleanup of `useFocusEffect`. Each library's part shows its way.
+
+## Suspense and the loading screen {#suspense}
+
+A screen that reads its data with Suspense (`useSuspenseQuery` and the like) shows `loadingFallback` of `createNavigation` until the data is there. The bar is there at once; only the content waits:
+
+```ts title="src/Navigation.ts"
+export const Navigation = createNavigation({
+  // … screens, root, appProvider
+  loadingFallback: LoadingFallback,
+  errorFallback: ErrorFallback,
+});
+```
+
+With a prefetch before the push, the data is often in the cache before the screen renders, and the user never sees the fallback. The fallback is the same for every screen; it gets `screen: { id, name }` to differ for one. See [A screen that loads](../architecture/errors-and-loading#loading).
+
+## Errors {#errors}
+
+A failed request is not an error of the render. Without Suspense, the hook returns the error and the screen shows it, with its own retry. With Suspense, or with an option that throws the error (`throwOnError` in TanStack Query), the error goes up to the screen's error boundary: the screen shows `errorFallback` under its bar, and the other screens go on. `retry` of the fallback renders the screen again; a library that remembers the error needs to be told to forget it first, as the TanStack Query part shows. Every such error also goes to `onError`: see [Error reporting](./error-reporting).
+
+## TanStack Query {#tanstack-query}
+
+```sh
+npm install @tanstack/react-query
+```
+
+### Create the client {#tanstack-client}
+
+```ts title="src/queryClient.ts"
+import { AppState } from 'react-native';
+import {
+  focusManager,
+  QueryClient,
+} from '@tanstack/react-query';
+
+export const queryClient = new QueryClient();
+
+// refetch stale queries when the app comes to the foreground
+AppState.addEventListener('change', (status) => {
+  focusManager.setFocused(status === 'active');
+});
+```
+
+`focusManager` is the app's focus: TanStack Query's React Native guide wires it the same way. Network status goes through `onlineManager` with NetInfo, as that guide shows.
+
+### Connect it to the screens {#tanstack-provider}
+
+`QueryClientProvider` with the client from the module, in `appProvider`: the `AppProvider` of [Where the provider goes](#provider). In `screenProvider` it works too, with the same client.
+
+### Read and write from a screen {#tanstack-screen}
+
+```tsx title="src/screens/Message.tsx"
+import { Text } from 'react-native';
+import { useQuery } from '@tanstack/react-query';
+import { defineScreen, useIsFocused } from '@apexnative/navigation';
+import { useRefreshOnFocus } from '../useRefreshOnFocus';
+import { messageQuery } from '../queries';
+
+function Message({ id }: { id: string }) {
+  const isFocused = useIsFocused();
+  const { data, error, refetch } = useQuery({
+    ...messageQuery(id),
+    // no updates and no refetches while another screen covers it
+    subscribed: isFocused,
+  });
+  useRefreshOnFocus(refetch);
+
+  if (error) return <Text>Could not load the message</Text>;
+  return <Text>{data?.body}</Text>;
+}
+
+export const MessageScreen = defineScreen({ component: Message });
+```
+
+```ts title="src/queries.ts"
+import { queryOptions } from '@tanstack/react-query';
+
+export const messageQuery = (id: string) =>
+  queryOptions({
+    queryKey: ['message', id],
+    queryFn: () => loadMessage(id), // your own request
+  });
+```
+
+`queryOptions` keeps the key and the request in one place, so the screen, the prefetch and the invalidation use the same key. A mutation updates the cache with `queryClient.invalidateQueries({ queryKey: ['message', id] })` in its `onSuccess`; the Inbox under the screen gets the new data when the user goes back.
+
+### Load before the screen shows {#tanstack-prefetch}
+
+```ts
+import { queryClient } from './queryClient';
+import { messageQuery } from './queries';
+
+queryClient.prefetchQuery(messageQuery(id));
+navigation.push('Message', { props: { id } });
+```
+
+The same call works in `didMount`, in a route of `linking`, or in a listener: the client is a module, not a hook.
+
+### Suspense and errors {#tanstack-suspense}
+
+`useSuspenseQuery(messageQuery(id))` suspends until the data is there: the screen shows `loadingFallback`. A failed request throws to `errorFallback`. TanStack Query keeps the failed query in its error state, so a plain `retry` would throw the same error again; reset it first:
+
+```tsx title="src/ErrorFallback.tsx"
+import { Button, Text, View } from 'react-native';
+import { useQueryErrorResetBoundary } from '@tanstack/react-query';
+import type { ErrorFallbackProps } from '@apexnative/navigation';
+
+export function ErrorFallback({ error, retry }: ErrorFallbackProps) {
+  const { reset } = useQueryErrorResetBoundary();
+  const tryAgain = () => {
+    reset(); // the failed queries fetch again on the next render
+    retry();
+  };
+  return (
+    <View>
+      <Text>{error instanceof Error ? error.message : 'Error'}</Text>
+      <Button title="Try again" onPress={tryAgain} />
+    </View>
+  );
+}
+```
+
+The fallback renders inside the screen's providers, so the hook has what it needs in both modes.
+
+### Sign-out {#tanstack-sign-out}
+
+`queryClient.clear()` drops every cached query, so the next user starts empty. Call it where the sign-out happens, before `navigation.switchTo` shows the signed-out root.
+
+### Tests {#tanstack-tests}
+
+A test renders the screen inside its own `QueryClientProvider` with a new client, `new QueryClient({ defaultOptions: { queries: { retry: false } } })`, so tests don't share a cache. See [Testing](./testing).
+
+## SWR {#swr}
+
+```sh
+npm install swr
+```
+
+### Create the cache {#swr-cache}
+
+SWR keeps one global cache by default, which every root shares, so a screen works without a provider at all. To refresh when the app comes to the foreground, SWR's React Native guide sets `SWRConfig` with `initFocus` and a cache provider of its own. That cache must be one for the app, so `SWRConfig` goes in `appProvider`:
+
+```tsx title="src/AppProvider.tsx"
+import type { ReactNode } from 'react';
+import { AppState } from 'react-native';
+import { SWRConfig } from 'swr';
+
+const config = {
+  provider: () => new Map(),
+  isVisible: () => true,
+  initFocus(callback: () => void) {
+    let state = AppState.currentState;
+    const sub = AppState.addEventListener('change', (next) => {
+      if (state.match(/inactive|background/) && next === 'active') {
+        callback();
+      }
+      state = next;
+    });
+    return () => sub.remove();
+  },
+};
+
+export function AppProvider({ children }: { children: ReactNode }) {
+  return <SWRConfig value={config}>{children}</SWRConfig>;
+}
+```
+
+`provider` runs when `SWRConfig` mounts: in `appProvider` that is once, so the app has one cache. In `screenProvider` the same code would give each screen a cache of its own. Without one tree, leave `SWRConfig` out and use the global cache.
+
+### Read and write from a screen {#swr-screen}
+
+```tsx title="src/screens/Message.tsx"
+import { Text } from 'react-native';
+import useSWR from 'swr';
+import { useIsFocused } from '@apexnative/navigation';
+import { useRefreshOnFocus } from '../useRefreshOnFocus';
+
+function Message({ id }: { id: string }) {
+  const isFocused = useIsFocused();
+  const { data, error, mutate } = useSWR(
+    ['message', id],
+    () => loadMessage(id), // your own request
+    { refreshInterval: isFocused ? 30_000 : 0 },
+  );
+  useRefreshOnFocus(() => mutate());
+
+  if (error) return <Text>Could not load the message</Text>;
+  return <Text>{data?.body}</Text>;
+}
+```
+
+`mutate()` with no arguments revalidates this key. The polling runs only while the user sees the screen: `refreshInterval` of `0` stops it.
+
+### Load before the screen shows {#swr-prefetch}
+
+```ts
+import { preload } from 'swr';
+
+preload(['message', id], () => loadMessage(id));
+navigation.push('Message', { props: { id } });
+```
+
+`preload` fills the global cache. With `SWRConfig` and its own cache in `appProvider`, the screen reads that cache instead; prefetch there with the `mutate` of `useSWRConfig()` in the screen that pushes: `mutate(['message', id], loadMessage(id))`.
+
+### Suspense and errors {#swr-suspense}
+
+`{ suspense: true }` in the options of `useSWR` suspends the screen, which shows `loadingFallback`. Keep request errors in the screen, from `error` of the hook with a retry by `mutate()`; `errorFallback` is then for errors of the render.
+
+### Sign-out {#swr-sign-out}
+
+The global `mutate` of `swr` with a filter clears the keys: `mutate(() => true, undefined, { revalidate: false })`. With a cache of `SWRConfig`, use the `mutate` of `useSWRConfig()` the same way.
+
+## Apollo Client {#apollo}
+
+```sh
+npm install @apollo/client graphql rxjs
+```
+
+### Create the client {#apollo-client}
+
+```ts title="src/apollo.ts"
+import {
+  ApolloClient,
+  HttpLink,
+  InMemoryCache,
+} from '@apollo/client';
+
+export const client = new ApolloClient({
+  link: new HttpLink({ uri: 'https://example.com/graphql' }),
+  cache: new InMemoryCache(),
+});
+```
+
+### Connect it to the screens {#apollo-provider}
+
+`ApolloProvider` from `@apollo/client/react` only passes the client on, so it works in `appProvider` and in `screenProvider` alike, as long as the client comes from the module:
+
+```tsx title="src/AppProvider.tsx"
+import type { ReactNode } from 'react';
+import { ApolloProvider } from '@apollo/client/react';
+import { client } from './apollo';
+
+export function AppProvider({ children }: { children: ReactNode }) {
+  return <ApolloProvider client={client}>{children}</ApolloProvider>;
+}
+```
+
+### Read and write from a screen {#apollo-screen}
+
+```tsx title="src/screens/Message.tsx"
+import { Text } from 'react-native';
+import { gql } from '@apollo/client';
+import { useQuery } from '@apollo/client/react';
+import { useFocusEffect } from '@apexnative/navigation';
+import { useRefreshOnFocus } from '../useRefreshOnFocus';
+
+export const MESSAGE = gql`
+  query Message($id: ID!) {
+    message(id: $id) { id body }
+  }
+`;
+
+function Message({ id }: { id: string }) {
+  const { data, error, refetch, startPolling, stopPolling } =
+    useQuery(MESSAGE, { variables: { id } });
+  useRefreshOnFocus(() => refetch());
+  // poll only while the user sees the screen
+  useFocusEffect(() => {
+    startPolling(30_000);
+    return stopPolling;
+  });
+
+  if (error) return <Text>Could not load the message</Text>;
+  return <Text>{data?.message.body}</Text>;
+}
+```
+
+The normalized cache does the rest: a mutation that returns the message with its `id` updates it in every screen that shows it, the Inbox under this one included.
+
+### Load before the screen shows {#apollo-prefetch}
+
+```ts
+import { client } from './apollo';
+
+client.query({ query: MESSAGE, variables: { id } });
+navigation.push('Message', { props: { id } });
+```
+
+The result goes into the cache, and the screen's `useQuery` reads it there. `createQueryPreloader(client)` from `@apollo/client/react` does the same for a screen that reads with Suspense.
+
+### Suspense and errors {#apollo-suspense}
+
+`useSuspenseQuery` from `@apollo/client/react` suspends the screen, which shows `loadingFallback`; network and GraphQL errors throw to `errorFallback`. To show request errors with a retry of the query itself, keep them in the screen with `useQuery`, as above, and let `errorFallback` handle errors of the render.
+
+### Sign-out {#apollo-sign-out}
+
+`client.clearStore()` empties the cache without refetching the active queries, so nothing of the old user is requested again while the signed-out root comes in.
+
+## RTK Query {#rtk-query}
+
+RTK Query is part of Redux Toolkit, and lives in the Redux store. The store and its `Provider` go as for any Redux app: see [State management](./state-management). The parts that differ for data:
+
+```ts title="src/api.ts"
+import {
+  createApi,
+  fetchBaseQuery,
+} from '@reduxjs/toolkit/query/react';
+
+export const api = createApi({
+  baseQuery: fetchBaseQuery({ baseUrl: 'https://example.com/' }),
+  endpoints: (build) => ({
+    getMessage: build.query<Message, string>({
+      query: (id) => `messages/${id}`,
+    }),
+  }),
+});
+
+export const { useGetMessageQuery } = api;
+```
+
+The reducer and the middleware of `api` go into the store; the store is a module, so the cache is one for the app in both modes.
+
+- **From a screen:** `const { data, error, refetch } = useGetMessageQuery(id)`. Refresh on return with `useRefreshOnFocus(refetch)`.
+- **Polling only while shown:** `useGetMessageQuery(id, { pollingInterval: isFocused ? 30_000 : 0 })` with `useIsFocused()`. Avoid `skip` for this: a skipped query drops its data, and the covered screen would be empty when the user comes back.
+- **Before a push:** `store.dispatch(api.util.prefetch('getMessage', id, {}))`, then `navigation.push`. From a component, `api.usePrefetch('getMessage')`.
+- **The app's focus:** `refetchOnFocus` listens to browser events. In React Native, pass your own handler with `AppState` to `setupListeners(store.dispatch, …)`.
+- **Errors:** the hooks return `error` and don't suspend, so request errors stay in the screen; `errorFallback` is for errors of the render.
+- **Sign-out:** `store.dispatch(api.util.resetApiState())`.
+
+## Related {#related}
+
+- [One tree](../architecture/one-tree): `appProvider` and `screenProvider`.
+- [Errors and loading](../architecture/errors-and-loading): `errorFallback`, `loadingFallback`, `onError`.
+- [Lifecycle and events](../fundamentals/lifecycle-and-events): when a screen appears and disappears.
+- [State management](./state-management): Redux, Zustand and others.
+- [Error reporting](./error-reporting): sending the errors to a crash reporter.

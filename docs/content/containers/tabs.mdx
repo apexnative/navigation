@@ -1,0 +1,208 @@
+---
+title: Tabs
+description: 'Tabs with a stack each, how to build them, how the app selects a tab, presses and badges, lazy tabs, and the tab bars of iOS 26, iPad and Android.'
+---
+
+import { SectionStatus, SectionApi } from '@site/src/components/Api';
+import { Mark, Os } from '@site/src/components/Intro';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+<SectionStatus id="tabs" />
+
+Tabs are the sections of an app side by side: Home, Inbox, Profile. The user moves between them with one tap, and each section stays where the user left it. `Tabs` builds them, a `Tab` for each section:
+
+```ts title="Navigation.ts"
+import { createNavigation, Tab, Tabs } from '@apexnative/navigation';
+import { HomeScreen } from './screens/Home';
+import { InboxScreen } from './screens/Inbox';
+import { ProfileScreen } from './screens/Profile';
+
+export const Navigation = createNavigation({
+  screens: {
+    Home: HomeScreen,
+    Inbox: InboxScreen,
+    Profile: ProfileScreen,
+  },
+  root: Tabs(
+    Tab('Home').label('Home').icon(require('./icons/home.png')),
+    Tab('Inbox').label('Inbox').icon(require('./icons/inbox.png')),
+    Tab('Profile').label('Profile').icon(require('./icons/user.png')),
+  ),
+});
+```
+
+The app opens on Home, with the tab bar of the platform at the bottom. A tap on Inbox shows Inbox.
+
+This page answers:
+
+1. [What tabs are](#what): sections with a stack each.
+2. [How to build them](#build): labels, icons, the first tab.
+3. [How the app selects a tab](#select), and what a press can do.
+4. [Badges and dots](#badges).
+5. [When tabs are created](#lazy).
+6. [The tab bar on each platform](#platforms): iOS 26, iPad, Android.
+
+## What tabs are {#what}
+
+Each tab holds <Mark>a stack of its own</Mark>. A push goes into the stack of the tab the screen is in, so the user can go deep in Inbox, look at Home, and come back to Inbox where they were:
+
+<DeviceVideo name="tabs-stacks" />
+
+The tab bar is the platform's: the system tab bar on <Os name="iOS" />, which becomes a bar at the top or a sidebar on <Os name="iPadOS" /> and a vertical bar at the side on iPhone Duo, and the Material bottom navigation on <Os name="Android" />.
+
+## Building tabs {#build}
+
+`Tabs` takes its tabs in order. Each `Tab` takes what it shows: a screen of `screens` by its name, which gets a [stack](./stack) around it. A tab's methods set what the tab bar shows for it:
+
+- **`label` and `icon`.** An icon is an image, `require('./home.png')`, or a symbol of each platform: `{ ios: 'house.fill', android: 'ic_home' }`, an SF Symbol on iOS and a drawable of the app on Android.
+- **`id`** names the tab, so commands can select it or give it a badge without knowing its place.
+
+`Tabs().selected()` is the tab the app opens on: its index, or its id. Without it, the first tab:
+
+```ts
+// icons: your own images, such as require('./icons/home.png')
+Tabs(
+  Tab('Home').label('Home').icon(icons.home),
+  Tab('Inbox').label('Inbox').icon(icons.inbox).id('inbox'),
+).selected('inbox');
+```
+
+The app opens on Inbox; Home is one tap away.
+
+A tab can hold any layout, not only a screen. `Tab(Stack('Inbox', Screen('Chat', { userId })))` opens with a chat already pushed over Inbox.
+
+The look of the tab items goes on all tabs at once with `Tabs().itemStyle({ … })`, and a tab's own `itemStyle` goes over it. The tab bar itself takes `Tabs().options({ … })`: see [the options](#options) below.
+
+### Screens without the tab bar {#hide}
+
+A screen deep in a tab, such as a chat or a photo, often needs the whole height. `hideBottomTabs()` in its options hides the tab bar <Mark>while this screen is on top</Mark>. The bar comes back when the user goes back, because the screen under it doesn't hide it.
+
+```ts
+export const ChatScreen = defineScreen({
+  component: Chat,
+  options: (s) => s.hideBottomTabs(),
+});
+```
+
+## Selecting a tab {#select}
+
+The user selects a tab with a tap. The app selects one with `selectTab`, by its index or its id. It resolves once the tab shows, so the next command acts in that tab:
+
+```ts
+import { navigation } from '@apexnative/navigation';
+
+await navigation.selectTab('inbox');
+await navigation.push('Chat', { props: { userId } });
+```
+
+This is the app's `navigation`: its `push` goes to the stack the user sees, now the Inbox tab. A screen's own `useNavigation()` would push into that screen's stack instead.
+
+Inbox shows, and Chat comes in over it, in the stack of the Inbox tab.
+
+### A press on a tab {#press}
+
+A second tap on the selected tab is a convention of both platforms: <Mark>back to the start of the tab</Mark>. The navigation does it without code:
+
+<DeviceVideo name="tab-repress" />
+
+| The user is | A second tap |
+| --- | --- |
+| Deep in the tab: Inbox → Chat → Profile | Goes back to Inbox, the first screen of the tab. |
+| On the first screen, scrolled down | Scrolls it back to the top. |
+
+`Tab().popToRootOnPress(false)` turns it off. A screen that wants to do something of its own on the tap, such as reload, listens with `useTabPress`:
+
+```tsx
+useTabPress(({ wasSelected }) => {
+  if (wasSelected) refetch(); // your own request
+});
+```
+
+A tab can also be a button, such as a New tab that opens a modal to write. A `Tab()` without content <Mark>never becomes current</Mark>, and `onPress` decides what it does:
+
+```ts title="Navigation.ts"
+import { navigation, Tab } from '@apexnative/navigation';
+
+Tab()
+  .label('New')
+  .icon(icons.plus)
+  .onPress(() => navigation.showModal('Compose'));
+```
+
+A tab with content can do the same now and then: with `selectOnPress(false)` a press keeps the current tab, and `onPress` decides.
+
+`popToRootOnBlur()` sends a tab back to its first screen when the user leaves it, so it always opens at its start.
+
+### Back on Android {#back}
+
+<Os name="Android" /> On the first screen of a tab, the system back does what `Tabs().backBehavior(…)` says: `'exit'` leaves the app, `'first'` goes to the first tab, `'previous'` to the tab the user came from. iOS has no system back, so the method does nothing there.
+
+## Badges and dots {#badges}
+
+A badge is a number or a short text on the tab's icon; a dot is a badge without text.
+
+<DeviceVideo name="tabs-badge" />
+
+```ts
+Tab('Inbox').label('Inbox').id('inbox').badge(3);
+```
+
+The app changes it from anywhere, by the tab's id. A count goes as it is: `0` takes the badge away, and so does `null`. The text `'0'` shows "0".
+
+```ts
+navigation.setTabBadge(unread, 'inbox');
+```
+
+From a screen of the tab, `setTabBadge(count)` needs no id: it sets the badge of the screen's own tab. `Tab().dot()` shows a dot.
+
+## When tabs are created {#lazy}
+
+By default every tab is created with the tabs, so a switch shows it at once. `Tabs().lazy()` creates each tab the first time it shows. The app starts faster when its tabs are heavy, and a tab the user never opens costs nothing.
+
+```ts
+const main = Tabs(/* … */).lazy();
+```
+
+## The tab bar on each platform {#platforms}
+
+The tab bar follows the platform, and each platform has its own way:
+
+<DeviceVideo name="tabs-platforms" />
+
+<DeviceVideo name="tabs-ios26" devices={['ios']} />
+
+<DeviceVideo name="tabs-ipad-sidebar" devices={['ipad']} />
+
+| Platform | The tab bar |
+| --- | --- |
+| <Os name="iOS" /> 26 | Liquid Glass. `Tabs().minimize('onScrollDown')` shrinks it to the selected tab as the content scrolls. `Tabs().accessory('Player')` puts a screen of `screens` above the tabs, as the mini player of a music app. |
+| <Os name="iPadOS" /> 18+ | A bar at the top that turns into a sidebar: `Tabs().sidebar('sidebar')`. With the sidebar, `Tabs().customizable(id)` lets the user arrange the tabs, and keeps the arrangement under the id. iPhone shows the tab bar. |
+| <Os name="iOS" /> 27 iPhone Duo | The tab bar is in the vertical bar at the trailing edge, folded and open, with the buttons of the top bar (`topBar.verticalBarKeeps` decides who keeps the room, see [Buttons on iPhone Duo](../screen-ui/bar-buttons#iphone-duo)). Open, `Tabs().sidebar('sidebar')` shows the sidebar too, as on iPad. |
+| <Os name="Android" /> | Material 3 bottom navigation. `layoutStyle: 'compact'` makes it a bar that floats over the content, `hideOnScroll` hides it as the content scrolls, when the scroll view is the root of the screen, with `nestedScrollEnabled`. |
+
+The colors go with the [theme](../architecture/theme-and-context): the selected tab takes the primary color, the bar the bar color. On iOS 26 the system draws the bar and the tabs not selected in its own colors.
+
+## Events {#events}
+
+| Event | When |
+| --- | --- |
+| `tabSelected` | A tab became current. |
+| `tabPressed` | A tap on a tab, the selected one too. |
+| `tabLongPressed` | A long press on a tab. |
+| `accessoryPlacementChanged` | <Os name="iOS" /> 26+: the accessory moved next to the shrunk tab bar (`'inline'`), or back above it (`'regular'`). |
+
+In a screen, `useTabPress` covers the presses of its own tab. See [Every event](../fundamentals/lifecycle-and-events#events).
+
+## Options {#options}
+
+The tab bar takes the options `bottomTabs`, each tab item `bottomTab`. The methods above cover the usual ones. `Tabs().options({ … })` and `Tab().options({ … })` take the rest, all listed in the API below:
+
+```ts
+Tabs(/* … */).options({ titleDisplayMode: 'alwaysShow' });
+```
+
+A whole app with tabs, step by step: [An app with tabs](../flows/an-app-with-tabs).
+
+## API {#api}
+
+<SectionApi id="tabs" />

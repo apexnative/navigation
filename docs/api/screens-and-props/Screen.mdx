@@ -1,0 +1,122 @@
+`Screen` places a screen of `screens` in a layout with its props: `Screen('Details', { id: '42' })`. A layout names
+screens in `Stack(…)`, `Tab(…)`, `setStack`, `switchTo`, `root` and `roots` of `createNavigation`, and `start` of a
+link. A screen without props goes there by its name alone; `Screen` is for a screen with props, for options of this
+one showing, and for an id of your own.
+
+## Usage {#usage}
+
+A link `myapp://user/42` that launches the app should show Profile with Home under it, so back goes somewhere:
+
+```ts title="src/Navigation.ts"
+import {
+  createNavigation,
+  navigation,
+  Screen,
+  Stack,
+} from '@apexnative/navigation';
+import { HomeScreen } from './screens/Home';
+import { ProfileScreen } from './screens/Profile';
+
+export const Navigation = createNavigation({
+  screens: { Home: HomeScreen, Profile: ProfileScreen },
+  root: 'Home',
+  linking: {
+    prefixes: ['myapp://'],
+    routes: {
+      'user/:userId': {
+        start: ({ userId }) =>
+          Stack('Home', Screen('Profile', { userId })),
+        open: ({ userId }) =>
+          navigation.push('Profile', { props: { userId } }),
+      },
+    },
+  },
+});
+```
+
+Launched by the link, the app shows Profile for user 42 as the splash screen goes; back slides to Home. Home has no
+props, so it goes by its name; Profile needs `userId`, so it goes as `Screen`.
+
+## Signature {#signature}
+
+<ApiSignature data={data} name="Screen" />
+
+Two forms: `Screen(name)` for a screen whose props are all optional, `Screen(name, props)` with its props. It returns a
+`ScreenElement`, which a layout takes in place of a name.
+
+**The props are checked** against the screen's component, as a command checks them, once the app's type is
+registered: a missing required prop, a wrong type, or a name that isn't in `screens` is a type error where the layout
+is used. They can be anything a component takes, functions too: they stay in JavaScript. See
+[Props](/docs/fundamentals/screens-and-props#props).
+
+## This showing {#show-group}
+
+The methods return a new element; the one they are called on doesn't change. So a layout kept in a constant can be
+reused, and a method chained on it makes a variant.
+
+### `options()` {#options}
+
+<ApiMember data={data} of="ScreenElement" name="options" />
+
+Options of this showing only, over those of the screen's [`defineScreen`](/api/screens-and-props/defineScreen#options).
+They take the same forms: an object, or the chain with the props of this element and `{ theme, context }`.
+
+```ts
+Stack(
+  'Home',
+  Screen('Profile', { userId }).options((s) =>
+    s.backButton({ title: 'Home' }),
+  ),
+);
+```
+
+Profile keeps its own title, and only here its back button reads Home.
+
+**The function runs when `.options()` is called,** not when the layout is shown. A layout made at module level, such as
+a root of `roots` written as a value, reads the theme and the context as they are when the module loads, before
+`willMount`. For options from the context, make the layout in a function: a root of `roots` that is a function, or
+`root: (context) => …`.
+
+### `id()` {#id}
+
+<ApiMember data={data} of="ScreenElement" name="id" />
+
+Gives the screen an id of your own in place of the one the navigation makes (`Component12`). A command can then
+address it by name, without waiting for the id a command returns:
+
+```ts
+navigation.switchTo(
+  Stack(Screen('Home').id('home'), Screen('Profile', { userId })),
+);
+
+// later, from anywhere: back to Home of that stack
+navigation.popTo('home');
+```
+
+`popTo`, `dismissModal` and `dismissOverlay` take a screen's id.
+
+**An id goes to one screen.** A layout that gives one id to two screens fails, "The id 'home' goes to two screens", and
+so does a command that would show a screen with an id that shows already elsewhere. Give an id only to a screen that
+is shown once, such as the first screen of a root.
+
+## Alone or in a stack {#alone}
+
+Where a place of a layout navigates on (a root, a tab, the center of a side menu), a name alone becomes a stack with
+the screen, and a `Screen` element doesn't:
+
+```ts
+root: 'Home', // Home in a stack: a top bar, push works
+
+root: Screen('Home'), // Home alone: no stack around it
+```
+
+A screen alone has no top bar, and a `push` from it rejects: "push: Home is not in a stack". That suits a screen that
+never navigates on, such as a full-screen player. For a screen with props that pushes, put it in a stack:
+`Stack(Screen('Profile', { userId }))`.
+
+## See also {#see-also}
+
+- [Screens and props](/docs/fundamentals/screens-and-props): screens, props, and their types.
+- [Stack](/docs/containers/stack), [Switching roots](/docs/fundamentals/switching-roots#on-the-go): the layouts that
+  take `Screen`.
+- [Deep links](/docs/guides/deep-links#start-and-open): `start` of a route.

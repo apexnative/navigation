@@ -1,0 +1,496 @@
+#import "ANNRenderWait.h"
+#import "ANNAssert.h"
+#import "ANNComponentViewController.h"
+#import "ANNScreenReadiness.h"
+#import "UIViewController+LayoutProtocol.h"
+
+// A screen whose rendered state stays unknown counts as ready after this, with `unknownContentRule`.
+static const NSTimeInterval ANNUnknownContentLimit = 1;
+
+// The number of the last wait made: each wait listens under a key of its own.
+static NSUInteger ANNRenderWaitCount;
+
+@implementation ANNRenderWait {
+    ANNRenderWaitContent _content;
+    UIViewController *_node;
+    NSArray<UIViewController *> * (^_screens)(void);
+    NSTimeInterval _limit;
+    ANNRenderWaitBar _bar;
+    ANNBarWaitLimits _barLimits;
+    NSString *_key;
+    // The token: each start, phase and end takes the next one, so that what an earlier one set up does nothing.
+    NSUInteger _number;
+    // Inside `start`: a step runs as it is, under the caller's protection.
+    BOOL _starting;
+    // Inside `setUp`: a ready handler leaves the node to the readiness test after it.
+    BOOL _settingUp;
+    // The content nodes still waited, and every node the wait set its ready handler on.
+    NSHashTable<UIViewController *> *_waited;
+    NSHashTable<UIViewController *> *_listened;
+    // The waited screens of the "root mounted" kind (a subset of `_waited`), and whether their limit passed in this
+    // start (a retake waits for them no more then).
+    NSHashTable<UIViewController *> *_mountWaited;
+    BOOL _mountLimitPassed;
+    ANNBarComponentsWait *_barWait;
+    // What the last take of the running phase took: its screens (weakly) and, in the content phase, what the take read
+    // of each to decide what it waits for (`takeStateOfScreens:`). A retake that would take the same does nothing.
+    NSPointerArray *_takenScreens;
+    NSArray<NSNumber *> *_takenStates;
+}
+
+- (instancetype)initWithContent:(ANNRenderWaitContent)content
+                           node:(UIViewController *)node
+                        screens:(NSArray<UIViewController *> * (^)(void))screens
+                          limit:(NSTimeInterval)limit
+                            bar:(ANNRenderWaitBar)bar
+                      barLimits:(ANNBarWaitLimits)barLimits {
+    if (self = [super init]) {
+        _content = content;
+        _node = node;
+        _screens = [screens copy];
+        _limit = limit;
+        _bar = bar;
+        _barLimits = barLimits;
+        _key = [NSString
+            stringWithFormat:@"ApexNavigation.renderWait.%lu", (unsigned long)++ANNRenderWaitCount];
+        _waited = [NSHashTable weakObjectsHashTable];
+        _listened = [NSHashTable weakObjectsHashTable];
+        _mountWaited = [NSHashTable weakObjectsHashTable];
+    }
+    return self;
+}
+
+#pragma mark - The start
+
+- (void)start {
+    ANNAssertMainQueue();
+    if (_isWaiting) {
+        return;
+    }
+    _isWaiting = YES;
+    _isInBarPhase = NO;
+    _mountLimitPassed = NO;
+    NSUInteger number = ++_number;
+    _starting = YES;
+    @try {
+        [self startContentOfNumber:number];
+    } @finally {
+        _starting = NO;
+    }
+    if (![self runs:number]) {
+        return;
+    }
+    __weak ANNRenderWait *weakSelf = self;
+    if (_limit > 0) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(_limit * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+                         [weakSelf limitOfNumber:number];
+                       });
+    }
+    if (_mountLimit > 0) {
+        int64_t delay = (int64_t)(_mountLimit * NSEC_PER_SEC);
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, delay), dispatch_get_main_queue(), ^{
+          [weakSelf mountLimitOfNumber:number];
+        });
+    }
+    if (_unknownContentRule) {
+        int64_t delay = (int64_t)(ANNUnknownContentLimit * NSEC_PER_SEC);
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, delay), dispatch_get_main_queue(), ^{
+          [weakSelf unknownLimitOfNumber:number];
+        });
+    }
+}
+
+// The handlers first, then the setup (which may make the content ready inside it), then the test: a node ready by
+// then counts at once. Nothing left to wait for ends the content phase here.
+- (void)startContentOfNumber:(NSUInteger)number {
+    [self takeScreensOfNumber:number];
+    dispatch_block_t setUp = _setUp;
+    if (setUp) {
+        _settingUp = YES;
+        @try {
+            setUp();
+        } @finally {
+            _settingUp = NO;
+        }
+    }
+    if (![self runs:number]) {
+        return;
+    }
+    if (_content == ANNRenderWaitContentNode && _node && [self screensAreReady]) {
+        [_waited removeObject:_node];
+    }
+    if (_waited.count == 0 && !_barWait) {
+        [self phaseOfNumber:number endedMarkingReady:NO];
+    }
+}
+
+// The content phase takes what it waits for: the bar components that go with the content, then a ready handler on
+// each content node.
+- (void)takeScreensOfNumber:(NSUInteger)number {
+    NSArray<UIViewController *> *screens = [self screens];
+    [self rememberTakenScreens:screens states:[self takeStateOfScreens:screens]];
+    if (_bar == ANNRenderWaitBarWithContent) {
+        __weak ANNRenderWait *weakSelf = self;
+        [_barWait cancel];
+        _barWait = [ANNBarComponentsWait waitForScreens:[self barScreens]
+                                                 limits:_barLimits
+                                                   done:^{
+                                                     [weakSelf barOfNumber:number];
+                                                   }];
+    }
+    switch (_content) {
+        case ANNRenderWaitContentNone:
+            break;
+        case ANNRenderWaitContentEachScreen:
+            // Each screen by the readiness it needs: its content, or the first mount of its root (an unselected
+            // tab's screen). A screen with no content to wait for (a native screen) is ready.
+            for (UIViewController *node in screens) {
+                if (![node isKindOfClass:ANNComponentViewController.class]) {
+                    continue;
+                }
+                ANNComponentViewController *screen = (ANNComponentViewController *)node;
+                UIView<ANNComponentProtocol> *content = screen.reactView;
+                if (!content || content.isReady) {
+                    continue;
+                }
+                if (ANNWaitedReadinessOf(screen) == ANNWaitedReadinessContent) {
+                    [self listenTo:screen number:number];
+                    continue;
+                }
+                if (_mountLimitPassed) {
+                    continue;
+                }
+                [_mountWaited addObject:screen];
+                // A slot screen's readiness is its mount: its ready handler serves.
+                if (![content respondsToSelector:@selector(whenMounted:)]) {
+                    [self listenTo:screen number:number];
+                    continue;
+                }
+                if (content.hasMounted) {
+                    [_mountWaited removeObject:screen];
+                    continue;
+                }
+                [_waited addObject:screen];
+                __weak ANNRenderWait *weakSelf = self;
+                __weak UIViewController *weakScreen = screen;
+                [content whenMounted:^{
+                  [weakSelf node:weakScreen readyOfNumber:number];
+                }];
+            }
+            break;
+        case ANNRenderWaitContentNode:
+            if (_node) {
+                [self listenTo:_node number:number];
+            }
+            break;
+    }
+}
+
+- (void)listenTo:(UIViewController *)node number:(NSUInteger)number {
+    [_waited addObject:node];
+    [_listened addObject:node];
+    __weak ANNRenderWait *weakSelf = self;
+    __weak UIViewController *weakNode = node;
+    [node setReadyHandler:^{
+      [weakSelf node:weakNode readyOfNumber:number];
+    }
+                   forKey:_key];
+}
+
+#pragma mark - What ends a phase
+
+- (void)node:(UIViewController *)node readyOfNumber:(NSUInteger)number {
+    if (_settingUp || !node || ![self runs:number] || ![_waited containsObject:node]) {
+        return;
+    }
+    [_waited removeObject:node];
+    if (_waited.count == 0 && !_barWait) {
+        [self phaseOfNumber:number endedMarkingReady:NO];
+    }
+}
+
+// The bar components are ready, or past their own limits: the phase ends unless content is still waited.
+- (void)barOfNumber:(NSUInteger)number {
+    if (![self runs:number]) {
+        return;
+    }
+    _barWait = nil;
+    if (_waited.count > 0) {
+        return;
+    }
+    [self phaseOfNumber:number endedMarkingReady:NO];
+}
+
+// The screens of the "root mounted" kind are waited no longer: nobody sees them, nothing of theirs is held.
+- (void)mountLimitOfNumber:(NSUInteger)number {
+    if (![self runs:number]) {
+        return;
+    }
+    _mountLimitPassed = YES;
+    if (_mountWaited.count == 0) {
+        return;
+    }
+    for (UIViewController *node in _mountWaited.allObjects) {
+        [_waited removeObject:node];
+    }
+    [_mountWaited removeAllObjects];
+    if (_waited.count == 0 && !_barWait) {
+        [self phaseOfNumber:number endedMarkingReady:NO];
+    }
+}
+
+// The limit: what is still waited counts as rendered from now on, its held events go at once.
+- (void)limitOfNumber:(NSUInteger)number {
+    if (![self runs:number] || (_waited.count == 0 && !_barWait)) {
+        return;
+    }
+    [self phaseOfNumber:number endedMarkingReady:YES];
+}
+
+// The unknown-content rule: a screen whose safe area view spoke keeps the wait for its signal; otherwise the content
+// counts as ready.
+- (void)unknownLimitOfNumber:(NSUInteger)number {
+    if (![self runs:number]) {
+        return;
+    }
+    for (UIViewController *node in [self screens]) {
+        if (![node isKindOfClass:ANNComponentViewController.class]) {
+            continue;
+        }
+        ANNComponentViewController *screen = (ANNComponentViewController *)node;
+        NSString *screenId = screen.layoutInfo.componentId ?: @"";
+        if (screen.reactView && !screen.reactView.isReady &&
+            [ANNScreenReadiness contentRenderedOfScreen:screenId] != ANNContentRenderedUnknown) {
+            return;
+        }
+    }
+    [self phaseOfNumber:number endedMarkingReady:YES];
+}
+
+- (void)endPhase {
+    ANNAssertMainQueue();
+    [self phaseOfNumber:_number endedMarkingReady:NO];
+}
+
+// The running phase ends: the content phase goes on to the bar phase when the bar components come after it,
+// otherwise the wait ends.
+- (void)phaseOfNumber:(NSUInteger)number endedMarkingReady:(BOOL)markReady {
+    if (![self runs:number]) {
+        return;
+    }
+    BOOL (^canEnd)(void) = _canEnd;
+    if (canEnd && !canEnd()) {
+        return;
+    }
+    [self runStep:^{
+      if (markReady) {
+          [self markContentReady];
+      }
+      if (self->_bar == ANNRenderWaitBarAfterContent && !self->_isInBarPhase) {
+          [self startBarPhase];
+          return;
+      }
+      [self finish];
+    }];
+}
+
+// With `ANNRenderWaitContentNode` the node's readiness is the node's own: every screen of it is marked. Otherwise the
+// screens still waited are.
+- (void)markContentReady {
+    NSArray<UIViewController *> *marked =
+        _content == ANNRenderWaitContentNode ? [self screens] : _waited.allObjects;
+    for (UIViewController *node in marked) {
+        if ([node isKindOfClass:ANNComponentViewController.class]) {
+            [((ANNComponentViewController *)node).appearance markReady];
+        }
+    }
+}
+
+#pragma mark - The bar phase
+
+// The content is there: the bar components of the screens now, each kind to its own limit from now. Nothing to wait
+// for ends the wait at once.
+- (void)startBarPhase {
+    [_barWait cancel];
+    _barWait = nil;
+    [self releaseContent];
+    _isInBarPhase = YES;
+    NSUInteger number = ++_number;
+    __weak ANNRenderWait *weakSelf = self;
+    NSArray<UIViewController *> *barScreens = [self barScreens];
+    [self rememberTakenScreens:barScreens states:nil];
+    ANNBarComponentsWait *barWait = [ANNBarComponentsWait waitForScreens:barScreens
+                                                                  limits:_barLimits
+                                                                    done:^{
+                                                                      [weakSelf barOfNumber:number];
+                                                                    }];
+    _barWait = barWait;
+    if (!barWait) {
+        [self finish];
+    }
+}
+
+#pragma mark - Taking again, the end
+
+- (void)retakeScreens:(BOOL)take {
+    ANNAssertMainQueue();
+    if (!_isWaiting) {
+        return;
+    }
+    // Nothing changed for the wait: taking the same screens again would only start its bar components' limits anew.
+    if (take && [self takesSameAsLastTake]) {
+        return;
+    }
+    if (_isInBarPhase) {
+        [self runStep:^{
+          [self startBarPhase];
+        }];
+        return;
+    }
+    // The same token: the limit set at the start stays.
+    NSUInteger number = _number;
+    [self releaseContent];
+    [_barWait cancel];
+    _barWait = nil;
+    if (take) {
+        [self takeScreensOfNumber:number];
+    } else {
+        _takenScreens = nil;
+        _takenStates = nil;
+    }
+    if (_waited.count == 0 && !_barWait) {
+        [self phaseOfNumber:number endedMarkingReady:NO];
+    }
+}
+
+- (void)cancel {
+    ANNAssertMainQueue();
+    if (!_isWaiting) {
+        return;
+    }
+    [self stop];
+}
+
+- (void)finish {
+    dispatch_block_t ended = _ended;
+    [self stop];
+    if (ended) {
+        ended();
+    }
+}
+
+// The wait lets go of everything: its handlers, its bar wait; its limits find another token.
+- (void)stop {
+    _isWaiting = NO;
+    _isInBarPhase = NO;
+    _takenScreens = nil;
+    _takenStates = nil;
+    _number++;
+    [_barWait cancel];
+    _barWait = nil;
+    [self releaseContent];
+    _ended = nil;
+}
+
+- (void)releaseContent {
+    for (UIViewController *node in _listened.allObjects) {
+        [node removeReadyHandlerForKey:_key];
+    }
+    [_listened removeAllObjects];
+    [_waited removeAllObjects];
+    [_mountWaited removeAllObjects];
+}
+
+#pragma mark - Helpers
+
+// What the content phase's take reads of each screen to decide what it waits for: the readiness it needs, whether it
+// has its content yet, whether that content is ready, and whether its root mounted.
+- (NSArray<NSNumber *> *)takeStateOfScreens:(NSArray<UIViewController *> *)screens {
+    NSMutableArray<NSNumber *> *states = [NSMutableArray arrayWithCapacity:screens.count];
+    for (UIViewController *node in screens) {
+        NSUInteger state = (NSUInteger)ANNWaitedReadinessOf(node) << 3;
+        if ([node isKindOfClass:ANNComponentViewController.class]) {
+            UIView<ANNComponentProtocol> *content = ((ANNComponentViewController *)node).reactView;
+            BOOL mounted = [content respondsToSelector:@selector(hasMounted)] && content.hasMounted;
+            state |= (content ? 1 : 0) | (content.isReady ? 2 : 0) | (mounted ? 4 : 0);
+        }
+        [states addObject:@(state)];
+    }
+    return states;
+}
+
+- (void)rememberTakenScreens:(NSArray<UIViewController *> *)screens
+                      states:(nullable NSArray<NSNumber *> *)states {
+    _takenScreens = [NSPointerArray weakObjectsPointerArray];
+    for (UIViewController *node in screens) {
+        [_takenScreens addPointer:(__bridge void *)node];
+    }
+    _takenStates = states;
+}
+
+// The phase would take the same screens as its last take, in the content phase each in the same state. A screen gone
+// since then reads nil and differs.
+- (BOOL)takesSameAsLastTake {
+    if (!_takenScreens) {
+        return NO;
+    }
+    NSArray<UIViewController *> *screens = _isInBarPhase ? [self barScreens] : [self screens];
+    if (screens.count != _takenScreens.count) {
+        return NO;
+    }
+    for (NSUInteger index = 0; index < screens.count; index++) {
+        if ((__bridge void *)screens[index] != [_takenScreens pointerAtIndex:index]) {
+            return NO;
+        }
+    }
+    if (_isInBarPhase) {
+        return YES;
+    }
+    return [[self takeStateOfScreens:screens] isEqualToArray:_takenStates ?: @[]];
+}
+
+- (BOOL)runs:(NSUInteger)number {
+    return _isWaiting && _number == number;
+}
+
+- (NSArray<UIViewController *> *)screens {
+    NSArray<UIViewController *> * (^screens)(void) = _screens;
+    return (screens ? screens() : nil) ?: @[];
+}
+
+// The screens whose bar components are waited for: those waited by their content (never a screen the user doesn't see).
+- (NSArray<UIViewController *> *)barScreens {
+    NSMutableArray<UIViewController *> *screens = [NSMutableArray new];
+    for (UIViewController *node in [self screens]) {
+        if (ANNWaitedReadinessOf(node) == ANNWaitedReadinessContent) {
+            [screens addObject:node];
+        }
+    }
+    return screens;
+}
+
+// Every screen has no content to wait for (a native screen) or its content is ready.
+- (BOOL)screensAreReady {
+    for (UIViewController *node in [self screens]) {
+        if (![node isKindOfClass:ANNComponentViewController.class]) {
+            continue;
+        }
+        ANNComponentViewController *screen = (ANNComponentViewController *)node;
+        if (screen.reactView && !screen.reactView.isReady) {
+            return NO;
+        }
+    }
+    return YES;
+}
+
+- (void)runStep:(dispatch_block_t)step {
+    void (^protect)(dispatch_block_t) = _protect;
+    if (_starting || !protect) {
+        step();
+        return;
+    }
+    protect(step);
+}
+
+@end

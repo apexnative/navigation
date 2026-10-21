@@ -1,0 +1,712 @@
+---
+title: Deep links
+description: 'Links that open screens of the app: declaring them on iOS and Android, the routes, a link that launches the app and one that comes while it runs, links that wait for sign-in, and testing.'
+---
+
+import { Mark, Os, Pair, Steps } from '@site/src/components/Intro';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+A deep link is a URL that opens a screen of the app: `myapp://user/42` in a message, `https://example.com/user/42` on a web page. Here you make `myapp://user/42` open the profile of user 42. You end with:
+
+- a link that launches the app straight on the profile, with Home under it to go back to;
+- the same link pushing the profile when the app already runs;
+- links that wait until the user signs in, then open.
+
+<DeviceVideo name="guide-deep-link" />
+
+## What you need {#need}
+
+- An app made or set up by the CLI: the app delegate and the activity that `init` and `setup` write already pass every link on to the navigation. See [Installation](../start/installation).
+- A Profile screen that takes `{ userId: string }`: [Screens and props](../fundamentals/screens-and-props).
+- For the launch part, named roots: [Switching roots](../fundamentals/switching-roots). For the sign-in part, the app's context: [Theme and context](../architecture/theme-and-context#context).
+- A native build after step 1: the links are declared in `Info.plist` and `AndroidManifest.xml`.
+
+## How it will work {#plan}
+
+The app lists its links in `linking` of `createNavigation`, <Mark>a route per path</Mark>, and the navigation turns each link into commands. The native side owns the screens, so a link doesn't describe the whole state of the app, as a URL of a web page would: it does what its route says, from where the user is.
+
+<Steps
+  items={[
+    { text: <>The system gives the link to the app, because the app declares its scheme or domain.</>, code: 'Info.plist · AndroidManifest.xml' },
+    { text: <>The navigation gets it from React Native's <code>Linking</code>, and finds the route of its path.</>, code: "'user/:userId'" },
+    { text: <>The route runs: at a launch it can make the first root; in a running app it makes a command.</>, code: 'start · open' },
+    { text: <>When the route's <code>when</code> says no, the link waits, and opens once it says yes.</>, code: 'when(context)' },
+  ]}
+/>
+
+If you come from React Navigation, a link there names screens in a nested config, and the navigator builds the state from it. Here a route says what to do:
+
+<Pair left="React Navigation" right="Routes">
+
+```tsx
+const linking = {
+  prefixes: ['myapp://'],
+  config: {
+    screens: {
+      Profile: 'user/:userId',
+    },
+  },
+};
+
+<NavigationContainer
+  linking={linking}
+>
+```
+
+```ts
+createNavigation({
+  // …
+  linking: {
+    prefixes: ['myapp://'],
+    routes: {
+      'user/:userId': 'Profile',
+    },
+  },
+});
+```
+
+</Pair>
+
+Moving the rest of a React Navigation config: [Deep links](../migration/from-react-navigation#linking) of the migration guide; from Expo Router, where every file is a URL: [Deep links](../migration/from-expo-router#linking).
+
+## 1. Declare the links {#declare}
+
+The system gives a link to the app only when the app declares it, natively. The app delegate and the activity that `setup` made already pass every link on to the navigation; what's left is the list of schemes and domains. `links` writes that list from the prefixes of `linking`, so put them in `Navigation.ts` first; the routes come in [step 2](#routes):
+
+```ts title="Navigation.ts"
+import { createNavigation } from '@apexnative/navigation';
+
+export const Navigation = createNavigation({
+  // … your screens and root
+  linking: {
+    prefixes: ['myapp://'],
+    routes: {},
+  },
+});
+```
+
+```bash title="Terminal"
+npx apex-navigation links
+```
+
+It shows each change and asks before it writes, as `setup` does. For a scheme it writes `Info.plist` and the main activity of `AndroidManifest.xml`, as [below](#scheme); for a web site, the entitlements and a verified filter (see [Links to your web site](#web-links)).
+
+- **It reads your code.** `prefixes` is a list of strings in `linking`, or a constant that holds one, in `Navigation.ts` or a file it imports. Prefixes made at run time, such as from an environment variable, stop the command, and it prints how to write them.
+- **It only adds.** A prefix taken out of `prefixes` keeps its declaration, as something else may still open the app with it. `doctor` lists the declarations no prefix has; remove them by hand.
+- **It can run again.** A declaration that is there already shows as `done`, so run it after each new prefix.
+
+The sections below show what it writes, which is also how to declare the links by hand. Every option: [The CLI](./cli#links-declare).
+
+### A scheme of the app {#scheme}
+
+A scheme of its own, such as `myapp://`, works at once and needs no web site. Any app can declare the same scheme, so it suits links from your own apps and messages better than links on the web.
+
+<Os name="iOS" /> `CFBundleURLTypes` in `Info.plist`:
+
+```xml title="ios/MyApp/Info.plist"
+<key>CFBundleURLTypes</key>
+<array>
+  <dict>
+    <key>CFBundleURLName</key>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    <key>CFBundleURLSchemes</key>
+    <array>
+      <string>myapp</string>
+    </array>
+  </dict>
+</array>
+```
+
+<Os name="Android" /> An intent filter of the main activity in `AndroidManifest.xml`, next to its launcher filter:
+
+```xml title="android/app/src/main/AndroidManifest.xml"
+<activity android:name=".MainActivity" android:launchMode="singleTask">
+  <!-- the launcher intent filter -->
+  <intent-filter>
+    <action android:name="android.intent.action.VIEW" />
+    <category android:name="android.intent.category.DEFAULT" />
+    <category android:name="android.intent.category.BROWSABLE" />
+    <data android:scheme="myapp" />
+  </intent-filter>
+</activity>
+```
+
+Keep the template's `launchMode="singleTask"`: a link then comes to the activity that runs, as a link to a running app. Without it a link starts another copy of the activity; `links` and `doctor` warn about it.
+
+### Links to your web site {#web-links}
+
+A link to your domain, `https://example.com/user/42`, opens the app when it is installed and the web page when it isn't: universal links on iOS, App Links on Android. The system checks that the domain belongs to the app through a file the domain serves.
+
+| Platform | In the app | On the domain |
+| --- | --- | --- |
+| <Os name="iOS" /> Universal links | The Associated Domains capability, with `applinks:example.com`. | `/.well-known/apple-app-site-association` |
+| <Os name="Android" /> App Links | An intent filter with `android:autoVerify="true"`, the `https` scheme and the host. | `/.well-known/assetlinks.json` |
+
+Add the site to `prefixes`, `'https://example.com'`, and run `links` again:
+
+- <Os name="iOS" /> It writes `applinks:example.com` into the associated domains of `ios/MyApp/MyApp.entitlements`, and names that file in the app's target, as the Associated Domains capability of Xcode does. A target that names an entitlements file already gets the domain in that file.
+- <Os name="Android" /> It adds one verified filter for all the sites, apart from the filters of the schemes: another scheme in a verified filter stops the verification.
+
+```xml title="android/app/src/main/AndroidManifest.xml"
+<intent-filter android:autoVerify="true">
+  <action android:name="android.intent.action.VIEW" />
+  <category android:name="android.intent.category.DEFAULT" />
+  <category android:name="android.intent.category.BROWSABLE" />
+  <data android:scheme="https" android:host="example.com" />
+</intent-filter>
+```
+
+#### The files your site serves {#web-files}
+
+`links files` writes both files from the app and its routes:
+
+```bash title="Terminal"
+npx apex-navigation links files --team-id ABCDE12345
+```
+
+They go into `.well-known/` of the app (`--out` picks another folder), and the command says where your site serves each: `https://example.com/.well-known/apple-app-site-association` and `https://example.com/.well-known/assetlinks.json`, over HTTPS, with no redirect.
+
+<Os name="iOS" /> `apple-app-site-association` lists the paths the app opens. `appIDs` is your team and the bundle id: the team of `--team-id`, or the `DEVELOPMENT_TEAM` of the Xcode project. `components` come from the routes: their static parts as they are, each `:param` as `*`, and a last `:param?` both with and without it. For the routes of [step 2](#routes):
+
+```json title=".well-known/apple-app-site-association"
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["ABCDE12345.com.example.myapp"],
+        "components": [
+          { "/": "/settings" },
+          { "/": "/item/*" },
+          { "/": "/user/*" }
+        ]
+      }
+    ]
+  }
+}
+```
+
+- A `*` takes slashes too: `/user/42/posts` opens the app as well, and goes to [`unmatched`](#unmatched) there when no route takes it.
+- The file follows the routes: after a new route, run `links files` again and put the new file on the site. A path the file doesn't list opens the web page.
+
+<Os name="Android" /> `assetlinks.json` lets the app open the links of the site when it is signed with a key the file lists. `package_name` is the `applicationId` of `android/app/build.gradle`. The keys:
+
+- **The debug key**, added by itself: `android/app/debug.keystore`, which the template also signs release builds with until the app has a key of its own, or else `~/.android/debug.keystore`. The command reads it with `keytool` of the JDK; without a JDK it warns and leaves it out.
+- **Your release key**, with `--fingerprint` and its SHA-256. With Play App Signing, Google signs the app: take the key of Play Console, Test and release › App signing. Repeat `--fingerprint` for several keys.
+
+:::note[A prefix with a path]
+
+With a prefix such as `https://example.com/app`, the `components` start with `/app`, so iOS opens only those paths. Android verifies the whole host, and the filter `links` writes takes every link of it: a link outside `/app` opens the app too, and goes to `unmatched`. `links` warns about such a prefix.
+
+:::
+
+Every option of `links files`, such as `--platform` for one file: [The CLI](./cli#links-files). The files and how the systems check them are described by the platforms: [Supporting associated domains](https://developer.apple.com/documentation/xcode/supporting-associated-domains) (Apple) and [Verify Android App Links](https://developer.android.com/training/app-links/verify-android-applinks) (Android).
+
+:::note[NFC tags on Android]
+
+On <Os name="Android" /> the link that launches the app is the data of an `ACTION_VIEW` intent, which the filters above deliver. An NFC tag (`NDEF_DISCOVERED`) that starts the app opens no route: the app starts with its usual first root. While the app runs, React Native passes the URL of a tag on like a link, and its route runs.
+
+:::
+
+Build the app again, as these are native files. Open `myapp://user/42` from a message, or with the commands of [Testing](#testing): the app comes to the front, or launches. Nothing opens in it yet: no route takes the link.
+
+## 2. Add the routes {#routes}
+
+Start with one route, a screen name:
+
+```ts title="Navigation.ts"
+import { createNavigation } from '@apexnative/navigation';
+import { HomeScreen } from './src/screens/Home';
+import { ProfileScreen } from './src/screens/Profile';
+
+export const Navigation = createNavigation({
+  screens: { Home: HomeScreen, Profile: ProfileScreen },
+  root: 'Home',
+  linking: {
+    prefixes: ['myapp://'],
+    routes: {
+      'user/:userId': 'Profile',
+    },
+  },
+});
+```
+
+Open `myapp://user/42` with the app running: Profile slides in with `{ userId: '42' }` as its props, and back goes to the screen the user was on.
+
+A route can be more than a screen name. `linking` takes the routes by path pattern, and each is a screen name, a function, or `{ start, open, when }`:
+
+```ts title="Navigation.ts"
+import {
+  createNavigation,
+  navigation,
+  Screen,
+  Stack,
+} from '@apexnative/navigation';
+
+export const Navigation = createNavigation({
+  screens: {
+    Home: HomeScreen,
+    Profile: ProfileScreen,
+    Settings: SettingsScreen,
+    Details: DetailsScreen,
+  },
+  root: 'Home',
+  linking: {
+    prefixes: ['myapp://', 'https://example.com'],
+    routes: {
+      // A screen name: pushed.
+      settings: 'Settings',
+      // A function: what the link does.
+      'item/:id': ({ id }) =>
+        navigation.showModal('Details', { props: { id } }),
+      // At a launch, and in a running app: see below.
+      'user/:userId': {
+        start: ({ userId }) =>
+          Stack('Home', Screen('Profile', { userId })),
+        open: ({ userId }) =>
+          navigation.push('Profile', { props: { userId } }),
+      },
+    },
+  },
+});
+```
+
+- **A screen name** pushes that screen from the screen the user sees, with the params of the path and the query as its props: `myapp://settings?tab=privacy` pushes Settings with `{ tab: 'privacy' }`. A param and a query key of the same name: the param wins.
+- **A function** is what the link does: any commands. It gets the params and the link, a [`LinkInfo`](/api/starting-the-app/types#linkinfo): the URL, the path, the query, and `initial`, whether this link launched the app.
+- **`{ start, open, when }`** says what the link does when it launches the app (`start`), when the app runs (`open`), and when it may run at all ([`when`](#when)).
+
+A link runs <Mark>after `willMount`</Mark>, once the first root is shown, so the screens it opens find the context ready. A link that comes while the app starts waits for that root, then runs as in a running app. The navigation listens to React Native's `Linking` itself: the app adds no listener for these links.
+
+### Which route takes a URL {#matching}
+
+- **The path.** With `prefixes`, a URL must start with one of them, and the rest is the path: `https://example.com/user/42` gives `user/42`; a URL with none of them isn't the app's, and goes to [`unmatched`](#unmatched). Without `prefixes` every URL goes: an `http` or `https` URL leaves out its host, and for any other scheme the path starts after `://`, so `myapp://user/42` gives `user/42` too.
+- **The patterns.** Static parts, `:param`, and `:param?`, an optional param, at the end. Slashes at the start and the end don't matter, and an empty part is left out (`user//42` is `user/42`); static parts are case-sensitive; params come decoded (`%20` is a space). The scheme and the host of a prefix don't care about case.
+- **The query.** `?tab=posts` is `link.query.tab`. A key given twice keeps its last value, and `+` is a space. The fragment (`#…`) is left out.
+- **The order.** The most specific route wins: more required parts first, then a static part before a param at the same place, then fewer parts, then the order of `routes`. So `user/me` takes `myapp://user/me` before `user/:userId` or `user/:userId/:tab?` does, wherever each is written.
+
+## 3. At a launch, and in a running app {#start-and-open}
+
+A link that launches the app and a link that comes while it runs want different things. Launched by `myapp://user/42`, the app should show the profile at once, not Home and then a push. `start` makes <Mark>the first root</Mark> from the link: the target with the screens to go back to under it, shown at once as the splash screen goes, with no transition (after a [splash of your own](./splash-screen#own-splash), with its transition). In a running app the user is somewhere already, and `open` makes a transition from there.
+
+```ts
+'user/:userId': {
+  // Launched by the link: Profile, and back goes to Home.
+  start: ({ userId }) =>
+    Stack('Home', Screen('Profile', { userId })),
+  // The app runs: Profile is pushed where the user is.
+  open: ({ userId }) =>
+    navigation.push('Profile', { props: { userId } }),
+},
+```
+
+What runs in each case:
+
+| The route has | The link launches the app | The app runs |
+| --- | --- | --- |
+| Only `open` (or it is a screen name, or a function) | The usual first root (`root`, `initialRoot`), then `open` | `open` |
+| Only `start` | `start` is the first root | `navigation.switchTo(start(…))`, as if the app were opened by the link |
+| `start` and `open` | `start` is the first root | `open` |
+
+"The app runs" includes an app in the background: the link brings it to the front. A route with only `start` replaces the whole app when it runs, modals included, which suits a link that starts something over; a link that opens one more screen gives its route an `open`.
+
+`start` returns a layout, or a root of `roots` by its name or as `[name, param]`, as `initialRoot` does:
+
+```ts
+roots: {
+  login: Stack('Login'),
+  main: Stack('Home'),
+  profile: (userId: string) =>
+    Stack('Home', Screen('Profile', { userId })),
+},
+// …
+routes: {
+  'user/:userId': { start: ({ userId }) => ['profile', userId] },
+},
+```
+
+A screen that belongs in a modal goes over the root with `Root(…).modal(…)`: closing it shows the app under it.
+
+```ts
+'item/:id': {
+  start: ({ id }) =>
+    Root('Home').modal(Stack(Screen('Details', { id }))),
+  open: ({ id }) =>
+    navigation.showModal('Details', { props: { id } }),
+},
+```
+
+:::note[TypeScript checks a root name, not a layout]
+
+A root of `roots` that `start` returns is checked like `initialRoot`. The screens of a layout it returns are not checked by the types, though `switchTo` checks the same layout: a name that isn't in `screens` fails only when the root is set, and props that don't fit go to the screen as they are.
+
+:::
+
+### A link that launches the app, step by step {#launch}
+
+<Steps
+  items={[
+    { text: <>The system starts the app with the link, and the <Mark>splash screen</Mark> shows.</> },
+    { text: <><code>willMount</code> runs; meanwhile the navigation asks the native side for the link.</>, code: 'await willMount()' },
+    { text: <>The route of the link is found. With <code>start</code>, and when its <code>when</code> lets it, its layout is the first root; otherwise the usual one is.</>, code: 'start(params, link) · root' },
+    { text: <><code>didMount</code> runs.</>, code: 'didMount(context)' },
+    { text: <>A route without <code>start</code> runs <code>open</code>, and the links that came meanwhile run after it, as in a running app.</>, code: 'open(params, link)' },
+  ]}
+/>
+
+A reload, a failed start and a new activity on Android each treat the launch link their own way: see [When the app launches again](#relaunch).
+
+## 4. Links that wait for the sign-in {#when}
+
+Some links make sense only signed in: a profile, an order. `when` says whether a link may run now, from the app's context:
+
+```ts title="Navigation.ts"
+export const Navigation = createNavigation({
+  screens: { Login: LoginScreen, Home: HomeScreen /* … */ },
+  roots: { login: Stack('Login'), main: Stack('Home') },
+  context: { signedIn: false },
+  willMount: async () => {
+    navigation.setContext({ signedIn: await isSignedIn() });
+  },
+  initialRoot: (context) => (context.signedIn ? 'main' : 'login'),
+  linking: {
+    prefixes: ['myapp://'],
+    when: (context) => context.signedIn,
+    routes: {
+      'user/:userId': 'Profile',
+      // Runs signed out too.
+      'reset-password/:token': {
+        when: () => true,
+        open: ({ token }) =>
+          navigation.showModal('ResetPassword', { props: { token } }),
+      },
+    },
+  },
+});
+```
+
+- **Without `when`** a link runs as soon as the app is open, signed in or not.
+- **A route's own `when`** takes the place of the one of `linking`: here a password reset runs signed out.
+- **A link whose `when` is false** doesn't run: it <Mark>waits</Mark>. One link waits at a time, the latest: a newer one takes the place of the one before. A link that launches the app signed out shows the usual first root, Login here, and waits.
+- **`when` is asked when a link comes, and for a waiting link on each `setContext`.** It reads the app's context, which the navigation sees change. A `when` that reads a store instead (Redux, Zustand) isn't asked again when the store changes: there, use `pending: 'manual'` and open the link after the sign-in, as in [Taken by the app](#manual).
+
+### Opened after the sign-in {#auto}
+
+By default, `pending: 'auto'`, a waiting link runs by itself once the context lets it (`when` is asked again at every `setContext`), <Mark>after the commands then on their way</Mark>. At a sign-in the app sets the context and switches to its main root, and the link opens in that root:
+
+```ts title="signIn.ts"
+export async function signIn(email: string, password: string) {
+  await api.signIn(email, password); // your own sign-in
+  navigation.setContext({ signedIn: true });
+  await navigation.switchTo('main');
+  // The waiting link opens in main: Profile over Home.
+}
+```
+
+:::tip
+
+Make the commands right after `setContext`, with no `await` between them: the link waits for the commands on their way when the context changed. A `switchTo` that comes later finds the link already open in the old root, and replaces it.
+
+:::
+
+### Taken by the app {#manual}
+
+With `pending: 'manual'` a waiting link stays until the app takes it. That is the way when the sign-in lives in a store, not in the app's context: the navigation doesn't see the store change, so the sign-in opens the link itself.
+
+```ts
+// in createNavigation; useSession is your own Zustand store
+linking: {
+  prefixes: ['myapp://'],
+  when: () => useSession.getState().user !== null,
+  pending: 'manual',
+  routes: { 'user/:userId': 'Profile' },
+},
+```
+
+```ts title="signIn.ts"
+export async function signIn(email: string, password: string) {
+  await api.signIn(email, password); // your own sign-in and store
+  await navigation.switchTo('main');
+  await navigation.openPendingLink(); // false when none waits
+}
+```
+
+The whole flow with Zustand is in [Sign in and sign out](../flows/sign-in-and-sign-out#links). A screen can also offer the link instead of opening it at once, as the banner below does. These work in both modes:
+
+| | What it does |
+| --- | --- |
+| `navigation.getPendingLink()` | The waiting link, or null: its `url`, `path`, `route` (the pattern), `params` and `query`. |
+| `navigation.openPendingLink()` | Runs it now, as in a running app, whatever `when` says, and forgets it. Resolves once its route ran, with false when no link waits. |
+| `navigation.clearPendingLink()` | Forgets it. |
+| [`usePendingLink()`](/api/starting-the-app/usePendingLink) | The waiting link in a component, which renders again when one starts waiting and when it goes. |
+
+```tsx title="PendingLinkBanner.tsx"
+import { Button, View } from 'react-native';
+import { navigation, usePendingLink } from '@apexnative/navigation';
+
+export function PendingLinkBanner() {
+  const link = usePendingLink();
+  if (!link) return null;
+  return (
+    <View>
+      <Button
+        title={`Open ${link.path}`}
+        onPress={() => navigation.openPendingLink()}
+      />
+      <Button
+        title="Not now"
+        onPress={() => navigation.clearPendingLink()}
+      />
+    </View>
+  );
+}
+```
+
+## Typed params {#params}
+
+The patterns are types. In the route of `'user/:userId/:tab?'` the params are `{ userId: string; tab?: string }`, and TypeScript checks every use. Params are strings: a number is the app's to parse.
+
+```ts
+'order/:orderId': ({ orderId }) =>
+  navigation.push('Details', { props: { id: Number(orderId) } }),
+```
+
+`LinkParams` gives the same type to a handler written apart from the config:
+
+```ts title="links.ts"
+import { navigation, type LinkParams } from '@apexnative/navigation';
+
+export function openProfile({ userId }: LinkParams<'user/:userId'>) {
+  return navigation.push('Profile', { props: { userId } });
+}
+```
+
+```ts
+routes: { 'user/:userId': openProfile },
+```
+
+A screen name as a route is checked too: `'user/:userId': 'Profile'` compiles when Profile takes `{ userId: string }` as its props, its other props optional. A Profile that takes a number gets a function route that converts it.
+
+`when` gets the app's context with its type, from `context` of `createNavigation`.
+
+## Errors, and links no route takes {#errors}
+
+A route whose `start` or `open` throws, or whose command fails, goes to `onError` with `source.type === 'link'` and the URL; without `onError`, to the console. The app goes on. A `start` that throws when its link launches the app leaves the usual first root.
+
+```ts title="Navigation.ts"
+export const Navigation = createNavigation({
+  // …
+  onError: (error, source) => {
+    if (source.type === 'link') {
+      console.warn(`The link ${source.url} failed`, error);
+    }
+  },
+});
+```
+
+A failed command reaches `onError` when the handler returns its promise. An arrow function without braces does; with braces, `return` it, or `await` it in an `async` function.
+
+### Links no route takes {#unmatched}
+
+A URL that no route takes, or that starts with none of `prefixes`, goes to `unmatched`; without it, a development build warns: `[navigation] No route of linking takes '<url>'`.
+
+```ts
+linking: {
+  routes: { /* … */ },
+  unmatched: (url) => {
+    // your own report, for example
+    reportUnknownLink(url);
+  },
+},
+```
+
+A URL the app handles somewhere else comes here too: `unmatched` can leave it alone.
+
+## Links that come from elsewhere {#other-sources}
+
+The routes run for the links the system gives the app through React Native's `Linking`. Some links come another way:
+
+- **A notification that carries a link.** Your notification library reports the tap, not the system, so no route runs by itself. Keep one function per target and call it from the route and from the tap listener: see [When the notification has a link](./notifications#links).
+- **A link SDK** (attribution, deferred links) that reports a link through its own callback, such as a link that installed the app. Call the same function from that callback.
+- **Your own `Linking` listener.** The navigation listens to `Linking` itself, so the app adds none for the links of `linking`. A listener of your own hears the same links, and whatever it opens comes on top of what the route opened.
+
+## When the app launches again {#relaunch}
+
+The launch link is read once per launch of the app, and the cases differ:
+
+- **A reload of the JavaScript** in development doesn't run it again. To try a launch by a link, quit the app and open the link again.
+- **A start that failed** keeps its link for the next try (Try again of `errorFallback`), and the other links wait for the start that succeeds.
+- <Os name="Android" /> **A new activity** while the JavaScript runs (Android can start one; see [When the app launches again](../fundamentals/starting-the-app#launches)): the last root comes back, then the link of the new activity runs as in a running app, with `initial` true.
+- <Os name="Android" /> **An activity created again from its saved state**, after a configuration change or after the system ended the process, gives no link: that link ran before. Neither does the app opened from the recent apps, though a link started it first.
+- <Os name="Android" /> **A link that comes while React Native starts** isn't lost: it becomes the link that launched the app.
+
+## An app with its own scene delegate {#scene-delegate}
+
+<Os name="iOS" /> `ANNAppDelegate` gives the app's scene `ANNSceneDelegate`, which moves the navigation's window into the scene and passes the scene's links on. An app whose `Info.plist` names a scene delegate of its own does both itself. The links that launched the app come with the options of `scene(_:willConnectTo:options:)`, and they count as the launch link when they're passed on in that same call, with the window moved into the scene:
+
+```swift title="ios/MyApp/SceneDelegate.swift"
+import ApexNavigation
+import UIKit
+
+class SceneDelegate: UIResponder, UIWindowSceneDelegate {
+  var window: UIWindow?
+
+  func scene(
+    _ scene: UIScene,
+    willConnectTo session: UISceneSession,
+    options connectionOptions: UIScene.ConnectionOptions
+  ) {
+    guard let windowScene = scene as? UIWindowScene else { return }
+    window = ApexNavigation.attach(to: windowScene)
+    // The links that launched the app: passed on in this same
+    // call, so the first root can come from one of them.
+    for context in connectionOptions.urlContexts {
+      openLink(context.url)
+    }
+    for activity in connectionOptions.userActivities {
+      if let url = activity.webpageURL { openLink(url) }
+    }
+  }
+
+  // Links while the app runs.
+  func scene(
+    _ scene: UIScene,
+    openURLContexts URLContexts: Set<UIOpenURLContext>
+  ) {
+    for context in URLContexts {
+      openLink(context.url)
+    }
+  }
+
+  func scene(
+    _ scene: UIScene,
+    continue userActivity: NSUserActivity
+  ) {
+    if let url = userActivity.webpageURL { openLink(url) }
+  }
+
+  private func openLink(_ url: URL) {
+    let app = UIApplication.shared.delegate as? ANNAppDelegate
+    app?.dispatchDeepLinkURL(url)
+  }
+}
+```
+
+`ApexNavigation.attach(to:)` is `attachToWindowScene:` in Objective-C.
+
+## Testing {#testing}
+
+A link takes a different way when it launches the app and when the app runs, so test both:
+
+- **Cold:** the app isn't running, and the link launches it: `start`, or the usual first root and then `open`.
+- **Warm:** the app runs, in front or in the background: `open`, or `switchTo` for a route with only `start`.
+
+`links open` opens a link as a tap would, on the booted iOS simulator and the connected Android device or emulator at once:
+
+```bash title="Terminal"
+# Warm: with the app running.
+npx apex-navigation links open "myapp://user/42"
+# Cold: it quits the app first, so the link launches it.
+npx apex-navigation links open "myapp://user/42" --cold
+```
+
+- **One platform:** `--platform ios` or `--platform android`. Without it, a platform with no device is left out, and the command fails only when no platform opened the link.
+- **Several Android devices:** `ANDROID_SERIAL=<serial>` picks one.
+- **A query** arrives as it is: the command quotes the URL for the device's shell itself. Keep the quotes in your own shell.
+- **A URL that starts with none of the prefixes** gets a warning and opens anyway, which is how you try [`unmatched`](#unmatched).
+- <Os name="Android" /> **It names the app's package**, so the link reaches the app even before your site is verified: it tests the routes, not the verification.
+
+The same by hand, <Os name="iOS" /> on the simulator:
+
+```bash title="Terminal"
+# Cold: quit the app first.
+xcrun simctl terminate booted com.example.myapp
+xcrun simctl openurl booted "myapp://user/42"
+```
+
+<Os name="Android" /> On a device or an emulator:
+
+```bash title="Terminal"
+# Cold: stop the app first.
+adb shell am force-stop com.example.myapp
+adb shell am start -W -a android.intent.action.VIEW \
+  -d "myapp://user/42" com.example.myapp
+```
+
+The same `openurl` or `am start` with the app running tests the warm way. Keep the URL in quotes: the shell takes the `?` and `&` of a query for its own. With `adb shell` the device's shell reads the command again, so a URL with `&` needs the whole command in single quotes as well: `adb shell 'am start … -d "myapp://user/42?a=1&b=2" …'`.
+
+- A reload of the JavaScript doesn't run the launch link again: for the cold way, quit the app each time.
+- A link to your domain opens the app only once the domain is checked (see [Links to your web site](#web-links)), but for `am start` with the app's package. On Android, `adb shell pm get-app-links com.example.myapp` shows whether it is.
+- In the Showcase, scenario 19.5 opens every kind of route with `apexnative://` links.
+- In end-to-end tests, Detox and Maestro open a link cold and warm too: see [Links in end-to-end tests](./testing#links).
+
+## The whole code {#code}
+
+The app of this guide: a signed-out root and a signed-in one, the profile link that launches the app on the profile, and a password reset that runs signed out.
+
+```ts title="Navigation.ts"
+import {
+  createNavigation,
+  navigation,
+  Screen,
+  Stack,
+} from '@apexnative/navigation';
+import { isSignedIn } from './src/session'; // your own check
+import { HomeScreen } from './src/screens/Home';
+import { LoginScreen } from './src/screens/Login';
+import { ProfileScreen } from './src/screens/Profile';
+import { ResetPasswordScreen } from './src/screens/ResetPassword';
+
+export type AppContext = { signedIn: boolean };
+
+export const Navigation = createNavigation({
+  screens: {
+    Home: HomeScreen,
+    Login: LoginScreen,
+    Profile: ProfileScreen,
+    ResetPassword: ResetPasswordScreen,
+  },
+  roots: {
+    login: Stack('Login'),
+    main: Stack('Home'),
+    profile: (userId: string) =>
+      Stack('Home', Screen('Profile', { userId })),
+  },
+  context: { signedIn: false } as AppContext,
+  willMount: async () => {
+    navigation.setContext({ signedIn: await isSignedIn() });
+  },
+  initialRoot: (context) => (context.signedIn ? 'main' : 'login'),
+  linking: {
+    prefixes: ['myapp://', 'https://example.com'],
+    when: (context) => context.signedIn,
+    routes: {
+      'user/:userId': {
+        start: ({ userId }) => ['profile', userId],
+        open: ({ userId }) =>
+          navigation.push('Profile', { props: { userId } }),
+      },
+      'reset-password/:token': {
+        when: () => true,
+        open: ({ token }) =>
+          navigation.showModal('ResetPassword', {
+            props: { token },
+          }),
+      },
+    },
+  },
+  onError: (error, source) => {
+    if (source.type === 'link') {
+      console.warn(`The link ${source.url} failed`, error);
+    }
+  },
+});
+```
+
+The sign-in that opens the waiting link is in [Opened after the sign-in](#auto); the native files are in [step 1](#declare).
+
+## What's next {#next}
+
+- [Sign in and sign out](../flows/sign-in-and-sign-out#links): links that wait, in a whole sign-in flow.
+- [Notifications that open a screen](./notifications#links): the same targets from a notification.
+- [Switching roots](../fundamentals/switching-roots): the roots that `start` returns, and roots with a param.
+- [Starting the app](../fundamentals/starting-the-app#links): a link in the order of a launch.
+- [Testing](./testing): the routes in Jest, and end-to-end tests that open links.

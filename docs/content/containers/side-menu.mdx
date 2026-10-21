@@ -1,0 +1,149 @@
+---
+title: Side menu
+description: 'What a side menu is, how to build one, how it opens and closes, how a pick in the menu changes the content, and how it looks on each platform.'
+---
+
+import { SectionStatus, SectionApi } from '@site/src/components/Api';
+import { Mark, Os } from '@site/src/components/Intro';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+<SectionStatus id="side-menu" />
+
+A side menu is a drawer beside the content of the app: the sections, the account, the settings, out of the way until the user pulls it in. `SideMenu` builds one from the content, its center, and a menu on a side:
+
+```ts title="Navigation.ts"
+import { createNavigation, SideMenu } from '@apexnative/navigation';
+import { MenuScreen } from './screens/Menu';
+import { HomeScreen } from './screens/Home';
+import { SettingsScreen } from './screens/Settings';
+
+export const Navigation = createNavigation({
+  screens: {
+    Menu: MenuScreen,
+    Home: HomeScreen,
+    Settings: SettingsScreen,
+  },
+  root: SideMenu({
+    left: 'Menu', // the menu
+    center: 'Home', // the content
+  }),
+});
+```
+
+Home shows. A swipe from the left edge brings Menu in over it.
+
+This page answers:
+
+1. [What a side menu is](#what), and its parts.
+2. [How to build one](#build).
+3. [How it opens and closes](#open).
+4. [How a pick in the menu changes the content](#pick).
+5. [How it looks](#look) on each platform, and [where the swipe is off](#swipe).
+
+## What a side menu is {#what}
+
+A side menu has <Mark>a center and a menu on one side or both</Mark>. The center is the app the user works in; the menu slides in over it, or moves it aside, and goes away again.
+
+<DeviceVideo name="side-menu" />
+
+- **The center is a [stack](./stack),** so it pushes as the root does: a screen named alone gets a stack.
+- **A menu is a screen on its own,** without a stack: a list of what the center can show.
+
+## Building a side menu {#build}
+
+`SideMenu` takes its parts, each a screen of `screens` by its name or a layout. The side methods take each menu's settings, such as its width:
+
+```ts
+SideMenu({ left: 'Menu', center: 'Home' }).left({ width: 300 });
+```
+
+A right menu is the same: `right: 'Filters'`, with `.right({ … })`. A side menu is a root most of the time, `root: main` or one of `roots`. It can also be a tab or the content of a modal.
+
+## Opening and closing {#open}
+
+The user opens a menu with a swipe from its edge. A swipe back, a tap on the content or the system back on <Os name="Android" /> closes it. The app does it with `openMenu` and `closeMenu`, such as from a button of the top bar:
+
+```ts title="src/screens/Home.tsx"
+import { defineScreen } from '@apexnative/navigation';
+
+export const HomeScreen = defineScreen({
+  component: Home,
+  options: (s) =>
+    s.leftButtons({
+      id: 'menu',
+      icon: require('../icons/menu.png'),
+      onPress: ({ navigation }) => navigation.openMenu('left'),
+    }),
+});
+```
+
+A tap on the button opens the menu. A button of the options gets the navigation of its screen in `onPress`, so the options need no import of `navigation`.
+
+`closeMenu()` closes whichever menu is open. Both resolve once the menu has moved.
+
+## A pick in the menu {#pick}
+
+A menu is a screen without a stack, so <Mark>its commands act on the center</Mark>, and the menu closes once the center has changed. A pick usually switches the section, so the center starts over with it:
+
+```tsx title="src/screens/Menu.tsx"
+import { Button, View } from 'react-native';
+import { useNavigation } from '@apexnative/navigation';
+
+function Menu() {
+  const navigation = useNavigation();
+  const open = (section: 'Home' | 'Settings') =>
+    navigation.replace(section);
+
+  return (
+    <View>
+      <Button title="Home" onPress={() => open('Home')} />
+      <Button title="Settings" onPress={() => open('Settings')} />
+    </View>
+  );
+}
+```
+
+A tap on Settings shows Settings in the center, and the menu closes. Which command to use depends on the way back:
+
+| From the menu | The center |
+| --- | --- |
+| `replace('Settings')` | Shows Settings alone: a new section, with no back to the one before. |
+| `push('Profile')` | Pushes Profile over its top screen, with back to it. |
+
+## How it looks {#look}
+
+| Platform | The menu |
+| --- | --- |
+| <Os name="iOS" /> | Over the content, which dims: `openMode: 'aboveContent'` of the side, the default. Or under it, with the content moved aside: `'pushContent'`. Then `animation(…)` says how the menu appears: `'parallax'`, `'slide'`, `'slide-and-scale'` or `'door'`. |
+| <Os name="Android" /> | The drawer of the platform: over the content, which dims. |
+
+`.ios()` keeps the settings that only iOS has apart from the others:
+
+```ts
+const main = SideMenu({ left: 'Menu', center: 'Home' })
+  .left({ width: 300 })
+  .ios((menu) =>
+    menu.left({ openMode: 'pushContent' }).animation('parallax'),
+  );
+```
+
+On iOS the content moves aside, and the menu comes in under it with a parallax; on Android the drawer slides over the content.
+
+<Os name="iOS" /> 26: `left({ glass: true })` puts the menu on Liquid Glass. The glass shows where the menu's screen has no background of its own.
+
+## Where the swipe is off {#swipe}
+
+A swipe from the edge can clash with the content, such as a map or a carousel. A screen turns it off <Mark>while it is on top of the center</Mark>, in its options:
+
+```ts
+export const MapScreen = defineScreen({
+  component: Map,
+  options: (s) => s.sideMenu({ left: { enabled: false } }),
+});
+```
+
+On the map the swipe pans the map, and the menu still opens with `openMenu`. On <Os name="iOS" />, `gesture('entireScreen')` lets the swipe start anywhere on the content, `'bezel'` only at the edge (the default).
+
+## API {#api}
+
+<SectionApi id="side-menu" />

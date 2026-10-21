@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+    What a splash theme (the main activity's theme in the manifest, written by `npx apex-navigation splash`) tells the
+    navigation: the app's theme the activity takes in onCreate, and the background and the logo of the copy of the
+    splash under the navigation until its first root shows.
+    -->
+    <declare-styleable name="ApexNavigationSplash">
+        <attr name="apexNavigationPostSplashTheme" format="reference" />
+        <attr name="apexNavigationSplashBackground" format="color" />
+        <attr name="apexNavigationSplashLogo" format="reference" />
+    </declare-styleable>
+</resources>

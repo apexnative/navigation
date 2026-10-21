@@ -1,0 +1,141 @@
+`usePendingLink` gives a component the link that waits for `when` of
+[`linking`](/api/starting-the-app/createNavigation#linking), or `null` when none waits. The component renders again when
+a link starts waiting, and when it runs or is forgotten. The place for it is a screen that asks the user to sign in
+first: it can say what the link will open, or offer it after the sign-in.
+
+## Usage {#usage}
+
+A link to a profile makes sense only signed in. `when` keeps it waiting while the user is signed out:
+
+```ts title="src/Navigation.ts"
+export const Navigation = createNavigation({
+  // …
+  context: { signedIn: false },
+  linking: {
+    prefixes: ['myapp://'],
+    when: (context) => context.signedIn,
+    routes: { 'user/:userId': 'Profile' },
+  },
+});
+```
+
+Login reads the waiting link and tells the user why they are asked to sign in:
+
+```tsx title="src/screens/Login.tsx"
+import { Button, Text, View } from 'react-native';
+import { navigation, usePendingLink } from '@apexnative/navigation';
+
+export function Login() {
+  const link = usePendingLink();
+  return (
+    <View>
+      {link && <Text>Sign in to open {link.path}</Text>}
+      {link && (
+        <Button
+          title="Not now"
+          onPress={() => navigation.clearPendingLink()}
+        />
+      )}
+      {/* your own sign-in form */}
+    </View>
+  );
+}
+```
+
+Opened by `myapp://user/42` while signed out, the app shows Login with "Sign in to open user/42". Once the sign-in sets
+the context, the link runs by itself and Profile opens; the note goes away, because the link no longer waits. Not now
+forgets the link.
+
+## Signature {#signature}
+
+<ApiSignature data={data} name="usePendingLink" />
+
+It takes nothing and returns a `PendingLink`, or `null`. It doesn't depend on the screen, so any component can call
+it: a screen, an overlay, a component inside `appProvider`.
+
+## The link {#link-group}
+
+The fields below show the values for `myapp://user/42?tab=posts`, taken by the route `'user/:userId'` with the prefix
+`myapp://`.
+
+### `url` {#url}
+
+<ApiMember data={data} of="PendingLink" name="url" />
+
+The whole URL as the app got it: `'myapp://user/42?tab=posts'`. Use it to log the link, or to keep it somewhere of
+your own.
+
+### `path` {#path}
+
+<ApiMember data={data} of="PendingLink" name="path" />
+
+The path, without the prefix and the query: `'user/42'`. The readable part of the link, for a note such as "Sign in
+to open user/42".
+
+### `route` {#route}
+
+<ApiMember data={data} of="PendingLink" name="route" />
+
+The pattern of the route that took the link, as a key of `routes`: `'user/:userId'`. Use it to say what the link
+opens in your own words:
+
+```tsx
+const what = link?.route === 'user/:userId' ? 'this profile' : 'it';
+```
+
+### `params` {#params}
+
+<ApiMember data={data} of="PendingLink" name="params" />
+
+The params of the path, each a string: `{ userId: '42' }`. A banner can load what the link points to, such as the
+name of the user, before the user signs in.
+
+### `query` {#query}
+
+<ApiMember data={data} of="PendingLink" name="query" />
+
+The query string by key: `{ tab: 'posts' }`. A key given twice keeps its last value.
+
+## Running or forgetting it {#actions}
+
+The hook only reads. What happens to the link is up to `pending` of `linking` and these commands:
+
+| | What it does |
+| --- | --- |
+| `pending: 'auto'` (the default) | The link runs by itself once `when` lets it, after the commands then on their way, such as the `switchTo` of a sign-in. `when` is asked again on each `setContext`. |
+| `pending: 'manual'` | The link stays until the app runs or forgets it. The way when `when` reads a store, whose changes the navigation doesn't see: the sign-in calls `openPendingLink()`. |
+| `navigation.openPendingLink()` | Runs it now, whatever `when` says, and forgets it. Resolves with `false` when no link waits. |
+| `navigation.clearPendingLink()` | Forgets it. |
+| `navigation.getPendingLink()` | The same value as the hook, outside React. |
+
+With `'manual'` a screen offers the link instead of opening it at once:
+
+```tsx
+const link = usePendingLink();
+// …
+{link && (
+  <Button
+    title={`Open ${link.path}`}
+    onPress={() => navigation.openPendingLink()}
+  />
+)}
+```
+
+See [Links that wait](/docs/guides/deep-links#when) for `when`, `'auto'` and `'manual'` in full.
+
+## Over time {#time}
+
+- **One link waits at a time,** the latest: a link that comes while another waits takes its place, and the component
+  renders with the new one.
+- **At a cold start the first render sees `null`.** A link that launches the app waits only once the first root is
+  shown, so Login renders first without it, then again with it. Don't treat the first `null` as "no link".
+- **The link lives in the JavaScript runtime.** A JavaScript reload, or the app killed and launched again, forgets it.
+  Keep it yourself, from `url`, if it must survive that.
+- **A `when` that throws** keeps the link waiting; the error goes to `onError` of `createNavigation`, once for the link.
+
+## See also {#see-also}
+
+- [Deep links](/docs/guides/deep-links): routes, `start` and `open`, links that wait.
+- [Sign in and sign out](/docs/flows/sign-in-and-sign-out#links): a waiting link in the whole sign-in flow, with the
+  context or a store, and [telling the user a link waits](/docs/flows/sign-in-and-sign-out#pending).
+- [`createNavigation`](/api/starting-the-app/createNavigation#linking): the `linking` key.

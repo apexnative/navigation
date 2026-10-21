@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+    The size of the native splash's logo, which JavaScript reads (`useSplash().logo`). 0dp here: no splash made by the
+    CLI. The app's resources that `npx apex-navigation splash` writes give the real size.
+    -->
+    <dimen name="apex_navigation_splash_logo_width">0dp</dimen>
+    <dimen name="apex_navigation_splash_logo_height">0dp</dimen>
+</resources>

@@ -1,0 +1,687 @@
+---
+title: From React Navigation
+description: 'Move an app from React Navigation 7 to @apexnative/navigation: the two models side by side, each piece of the old API mapped to the new one, and the move step by step.'
+---
+
+import { Mark, Os, Pair } from '@site/src/components/Intro';
+
+This page moves an app from React Navigation 7 to `@apexnative/navigation`, one piece at a time, in the order an app does it. At the end the app has the same screens, moves, headers, tabs and links, and no `@react-navigation` packages.
+
+This page answers:
+
+1. [How the two models differ](#models), and [what that changes in the app](#what-changes).
+2. [Which API takes the place of which](#map).
+3. [The move, step by step](#steps), with each piece before and after.
+4. [What has no direct equivalent](#no-equivalent), and what to do instead.
+
+## Two models {#models}
+
+React Navigation keeps the navigation <Mark>in the React tree</Mark>. Navigators are components, the state of every stack and tab is a React object, and its native stack shows the platform's screens by following that object.
+
+Here the navigation is <Mark>owned by the platform</Mark>. The stacks, tabs and modals are the native containers themselves; JavaScript describes them once and sends commands. Each screen is a React component that the platform shows in its own native screen.
+
+<Pair left="React Navigation" right="@apexnative/navigation">
+
+```tsx title="App.tsx"
+const RootStack =
+  createNativeStackNavigator();
+
+export default function App() {
+  return (
+    <NavigationContainer>
+      <RootStack.Navigator>
+        <RootStack.Screen
+          name="Home"
+          component={Home}
+        />
+        <RootStack.Screen
+          name="Details"
+          component={Details}
+        />
+      </RootStack.Navigator>
+    </NavigationContainer>
+  );
+}
+```
+
+```ts title="Navigation.ts"
+import {
+  createNavigation,
+} from '@apexnative/navigation';
+
+export const Navigation =
+  createNavigation({
+    screens: {
+      Home: HomeScreen,
+      Details: DetailsScreen,
+    },
+    root: 'Home',
+  });
+```
+
+</Pair>
+
+The left side renders the navigation. The right side describes it: `createNavigation` lists the screens by name and says what the window shows first, a stack with Home. Nothing of it renders in React.
+
+### What it changes in the app {#what-changes}
+
+| | React Navigation | Here |
+| --- | --- | --- |
+| **Providers** | Around `NavigationContainer`; every screen is their child. | Each screen is a React root of its own. Providers go to `appProvider` (one tree for every screen) or `screenProvider` (around each screen). See [One tree](../architecture/one-tree). |
+| **State** | A React object: routes, params, indexes. | The platform's. JavaScript hears events and reads a small state: the screen the user sees and the selected tab. |
+| **Params** | `route.params`, changed with `setParams`. | Props of the component, given by the command that shows the screen. |
+| **Options** | Props of a screen, with React elements for the header. | Data the platform reads before the screen shows. A component in a bar is registered in `screens`, as a screen is. |
+| **Safe area** | `SafeAreaView` or a safe area library. | Every screen keeps clear of the bars by itself. See [The safe area](../screen-ui/system-ui#safe-area). |
+
+Because options are data, a title is there from the first frame, and because the state is the platform's, a move renders nothing in React by itself. More on the model: [Introduction](../start/introduction#models).
+
+## The map {#map}
+
+Each piece of React Navigation, and what takes its place. The [steps](#steps) below show each one in code.
+
+### Structure {#map-structure}
+
+| React Navigation | Here |
+| --- | --- |
+| `NavigationContainer` | `createNavigation`, registered with `AppRegistry` of the package. |
+| `createNativeStackNavigator` | `Stack(…)`; a screen named alone as a root is a stack. |
+| `createBottomTabNavigator` | `Tabs(Tab(…), …)`: the system tab bar, a stack in each tab. |
+| `createDrawerNavigator` | `SideMenu({ left, center })`. |
+| `presentation: 'modal'` | `navigation.showModal(name)`: a modal is a command, not a screen's place. |
+| `linking` of `NavigationContainer` | `linking` of `createNavigation`: a route per path. |
+| `RootParamList` and the param lists | Nothing to write: names and props come from `screens`. |
+
+### Moves {#map-moves}
+
+| React Navigation | Here |
+| --- | --- |
+| `navigate('Details', params)` | `push('Details', { props })`. |
+| `navigate` to a tab | `selectTab(index or id)`. |
+| `push` | `push`: every push is a new screen. |
+| `goBack()` | `goBack()`: pops, or closes the modal. |
+| `popTo`, `popToTop` | `popTo(id)`, `popToRoot()`. |
+| `reset`, `CommonActions.reset` | `setStack(…)` for one stack, `switchTo(…)` for the whole app. |
+| `navigationRef` outside React | `navigation` imported from the package. |
+
+### Screens {#map-screens}
+
+| React Navigation | Here |
+| --- | --- |
+| `options` of a screen | `options` of `defineScreen`, next to the component. |
+| `headerRight: () => <Button />` | `rightButtons({ id, text, onPress })`. |
+| `navigation.setOptions` in an effect | `useScreenOptions`, or `setOptions` from a handler. |
+| `useRoute().params` | The component's props; `useScreen()` gives `{ id, name }`. |
+| `useFocusEffect`, `useIsFocused` | The same names, from this package. |
+| `usePreventRemove`, `beforeRemove` | `usePreventLeave`. |
+| `theme` of `NavigationContainer`, `useTheme` | `theme` of `createNavigation`, `useNavigationTheme`. |
+| Screens rendered by a condition (auth) | `roots`, `initialRoot` and `switchTo`. |
+
+## The move, step by step {#steps}
+
+The steps go in the order an app moves: first the setup, then the screens, then what the screens do. Each step shows one piece before and after.
+
+### Start with migrate {#migrate}
+
+`migrate` makes the first step itself, and lists the rest place by place:
+
+```bash title="Terminal"
+npx apex-navigation migrate
+```
+
+It puts `@apexnative/navigation` into `package.json` and makes the changes of `setup`: the native entry points, `index.js`, `Navigation.ts` with the app's `App` as the first screen, and `navigation-env.d.ts`. Then it runs one install with the app's package manager, and the pods on a Mac (`--skip-pods` leaves them for later). It shows each change and asks before it writes. The `@react-navigation` packages stay, so the app runs as before, now inside the first screen of a native stack.
+
+Everything else is the report: each place in the files that import `@react-navigation`, with the file and the line, the line as it is, its new form, and the step of this page, such as a navigator for [step 3](#root), `navigation.navigate` for [step 5](#moves) or `route.params` for [step 2](#screens). The command changes none of these places, and exits with 1 while the report has any, as every command with files left to change by hand. With `--json` they are `report: [{ file, line, step, what, before, after, docs }]`. It reads the code with TypeScript, so the app needs `typescript` among its dev dependencies.
+
+The steps below stay the reference: step 1 is what `migrate` did, and the others move the places of the report. Every option: [The CLI](../guides/cli#migrate).
+
+### 1. Install and set up {#install}
+
+Add the package and run `setup` in the root of the app. It changes the native entry points, so the platform's containers take the window, and writes `Navigation.ts` with the app's `App` as the first screen. What each change does and why: [Installation](../start/installation#existing-app).
+
+```bash title="Terminal"
+npx apex-navigation setup
+```
+
+Keep `@react-navigation` installed until the [last step](#cleanup), so the app compiles while you move. `doctor` warns about it meanwhile: two navigations in one app don't see each other's screens.
+
+### 2. Screens and their params {#screens}
+
+A screen's params become the props of its component. Its options move next to it, with `defineScreen`, and can read the props.
+
+<Pair left="React Navigation" right="@apexnative/navigation">
+
+```tsx title="Details.tsx"
+type Props = NativeStackScreenProps<
+  RootStackParamList,
+  'Details'
+>;
+
+function Details({ route }: Props) {
+  return <Text>{route.params.id}</Text>;
+}
+
+// in the navigator
+<RootStack.Screen
+  name="Details"
+  component={Details}
+  options={({ route }) => ({
+    title: `Item ${route.params.id}`,
+  })}
+/>
+```
+
+```tsx title="Details.tsx"
+function Details({ id }: { id: string }) {
+  return <Text>{id}</Text>;
+}
+
+export const DetailsScreen =
+  defineScreen({
+    component: Details,
+    options: (s, props) =>
+      s.title(`Item ${props.id}`),
+  });
+```
+
+</Pair>
+
+The screen is listed once in `screens` of `createNavigation`, under its name. A screen without options goes there as a plain component. More: [Screens and props](../fundamentals/screens-and-props).
+
+### 3. The navigators become a root {#root}
+
+Nested navigators become one layout of builders: `Tabs`, `Tab`, `Stack`. Each tab holds a stack of its own, so the stack navigator inside each tab goes away.
+
+<Pair left="React Navigation" right="@apexnative/navigation">
+
+```tsx
+const BottomTabs =
+  createBottomTabNavigator();
+
+function MainTabs() {
+  return (
+    <BottomTabs.Navigator>
+      <BottomTabs.Screen
+        name="HomeTab"
+        component={HomeStack}
+        options={{ title: 'Home' }}
+      />
+      <BottomTabs.Screen
+        name="InboxTab"
+        component={InboxStack}
+        options={{ title: 'Inbox' }}
+      />
+    </BottomTabs.Navigator>
+  );
+}
+```
+
+```ts title="Navigation.ts"
+export const Navigation =
+  createNavigation({
+    screens: {
+      Home: HomeScreen,
+      Inbox: InboxScreen,
+      Chat: ChatScreen,
+    },
+    root: Tabs(
+      Tab('Home').label('Home'),
+      Tab('Inbox')
+        .label('Inbox')
+        .id('inbox'),
+    ),
+  });
+```
+
+</Pair>
+
+A screen pushed from Inbox, such as Chat, is listed in `screens` and nowhere else: a push goes into the stack of the tab it was made from. `tabBarIcon` becomes `icon`, an image or a symbol of each platform, as `{ ios: 'tray', android: 'ic_inbox' }`, since the tab bar is native and draws no React element. More: [Tabs](../containers/tabs#build).
+
+### 4. Register the app {#register}
+
+`AppRegistry` of the package takes the navigation in place of a root component. `NavigationContainer` and `App.tsx` go away: the window shows the root, not one React view.
+
+<Pair left="React Navigation" right="@apexnative/navigation">
+
+```js title="index.js"
+import { AppRegistry } from 'react-native';
+import App from './App';
+import { name } from './app.json';
+
+AppRegistry.registerComponent(
+  name,
+  () => App,
+);
+```
+
+```js title="index.js"
+import {
+  AppRegistry,
+} from '@apexnative/navigation';
+import { name } from './app.json';
+import { Navigation } from './Navigation';
+
+AppRegistry.registerComponent(
+  name,
+  Navigation,
+);
+```
+
+</Pair>
+
+Work that ran before the first render, such as reading the session, goes to `willMount`: the splash screen stays until it is done. See [Starting the app](../fundamentals/starting-the-app#data).
+
+### 5. Moves between screens {#moves}
+
+`useNavigation()` gives the commands of the screen the component is in, typed from `screens`, with no generic to pass. Params go under `props`.
+
+<Pair left="React Navigation" right="@apexnative/navigation">
+
+```tsx
+const navigation =
+  useNavigation<HomeNavigation>();
+
+navigation.navigate('Details', {
+  id: '42',
+});
+navigation.goBack();
+navigation.navigate('InboxTab');
+```
+
+```tsx
+const navigation = useNavigation();
+
+navigation.push('Details', {
+  props: { id: '42' },
+});
+navigation.goBack();
+navigation.selectTab('inbox');
+```
+
+</Pair>
+
+- **`push` always shows a new screen.** A screen that should open once per item, such as a chat, says so with `key` in `defineScreen`: pushing it again goes back to it. See [One screen per item](../fundamentals/screens-and-props#key).
+- **Every command returns a promise** that resolves once the move has ended, so moves go one after another with `await`.
+- **Code outside the screens**, such as a notification handler that used `navigationRef`, imports `navigation` from the package. It needs no ref and no container to be ready: a command made before the app starts waits for the first root.
+
+All the moves: [Moving between screens](../fundamentals/moving-between-screens).
+
+### 6. Header options {#options}
+
+Header options become the options of the screen. A button of the header is data with an `onPress`, not a React element, because the platform draws it.
+
+<Pair left="React Navigation" right="@apexnative/navigation">
+
+```tsx
+<RootStack.Screen
+  name="Profile"
+  component={Profile}
+  options={({ navigation }) => ({
+    title: 'Profile',
+    headerLargeTitle: true,
+    headerRight: () => (
+      <Button
+        title="Edit"
+        onPress={() =>
+          navigation.navigate('Edit')
+        }
+      />
+    ),
+  })}
+/>
+```
+
+```tsx
+export const ProfileScreen =
+  defineScreen({
+    component: Profile,
+    options: (s) =>
+      s
+        .title('Profile')
+        .largeTitle()
+        .rightButtons({
+          id: 'edit',
+          text: 'Edit',
+          onPress: ({ navigation }) =>
+            navigation.push('Edit'),
+        }),
+  });
+```
+
+</Pair>
+
+| React Navigation | Here |
+| --- | --- |
+| `title`, `headerLargeTitle` | `title(…)`, `largeTitle()` (<Os name="iOS" />; the large top app bar on <Os name="Android" />) |
+| `headerShown: false` | `hideTopBar()` |
+| `headerBackTitle`, `headerBackButtonDisplayMode` | `backButton({ title, showTitle })` |
+| `gestureEnabled: false` | `popGesture(false)` |
+| `headerSearchBarOptions` | `searchBar({ … })` with `useSearchBar` |
+| `headerTitle: () => <Title />` | `title({ component })`, the component registered in `screens` |
+
+Options that follow the state of the screen, which React Navigation sets with `navigation.setOptions` in an effect, go in `useScreenOptions`: it builds them on each render and applies them when they change.
+
+<Pair left="React Navigation" right="@apexnative/navigation">
+
+```tsx
+useLayoutEffect(() => {
+  navigation.setOptions({
+    title: `${count} selected`,
+  });
+}, [navigation, count]);
+```
+
+```tsx
+useScreenOptions((s) =>
+  s.title(`${count} selected`),
+);
+```
+
+</Pair>
+
+More: [Screen options](../fundamentals/screen-options), [Top bar](../screen-ui/top-bar), [Bar buttons](../screen-ui/bar-buttons).
+
+### 7. Modals {#modals}
+
+In React Navigation a modal is a screen with `presentation: 'modal'`, usually in a group of the root stack. Here a modal is a way to show a screen: the command decides, so the same screen can be pushed in one place and shown in a modal in another.
+
+<Pair left="React Navigation" right="@apexnative/navigation">
+
+```tsx
+<RootStack.Group
+  screenOptions={{
+    presentation: 'modal',
+  }}
+>
+  <RootStack.Screen
+    name="Compose"
+    component={Compose}
+  />
+</RootStack.Group>
+
+// to open it
+navigation.navigate('Compose');
+```
+
+```ts
+navigation.showModal('Compose', {
+  closeButton: true,
+});
+
+// in Compose, after sending
+navigation.dismiss();
+```
+
+</Pair>
+
+A modal has a stack of its own, so its screens push inside it. `presentation: 'formSheet'` with `sheetAllowedDetents` becomes `sheet: { detents: ['medium', 'large'] }` of `showModal`; `'transparentModal'` becomes `style: 'overFullScreen'` with `backgroundColor('transparent')` on the screen. More: [Modals](../containers/modals).
+
+### 8. A drawer {#drawer}
+
+The drawer navigator becomes a side menu: the menu is a screen of its own, the center a stack. A pick in the menu acts on the center.
+
+<Pair left="React Navigation" right="@apexnative/navigation">
+
+```tsx
+const AppDrawer =
+  createDrawerNavigator();
+
+<AppDrawer.Navigator
+  drawerContent={(props) => (
+    <Menu {...props} />
+  )}
+>
+  <AppDrawer.Screen
+    name="Home"
+    component={Home}
+  />
+</AppDrawer.Navigator>
+
+// in a screen
+navigation.openDrawer();
+```
+
+```ts
+root: SideMenu({
+  left: 'Menu',
+  center: 'Home',
+}),
+
+// in a screen
+navigation.openMenu('left');
+
+// in Menu: a new section
+navigation.replace('Settings');
+```
+
+</Pair>
+
+The drawer of React Navigation lists its screens and shows one at a time; a side menu has one center, and a pick in the menu replaces what the center shows. More: [Side menu](../containers/side-menu).
+
+### 9. Hooks of a screen {#hooks}
+
+Most hooks keep their names. `useFocusEffect` takes the effect itself: it runs when the screen gets the focus and cleans up when it loses it, not on renders, so it needs no `useCallback`. A modal or a sheet takes the focus, as in React Navigation.
+
+<Pair left="React Navigation" right="@apexnative/navigation">
+
+```tsx
+useFocusEffect(
+  useCallback(() => {
+    const timer =
+      setInterval(reload, 30_000);
+    return () => clearInterval(timer);
+  }, []),
+);
+```
+
+```tsx
+useFocusEffect(() => {
+  const timer =
+    setInterval(reload, 30_000);
+  return () => clearInterval(timer);
+});
+```
+
+</Pair>
+
+| React Navigation | Here |
+| --- | --- |
+| `useNavigation` | `useNavigation`: no generic, typed from `screens`. |
+| `useRoute` | The props of the component; `useScreen()` for `{ id, name }`. |
+| `useIsFocused` | `useIsFocused`. Under a sheet it is `false`, though the screen still shows. |
+| `navigation.addListener('focus')` | `useScreenAppear`. |
+| `usePreventRemove` | `usePreventLeave(prevent, onAttempt)`; after the user agrees, `goBack()` leaves. |
+| `useNavigationState` | `useNavigationState`: the screen the user sees and the selected tab, not the routes. |
+| `BackHandler` in `useFocusEffect` (Android) | The same. While a listener is registered, the system's animation back to the home screen doesn't play on the first screen: see [Handling back yourself](../screen-ui/back-and-gestures#back-handler). |
+
+The effect of `useFocusEffect` reads the values of the latest render when it runs, but doesn't restart when they change while the screen keeps the focus: what should restart goes in a `useEffect` with its dependencies. More: [Lifecycle and events](../fundamentals/lifecycle-and-events#hooks), [Keeping the user on a screen](../screen-ui/back-and-gestures#prevent).
+
+### 10. Providers and the theme {#providers}
+
+Providers that wrapped `NavigationContainer` move to `createNavigation`. Those that hold state the screens share, such as a query client or a store in React context, go to `appProvider`: every screen then renders in one React tree inside it.
+
+<Pair left="React Navigation" right="@apexnative/navigation">
+
+```tsx
+<QueryClientProvider client={client}>
+  <NavigationContainer theme={theme}>
+    <RootStack.Navigator>
+      {/* … */}
+    </RootStack.Navigator>
+  </NavigationContainer>
+</QueryClientProvider>
+```
+
+```tsx
+function AppProvider(
+  { children }: { children: ReactNode },
+) {
+  return (
+    <QueryClientProvider client={client}>
+      {children}
+    </QueryClientProvider>
+  );
+}
+
+createNavigation({
+  // …
+  appProvider: AppProvider,
+  theme: { colors: { primary: '#E76F51' } },
+});
+```
+
+</Pair>
+
+A store kept in a module, such as Zustand or Redux with its store imported, needs no provider at all. The theme's colors map one to one: `primary` to `primary`, `card` to `bar`, `text`, `background`, `border`, and `notification` to `badge`. A color can be `{ light, dark }`, and the native side switches it with the system, with no render. `useTheme` becomes `useNavigationTheme`. More: [One tree](../architecture/one-tree), [Theme and context](../architecture/theme-and-context#theme).
+
+### 11. Signed in and signed out {#auth}
+
+React Navigation renders different screens by a condition, and the navigator follows the change. Here the signed-out and signed-in parts are two roots, and the app switches between them. The condition goes into the context, which `willMount` fills before the first screen.
+
+<Pair left="React Navigation" right="@apexnative/navigation">
+
+```tsx
+<RootStack.Navigator>
+  {signedIn ? (
+    <RootStack.Screen
+      name="Home"
+      component={Home}
+    />
+  ) : (
+    <RootStack.Screen
+      name="Login"
+      component={Login}
+    />
+  )}
+</RootStack.Navigator>
+```
+
+```ts
+createNavigation({
+  // …
+  roots: { login: 'Login', main: 'Home' },
+  context: { signedIn: false },
+  willMount: async () => {
+    navigation.setContext({
+      signedIn: await isSignedIn(),
+    });
+  },
+  initialRoot: (context) =>
+    context.signedIn ? 'main' : 'login',
+});
+```
+
+</Pair>
+
+After the sign-in, the screen sets the context and switches; a sign-out switches back. The old root's screens unmount, as the screens left out by the condition did.
+
+```ts title="src/screens/Login.tsx"
+const signIn = async (email: string, password: string) => {
+  await logIn(email, password); // your own request
+  navigation.setContext({ signedIn: true });
+  await navigation.switchTo('main');
+};
+```
+
+More: [Switching roots](../fundamentals/switching-roots), [Theme and context](../architecture/theme-and-context#context).
+
+### 12. Deep links {#linking}
+
+The linking config moves to `createNavigation`, with a route per path pattern instead of a tree of screens. The native declarations, the URL scheme and the associated domains, stay as they are.
+
+<Pair left="React Navigation" right="@apexnative/navigation">
+
+```tsx
+const linking = {
+  prefixes: ['myapp://'],
+  config: {
+    screens: {
+      Profile: 'user/:userId',
+      Settings: 'settings',
+    },
+  },
+};
+
+<NavigationContainer linking={linking}>
+```
+
+```ts
+createNavigation({
+  // …
+  linking: {
+    prefixes: ['myapp://'],
+    routes: {
+      'user/:userId': 'Profile',
+      settings: 'Settings',
+    },
+  },
+});
+```
+
+</Pair>
+
+React Navigation builds the whole navigation state from a URL. Here a link runs as a command: a screen name pushes that screen where the user is, with the params as its props. A link that launches the app can make the first root itself with `start`, such as Profile with Home under it; `when` makes a link wait until the user signs in. More: [Deep links](../guides/deep-links).
+
+### 13. Typed routes {#types}
+
+The param lists and the global declaration go away. The names and props are checked from `screens` through one file that `setup` wrote, `navigation-env.d.ts`.
+
+<Pair left="React Navigation" right="@apexnative/navigation">
+
+```ts
+type RootStackParamList = {
+  Home: undefined;
+  Details: { id: string };
+};
+
+declare global {
+  namespace ReactNavigation {
+    interface RootParamList
+      extends RootStackParamList {}
+  }
+}
+```
+
+```ts title="navigation-env.d.ts"
+// Made by apex-navigation setup.
+declare module '@apexnative/navigation' {
+  interface Register {
+    app: typeof import('./Navigation')
+      .Navigation;
+  }
+}
+export {};
+```
+
+</Pair>
+
+A wrong name, a missing prop or a prop of the wrong type is an error in the editor. The file doesn't change with the screens: a screen added to `screens` is typed at once. More: [Typed commands](../start/installation#typed-commands).
+
+### 14. Remove the old packages {#cleanup}
+
+Once no file imports them, remove `@react-navigation/*`, and `react-native-screens` and `react-native-safe-area-context` when nothing else uses them. Then run `doctor`: the warning about another navigation goes away.
+
+```bash title="Terminal"
+npx apex-navigation doctor
+```
+
+Screens wrapped in `SafeAreaView` can drop it, since every screen keeps clear of the bars by itself; `useSafeAreaInsets` of this package gives what still covers the content of the screen. Code such as `paddingTop: insets.top` keeps working with it: on an edge the screen keeps clear the inset is 0, so nothing is padded twice.
+
+## What has no direct equivalent {#no-equivalent}
+
+| React Navigation | What to do here |
+| --- | --- |
+| `navigation.setParams` | Props are given once. What changes goes in the screen's state, or the app's context or store. |
+| A custom navigator, or a `tabBar` drawn in React | The containers are the platform's and draw their own bars: style them with their options and the theme. On <Os name="iOS" /> 26, `Tabs().accessory(…)` puts a screen of your own above the tab bar. |
+| `header: () => <MyHeader />` | `hideTopBar()` and a header in the screen's content, or a component as the title or the background of the bar. |
+| Material top tabs | No container for it. A pager component inside one screen does the same. |
+| Persisting the navigation state | The state is the platform's and isn't saved. Save what the user was on yourself, and make the first root from it in `initialRoot` or `root`. |
+| `navigate('Root', { screen: 'Inbox' })` into a nested navigator | Commands one after another: `await selectTab('inbox')`, then `push`. |
+| `getParent()`, `getState().routes` | `getState()` holds the screen the user sees and the tab; events tell the rest. |
+| The web | Not a target of this library. |
+
+## Related {#related}
+
+- [Introduction](../start/introduction): the model, and when it fits.
+- [Quick start](../start/quick-start): an app with two screens, from the start.
+- [From Expo Router](./from-expo-router).
+- [From react-native-navigation](./from-react-native-navigation).

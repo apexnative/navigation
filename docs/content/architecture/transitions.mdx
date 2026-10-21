@@ -1,0 +1,206 @@
+---
+title: Transitions
+description: "How screens come and go: the platform's transitions, presets for a command, transitions out of a view (shared elements, zoom, preview), animations of your own, and waiting for the content. Which to pick, and what each costs."
+---
+
+import { SectionStatus, SectionApi } from '@site/src/components/Api';
+import { Mark, Os } from '@site/src/components/Intro';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+<SectionStatus id="transitions" />
+
+A transition is how a screen comes in and goes. By default it is the platform's own, with its gestures. A command can ask for another one with `transition`:
+
+```ts
+import { navigation } from '@apexnative/navigation';
+
+navigation.push('Details', { transition: 'fade' });
+```
+
+Details fades in over the screen before it, and fades out on the way back. This page answers:
+
+1. [The platform's transitions](#platform), and why they are the default.
+2. [Presets](#presets) for a command, or for the whole app.
+3. [Transitions out of a view](#views): shared elements, zoom, preview.
+4. [Animations of your own](#custom).
+5. [Which to pick](#which).
+6. [Waiting for the content](#wait).
+
+## The platform's transitions {#platform}
+
+Without a `transition`, every move is the platform's: a push slides in from the edge, a sheet rises from the bottom, a new tab shows at once. They <Mark>follow the finger</Mark>: the swipe back of iOS moves the screen as the user drags, and the user can stop halfway. They also follow the system: on Android a push plays the transition the system gives to a move between screens.
+
+So the platform's transitions are the right choice for most moves. A preset or an animation of your own is for a move that means something else: a modal that should fade, a screen that grows out of a photo.
+
+## Presets {#presets}
+
+`transition` of `push` and `showModal` takes a preset. The way back is the same in reverse:
+
+<DeviceVideo name="transitions-presets" />
+
+| Preset | The screen |
+| --- | --- |
+| `'platform'` | The platform's own transition: the default. |
+| `'fade'` | Fades in, and out on the way back. |
+| `'slideUp'` | Comes from the bottom, goes down. |
+| `'slideFromEnd'` | Comes from the trailing edge: the right, or the left in a right-to-left app. |
+| `'scale'` | Grows in place, and shrinks on the way back. |
+| `'none'` | Shows at once. |
+
+A preset takes 300 ms. `{ type, duration }` sets another time, in milliseconds:
+
+```ts
+navigation.showModal('Player', {
+  transition: { type: 'slideUp', duration: 450 },
+});
+```
+
+`presentation` of `createNavigation` gives every push or modal of the app its transition: see [Defaults for the whole app](../fundamentals/moving-between-screens#presentation). New roots have presets of their own: see [How a new root comes in](../fundamentals/switching-roots#transitions).
+
+## Transitions out of a view {#views}
+
+Some moves start from a view: a photo opens out of its tile, an avatar grows into a profile. The view on the screen has a `nativeID`, and the transition names it:
+
+<DeviceVideo name="shared-element" />
+
+<DeviceVideo name="preview" devices={['ios']} />
+
+### Shared elements {#shared}
+
+Views move from one screen into the other. Each pair names a view of this screen and a view of the next; the rest of the screen fades. Back moves them home.
+
+```tsx title="src/screens/People.tsx"
+<Image nativeID={`avatar-${person.id}`} source={person.photo} />
+<Text nativeID={`name-${person.id}`}>{person.name}</Text>
+```
+
+```tsx title="src/screens/Person.tsx"
+<Image nativeID="person-avatar" source={photo} />
+<Text nativeID="person-name">{name}</Text>
+```
+
+```ts
+navigation.push('Person', {
+  props: { id: person.id },
+  transition: {
+    shared: [
+      [`avatar-${person.id}`, 'person-avatar'],
+      [`name-${person.id}`, 'person-name'],
+    ],
+  },
+});
+```
+
+The avatar of the row moves and grows into the photo of the profile, and the name into its larger title. The views can differ in size and style. `type` and `duration` next to `shared` change how the rest of the screen comes, `'fade'` by default.
+
+Both platforms. <Os name="Android" /> The next screen waits until it is drawn, so its views are there to move into; a `type` other than a fade gives way to a fade.
+
+### Zoom {#zoom}
+
+<Os name="iOS" /> 18+ The next screen opens out of a view and shrinks back into it, as photos do in the system apps. The swipe back, and the swipe down of a sheet, shrink it with the finger:
+
+```ts
+navigation.push('Photo', {
+  props: { id: photo.id },
+  transition: { zoom: `photo-${photo.id}` },
+});
+```
+
+The tile has the same `nativeID`: `photo-` and the id of the photo. `showModal` takes the zoom too. On Android and older iOS the screen comes in with the platform's transition.
+
+### Preview {#preview}
+
+<Os name="iOS" /> A long press on a view shows the screen it opens, small, with a menu under it; a tap on the preview pushes the screen. A screen says which views preview what with `usePreview`, by the view's `nativeID`:
+
+```tsx title="src/screens/Photos.tsx"
+import { Image, Share } from 'react-native';
+import { usePreview } from '@apexnative/navigation';
+
+function Tile({ id, uri }: { id: string; uri: string }) {
+  usePreview(`photo-${id}`, {
+    screen: 'Photo',
+    props: { id },
+    actions: [
+      {
+        id: 'share',
+        title: 'Share',
+        onPress: () => Share.share({ url: uri }),
+      },
+    ],
+  });
+  return <Image nativeID={`photo-${id}`} source={{ uri }} />;
+}
+```
+
+The preview goes when the component unmounts. On Android a long press on the view does nothing of the navigation's: the view has no preview.
+
+## Animations of your own {#custom}
+
+`options.animations` describes a move property by property: the screen that comes in, and the one that goes. It is for a move a preset doesn't have, and it goes over the `transition` of the command:
+
+```ts
+navigation.push('Details', {
+  options: {
+    animations: {
+      push: {
+        content: {
+          enter: {
+            translationY: { from: 300, to: 0, duration: 300 },
+            alpha: { from: 0, to: 1, duration: 300 },
+          },
+        },
+      },
+    },
+  },
+});
+```
+
+Details rises 300 points as it fades in. Each property animates from a value to a value over a time, with a delay and an interpolation if it needs them; the [API](#api) lists every one.
+
+The same goes for `pop`, `showModal`, `dismissModal`, `setStackRoot` and `setRoot`. The swipe back is the exception: <Os name="iOS" /> it always follows the finger with the system's slide, so a custom `pop` plays for the back button and `pop()` only.
+
+## Which to pick {#which}
+
+| The move | Pick | What it costs |
+| --- | --- | --- |
+| Most moves | The platform's | Nothing: it follows the finger and the system. |
+| A move that means something else, such as a fading modal | A preset | The swipe back on iOS still slides. |
+| A view that becomes the next screen | Shared elements, or the zoom on iOS 18+ | A `nativeID` on both views. The zoom shows on iOS 18+ only. |
+| A look at a screen before opening it | The preview | iOS only. |
+| A move no preset has | `options.animations` | Every property spelled out; the swipe back on iOS still slides. |
+
+## Waiting for the content {#wait}
+
+A screen can come in before its React content has drawn, or wait for it. Coming in at once keeps the move fast; waiting keeps the user from seeing an empty screen slide in.
+
+| | By default |
+| --- | --- |
+| <Os name="iOS" /> push | Doesn't wait for the content: the screen slides in with its bar, and the content draws as it comes. It waits only for components in the bar. |
+| <Os name="Android" /> push | Doesn't wait. With `appProvider` a React screen is rendered before the push starts, so it comes in drawn from the first frame. A screen with a React root of its own comes in at once, and its content draws as it comes; so does a native screen. The components of the bar draw as the screen comes in. |
+| <Os name="Android" /> modal | Waits for the content and the components of the bar, half a second at most, so the screen comes in drawn. |
+
+`waitForRender` of an animation changes it. `true` waits as long as it takes; `false` comes in at once (a push on Android with `appProvider` [still renders the screen first](#wait-one-tree)):
+
+```ts
+navigation.push('Details', {
+  options: { animations: { push: { waitForRender: true } } },
+});
+```
+
+A screen that draws nothing at first doesn't hold its transition back: it comes in empty, with its bar.
+
+### A push on Android, in one tree {#wait-one-tree}
+
+<Os name="Android" /> With `appProvider` a push doesn't wait for the screen, and the screen still comes in drawn: nothing of it mounts during the transition, which would drop frames. It goes in three steps:
+
+1. The native side lays the screen out in its stack, out of sight, and gives React its size and its safe area.
+2. React renders the screen at that size with its content, at once.
+3. The push starts in the frame in which that content appears; if it doesn't appear, after half a second.
+
+So the push starts later by the time React takes to render the screen, as a push in a native app starts once its screen is built. `waitForRender: false` goes the same way here; `true` waits for the content as long as it takes, and for the components of the bar, half a second at most.
+
+The size and the safe area come from the options the screen is pushed with. Options the screen changes as it renders for the first time, such as hiding the top bar or its safe area edges, apply as it comes in, and its content lays out once more during the transition. Put such options in the screen's own options instead.
+
+## API {#api}
+
+<SectionApi id="transitions" />

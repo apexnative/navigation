@@ -1,0 +1,313 @@
+---
+title: Testing
+description: 'Tests of an app with native navigation: Jest with the navigation mocked once for every test, ids for the bars and the back button, end-to-end tests with Maestro and Detox, links opened cold and warm, and what only a device can check.'
+---
+
+import { SectionStatus, SectionApi } from '@site/src/components/Api';
+import { Mark, Os } from '@site/src/components/Intro';
+import DocTabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+<SectionStatus id="testing" />
+
+An app is tested in two places. Jest runs the JavaScript alone: a screen renders, a button asks for the right command. An end-to-end test, with Maestro, Detox or Appium, taps through the real app on a device: the bars, the transitions, the back button. The navigation is native, so <Mark>its moves are tested end to end</Mark>, and the code that asks for them in Jest.
+
+Here you test the Notes list and the Note screen of [Building a screen](./building-a-screen). You end with:
+
+- Jest set up once, so every test renders a screen without a device;
+- a Jest test that a tap on a note asks for the Note screen;
+- an end-to-end test that opens a note, finds its top bar and goes back with the back button.
+
+## What you need {#need}
+
+- Jest with the React Native preset, as the React Native template sets it up, and [React Native Testing Library](https://callstack.github.io/react-native-testing-library/) for the screens.
+- For the end-to-end part, one of [Maestro](https://maestro.mobile.dev) or [Detox](https://www.npmjs.com/package/detox), installed and set up by its own docs, and a debug or release build of the app on a simulator or a device.
+- The screens to test: the Notes list and the Note screen of [Building a screen](./building-a-screen).
+
+## How it will work {#plan}
+
+| | Jest | End to end |
+| --- | --- | --- |
+| Runs | The JavaScript alone, in Node | The real app, on a simulator or a device |
+| The navigation | Replaced by mocks, once, in a setup file | The real one, native |
+| Checks | What a screen asks for: `push('Note', …)` | What the user sees: the Note screen, its top bar |
+| Finds things by | Text and `testID` of your components | `testID` of your components, ids of the bars and buttons from the options, `TestIDs.backButton` |
+
+A screen in Jest renders without the native side, so nothing there moves the user: the test checks the command, and the end-to-end test checks that the platform carried it out.
+
+## 1. Set up Jest {#jest}
+
+The package is published as ES modules, so Jest transforms it like React Native itself. A setup file replaces the parts that need a screen or the native side, once for every test:
+
+```js title="jest.config.js"
+module.exports = {
+  preset: '@react-native/jest-preset',
+  setupFiles: ['<rootDir>/jest.setup.ts'],
+  clearMocks: true,
+  transformIgnorePatterns: [
+    'node_modules/(?!(@react-native|react-native|@apexnative)/)',
+  ],
+};
+```
+
+```ts title="jest.setup.ts"
+jest.mock('@apexnative/navigation', () => {
+  const { useEffect } = require('react');
+  const actual = jest.requireActual('@apexnative/navigation');
+  // One object for useNavigation() and for navigation.
+  const navigation = {
+    push: jest.fn(),
+    pop: jest.fn(),
+    goBack: jest.fn(),
+    dismiss: jest.fn(),
+    showModal: jest.fn(),
+    dismissAllModals: jest.fn(),
+    selectTab: jest.fn(),
+    switchTo: jest.fn(),
+    on: jest.fn(() => () => {}),
+    // The real context, so a test can set it.
+    getContext: actual.navigation.getContext,
+    setContext: actual.navigation.setContext,
+  };
+  return {
+    ...actual,
+    navigation,
+    useNavigation: () => navigation,
+    useScreen: () => ({ id: 'Component1', name: 'Test' }),
+    useIsFocused: () => true,
+    useScreenOptions: jest.fn(),
+    usePreventLeave: jest.fn(),
+    useScreenAppear: jest.fn(),
+    useScreenDisappear: jest.fn(),
+    useFocusEffect: (effect: () => void) => useEffect(effect, []),
+  };
+});
+```
+
+What each part is for:
+
+- **The commands** are `jest.fn()`: a test checks what was asked for, and in what order. `useNavigation()` and `navigation` return the same object, so a test checks `navigation.push` whichever one the code used.
+- **The hooks of a screen** need the screen they are in, and a test renders the component alone. Here they become stand-ins: `useFocusEffect` runs once, as when the screen first shows; the options and the leave guard do nothing.
+- **The context** stays real: `navigation.setContext` in a test changes what `useAppContext` reads.
+- `clearMocks` empties the calls before each test, and keeps the stand-ins.
+
+Add the other hooks your screens use the same way, such as `useSearchBar` or `useTabPress`. Run `yarn jest`: nothing is tested yet, and nothing fails.
+
+## 2. A screen in Jest {#screens}
+
+The Notes list opens the Note screen with the id of the note. The test renders it, taps the note, and checks the command:
+
+```tsx title="src/screens/Notes.test.tsx"
+import {
+  fireEvent,
+  render,
+  screen,
+} from '@testing-library/react-native';
+import { navigation } from '@apexnative/navigation';
+import { Notes } from './Notes';
+
+test('a tap on a note opens it', () => {
+  render(<Notes />);
+  fireEvent.press(screen.getByText('Shopping'));
+  expect(navigation.push).toHaveBeenCalledWith('Note', {
+    props: { noteId: '7' },
+  });
+});
+```
+
+The test passes: the screen asked for Note, with the id of the note. That the platform then shows Note is the end-to-end test's part.
+
+A test of what happens when a command fails makes the mock reject once:
+
+```ts
+jest
+  .mocked(navigation.goBack)
+  .mockRejectedValueOnce(new Error('No screen to go back to'));
+```
+
+### A hook outside a screen {#hook-outside}
+
+Without the stand-ins, a hook of a screen throws, and the message says why: `[navigation] This hook is for the screens of createNavigation, and the component is not in one`. `useNavigation` says the same in its own words. These hooks need a screen: `useNavigation`, `useScreen`, `useScreenOptions`, `usePreventLeave`, `useIsFocused`, `useFocusEffect`, `useScreenAppear`, `useScreenDisappear`, `useScreenEvent`, `useNavigationButton`, `useSearchBar`, `useTabPress`. `useAppContext`, `useNavigationState` and `useNavigationTheme` work as they are.
+
+## 3. Code outside the screens {#outside}
+
+A function that moves the user, such as the one a notification or a link calls, uses `navigation`. In Jest a command can't run, as there is no native side and no app started: unmocked, it rejects with `[navigation] A command before the app started: register it with AppRegistry.registerComponent`. With the setup file, the test checks the commands and their order. Here `openChat` of [Notifications that open a screen](./notifications#open):
+
+```ts title="src/openChat.test.ts"
+import { navigation } from '@apexnative/navigation';
+import { openChat } from './openChat';
+
+test('a chat opens over Inbox', async () => {
+  await openChat('7');
+  expect(navigation.selectTab).toHaveBeenCalledWith('inbox');
+  expect(navigation.push).toHaveBeenCalledWith('Chat', {
+    props: { chatId: '7' },
+  });
+});
+```
+
+The routes of `linking` are tested the same way when they are functions of their own, as `openProfile` in [Typed params](./deep-links#params): the test calls the function with the params, and checks the commands. Code that reads the context sets it first:
+
+```ts
+navigation.setContext({ user: null });
+openChatWhenSignedIn('7');
+expect(navigation.push).not.toHaveBeenCalled();
+```
+
+## 4. Ids of the bars and the buttons {#ids}
+
+Your own content takes `testID` as in any React Native app. What the platform draws for the screen, the bars and their buttons, gets its ids from the options:
+
+| What | Its id |
+| --- | --- |
+| The top bar | `topBar.testID`: `s.topBar({ testID: 'note.topBar' })` |
+| A button of the top bar or the toolbar | `testID` of the button |
+| A tab | `Tab('Inbox').testID('tab.inbox')` |
+| The tab bar | `testID` of `Tabs(…).options({ … })` |
+| The back button | `TestIDs.backButton`, see [below](#back-button) |
+
+```tsx title="src/screens/Note.tsx"
+export const NoteScreen = defineScreen({
+  component: Note,
+  options: (s) =>
+    s.topBar({ testID: 'note.topBar' }).rightButtons({
+      id: 'save',
+      text: 'Save',
+      testID: 'note.save',
+    }),
+});
+```
+
+A test then taps Save by its id: `element(by.id('note.save'))` in Detox, `tapOn: { id: "note.save" }` in Maestro.
+
+<Os name="iOS" /> A top bar without `testID` has the title of the screen as its id, as UIKit sets it. On iOS 26 the title and the subtitle are the system's own: find them by their text.
+
+## 5. The back button {#back-button}
+
+The back button is drawn by the platform, not by the app, so the app can't give it a `testID` in its content. It has a fixed id, `TestIDs.backButton`: `'BackButton'`.
+
+- <Os name="iOS" /> The back button is the system one, and UIKit gives it this id itself; there is no public way to set another.
+- <Os name="Android" /> The navigation gives it the same id. `topBar.backButton.testID` sets another.
+
+An end-to-end test runs outside the app, so it uses the string: `element(by.id('BackButton'))`. When two stacks show at once, such as the columns of a split view, two back buttons can have the id; look for the one inside the top bar of the screen, by the bar's `testID`:
+
+```ts
+await element(
+  by.id('BackButton').withAncestor(by.id('note.topBar')),
+).tap();
+```
+
+<Os name="Android" /> The system back is not a button on screen: `device.pressBack()` in Detox, `- back` in Maestro.
+
+## 6. An end-to-end test {#e2e}
+
+The test opens a note from the list, checks that its top bar shows, and goes back with the back button:
+
+<DocTabs groupId="e2e-tool">
+<TabItem value="maestro" label="Maestro" default>
+
+```yaml title="e2e/notes.yaml"
+appId: com.example.myapp
+---
+- launchApp
+- tapOn: 'Shopping'
+- assertVisible:
+    id: 'note.topBar'
+- tapOn:
+    id: 'BackButton'
+- assertVisible: 'Shopping'
+```
+
+```bash title="Terminal"
+maestro test e2e/notes.yaml
+```
+
+</TabItem>
+<TabItem value="detox" label="Detox">
+
+```ts title="e2e/notes.test.ts"
+describe('Notes', () => {
+  beforeAll(async () => {
+    await device.launchApp({ newInstance: true });
+  });
+
+  it('opens a note and goes back', async () => {
+    await element(by.text('Shopping')).tap();
+    await expect(element(by.id('note.topBar'))).toBeVisible();
+    await element(by.id('BackButton')).tap();
+    await expect(element(by.text('Shopping'))).toBeVisible();
+  });
+});
+```
+
+```bash title="Terminal"
+detox test --configuration ios.sim.debug
+```
+
+</TabItem>
+</DocTabs>
+
+The app launches, Note slides in with its top bar, and back returns to the list: the test passes. Run it on both platforms: the same options draw native bars on each.
+
+## Links in end-to-end tests {#links}
+
+A link takes a different way when it launches the app and when the app runs (see [Deep links](./deep-links#start-and-open)), so test both:
+
+<DocTabs groupId="e2e-tool">
+<TabItem value="maestro" label="Maestro" default>
+
+```yaml title="e2e/profile-link.yaml"
+appId: com.example.myapp
+---
+# Cold: the link launches the app.
+- stopApp
+- openLink: myapp://user/42
+- assertVisible: 'Profile'
+# Warm: the app runs.
+- tapOn:
+    id: 'BackButton'
+- openLink: myapp://user/7
+- assertVisible: 'Profile'
+```
+
+</TabItem>
+<TabItem value="detox" label="Detox">
+
+```ts title="e2e/profile-link.test.ts"
+it('opens the profile from a link', async () => {
+  // Cold: the link launches the app.
+  await device.launchApp({
+    newInstance: true,
+    url: 'myapp://user/42',
+  });
+  await expect(element(by.text('Profile'))).toBeVisible();
+
+  // Warm: the app runs.
+  await device.openURL({ url: 'myapp://user/7' });
+  await expect(element(by.text('Profile'))).toBeVisible();
+});
+```
+
+</TabItem>
+</DocTabs>
+
+A reload of the JavaScript doesn't run the launch link again, so a cold test always starts a new instance of the app. The commands to open a link by hand: [Testing](./deep-links#testing) of Deep links.
+
+## What only a device can check {#device}
+
+What the platform does is out of Jest's reach. These need the app on a device or a simulator, by hand or end to end:
+
+- **The moves themselves:** that a push shows the screen, that back and the swipe back return, that a modal closes.
+- **Options:** the title, the buttons, the bars, as the platform draws them.
+- **A launch:** the first root, the splash screen, a link or a notification that launches the app. Quit the app before each run: a reload of the JavaScript doesn't launch it again. See [Testing](./deep-links#testing) of Deep links.
+- **Both platforms:** the same options draw native bars on each, so run the end-to-end tests on iOS and on Android.
+
+## What's next {#next}
+
+- [Building a screen](./building-a-screen): the Note screen these tests cover.
+- [Deep links](./deep-links#testing): opening links by hand, cold and warm.
+- [Notifications that open a screen](./notifications#testing): the taps to try at each moment.
+
+## API {#api}
+
+<SectionApi id="testing" />

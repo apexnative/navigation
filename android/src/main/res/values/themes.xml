@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+    The navigation's own theme: Material 3 in neutral grays, light here and dark in values-night. An app inherits it
+    (`<style name="AppTheme" parent="Theme.ApexNavigation">`) and sets any color of its own over it; the navigation's
+    views take the app's Material 3 colors. With a theme that isn't Material 3, they take this one.
+    The tones are those of Material 3's palettes with no hue: tone 40 of the primary, 98 of the surface, and so on.
+    The secondary container, the pill of the selected tab, is tone 85 (30 in dark), as in Material's monochrome scheme:
+    with no hue to tell it apart, tone 90 hardly shows on the tab bar. The text colors follow the theme's grays too;
+    Material 3's are fixed colors with a tint.
+    -->
+    <style name="Theme.ApexNavigation" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">#5E5E5E</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorPrimaryContainer">#E2E2E2</item>
+        <item name="colorOnPrimaryContainer">#1B1B1B</item>
+        <item name="colorPrimaryInverse">#C6C6C6</item>
+        <item name="colorPrimaryFixed">#E2E2E2</item>
+        <item name="colorPrimaryFixedDim">#C6C6C6</item>
+        <item name="colorOnPrimaryFixed">#1B1B1B</item>
+        <item name="colorOnPrimaryFixedVariant">#474747</item>
+
+        <item name="colorSecondary">#5E5E5E</item>
+        <item name="colorOnSecondary">#FFFFFF</item>
+        <item name="colorSecondaryContainer">#D4D4D4</item>
+        <item name="colorOnSecondaryContainer">#1B1B1B</item>
+        <item name="colorSecondaryFixed">#E2E2E2</item>
+        <item name="colorSecondaryFixedDim">#C6C6C6</item>
+        <item name="colorOnSecondaryFixed">#1B1B1B</item>
+        <item name="colorOnSecondaryFixedVariant">#474747</item>
+
+        <item name="colorTertiary">#5E5E5E</item>
+        <item name="colorOnTertiary">#FFFFFF</item>
+        <item name="colorTertiaryContainer">#E2E2E2</item>
+        <item name="colorOnTertiaryContainer">#1B1B1B</item>
+        <item name="colorTertiaryFixed">#E2E2E2</item>
+        <item name="colorTertiaryFixedDim">#C6C6C6</item>
+        <item name="colorOnTertiaryFixed">#1B1B1B</item>
+        <item name="colorOnTertiaryFixedVariant">#474747</item>
+
+        <item name="colorError">#BA1A1A</item>
+        <item name="colorOnError">#FFFFFF</item>
+        <item name="colorErrorContainer">#FFDAD6</item>
+        <item name="colorOnErrorContainer">#410002</item>
+
+        <item name="android:colorBackground">#F9F9F9</item>
+        <item name="colorOnBackground">#1B1B1B</item>
+        <item name="colorSurface">#F9F9F9</item>
+        <item name="colorOnSurface">#1B1B1B</item>
+        <item name="colorSurfaceVariant">#E2E2E2</item>
+        <item name="colorOnSurfaceVariant">#474747</item>
+        <item name="colorSurfaceInverse">#303030</item>
+        <item name="colorOnSurfaceInverse">#F1F1F1</item>
+        <item name="colorSurfaceBright">#F9F9F9</item>
+        <item name="colorSurfaceDim">#DADADA</item>
+        <item name="colorSurfaceContainerLowest">#FFFFFF</item>
+        <item name="colorSurfaceContainerLow">#F3F3F3</item>
+        <item name="colorSurfaceContainer">#EEEEEE</item>
+        <item name="colorSurfaceContainerHigh">#E8E8E8</item>
+        <item name="colorSurfaceContainerHighest">#E2E2E2</item>
+        <item name="colorOutline">#777777</item>
+        <item name="colorOutlineVariant">#C6C6C6</item>
+
+        <item name="android:textColorPrimary">@color/apex_navigation_text_primary</item>
+        <item name="android:textColorPrimaryDisableOnly">@color/apex_navigation_text_primary</item>
+        <item name="android:textColorSecondary">@color/apex_navigation_text_secondary</item>
+        <item name="android:textColorTertiary">@color/apex_navigation_text_secondary</item>
+        <item name="android:textColorHint">@color/apex_navigation_text_secondary</item>
+        <item name="android:textColorPrimaryInverse">@color/apex_navigation_text_primary_inverse</item>
+        <item name="android:textColorSecondaryInverse">@color/apex_navigation_text_secondary_inverse</item>
+        <item name="android:textColorTertiaryInverse">@color/apex_navigation_text_secondary_inverse</item>
+        <item name="android:textColorHintInverse">@color/apex_navigation_text_secondary_inverse</item>
+        <item name="android:textColorHighlightInverse">@color/apex_navigation_highlight_inverse</item>
+    </style>
+</resources>

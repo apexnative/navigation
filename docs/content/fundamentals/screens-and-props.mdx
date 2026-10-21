@@ -1,0 +1,334 @@
+---
+title: Screens and props
+description: 'What a screen is, how it gets its props and options, how it lives, and the details you meet later: the same screen many times, groups, loading later.'
+---
+
+import { SectionStatus, SectionApi } from '@site/src/components/Api';
+import { Mark, Steps } from '@site/src/components/Intro';
+import { ScreenAnatomy, ScreenLife } from '@site/src/components/Screens';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+<SectionStatus id="screens-and-props" />
+
+A list shows items, and a tap on one opens its details. The list and the details are screens, as are the settings and the sign-in: everything the user sees in the app. A screen is a React component that the app registers under a name, and a command shows it by that name, with its props:
+
+```tsx title="src/screens/Details.tsx"
+import { Text } from 'react-native';
+
+export function Details({ id }: { id: string }) {
+  return <Text>Item {id}</Text>;
+}
+```
+
+```ts
+// Navigation.ts: the app registers it
+screens: { Home: HomeScreen, Details },
+
+// Home, on a tap: Details comes in over Home
+navigation.push('Details', { props: { id: '42' } });
+```
+
+The user sees Details with `Item 42`, and back returns to Home. This page builds one screen step by step, in the order you meet the questions:
+
+1. [What a screen is](#what), and how it differs from a page of a router.
+2. [How the app knows its screens](#register), and [how a screen is shown](#show).
+3. [Props](#props): how a screen gets its data, and how TypeScript checks it.
+4. [Options](#options): the title and the bars of the screen.
+5. [The life of a screen](#lifecycle): when it mounts, appears, hides and goes away.
+6. Then the details: [the same screen many times](#instances), [groups](#groups), [loading later](#lazy), [which screen a component is in](#use-screen).
+
+## What a screen is {#what}
+
+A screen is <Mark>the platform's own screen with your React component inside</Mark>. The platform owns the screen: it slides it in, draws its top bar, keeps it in the stack and takes it back with the back gesture. Your component is the content, and the options say what the platform draws around it.
+
+<ScreenAnatomy />
+
+That is the difference from a router in the React tree, where the whole page, its top bar included, is React. Here only the content is React; <Mark>the rest is the platform's</Mark>, so it looks and moves exactly as in native apps, and it changes with the OS: a new iOS brings its new bars to your screens without a line of your code.
+
+So a screen is made of three things you give:
+
+| You give | What it is | Section |
+| --- | --- | --- |
+| A component | What the screen shows. | [Screens](#register) |
+| Props | The data of this showing: which item, which user. | [Props](#props) |
+| Options | What the platform draws: the title, the buttons, the bars. | [Options](#options) |
+
+## How the app knows its screens {#register}
+
+The app lists its screens once, in `screens` of `createNavigation`, each under a name.
+
+```ts title="Navigation.ts"
+import { createNavigation } from '@apexnative/navigation';
+import { DetailsScreen } from './screens/Details';
+import { HomeScreen } from './screens/Home';
+import { Settings } from './screens/Settings';
+
+export const Navigation = createNavigation({
+  screens: {
+    Home: HomeScreen,
+    Details: DetailsScreen,
+    Settings, // a plain component works too
+  },
+  root: 'Home',
+});
+```
+
+Why names, not components? A command runs on the native side, and the native side can't take a React component: it takes a name and asks JavaScript to render the screen with it. The name also keeps screens apart in the code: <Mark>a screen that opens another doesn't import it</Mark>, so two screens that open each other make no import cycle.
+
+What `screens` takes, from the simplest:
+
+| Entry | When |
+| --- | --- |
+| A component | A screen without options of its own: `Settings`. |
+| `defineScreen({ component, options })` | A screen with its options next to it: see [Options](#options). |
+| `{ load: () => import('./screens/Settings') }` | A screen whose code runs the first time it shows: see [Loading later](#lazy). |
+| `nativeScreen('ProfileScreen', …)` | A screen written in SwiftUI, UIKit or Compose: see [Native screens](../architecture/native-screens). |
+| `defineArrangement({ primary, secondary })` | Two screens shown as one, side by side in a large window: see [Arrangement](../containers/arrangement). |
+
+Any React component works: a function, `memo`, `forwardRef`. Each screen renders in a React root of its own; with `appProvider` all of them render in one tree: see [One tree](../architecture/one-tree).
+
+A name is used once across `screens` and every [group](#groups), because a command finds the screen by the name alone. When two screens share a name, the app doesn't start, and the error names both places.
+
+:::note[Components in the bars]
+
+A component that a bar shows, such as a title, a button or a background, is registered in `screens` too, and the options name it. See [Top bar](../screen-ui/top-bar).
+
+:::
+
+## How a screen is shown {#show}
+
+A command names the screen, and the platform shows it: in the stack, as a modal, over everything.
+
+```tsx title="src/screens/Home.tsx"
+import { Button } from 'react-native';
+import { useNavigation } from '@apexnative/navigation';
+
+export function Home() {
+  const navigation = useNavigation();
+  const open = () => navigation.push('Settings');
+  return <Button title="Open Settings" onPress={open} />;
+}
+```
+
+A tap on Open Settings slides Settings in over Home. `useNavigation()` gives the commands of the screen the component is in, so `push` knows which stack to push to. Code outside the screens uses `navigation` from the package. Layouts name screens the same way: `Stack('Home')` is a stack that starts with Home. All the commands: [Moving between screens](./moving-between-screens).
+
+## Props {#props}
+
+Props are the data of one showing: which item to show, which user. A screen takes them as any component does, and the command that shows it gives them.
+
+```tsx title="src/screens/Details.tsx"
+function Details({ id }: { id: string }) {
+  return <Text>Item {id}</Text>;
+}
+```
+
+```ts
+navigation.push('Details', { props: { id: '42' } });
+```
+
+The component gets exactly these props, nothing else. The screen's own id, when you need it, comes from [`useScreen()`](#use-screen).
+
+### TypeScript checks them {#typed}
+
+The name and the props are checked against the component, through [`navigation-env.d.ts`](../start/installation#typed-commands) that `setup` writes:
+
+```ts
+// ✗ no screen with this name
+navigation.push('Detials', { props: { id: '42' } });
+
+// ✗ Details needs its props
+navigation.push('Details');
+
+// ✗ id is a string
+navigation.push('Details', { props: { id: 42 } });
+```
+
+A screen whose props are all optional can be shown without them. Layouts are checked the same way: a screen without props by its name, a screen with props as `Screen(name, props)`.
+
+```ts
+Stack('Home', Screen('Details', { id: '42' }));
+```
+
+In a JavaScript app TypeScript checks nothing, and a name that isn't in `screens` fails at the command, with the name in the error.
+
+### Props stay in JavaScript {#props-in-js}
+
+Props don't go to the native side. The native side gets the name of the screen and its id, and the screen takes its props when it renders:
+
+<Steps
+  items={[
+    { text: 'The command keeps the props in JavaScript, under the id of the new screen.', code: "push('Details', { props })" },
+    { text: 'The native side gets the name, the id and the options. It creates the screen and a React root in it.', code: "{ name: 'Details', id }" },
+    { text: 'The screen renders with its props.', code: '<Details id="42" />' },
+  ]}
+/>
+
+So a prop can be anything a component takes, not only data: <Mark>a function</Mark>, an object of a class, a promise. A screen that picks a value, such as a color, gives it back through a callback in its props: see [A result back](./moving-between-screens#results).
+
+A screen gets its props once, when it shows. To change what a shown screen displays, change state: its own, or the app's (a context, a store).
+
+## Options {#options}
+
+Options say what the platform draws for the screen: the title, the buttons, the look of the bars. A screen keeps its own next to its component, with `defineScreen`, so it has them wherever it shows:
+
+```tsx title="src/screens/Details.tsx"
+export const DetailsScreen = defineScreen({
+  component: Details,
+  options: (s, props) => s.title(`Item ${props.id}`),
+});
+```
+
+`options` is a plain object of options, or a function that builds them from:
+
+| Argument | What it is |
+| --- | --- |
+| `s` | The chain of options: `s.title(…).largeTitle()`. See [Screen options](./screen-options). |
+| `props` | The props of this showing, typed from the component. |
+| `{ theme, context }` | The theme of the navigation and the app's context, as they are when the screen shows. |
+
+The options go to the native side with the command, so they apply <Mark>before the screen appears</Mark>: the title is there from the first frame, not set after a render.
+
+Options come from several places, and the later go over the earlier: the screen's [group](#groups), its `defineScreen`, the `options` of the command, and `setOptions` or `useScreenOptions` from the screen itself. The whole order, with the theme and the defaults of the app: [Screen options](./screen-options).
+
+## The life of a screen {#lifecycle}
+
+A screen isn't only mounted or not. Under another screen it is <Mark>still mounted but not seen</Mark>: its state and scroll stay, and it comes back as it was. So a screen has two lines of life: React's, from mount to unmount, and the user's, each time it appears and disappears.
+
+<ScreenLife />
+
+<DeviceVideo name="screen-life" devices={['ios']} />
+
+What the screen goes through in each case:
+
+| What happens | The screen |
+| --- | --- |
+| A push over it, or a full-screen modal | Disappears, stays mounted. |
+| Back to it | Appears again, with its state. |
+| Another tab is selected | Disappears, stays mounted; appears when its tab comes back. |
+| A sheet over it | Doesn't disappear: it still shows under the sheet. It loses the focus all the same, since the user is in the sheet: `useIsFocused()` is `false`, and `useFocusEffect` cleans up until the sheet goes. |
+| Back from it, its modal dismissed, a new root | Disappears, then unmounts. |
+
+### Hooks of the life {#hooks}
+
+React's `useEffect` follows React's line: it runs once at mount, and its cleanup at unmount. The navigation's hooks follow the user's line. The one most screens need is `useFocusEffect`, for work that should go on only while the screen has the focus, with nothing over it: a timer, a subscription, a video.
+
+```tsx title="src/screens/Inbox.tsx"
+import { useFocusEffect } from '@apexnative/navigation';
+
+function Inbox() {
+  useFocusEffect(() => {
+    const timer = setInterval(reload, 30_000); // your own reload
+    return () => clearInterval(timer); // stops while covered
+  });
+  // …
+}
+```
+
+The timer runs while Inbox has the focus; a push or a sheet over it stops the timer, and back starts it again. The other hooks (`useScreenAppear`, `useScreenDisappear`, `useIsFocused`), the order of the events and the events of the whole app: [Lifecycle and events](./lifecycle-and-events#hooks).
+
+## The same screen, many times {#instances}
+
+One screen can show many times at once, each time with its own props, state and id. The profile of a user opens the profile of a friend, and back comes to the first one.
+
+```tsx title="src/screens/Profile.tsx"
+function Profile({ userId }: { userId: string }) {
+  const navigation = useNavigation();
+  const open = () =>
+    navigation.push('Profile', { props: { userId: '12' } });
+  return <Button title="Open a friend" onPress={open} />;
+}
+```
+
+Shown for the user `7`, Profile pushes the profile of the user `12`. The stack then has two Profile screens: `12` over `7`. They are two screens, not one with new props: <Mark>the id is the showing, the props are the data</Mark>.
+
+This is how every screen works by default: <Mark>each push is a new screen</Mark>, and the navigation makes its id. Most apps never need the ids.
+
+### One screen per item {#key}
+
+Some screens should open once per item. The chat with a person is the usual case: a notification opens a chat, and that chat is in the stack already, under two other screens. A second copy would be wrong: the user would go back from the chat to the same chat.
+
+Such a screen says which prop makes it the same screen, with `key`:
+
+```tsx title="src/screens/Chat.tsx"
+export const ChatScreen = defineScreen({
+  component: Chat,
+  key: (props) => props.userId,
+});
+```
+
+- **Pushing a chat that is in the stack already goes back to it:** the screens over it close, and no second copy opens.
+- **The key is any string:** an id from your server, a UUID. It needs to tell the items of this screen apart, nothing more: the navigation puts the name of the screen in front of it, so the chat and the profile of the same user never clash.
+- **The key works within a stack:** in another stack, such as another tab or a modal, the chat opens as a screen of its own, as each tab keeps its own history.
+- **Without `key`,** every push is a new screen, as above.
+
+:::note
+
+An id you give a screen yourself in a layout, `Screen('Chat', props).id('support')`, must be unique in the app: a command that would show a second screen with it fails, with the id in the error.
+
+:::
+
+## Screens that share options {#groups}
+
+Some screens look alike: the sign-in screens without a top bar, the settings screens with a large title. A group gives them their options once:
+
+```ts title="Navigation.ts"
+export const Navigation = createNavigation({
+  screens: { Home: HomeScreen, Details: DetailsScreen },
+  groups: {
+    auth: {
+      options: (s) => s.hideTopBar(),
+      screens: { Login: LoginScreen, SignUp: SignUpScreen },
+    },
+  },
+  root: 'Home',
+});
+```
+
+A group gives options and nothing else. Its screens are named like any other, `navigation.push('SignUp')`, with no group in front, and their own options go over the group's.
+
+## Loading a screen later {#lazy}
+
+In React Native all the JavaScript of the app is in one bundle, so "loading" a screen means running the code of its module, with everything it imports. A screen imported in `Navigation.ts` runs at the start, under the splash screen. With `load`, its code runs <Mark>the first time a command shows it</Mark>:
+
+```ts title="Navigation.ts"
+screens: {
+  Home: HomeScreen,
+  Settings: { load: () => import('./screens/Settings') },
+},
+```
+
+```tsx title="src/screens/Settings.tsx"
+export default defineScreen({
+  component: Settings,
+  options: (s) => s.title('Settings'),
+});
+```
+
+The module's `default` export is the screen: a component, or `defineScreen`. The command waits for the module, so the screen's options apply as for any other, and its props are checked the same way.
+
+It pays for a big screen the user rarely opens, or one that imports a heavy library (charts, maps): the app starts without it. A small app doesn't need it.
+
+A screen that waits for data, not for its code, shows `loadingFallback` meanwhile: see [Errors and loading](../architecture/errors-and-loading).
+
+## Which screen a component is in {#use-screen}
+
+`useScreen()` returns the screen the component is in. Any component inside the screen can call it, however deep; outside a screen it throws.
+
+```tsx
+const { id, name } = useScreen();
+```
+
+| Field | What it is |
+| --- | --- |
+| `id` | The id of this showing of the screen, made by the navigation. Two profiles pushed one over the other have the same name and different ids. |
+| `name` | The name of the screen in `screens`: `'Profile'`. |
+
+`useNavigation().screen` is the same object, and `push` resolves with the id of the screen it showed.
+
+## Next: moving between screens {#next}
+
+The screens are registered and take their props. [Moving between screens](./moving-between-screens) shows every way one screen opens another: a push, a modal, an overlay, a tab, and the way back.
+
+## API {#api}
+
+<SectionApi id="screens-and-props" />

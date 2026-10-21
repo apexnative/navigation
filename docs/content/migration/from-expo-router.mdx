@@ -1,0 +1,485 @@
+---
+title: From Expo Router
+description: 'Move an app from Expo Router to @apexnative/navigation: files and registered screens side by side, what the native setup needs, and each piece of the old API mapped to the new one.'
+---
+
+import { Mark, Os, Pair } from '@site/src/components/Intro';
+
+This page moves an app from Expo Router to `@apexnative/navigation`: the routes in `app/` become registered screens, the `_layout` files become one layout, and `Link` and `router` become commands. At the end the app has the same screens, moves and links, and runs from its own native project.
+
+This page answers:
+
+1. [What the move needs first](#before): the native setup, and where Expo stands.
+2. [How the two models differ](#models), and [what that changes in the app](#what-changes).
+3. [Which API takes the place of which](#map).
+4. [The move, step by step](#steps), with each piece before and after.
+5. [What has no direct equivalent](#no-equivalent), and what to do instead.
+
+## Before you start {#before}
+
+The navigation is native code: the platform's stacks and tabs, set up in the app's entry points. So the app runs from <Mark>a native project of its own</Mark>, built with Xcode and Gradle, and never in Expo Go, which runs only the native code it ships with.
+
+`setup` makes the native changes, and today it stops in an app that depends on the `expo` package: Expo generates the native files, and a config plugin that would make these changes through Expo is planned, not ready. `doctor` reports the same. So the move takes one of two ways:
+
+| The app | The way |
+| --- | --- |
+| Uses few native packages of the Expo SDK, or none | Make a new React Native app with `init`, and move `app/` into it as screens, as this page shows. |
+| Relies on Expo Modules (most `expo-*` packages need the `expo` package) | Wait for the config plugin, or replace those packages with ones that don't need `expo` first. |
+
+```bash title="Terminal"
+npx @apexnative/navigation init MyApp
+```
+
+`init` makes a React Native app with the navigation set up, a starter with Home and Details, and the pods installed. Run it with `npx react-native run-ios` and `run-android`. What it makes, and the requirements: [Installation](../start/installation#new-app).
+
+## Two models {#models}
+
+Expo Router turns files into routes. Every file in `app/` is a screen and a URL, folders nest them, and a `_layout` file says which navigator holds the screens of its folder. Its navigators are those of React Navigation, so the navigation state lives in the React tree.
+
+Here screens are <Mark>registered by name</Mark>, in one list, and the layout is described once in code. The platform owns the stacks, tabs and modals; JavaScript sends commands. A URL is one way in among others: a link has a route only when the app gives it one.
+
+<Pair left="Expo Router" right="@apexnative/navigation">
+
+```text
+app/
+  _layout.tsx        <Stack />
+  index.tsx          Home
+  details/[id].tsx   Details
+```
+
+```ts title="Navigation.ts"
+import {
+  createNavigation,
+} from '@apexnative/navigation';
+
+export const Navigation =
+  createNavigation({
+    screens: {
+      Home: HomeScreen,
+      Details: DetailsScreen,
+    },
+    root: 'Home',
+  });
+```
+
+</Pair>
+
+Files under `src/screens/` are plain modules here: their place on disk means nothing, and a screen is what `screens` lists.
+
+### What it changes in the app {#what-changes}
+
+| | Expo Router | Here |
+| --- | --- | --- |
+| **A screen** | A file; its path is its URL. | A component listed in `screens` under a name. |
+| **Params** | Strings from the URL, read with `useLocalSearchParams`. | Props of any type, given by the command: a number, an object, a callback. |
+| **Layouts** | A `_layout` file per folder. | One layout of builders: `Stack`, `Tabs`, `SideMenu`. |
+| **Providers** | In the root `_layout`, around the navigator. | `appProvider` (one tree for every screen) or `screenProvider`. See [One tree](../architecture/one-tree). |
+| **Options** | Props of `Stack.Screen`, in the layout or in the screen. | Data next to the component, read by the platform before the screen shows. |
+
+Because a screen is named, not a path, two screens that open each other don't import each other, and renaming a file changes no link. More on the model: [Introduction](../start/introduction#models).
+
+## The map {#map}
+
+Each piece of Expo Router, and what takes its place. The [steps](#steps) below show each one in code.
+
+### Structure {#map-structure}
+
+| Expo Router | Here |
+| --- | --- |
+| A file in `app/` | A component in `screens`, under a name. |
+| `[id].tsx`, a dynamic segment | A prop of the screen: `{ id: string }`. |
+| `_layout.tsx` with `<Stack />` | `Stack(…)`; a screen named alone as a root is a stack. |
+| `_layout.tsx` with `<Tabs />` | `Tabs(Tab(…), …)`: the system tab bar, a stack in each tab. |
+| `expo-router/drawer` | `SideMenu({ left, center })`. |
+| A group, `(tabs)`, `(auth)` | A root of `roots`; a group of `createNavigation` for shared options. |
+| `+not-found.tsx` | `unmatched` of `linking`. |
+
+### Moves and hooks {#map-moves}
+
+| Expo Router | Here |
+| --- | --- |
+| `<Link href="/details/42">` | A press that calls `push('Details', { props: { id: '42' } })`. |
+| `router.push`, `router.navigate` | `push`; `selectTab` for a tab. |
+| `router.back()`, `router.dismiss()` | `goBack()`, `dismiss()`. |
+| `router.replace`, `<Redirect />` | `replace` in a stack, `switchTo` for the whole app. |
+| `useLocalSearchParams` | The component's props. |
+| `useFocusEffect`, `useNavigation` | `useFocusEffect`, `useNavigation` of this package. |
+| `Stack.Protected`, an auth redirect | `roots`, `initialRoot` and `switchTo`. |
+
+## The move, step by step {#steps}
+
+The steps go in the order an app moves: first the screens, then the layout, then what the screens do.
+
+### 1. Routes become screens {#screens}
+
+Each file of `app/` becomes a component under `src/screens/`, exported with `defineScreen`. Its dynamic segments become props, typed as the component's props. Options set inside the screen with `Stack.Screen` move next to the component.
+
+<Pair left="Expo Router" right="@apexnative/navigation">
+
+```tsx title="app/details/[id].tsx"
+export default function Details() {
+  const { id } =
+    useLocalSearchParams<{ id: string }>();
+  return (
+    <>
+      <Stack.Screen
+        options={{ title: `Item ${id}` }}
+      />
+      <Text>{id}</Text>
+    </>
+  );
+}
+```
+
+```tsx title="src/screens/Details.tsx"
+function Details({ id }: { id: string }) {
+  return <Text>{id}</Text>;
+}
+
+export const DetailsScreen =
+  defineScreen({
+    component: Details,
+    options: (s, props) =>
+      s.title(`Item ${props.id}`),
+  });
+```
+
+</Pair>
+
+Then each screen goes into `screens` of `createNavigation`, under the name commands will use. More: [Screens and props](../fundamentals/screens-and-props).
+
+### 2. Layout files become one layout {#layouts}
+
+The `_layout` files of the folders become one value: the root. A tabs layout whose tabs each hold a stack becomes `Tabs` with a `Tab` per screen; each tab has its stack without a layout file of its own.
+
+<Pair left="Expo Router" right="@apexnative/navigation">
+
+```tsx title="app/(tabs)/_layout.tsx"
+export default function TabLayout() {
+  return (
+    <Tabs>
+      <Tabs.Screen
+        name="index"
+        options={{ title: 'Home' }}
+      />
+      <Tabs.Screen
+        name="inbox"
+        options={{ title: 'Inbox' }}
+      />
+    </Tabs>
+  );
+}
+```
+
+```ts title="Navigation.ts"
+export const Navigation =
+  createNavigation({
+    screens: {
+      Home: HomeScreen,
+      Inbox: InboxScreen,
+      Chat: ChatScreen,
+    },
+    root: Tabs(
+      Tab('Home').label('Home'),
+      Tab('Inbox')
+        .label('Inbox')
+        .id('inbox'),
+    ),
+  });
+```
+
+</Pair>
+
+A screen pushed from Inbox, such as Chat, is listed in `screens` and nowhere else: a push goes into the stack of the tab it was made from. `tabBarIcon` becomes `icon`, an image or a symbol of each platform, as `{ ios: 'tray', android: 'ic_inbox' }`. More: [Tabs](../containers/tabs#build).
+
+### 3. The root layout and the entry point {#entry}
+
+The root `_layout` held the providers, the fonts and the splash screen. The providers go to `createNavigation`; the work before the first screen goes to `willMount`, and the splash screen stays until it is done.
+
+<Pair left="Expo Router" right="@apexnative/navigation">
+
+```tsx title="app/_layout.tsx"
+SplashScreen.preventAutoHideAsync();
+
+export default function RootLayout() {
+  const ready = useAppReady();
+  useEffect(() => {
+    if (ready) SplashScreen.hideAsync();
+  }, [ready]);
+  if (!ready) return null;
+  return (
+    <QueryClientProvider client={client}>
+      <Stack />
+    </QueryClientProvider>
+  );
+}
+```
+
+```tsx title="Navigation.ts"
+function AppProvider(
+  { children }: { children: ReactNode },
+) {
+  return (
+    <QueryClientProvider client={client}>
+      {children}
+    </QueryClientProvider>
+  );
+}
+
+export const Navigation =
+  createNavigation({
+    // …
+    appProvider: AppProvider,
+    willMount: prepareApp, // your own
+  });
+```
+
+</Pair>
+
+The entry point registers the navigation with `AppRegistry` of the package, in place of `expo-router/entry`. `init` writes it:
+
+```js title="index.js"
+import { AppRegistry } from '@apexnative/navigation';
+import { name } from './app.json';
+import { Navigation } from './Navigation';
+
+AppRegistry.registerComponent(name, Navigation);
+```
+
+More: [Starting the app](../fundamentals/starting-the-app), [One tree](../architecture/one-tree).
+
+### 4. Links and the router become commands {#moves}
+
+A `Link` is a press that makes a command, and `router` becomes `useNavigation()` in a screen. The command names the screen and gives its props; TypeScript checks both.
+
+<Pair left="Expo Router" right="@apexnative/navigation">
+
+```tsx
+<Link href="/details/42">Open</Link>
+
+const router = useRouter();
+router.push({
+  pathname: '/details/[id]',
+  params: { id: '42' },
+});
+router.back();
+```
+
+```tsx
+const navigation = useNavigation();
+
+<Button
+  title="Open"
+  onPress={() =>
+    navigation.push('Details', {
+      props: { id: '42' },
+    })
+  }
+/>;
+
+navigation.goBack();
+```
+
+</Pair>
+
+- **Props aren't limited to strings.** They stay in JavaScript, so a number, an object or a callback goes as it is. See [Props stay in JavaScript](../fundamentals/screens-and-props#props-in-js).
+- **Every command returns a promise** that resolves once the move has ended, so moves go one after another with `await`.
+- **Code outside the screens**, which used the `router` object, imports `navigation` from the package.
+
+All the moves: [Moving between screens](../fundamentals/moving-between-screens).
+
+### 5. Modals {#modals}
+
+A screen that a layout gives `presentation: 'modal'` becomes a command: `showModal`. The screen itself has no place in a layout, so it can be pushed in one place and shown in a modal in another.
+
+<Pair left="Expo Router" right="@apexnative/navigation">
+
+```tsx title="app/_layout.tsx"
+<Stack>
+  <Stack.Screen name="(tabs)" />
+  <Stack.Screen
+    name="compose"
+    options={{ presentation: 'modal' }}
+  />
+</Stack>
+
+// to open it
+router.push('/compose');
+```
+
+```ts
+navigation.showModal('Compose', {
+  closeButton: true,
+});
+
+// in Compose, after sending
+navigation.dismiss();
+```
+
+</Pair>
+
+A modal has a stack of its own, so its screens push inside it. A sheet that stops at half height is `sheet: { detents: ['medium', 'large'] }`. More: [Modals](../containers/modals).
+
+### 6. Options and header buttons {#options}
+
+`Stack.Screen` options become the screen's options in `defineScreen`. A header button is data with an `onPress`, because the platform draws the bar.
+
+<Pair left="Expo Router" right="@apexnative/navigation">
+
+```tsx
+<Stack.Screen
+  options={{
+    title: 'Profile',
+    headerRight: () => (
+      <Button
+        title="Edit"
+        onPress={() =>
+          router.push('/edit')
+        }
+      />
+    ),
+  }}
+/>
+```
+
+```ts
+export const ProfileScreen =
+  defineScreen({
+    component: Profile,
+    options: (s) =>
+      s.title('Profile').rightButtons({
+        id: 'edit',
+        text: 'Edit',
+        onPress: ({ navigation }) =>
+          navigation.push('Edit'),
+      }),
+  });
+```
+
+</Pair>
+
+Options that follow the state of the screen, which a `Stack.Screen` inside the screen renders, go in `useScreenOptions`: it builds them on each render and applies them when they change. More: [Screen options](../fundamentals/screen-options), [Bar buttons](../screen-ui/bar-buttons).
+
+### 7. Signed in and signed out {#auth}
+
+Expo Router guards screens with `Stack.Protected` or a `Redirect` in a layout. Here the signed-out and signed-in parts are two roots: `initialRoot` picks the first from the context, and the app switches after a sign-in.
+
+<Pair left="Expo Router" right="@apexnative/navigation">
+
+```tsx title="app/_layout.tsx"
+const { signedIn } = useSession();
+
+<Stack>
+  <Stack.Protected guard={signedIn}>
+    <Stack.Screen name="(tabs)" />
+  </Stack.Protected>
+  <Stack.Protected guard={!signedIn}>
+    <Stack.Screen name="login" />
+  </Stack.Protected>
+</Stack>
+```
+
+```ts title="Navigation.ts"
+createNavigation({
+  // …
+  roots: { login: 'Login', main },
+  context: { signedIn: false },
+  willMount: async () => {
+    navigation.setContext({
+      signedIn: await isSignedIn(),
+    });
+  },
+  initialRoot: (context) =>
+    context.signedIn ? 'main' : 'login',
+});
+```
+
+</Pair>
+
+Here `main` is the `Tabs(…)` of [step 2](#layouts). After the sign-in, the screen sets the context and switches; the sign-out switches back.
+
+```ts title="src/screens/Login.tsx"
+const signIn = async (email: string, password: string) => {
+  await logIn(email, password); // your own request
+  navigation.setContext({ signedIn: true });
+  await navigation.switchTo('main');
+};
+```
+
+More: [Switching roots](../fundamentals/switching-roots).
+
+### 8. Deep links {#linking}
+
+In Expo Router every file is a URL by itself. Here the app lists the links it takes, a route per path pattern, in `linking` of `createNavigation`. The scheme that `app.json` declared goes into the native project: `CFBundleURLTypes` on <Os name="iOS" />, an intent filter on <Os name="Android" />. See [Declare the links](../guides/deep-links#declare).
+
+<Pair left="Expo Router" right="@apexnative/navigation">
+
+```text
+app.json   "scheme": "myapp"
+
+app/user/[userId].tsx
+  → myapp://user/42
+app/settings.tsx
+  → myapp://settings
+```
+
+```ts
+createNavigation({
+  // …
+  linking: {
+    prefixes: ['myapp://'],
+    routes: {
+      'user/:userId': 'Profile',
+      settings: 'Settings',
+    },
+  },
+});
+```
+
+</Pair>
+
+A screen name as a route pushes that screen where the user is, with the params as its props. A link that launches the app can make the first root itself with `start`, such as Profile with Home under it, and `when` makes a link wait until the user signs in. What `+native-intent` did, rewriting a URL before it opens, a route does as a function of its params. More: [Deep links](../guides/deep-links).
+
+### 9. Typed routes {#types}
+
+Typed routes of Expo Router check an `href` against the files. Here the names and props of commands are checked against `screens`, through one file `init` and `setup` write, `navigation-env.d.ts`. It doesn't change with the screens: a screen added to `screens` is typed at once, with no dev server to generate types.
+
+```ts
+// ✗ no screen with this name
+navigation.push('Detials', { props: { id: '42' } });
+
+// ✗ Details needs its props
+navigation.push('Details');
+```
+
+The route patterns of `linking` are typed too: in `'user/:userId'` the handler gets `{ userId: string }`. More: [Typed commands](../start/installation#typed-commands), [Typed params](../guides/deep-links#params).
+
+### 10. Hooks of a screen {#hooks}
+
+| Expo Router | Here |
+| --- | --- |
+| `useLocalSearchParams` | The props of the component. |
+| `usePathname`, `useSegments` | `useNavigationState`: the screen the user sees and the selected tab. |
+| `useFocusEffect(useCallback(…))` | `useFocusEffect(effect)`: it runs when the screen gets the focus and cleans up when it loses it, not on renders, so no `useCallback`. |
+| `useNavigation` | `useNavigation`: the commands of this screen. |
+| `useIsFocused` | `useIsFocused`. |
+
+Every screen keeps clear of the bars by itself, so a `SafeAreaView` around the content can go; `useSafeAreaInsets` of this package gives what still covers the content, 0 on an edge the screen keeps clear, so padding by it never comes twice. More: [Lifecycle and events](../fundamentals/lifecycle-and-events#hooks), [The safe area](../screen-ui/system-ui#safe-area).
+
+## What has no direct equivalent {#no-equivalent}
+
+| Expo Router | What to do here |
+| --- | --- |
+| Expo Go | A development build of the app's own native project, with `npx react-native run-ios` or `run-android`. |
+| Every file a URL by itself | List the links the app takes in `linking`; a screen without a route opens from the app only. |
+| The web, server routes, API routes | Not a target of this library. |
+| `router.setParams` | Props are given once. What changes goes in the screen's state, or the app's context or store. |
+| Shared routes, `(a,b)` groups | One screen under one name, pushed from either tab: a push goes into the tab it was made from. |
+| A custom tab bar drawn in React | The tab bar is the platform's and draws its own items: style it with its options and the theme. On <Os name="iOS" /> 26, `Tabs().accessory(…)` puts a screen of your own above it. |
+
+## Related {#related}
+
+- [Introduction](../start/introduction): the model, and when it fits.
+- [Installation](../start/installation): `init`, `setup` and `doctor`.
+- [From React Navigation](./from-react-navigation): the same move, from the library Expo Router builds on.
+- [From react-native-navigation](./from-react-native-navigation).

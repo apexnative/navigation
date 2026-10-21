@@ -1,0 +1,108 @@
+// The library's Android module: Kotlin, with React Native's codegen of the TurboModule and the components
+// (`ApexNavigationSpec`). The C++ of the components (src/main/jni/CMakeLists.txt) builds with the app's autolinking.
+// -PapexNavigationWarningsAsErrors (scripts/build-android.sh) fails the build of this module on a Kotlin or Java
+// warning.
+buildscript {
+    // The Kotlin of the app, or this one: an app that has its Kotlin plugin on the classpath keeps it.
+    def kotlinVersion = rootProject.ext.has("kotlinVersion") ? rootProject.ext.get("kotlinVersion") : "2.1.20"
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion")
+    }
+}
+
+apply plugin: "com.android.library"
+// AGP 9 compiles Kotlin itself unless the app opts out (`android.builtInKotlin=false`, as React Native's template does).
+def agpMajor = com.android.Version.ANDROID_GRADLE_PLUGIN_VERSION.tokenize(".")[0].toInteger()
+// Not an Elvis: Groovy's `false ?: true` is true, which would read `android.builtInKotlin=false` as true.
+def builtInKotlinProperty = providers.gradleProperty("android.builtInKotlin").orNull
+def builtInKotlin = agpMajor >= 9 && (builtInKotlinProperty == null || builtInKotlinProperty.toBoolean())
+if (!builtInKotlin) {
+    apply plugin: "org.jetbrains.kotlin.android"
+}
+apply plugin: "com.facebook.react"
+
+def appValue(name, fallback) {
+    return rootProject.ext.has(name) ? rootProject.ext.get(name) : fallback
+}
+
+def warningsAsErrors = project.hasProperty("apexNavigationWarningsAsErrors")
+
+react {
+    libraryName = "ApexNavigationSpec"
+    codegenJavaPackageName = "dev.apexnative.navigation.react"
+    jsRootDir = file("../src")
+}
+
+android {
+    namespace "dev.apexnative.navigation"
+    compileSdk Math.max(appValue("compileSdkVersion", 36) as int, 36)
+
+    defaultConfig {
+        minSdk Math.max(appValue("minSdkVersion", 24) as int, 24)
+        consumerProguardFiles "consumer-rules.pro"
+        // NavigationActivity draws edge to edge when the app asks for it (`edgeToEdgeEnabled` in gradle.properties).
+        def edgeToEdge = project.findProperty("edgeToEdgeEnabled")?.toString()?.toBoolean() ?: false
+        buildConfigField "boolean", "EDGE_TO_EDGE_ENABLED", edgeToEdge.toString()
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        abortOnError false
+    }
+
+    // The unit tests are plain JUnit: android.util.Log and the like answer with defaults instead of throwing.
+    testOptions {
+        unitTests.returnDefaultValues = true
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+        allWarningsAsErrors = warningsAsErrors
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    if (warningsAsErrors) {
+        options.compilerArgs += ["-Xlint:unchecked", "-Xlint:deprecation", "-Werror"]
+    }
+}
+
+repositories {
+    google()
+    mavenCentral()
+}
+
+dependencies {
+    // The version of react-native comes from the app, through the React Native Gradle plugin.
+    implementation "com.facebook.react:react-android"
+    implementation "androidx.core:core-ktx:1.18.0"
+    implementation "androidx.appcompat:appcompat:1.8.0"
+    implementation "androidx.activity:activity:1.13.0"
+    implementation "androidx.annotation:annotation:1.11.0"
+    implementation "com.google.android.material:material:1.14.0"
+    // The side menu's drawer. 1.1.1, what Material 1.14 brings: 1.2.0 registers a back callback of its own on Android
+    // 13+ that would close an open menu before JavaScript's `BackHandler` and the navigation's back.
+    implementation "androidx.drawerlayout:drawerlayout:1.1.1"
+    implementation "androidx.slidingpanelayout:slidingpanelayout:1.2.0"
+    implementation "androidx.window:window:1.5.1"
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2"
+
+    testImplementation "junit:junit:4.13.2"
+    // AndroidX's `FastOutSlowInInterpolator`, only for the test that compares the core's own table of `fastOutSlowIn`
+    // with it; the library doesn't use it.
+    testImplementation "androidx.interpolator:interpolator:1.0.0"
+}

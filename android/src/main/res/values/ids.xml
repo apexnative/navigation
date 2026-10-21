@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The bottom tabs' view, which UI tests find by it. -->
+    <item name="bottomTabs" type="id" />
+    <!-- Tag keys of the navigation's own views. -->
+    <item name="apex_navigation_fab_bottom_margin" type="id" />
+    <item name="apex_navigation_element_placeholder" type="id" />
+    <item name="apex_navigation_saved_frame" type="id" />
+    <item name="apex_navigation_saved_parent" type="id" />
+    <item name="apex_navigation_saved_index" type="id" />
+    <item name="apex_navigation_saved_anchor" type="id" />
+</resources>

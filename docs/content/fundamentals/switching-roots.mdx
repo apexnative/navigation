@@ -1,0 +1,182 @@
+---
+title: Switching roots
+description: 'What a root is, one root or named roots, what a switch does to the app, a root made on the go, a root with a modal, and how a new root comes in.'
+---
+
+import { SectionStatus, SectionApi } from '@site/src/components/Api';
+import { Mark, Os } from '@site/src/components/Intro';
+import { RootKinds } from '@site/src/components/Screens';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+<SectionStatus id="switching-roots" />
+
+Some moves don't open a screen over another: they <Mark>replace the whole app</Mark>. The user signs in, and the sign-in screens give way to the app with its tabs; the user signs out, and the app gives way to the sign-in. The app names these parts as roots, and one command switches between them:
+
+```ts
+// on Login, once the user has signed in
+await navigation.switchTo('main');
+```
+
+The tabs of the app take the window, and Login is gone: back doesn't return to it. This page answers:
+
+1. [What a root is](#what), and what it can be.
+2. [One root, or named roots](#roots) to switch between.
+3. [What a switch does](#switch) to the screens, the modals and the overlays.
+4. [A root made on the go](#on-the-go), such as the screens of a deep link, and [a root with a modal](#with-modal).
+5. [How a new root comes in](#transitions).
+
+## What a root is {#what}
+
+The root is <Mark>what takes the window</Mark>: the bottom layer of the app, under the modals and the overlays. Every other move happens inside it: a push goes into its stack, a tab is one of its tabs. Changing the root is changing the app the user is in.
+
+A root is any layout of the navigation:
+
+<RootKinds />
+
+A screen named alone becomes a stack with it, so it can push. The containers have their own pages: [Stack](../containers/stack), [Tabs](../containers/tabs), [Side menu](../containers/side-menu), [Split view](../containers/split-view).
+
+## One root, or named roots {#roots}
+
+An app that is always the same gives its one root to `root`:
+
+```ts title="Navigation.ts"
+export const Navigation = createNavigation({
+  screens: { Home: HomeScreen, Details: DetailsScreen },
+  root: 'Home',
+});
+```
+
+An app with parts the user switches between, such as signed out and signed in, names its roots in `roots`, and `initialRoot` picks the first from the context, once `willMount` has set it:
+
+```ts title="Navigation.ts"
+import {
+  createNavigation,
+  navigation,
+  Tab,
+  Tabs,
+} from '@apexnative/navigation';
+import { HomeScreen } from './screens/Home';
+import { InboxScreen } from './screens/Inbox';
+import { LoginScreen } from './screens/Login';
+
+const main = Tabs(
+  Tab('Home').label('Home'),
+  Tab('Inbox').label('Inbox'),
+);
+
+export const Navigation = createNavigation({
+  screens: { Login: LoginScreen, Home: HomeScreen, Inbox: InboxScreen },
+  roots: { login: 'Login', main },
+  context: { signedIn: false },
+  willMount: async () => {
+    // your own check, for example a saved token
+    navigation.setContext({ signedIn: await isSignedIn() });
+  },
+  initialRoot: (context) => (context.signedIn ? 'main' : 'login'),
+});
+```
+
+A signed-in user starts on the tabs, anyone else on Login. Then a command switches by name, and TypeScript checks the name:
+
+```ts
+navigation.switchTo('main');
+```
+
+### A root with a param {#param}
+
+A root can be a function: it takes a param and makes the layout from it. The param goes after the name, and it is typed too.
+
+```ts
+import { Screen, Stack } from '@apexnative/navigation';
+
+// in createNavigation
+roots: {
+  welcome: (name: string) => Stack(Screen('Welcome', { name })),
+},
+```
+
+```ts
+navigation.switchTo('welcome', user.name);
+```
+
+Welcome takes the window with the user's name in its props.
+
+`initialRoot` gives a root with a param as `['welcome', name]`.
+
+## What a switch does {#switch}
+
+`switchTo` replaces the bottom layer, and with it what was over it:
+
+<DeviceVideo name="sign-in" />
+
+- **The old root's screens unmount**, with their state. What should outlive a switch, such as the signed-in user, belongs in the app's context or a store: see [Theme and context](../architecture/theme-and-context).
+- **The modals close**: they were tasks of the old app.
+- **The overlays stay**: a call in progress or a player goes on while the user signs out.
+- **There is no way back**: the old root is gone. To come back to it, switch to it again.
+
+`switchTo` resolves once the new root is in place.
+
+```ts
+async function signOut() {
+  await clearSession(); // your own sign-out
+  await navigation.switchTo('login');
+}
+```
+
+The whole flow, with the context and the first root: [Sign in and sign out](../flows/sign-in-and-sign-out).
+
+## A root made on the go {#on-the-go}
+
+`switchTo` also takes a layout, for a root that isn't one of `roots`. A deep link or a notification that opens a screen deep in the app makes the stack it needs:
+
+```ts
+navigation.switchTo(
+  Tabs(
+    Tab('Home').label('Home'),
+    Tab(Stack('Inbox', Screen('Chat', { userId }))).label('Inbox'),
+  ).selected(1),
+);
+```
+
+Here a name alone is a root of `roots`, so a screen on its own goes as `Stack('Name')`.
+
+### A root with a modal {#with-modal}
+
+`Root(…).modal(…)` puts a modal over the root once it is in place. A notification that opens a screen in a modal at a cold start shows the app, then the modal over it, as if the user had opened it:
+
+```ts
+import { Root } from '@apexnative/navigation';
+
+navigation.switchTo(
+  Root(main).modal(Stack(Screen('Details', { id }))),
+);
+```
+
+The tabs show first, then Details slides up over them with its own animation; when the user closes it, the app is under it.
+
+## How a new root comes in {#transitions}
+
+The first root of the app shows at once, in place of the splash screen; after a [splash of your own](../guides/splash-screen#own-splash) it comes in with that splash's `transition`, a fade by default. A root that replaces another comes in with the platform's own transition: a cross dissolve <Os name="iOS" />, Material's fade through <Os name="Android" />. `Root(…).transition(…)` gives it another: a preset, or an `enter` animation of its own. To show it at once, with no animation, use `'none'`: the new root shows as soon as its content is drawn, even when the app's `options` set a setRoot animation.
+
+<DeviceVideo name="roots-transitions" />
+
+```ts
+roots: {
+  login: 'Login',
+  main: Root(main).transition('fade'),
+},
+```
+
+The transition belongs to the root it brings in, so every switch to `main` fades in. With `{ enter: { waitForRender: true } }` the new root waits for its content as long as it takes, so it never comes in empty. All the animations: [Transitions](../architecture/transitions).
+
+## When Android brings the app back {#android}
+
+<Os name="Android" /> can create a new activity while the JavaScript of the app keeps running, for example after the user leaves the app for a long time. The navigation then sets <Mark>the last root</Mark> again, as `root`, `initialRoot` or the last `switchTo` made it. See [When the app launches again](./starting-the-app#launches).
+
+## Next: lifecycle and events {#next}
+
+Each move, a switch included, makes screens appear and disappear. [Lifecycle and events](./lifecycle-and-events) shows how a screen and the whole app hear it: to refresh on appear, to stop work while covered, to log every screen.
+
+## API {#api}
+
+<SectionApi id="switching-roots" />

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Theme.ApexNavigation's secondary text and hints on the inverse surface. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:alpha="0.38" android:color="?attr/colorOnSurfaceInverse" android:state_enabled="false" />
+    <item android:alpha="0.72" android:color="?attr/colorOnSurfaceInverse" />
+</selector>

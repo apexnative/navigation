@@ -1,0 +1,267 @@
+---
+title: Top bar
+description: 'The bar at the top of a stack: the title and the subtitle, the large title, the background and the border, hiding the bar, a component in place of the title, and the title menu.'
+---
+
+import { SectionStatus, SectionApi } from '@site/src/components/Api';
+import { Mark, Os } from '@site/src/components/Intro';
+import { BarAnatomy } from '@site/src/components/Screens';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+<SectionStatus id="top-bar" />
+
+Every screen of a stack has a bar at the top: it names the screen and holds the way back and the actions. A screen fills the bar through its options, and the title is the one most apps set:
+
+```tsx title="src/screens/Inbox.tsx"
+import { defineScreen } from '@apexnative/navigation';
+
+export const InboxScreen = defineScreen({
+  component: Inbox,
+  options: (s) => s.title('Inbox'),
+});
+```
+
+The bar shows "Inbox" as the screen comes in, before React renders it. This page answers:
+
+1. [What the top bar is](#what), and its parts.
+2. [The title](#title) and the subtitle.
+3. [The large title](#large-title).
+4. [The background and the border](#background).
+5. [Hiding the bar](#hide).
+6. [A component in place of the title](#title-component), and [the title menu](#title-menu).
+7. [The bar on iPhone Duo](#iphone-duo).
+
+The buttons of the bar have a page of their own: [Bar buttons](./bar-buttons). So do the back button ([Back and gestures](./back-and-gestures)) and the search field ([Search](./search)).
+
+## What the top bar is {#what}
+
+The top bar belongs to <Mark>the stack, not to a screen</Mark>: one bar for all the screens of the [stack](../containers/stack). Each screen gives it its title and buttons through its [options](../fundamentals/screen-options), and the bar changes with the screen as it comes in, as in any native app. The back button shows by itself on every screen but the first.
+
+<BarAnatomy />
+
+<DeviceVideo name="bar-what" />
+
+The platform draws the bar: `UINavigationBar` on <Os name="iOS" />, with Liquid Glass on iOS 26, and the Material 3 top app bar on <Os name="Android" />. Its colors come from the [theme](../architecture/theme-and-context) until a screen sets its own.
+
+## The title {#title}
+
+The title is the name of the screen. The subtitle is a second line under it, such as a status or a count. Both can come from the props of the screen:
+
+```ts
+export const ChatScreen = defineScreen({
+  component: Chat,
+  options: (s, props) => s.title(props.name).subtitle('online'),
+});
+```
+
+A title can change while the screen shows, such as when its data has loaded: see [Changing the options of a shown screen](../fundamentals/screen-options#change).
+
+The look of the text goes in an object instead of the string:
+
+```ts
+s.title({ text: 'Chat', color: '#1E2A44', fontFamily: 'Righteous' });
+```
+
+`fontSize`, `fontWeight` and `fontStyle` go in the same object, and the subtitle takes the same keys.
+
+| Platform | The title |
+| --- | --- |
+| <Os name="iOS" /> | In the middle of the bar. On iOS 26, `glass: 'regular'` or `'clear'` puts it on a capsule of Liquid Glass, as the buttons are, with the subtitle as a second line. |
+| <Os name="Android" /> | At the leading edge, next to the back arrow. `alignment: 'center'` puts it in the middle. |
+
+## The large title {#large-title}
+
+<Os name="iOS" /> A large title is big at the top of the screen, under the row of the bar. It goes into the bar as the content scrolls, so a long list keeps its room:
+
+<DeviceVideo name="large-title" />
+
+```ts
+s.title('Inbox').largeTitle();
+```
+
+`largeTitle()` shows it on this screen. A screen pushed from it usually has a small title, so it sets its own `displayMode`:
+
+```ts
+s.title('Details').largeTitle({ displayMode: 'never' });
+```
+
+| `displayMode` | The large title |
+| --- | --- |
+| `'always'` | Shows on this screen. The default of `largeTitle()`. |
+| `'never'` | Doesn't show on this screen. |
+| `'automatic'` | As on the screen under it; the first screen of a stack shows it. |
+| `'inline'` | iOS 17+: in the row of the bar instead of under it. Only on a screen without a back button, such as the first of a stack or of a modal: next to a back button UIKit shows it as `'always'`. |
+
+`collapseOnScroll: false` keeps the large title where it is: the list scrolls under the bar and the title stays.
+
+<Os name="Android" /> The same option shows the large top app bar of Material 3: the title big under the row of the bar, fading into the row as the content scrolls. The screen goes under the bar, so its list keeps its first rows clear with `useSafeAreaInsets().top` (see [The safe area](./system-ui#safe-area)). `'inline'` keeps the title in the row, as `'never'` does. Under a large title `hideOnScroll` doesn't work.
+
+## The background and the border {#background}
+
+On iOS 26 the bar is Liquid Glass, and the content shows through it as it scrolls under. <Mark>A color takes the glass away</Mark>, so set one only when the design needs it:
+
+```ts
+s.topBar({ background: { color: '#F3E9D2' }, noBorder: true });
+```
+
+`background.color` colors the bar on both platforms. With a large title on iOS 26 the color goes behind the title in the list, and fills the bar once the title collapses. Under a bar with a color the list has no edge effect at the top: see [The edge of the scroll](./system-ui#scroll-edge).
+
+The other keys of the background are rarer:
+
+| Option | What it does |
+| --- | --- |
+| `background.component` | A component of `screens` drawn behind the bar, such as a gradient. It is registered as the [title component](#title-component) is. |
+| `background.translucent` | <Os name="iOS" /> `true`: the content shows through; Liquid Glass on iOS 26, where it is the default. `false`: a solid bar, white in the light theme and black in the dark one. |
+| `background.blur` | <Os name="iOS" /> The system's frosted blur, plainer than the glass. A `color` wins over it, and it wins over `translucent`. |
+| `scrollEdgeAppearance` | <Os name="iOS" /> The look of the bar while the content is at its top, with `active: true`. The bar takes its usual look once the content scrolls under it. |
+
+The line under the bar:
+
+| Option | What it does |
+| --- | --- |
+| `noBorder` | <Os name="iOS" /> No line under the bar. |
+| `borderColor` | The color of the line. |
+| `elevation`, `borderHeight` | <Os name="Android" /> The shadow and the line under the bar, in dp. `elevation: 0` takes the shadow away. |
+
+## Hiding the bar {#hide}
+
+A screen without a bar, such as a photo or a sign-in, hides it in its options. The bar comes back when the user goes back, because the screen under it has its own options:
+
+<DeviceVideo name="bar-hide" />
+
+```ts
+s.hideTopBar();
+```
+
+`hideTopBar(hidden)` takes a value too, so the state can decide, as in a viewer that hides its bar on a tap:
+
+```tsx
+useScreenOptions((s) => s.hideTopBar(fullScreen));
+```
+
+The bar can also hide and show by itself:
+
+| Option | The bar |
+| --- | --- |
+| `hideOnScroll` | Hides while the content scrolls down, and comes back as it scrolls up. |
+| `hideOnTap` | <Os name="iOS" /> Hides and shows on a tap on the screen. |
+| `hideOnKeyboard` | <Os name="iOS" /> Hides while the keyboard shows. |
+| `animate` | `false`: hides and shows at once, without the animation. |
+
+With `hideOnScroll` the screen goes under the bar, so its rows show where the bar was. Its list keeps its first rows clear: on <Os name="iOS" /> with `contentInsetAdjustmentBehavior="automatic"`, on <Os name="Android" /> with `paddingTop: useSafeAreaInsets().top`.
+
+`drawBehind: true` keeps the bar and puts the content under it, as a map or a photo under a glass bar.
+
+## A component in place of the title {#title-component}
+
+A chat shows an avatar, a name and a status where the title is. Text can't do that, so a React component takes the place of the title. It takes three steps.
+
+**1. The component**, a plain React component with its props:
+
+```tsx title="src/bar/ChatTitle.tsx"
+import { Image, Text, View } from 'react-native';
+
+type Props = { name: string; avatar: string };
+
+export function ChatTitle(props: Props) {
+  return (
+    <View style={{ flexDirection: 'row', gap: 8 }}>
+      <Image
+        source={{ uri: props.avatar }}
+        style={{ width: 28, height: 28, borderRadius: 14 }}
+      />
+      <View>
+        <Text style={{ fontWeight: '600' }}>{props.name}</Text>
+        <Text style={{ fontSize: 12, opacity: 0.6 }}>online</Text>
+      </View>
+    </View>
+  );
+}
+```
+
+**2. Its registration** in `screens`, as any screen. The bar renders it in a React root of its own, so it needs a name:
+
+```ts title="Navigation.ts"
+export const Navigation = createNavigation({
+  screens: { Inbox: InboxScreen, Chat: ChatScreen, ChatTitle },
+  root: 'Inbox',
+});
+```
+
+**3. The options of the screen** name it in `title.component`, with its props:
+
+```ts title="src/screens/Chat.tsx"
+export const ChatScreen = defineScreen({
+  component: Chat,
+  options: (s, props) =>
+    s.title({
+      component: {
+        name: 'ChatTitle',
+        passProps: { name: props.name, avatar: props.avatar },
+      },
+    }),
+});
+```
+
+The screen comes in with the avatar and the name in the bar: it waits for the component to draw, so the title doesn't pop in after it.
+
+`alignment: 'fill'` in `component` gives the component all the room between the side buttons, from the back button on, so its content can start at the leading edge. Without it the component sits in the middle.
+
+The same three steps give the bar a background of its own, with `background.component`, and a button: see [A component as a button](./bar-buttons#component).
+
+## The title menu {#title-menu}
+
+<Os name="iOS" /> 16+ A tap on the title can open a menu, as the title of a document does in system apps; UIKit shows a chevron next to the title. A pick sends a button press with the id of the item:
+
+<DeviceVideo name="title-menu" devices={['ios']} />
+
+```tsx title="src/screens/Draft.tsx"
+export const DraftScreen = defineScreen({
+  component: Draft,
+  options: (s) =>
+    s.title({
+      text: 'Draft',
+      menu: { items: [{ id: 'duplicate', title: 'Duplicate' }] },
+    }),
+});
+
+function Draft() {
+  useNavigationButton('duplicate', () => duplicateDraft()); // your own
+  // …
+}
+```
+
+`rename: true` adds Rename to the menu: the title turns into a field in the bar, and the new title comes as the event `titleRenamed`:
+
+```tsx
+useScreenEvent('titleRenamed', ({ text }) => renameDraft(text));
+```
+
+`document: { url }` heads the menu with a file: its icon, name and type. A large title shows no chevron and opens no menu. On <Os name="Android" /> the title has no menu: put the same actions in [the overflow menu](./bar-buttons#overflow).
+
+## The layout of the bar {#layout}
+
+This section is rarely needed: most apps keep the platform's layout.
+
+<Os name="iOS" /> 16+ `style` lays the bar out. `'navigator'`, the default, centers the title, as a stack of screens does. `'browser'` and `'editor'` put it next to the back button, as an app of documents does, and leave room for [center buttons](./bar-buttons#center) on iPad.
+
+<Os name="Android" /> `height` and `topMargin`, of the bar and of its title, size the bar for a design of its own.
+
+## The bar on iPhone Duo {#iphone-duo}
+
+<Os name="iOS" /> 27.1 On iPhone Duo, folded and open, the title stays in the row at the top, and the large title too. The system moves the buttons into a vertical bar at the trailing edge, with the status bar and the tab bar: see [Buttons on iPhone Duo](./bar-buttons#iphone-duo). The app's options stay the same; a screen that needs its bars at the top asks for them:
+
+```ts
+s.verticalBars(false); // the bars at the top, as on any iPhone
+```
+
+Set it once for a screen: Apple asks apps not to switch it with the state of the screen. In a [pair](../containers/arrangement) the bar is the primary's, so is this option.
+
+The screen goes under the vertical bar, as under the top bar, and its list keeps its rows clear: see [The vertical bar of iPhone Duo](./system-ui#vertical-bar). Two things UIKit does there, which an app sees as they are:
+
+- **The bar goes away on a scroll down.** iOS 27 minimizes the navigation bar as the content scrolls down: the whole bar, its title and its blur, leaves, and comes back on a scroll up (UIKit's `navigationItem.navigationBarMinimization`). The library has no option for it yet.
+- **Folded, a bar with a background of its own leaves a band above it.** UIKit puts the bar about 24 points below the top of the outer display, so with `topBar.background` a band of about 24 points shows above the bar's color.
+
+## API {#api}
+
+<SectionApi id="top-bar" />

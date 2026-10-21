@@ -1,0 +1,194 @@
+---
+title: Search
+description: 'The search field of the platform in the top bar: adding it and filtering with it, where it sits, what shows while searching, scopes, tokens, suggestions and a results screen.'
+---
+
+import { SectionStatus, SectionApi } from '@site/src/components/Api';
+import { Mark, Os } from '@site/src/components/Intro';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+<SectionStatus id="search" />
+
+A list of mail, contacts or places needs a search field at the top. The search of a screen is the platform's own field in its top bar: `UISearchController` on <Os name="iOS" />, the Material 3 search on <Os name="Android" />. It looks, opens and closes as in system apps; <Mark>the screen only gets the text and shows what matches</Mark>. This page answers:
+
+1. [How to add search](#add) and filter with it.
+2. [Where the field sits](#placement) on each platform.
+3. [What shows while searching](#while).
+4. [Narrowing the search](#narrow): scopes, tokens, suggestions.
+5. [A results screen](#results) of its own.
+
+A whole search screen, with recent searches and a results screen, is walked through in [A search screen](../flows/a-search-screen).
+
+## Adding search {#add}
+
+A screen turns the field on in its options, and listens to the text with `useSearchBar`. Here an inbox filters its messages as the user types:
+
+```tsx title="src/screens/Inbox.tsx"
+import { useState } from 'react';
+import { FlatList, Text } from 'react-native';
+import { defineScreen, useSearchBar } from '@apexnative/navigation';
+
+export const InboxScreen = defineScreen({
+  component: Inbox,
+  options: (s) =>
+    s
+      .title('Inbox')
+      .searchBar({ visible: true, placeholder: 'Search mail' }),
+});
+
+function Inbox() {
+  const messages = useMessages(); // your own data
+  const [query, setQuery] = useState('');
+
+  useSearchBar({
+    onChange: ({ text }) => setQuery(text),
+    onCancel: () => setQuery(''),
+  });
+
+  const shown = messages.filter((message) =>
+    message.subject.toLowerCase().includes(query.toLowerCase()),
+  );
+
+  return (
+    <FlatList
+      data={shown}
+      contentInsetAdjustmentBehavior="automatic"
+      renderItem={({ item }) => <Text>{item.subject}</Text>}
+    />
+  );
+}
+```
+
+A field "Search mail" shows under the title. As the user types, the list keeps the messages that match; Cancel brings them all back.
+
+| Handler | Called |
+| --- | --- |
+| `onChange` | On every change of the text, and of the scope or the tokens. |
+| `onSubmit` | On the Search key of the keyboard; the keyboard hides. |
+| `onCancel` | When the search closes. |
+| `onSuggestion` | When the user picks a [suggestion](#suggestions). |
+
+## Where the field sits {#placement}
+
+`placement` puts the field where the platform does in its own apps:
+
+<DeviceVideo name="search-field" />
+
+| `placement` | <Os name="iOS" /> 16+ | <Os name="Android" /> |
+| --- | --- | --- |
+| `'stacked'` | Under the title. The default. | Under the title. |
+| `'automatic'` | As the system picks: on iPhone with iOS 26 at the bottom of the screen, on iPad in the bar. | Under the title. |
+| `'integrated'` | In the bar; on iPhone with iOS 26 at the bottom, or a magnifier in the bar when the bottom has no room, such as over a tab bar. | A magnifier among the buttons; the field opens in the bar. |
+| `'integratedButton'` | As `'integrated'`, but on iPad the closed search is always a magnifier. | As `'integrated'`. |
+| `'integratedCentered'` | As `'integrated'`, but centered in the bar on iPad. | As `'integrated'`. |
+
+Before iOS 26 every `integrated` value is the field in the bar.
+
+| Option | What it does |
+| --- | --- |
+| `hideOnScroll` | The field goes up with the content as it scrolls, and comes back at the top. On Android the bar hides with it. |
+| `focus: true` | The search opens with the keyboard, as on a screen made for searching. |
+| `placeholder` | The text of the empty field; the system "Search" without it. |
+| `backgroundColor`, `tintColor` | The color of the field, and of the cursor and the selected text. |
+
+## While searching {#while}
+
+| Option | While the search is open |
+| --- | --- |
+| `hideTopBarOnFocus` | <Os name="iOS" /> The bar hides, and the field moves to the top. On Android the open field always takes the bar. |
+| `obscuresBackgroundDuringPresentation` | The screen dims until the user types; a tap on it closes the search. |
+| `text` | Sets the text of the field from the app, such as a search the user ran before. No `onChange` follows: the app knows the text. |
+
+<DeviceVideo name="search-while" />
+
+## Narrowing the search {#narrow}
+
+### Scopes {#scopes}
+
+Scopes narrow the search to a part: All, Unread, Flagged. They are segments under the field on <Os name="iOS" />, filter chips on <Os name="Android" />. The selected one comes in `onChange` as `scope`:
+
+```ts
+s.searchBar({
+  visible: true,
+  scopes: [
+    { id: 'all', title: 'All' },
+    { id: 'unread', title: 'Unread' },
+  ],
+  selectedScope: 'all',
+});
+```
+
+```tsx
+useSearchBar({
+  onChange: ({ text, scope }) => setFilter({ text, scope }), // your own
+});
+```
+
+`scopeBarActivation` says when they show: `'onSearchActivation'` as soon as the search opens, `'onTextEntry'` once the user types. A scope the user picks stays picked when the screen shows again.
+
+On <Os name="iOS" /> 26 the segments make the bar taller, and the system's edge effect, the blur that content scrolling under the bar fades into, goes down with them. UIKit draws it, as in any app; `scrollEdgeEffect` doesn't change it.
+
+### Tokens {#tokens}
+
+<Os name="iOS" /> Tokens are filters inside the field, before the text, such as a sender the user picked:
+
+```ts
+s.searchBar({
+  visible: true,
+  tokens: [{ id: 'from-anna', text: 'Anna' }],
+});
+```
+
+The user sees them and deletes them with the backspace. `onChange` carries the ids of the ones left as `tokens`. Closing the search clears the field with its tokens, as UIKit does. On Android there are no tokens: use [scopes](#scopes) for a filter there.
+
+### Suggestions {#suggestions}
+
+<Os name="iOS" /> 16+ and <Os name="Android" /> A list of suggestions while the user types, such as recent searches or completions. The screen sets them from the text, with `useScreenOptions`:
+
+```tsx
+const [query, setQuery] = useState('');
+
+useScreenOptions((s) =>
+  s.searchBar({
+    // completions: your own list of words for the text
+    suggestions: completions(query).map((word) => ({
+      id: word,
+      title: word,
+    })),
+  }),
+);
+
+useSearchBar({
+  onChange: ({ text }) => setQuery(text),
+  onSuggestion: (id) => openSuggestion(id), // your own step
+});
+```
+
+A pick keeps the text, and comes to `onSuggestion` with the id of the suggestion. The list goes when the user picks one or types on, and the next render sets new ones. On iOS the list is UIKit's own, in the system's colors: the app gives it the items, not its look.
+
+## A results screen {#results}
+
+A search can show its results on a screen of its own, over the screen, from the moment it opens until it closes: recent places while the field is empty, then the places that match. `resultsComponent` names a component of `screens`:
+
+```ts
+s.searchBar({
+  visible: true,
+  resultsComponent: { name: 'PlaceResults' },
+  resultsActivation: 'onSearchActivation',
+});
+```
+
+The component gets the search events itself, with `useSearchBar`, as a screen of its own. `resultsActivation: 'onTextEntry'` shows it only once the field has text; until then the screen stays.
+
+| Platform | The results screen |
+| --- | --- |
+| <Os name="iOS" /> | Covers the whole screen, under the search field and to the bottom edge, so its background fills it. It keeps its content clear of the bar itself: a list with `contentInsetAdjustmentBehavior="automatic"`, other content with `useSafeAreaInsets`. |
+| <Os name="Android" /> | The search opens over the whole screen, the field at the top and the component under it. |
+
+## In the toolbar {#toolbar}
+
+<Os name="iOS" /> 26 The field can sit in the toolbar, between its buttons, with `{ systemItem: 'searchField' }` among the buttons of the toolbar, whatever `placement` says. See [Toolbar and FAB](./toolbar-and-fab#toolbar).
+
+## API {#api}
+
+<SectionApi id="search" />

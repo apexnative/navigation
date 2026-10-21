@@ -1,0 +1,320 @@
+---
+title: Installation
+description: 'Start a new app with the navigation or add it to the app you have, run it, and check the setup with doctor.'
+---
+
+import PackageInstall from '@site/src/components/PackageInstall';
+import { Mark, Models, Os, Paths, Requirements } from '@site/src/components/Intro';
+import { DoctorRun } from '@site/src/components/Terminal';
+
+This page adds the navigation to an app: a new one made by `init`, or the app you have, set up by `setup`. At the end, the app starts with its first screen in a native stack, and `doctor` reports no problems.
+
+## Requirements {#requirements}
+
+<Requirements
+  items={[
+    {
+      title: 'React Native',
+      tone: '#E9B949',
+      lines: ['0.85 or newer; checked on 0.87.', <>The <Mark>New Architecture</Mark> only.</>],
+    },
+    {
+      title: 'iOS and iPadOS',
+      tone: '#5FA8D3',
+      lines: ['Xcode 26 or newer, CocoaPods.', 'iOS 15.1 or newer, the minimum of React Native.'],
+    },
+    {
+      title: 'Android',
+      tone: '#8A9A5B',
+      lines: ['JDK 17, the Android SDK the app builds with.', 'minSdk 24 or higher.'],
+    },
+    {
+      title: 'Not yet',
+      tone: '#D1495B',
+      lines: ['Expo apps: the config plugin is planned.', 'The web is not a target.'],
+    },
+  ]}
+/>
+
+## Two ways to start {#paths}
+
+<Paths
+  items={[
+    {
+      eyebrow: 'A new app',
+      title: 'init',
+      text: 'A React Native app with the navigation already set up: Home and Details in a stack, dependencies and pods installed.',
+      command: 'npx @apexnative/navigation init MyApp',
+      to: '#new-app',
+    },
+    {
+      eyebrow: 'The app you have',
+      title: 'install and setup',
+      text: 'Add the package; setup changes the native entry points and installs the pods.',
+      command: 'npx apex-navigation setup',
+      to: '#existing-app',
+    },
+  ]}
+/>
+
+## A new app {#new-app}
+
+`init` makes a React Native app at the version the navigation is checked with, adds the package, runs `setup` and puts a starter in place of the template's `App`. Then it installs the dependencies and the pods.
+
+```bash title="Terminal"
+npx @apexnative/navigation init MyApp
+```
+
+Run the app from its folder:
+
+```bash title="Terminal"
+cd MyApp
+npx react-native run-ios
+npx react-native run-android
+```
+
+Home opens with an Open Details button. A tap pushes Details with the system transition; the swipe back or the back button returns to Home.
+
+The starter is the app of the [Quick start](./quick-start):
+
+| File | What it is |
+| --- | --- |
+| `Navigation.ts` | `createNavigation` with Home and Details in a stack. |
+| `src/screens/Home.tsx` | The first screen, with a button that pushes Details. |
+| `src/screens/Details.tsx` | The screen Home pushes. |
+| `navigation-env.d.ts` | Types of the commands, from `screens`: see [Typed commands](#typed-commands). |
+
+`init` removes the template's `App.tsx` and its test. The screens render inside the navigation, and a test that renders one component alone doesn't start it.
+
+### The starters {#templates}
+
+`--template` picks what the new app starts with. Each starter is a working app to grow, not a demo to delete.
+
+```bash title="Terminal"
+npx @apexnative/navigation init MyApp --template tabs
+```
+
+| Template | What the app starts with |
+| --- | --- |
+| `stack` | The default, above: Home in a stack, with a button that pushes Details. |
+| `tabs` | Tabs of Home, Profile and Settings, each in a stack of its own; Home pushes Details. The tab icons are SF Symbols on iOS (`house`, `person`, `gearshape`), and on Android vector drawables of Material Symbols, written to `android/app/src/main/res/drawable/`. |
+| `auth` | Login first. Sign in puts the user into the app's context and switches to the tabs above, where Profile shows the user's name; Sign out in Settings switches back to Login. |
+
+`auth` writes these files besides the screens:
+
+| File | What it is |
+| --- | --- |
+| `Navigation.ts` | The roots `signedOut` (Login) and `signedIn` (the tabs), the context `{ user }` with its type exported as `AppContext`, and `initialRoot`, which picks the first root from the context. |
+| `src/session.ts` | `signIn(name)` and `signOut()`: each sets the context and switches the root. |
+| `navigation-env.d.ts` | With the `context` line, as `Navigation.ts` exports `AppContext`: see [Typed commands](#typed-commands). |
+
+Login takes a name only. Your own sign-in goes where the comment in `src/session.ts` says, and the session you keep is read in `willMount`, so a user who signed in before starts on the tabs; until then each launch starts on Login. The whole flow, with links that wait for the sign-in: [Sign in and sign out](../flows/sign-in-and-sign-out).
+
+### The options of init {#init-options}
+
+The app it makes:
+
+| Option | What it does |
+| --- | --- |
+| `--template name` | The starter: `stack` (the default), `tabs` or `auth`. See [The starters](#templates). |
+| `--version v` | The React Native of the app: a version or a tag. By default, the one the navigation is checked with. |
+| `--pm name` | `npm`, `yarn` or `bun`. By default, the one the command runs with. |
+| `--directory path` | The folder of the app; its name by default. |
+| `--package-name id` | The Android package and the iOS bundle id, such as `com.example.app`. |
+| `--title text` | The name the app shows. |
+
+The steps it skips:
+
+| Option | What it does |
+| --- | --- |
+| `--skip-install` | Makes the app without installing dependencies and pods. |
+| `--skip-pods` | Installs the dependencies, not the pods. |
+| `--skip-git-init` | No git repository. |
+
+## The app you have {#existing-app}
+
+1. Add the package.
+
+   <PackageInstall />
+
+2. Set the app up for the navigation. `setup` shows each change and asks before it writes. On a Mac it then installs the pods, when it changed a file of the iOS app or the pods don't have the navigation yet: `pod install`, or `bundle install` and `bundle exec pod install` when the app has a `Gemfile`. On Linux and Windows it says to run `pod install` on a Mac.
+
+   ```bash title="Terminal"
+   npx apex-navigation setup
+   ```
+
+3. Run the app.
+
+   ```bash title="Terminal"
+   npx react-native run-ios
+   npx react-native run-android
+   ```
+
+   Your `App` shows as before, now as the first screen of a native stack, named Home in the new `Navigation.ts`.
+
+:::tip
+
+`--dry-run` shows the changes and writes nothing; `--yes` applies them without asking; `--skip-pods` leaves the pods for later and prints the line to run. A file changed by hand stays as it is, and `setup` prints what to change in it. Every option of every command: [The CLI](../guides/cli#setup).
+
+:::
+
+### What setup changes, and why {#why-native}
+
+In an app as the React Native template makes it, the window shows <Mark>one React view</Mark>, and all the navigation happens inside React. With this library the window shows <Mark>the containers of the platform</Mark>: a stack, tabs, modals, overlays. Every screen is a React view inside them. So the app hands its window and its startup to the navigation, and that is all the changes do.
+
+<Models
+  columns={[
+    { eyebrow: 'The template', title: 'One React view' },
+    { eyebrow: 'With the navigation', title: 'Containers of the platform' },
+  ]}
+  rows={[
+    {
+      label: 'The window',
+      cells: ['Shows one React root view that fills it.', 'Shows the root of the navigation; screens are React views inside its containers.'],
+    },
+    {
+      label: 'React Native',
+      cells: ['Started by the activity or the app delegate for that one view.', 'Started by the navigation, one host for every screen.'],
+    },
+    {
+      label: 'Back press',
+      cells: ['Goes to React.', "Goes to the navigation first: it pops a screen or closes a modal. On the first screen, the system's back, with its animation."],
+    },
+    {
+      label: 'Status bar',
+      cells: ['One for the app.', "Each screen's own, from its options."],
+    },
+  ]}
+/>
+
+#### Android files {#android-files}
+
+| File | What setup does | Why |
+| --- | --- | --- |
+| `MainApplication.kt` | Extends `NavigationApplication`. | It loads React Native itself and keeps one React host for all screens. Native screens made by `codegen` are registered there, before JS opens them. |
+| `MainActivity.kt` | Extends `NavigationActivity`. | The activity holds the containers of the navigation instead of one React view. It gets the back press, edge-to-edge and configuration changes first. |
+| `AndroidManifest.xml` | Adds `android:enableOnBackInvokedCallback="true"` to `<application>`. | On the first screen the system plays its own animation back to the home screen as the user swipes back (predictive back). Android 16 turns it on for apps that target API 36; an app that targets less opts in here. A value the app set itself stays. See [Back to the home screen](../screen-ui/back-and-gestures#system-animation). |
+| `styles.xml` | `AppTheme` inherits `Theme.ApexNavigation`. | The bars, tabs and search are Material 3 views and take their colors from the app's theme. This one is Material 3 in neutral grays, light and dark; change any color in the same file. A theme of the app's own stays as it is. See [Android's colors](../architecture/theme-and-context#android). |
+
+#### iOS files {#ios-files}
+
+| File | What setup does | Why |
+| --- | --- | --- |
+| `AppDelegate.swift` | Extends `ANNAppDelegate`. | It creates the window, puts the root of the navigation in it and starts React Native. Deep links that come before JS is ready wait for it. |
+| `Info.plist` | Sets `UIViewControllerBasedStatusBarAppearance` to `true`. | Each screen sets its own status bar from its options; with `false`, only the app as a whole can. |
+
+#### JavaScript files {#js-files}
+
+These files are the same on both platforms.
+
+| File | What setup does | Why |
+| --- | --- | --- |
+| `index.js` | Starts the app through the navigation. | `AppRegistry` of the package starts `createNavigation` instead of mounting one root component. |
+| `Navigation.ts` | New: shows `App` as the first screen. | The app keeps working as it was, now as the first screen of a stack. |
+| `App.tsx` | Takes out the template's `<StatusBar>`. | React Native's `StatusBar` logs an error on iOS once the screens set the status bar. |
+| `navigation-env.d.ts` | New: ties the commands to the screens of `Navigation.ts`. | The commands come from the package and can't see the app's screens. This declaration links them, so names and props are checked. See [Typed commands](#typed-commands). |
+
+### Typed commands {#typed-commands}
+
+`navigation.push('Details', { props })` comes from the package, and the package doesn't know the screens of your app. One declaration links them: `setup` and `init` write it in `navigation-env.d.ts` at the root of the app.
+
+```ts title="navigation-env.d.ts"
+// Made by apex-navigation setup: the types of the app's screens
+// for the navigation's commands. Don't edit.
+declare module '@apexnative/navigation' {
+  interface Register {
+    app: typeof import('./Navigation').Navigation;
+  }
+}
+export {};
+```
+
+- **It doesn't change with the screens.** It holds no list of screens, only `typeof Navigation`: a screen added to `screens` is typed the moment the file is saved, with no command and no build.
+- **The context too.** When `Navigation.ts` exports a type or an interface named `AppContext`, the file registers it next to `app`, with the line `context: import('./Navigation').AppContext;`: see [Typing it](../architecture/theme-and-context#types). A type of another name isn't picked up.
+- **`setup` keeps it up to date.** It writes the file again when it no longer fits: `Navigation.ts` began to export `AppContext`, or `index.js` imports the navigation from another module or under another name. A renamed module or export is an error of TypeScript in this file, not a silent loss of the types; `doctor` warns about such a file under Typed commands, and `--fix` runs `setup`.
+- **Don't edit it, and commit it.** `setup` knows its own file by the first line, the comment. A file without that line is yours: `setup` leaves it as it is and prints what it would write.
+- **`export {}` matters.** It makes the file a module, so the declaration adds to the types of the package instead of replacing them.
+- **A `tsconfig.json` with its own `include`** gets the file added to it by `setup`, as one of the changes it shows. One that lists its `files` instead: `setup` prints the line to add.
+- **No `tsconfig.json`** (a JavaScript app): the file isn't made. Everything works; screen names are plain strings and props aren't checked. `doctor` checks the names the commands give instead: see [Check everything with doctor](#doctor).
+
+:::note
+
+This is how TypeScript links a package to the code of an app: the commands are imported from the package, so the app has to tell it about its screens once. Other libraries do the same with a file their tools generate.
+
+:::
+
+## Check everything with doctor {#doctor}
+
+`doctor` checks what the navigation needs <Mark>in the app and on the machine</Mark>, and gives a fix for each problem. Run it after setup, after an upgrade, and whenever a build fails for no clear reason.
+
+<DoctorRun
+  facts={[{ text: 'React Native 0.87.1', ok: true }, { text: 'navigation 1.0.0-alpha.0' }]}
+  groups={[
+    {
+      title: 'App',
+      checks: [
+        { status: 'ok', title: 'React Native', detail: '0.87.1, New Architecture' },
+        { status: 'ok', title: 'Navigation', detail: '1.0.0-alpha.0' },
+        { status: 'ok', title: 'Native files', detail: 'MainApplication.kt · MainActivity.kt · AndroidManifest.xml · styles.xml · AppDelegate.swift · Info.plist' },
+        { status: 'ok', title: 'Entry point', detail: 'index.js' },
+        { status: 'ok', title: 'Typed commands', detail: 'navigation-env.d.ts' },
+      ],
+    },
+    {
+      title: 'Navigation',
+      checks: [
+        { status: 'ok', title: 'Screens', detail: '2' },
+        { status: 'ok', title: 'Links', detail: 'myapp://' },
+      ],
+    },
+    {
+      title: 'Android',
+      checks: [
+        { status: 'warn', title: 'JDK 17', detail: 'installed, but JDK 18 is in use', fix: 'export JAVA_HOME=$(/usr/libexec/java_home -v 17)' },
+        { status: 'ok', title: 'Android SDK', detail: 'SDK 37, build tools 37.0.0, NDK 27.1.12297006' },
+        { status: 'ok', title: 'minSdk', detail: '24' },
+        { status: 'info', title: 'Edge-to-edge', detail: 'Android 15 and newer (targetSdk 36)' },
+      ],
+    },
+    {
+      title: 'iOS',
+      checks: [
+        { status: 'ok', title: 'Xcode', detail: '27.0' },
+        { status: 'ok', title: 'CocoaPods', detail: '1.15.2' },
+        { status: 'ok', title: 'Pods', detail: 'navigation 1.0.0-alpha.0' },
+        { status: 'ok', title: 'iOS version', detail: "React Native's minimum" },
+      ],
+    },
+    {
+      title: 'Devices',
+      checks: [
+        { status: 'ok', title: 'iOS simulator', detail: 'iOS 27.0' },
+        { status: 'ok', title: 'adb', detail: '1 device connected' },
+      ],
+    },
+    { title: 'Conflicts', checks: [{ status: 'ok', title: 'None' }] },
+  ]}
+  summary="1 warning · 16 checks passed"
+/>
+
+| Group | What it checks |
+| --- | --- |
+| App | React Native and the New Architecture, the package, the files `setup` sets up, the entry point, React Native loaded twice, the status bar of the template, the generated code of native screens. Typed commands: `navigation-env.d.ts` there, pointing to the navigation, with its `context` line, and read by `tsconfig.json`. The splash screen made from its settings, with its logo inside the circle of Android's splash icon, and an iOS launch screen made with `UILaunchScreen` and no storyboard, which the navigation can't keep on screen. The app icon made from its settings, and an iOS icon set with no image, which the App Store refuses. |
+| Navigation | From the app's code. Screens: no name given twice in `screens` and the groups, and no file of the screens' folder with a `defineScreen` or `nativeScreen` that no file imports, a screen made and never added. Links: each prefix of `linking` declared on both platforms, the declarations no prefix has, a main activity that isn't `singleTask`. Screen names, in a JavaScript app only: a name that `push`, `replace`, `showModal` or `showInColumn` gives and no screen has, with its file and line. |
+| <Os name="Android" /> | JDK 17 in use, the Android SDK, `minSdk`, how edge-to-edge works in the app. |
+| <Os name="iOS" /> | Xcode 26 or newer, CocoaPods, the pods of the navigation and whether they are out of date, the iOS version of the Podfile. |
+| Devices | A simulator and `adb` to run the app on. |
+| Conflicts | Another navigation in the app, an Expo app. |
+
+:::tip
+
+`--fix` makes the fixes the CLI has, for errors and for warnings: `setup`, `links`, `icons`, `codegen` and `pod install`, asking before each. `--json` prints the result as one JSON document, for CI, tools and AI agents. The command exits with 1 when a check finds an error; warnings leave it at 0.
+
+:::
+
+## Next {#next}
+
+- **The first screens:** the [Quick start](./quick-start) defines two screens, puts them in a stack and pushes one from the other.
+- **A native screen:** a screen in SwiftUI, UIKit or Compose is added with `npx apex-navigation screen`. More: [Native screens](../architecture/native-screens).
+- **Coming from another library:** [From React Navigation](../migration/from-react-navigation), [From Expo Router](../migration/from-expo-router) and [From react-native-navigation](../migration/from-react-native-navigation) move an app screen by screen.
+- **Every command:** [The CLI](../guides/cli) lists them all, with their options, the links, the app icon and the server for AI agents.

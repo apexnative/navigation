@@ -1,0 +1,102 @@
+import { Mark, Os } from '@site/src/components/Intro';
+
+`useReservedRegions` tells a screen's component which parts of the screen the hardware takes: the fold of a partly
+folded device, where the screen divides, and a camera or a hinge over the screen. They lie inside the screen, where the
+safe area doesn't reach, so content that must stay readable and controls that must stay easy to tap keep off them. It
+is called in a component of a screen.
+
+## Usage {#usage}
+
+A photo editor puts the photo on one side of the fold and its controls on the other:
+
+```tsx title="src/screens/Editor.tsx"
+import { View } from 'react-native';
+import { useReservedRegions } from '@apexnative/navigation';
+import { Controls, Photo } from '../editor'; // your own
+
+const GAP = 20; // controls stay this far from the fold
+
+export function Editor() {
+  const { division } = useReservedRegions();
+  // a fold from top to bottom, as in a book
+  const fold = division.find((r) => r.height > r.width);
+
+  if (!fold) {
+    // flat: the controls under the photo
+    return (
+      <View style={{ flex: 1 }}>
+        <Photo style={{ flex: 1 }} />
+        <Controls />
+      </View>
+    );
+  }
+  return (
+    <View style={{ flex: 1, flexDirection: 'row' }}>
+      <Photo style={{ width: fold.x }} />
+      <Controls style={{ flex: 1, marginLeft: fold.width + GAP }} />
+    </View>
+  );
+}
+```
+
+On iPhone Duo or an Android foldable folded halfway like a book, the photo reaches the fold and the controls start
+20 points after it. Opened flat, the fold isn't there any more, and the controls go under the photo again. The regions
+are measured from the left edge in a right-to-left app too, so such an app mirrors this layout.
+
+## Signature {#signature}
+
+<ApiSignature data={data} name="useReservedRegions" />
+
+It takes nothing, and returns the regions of the screen the component is in, two lists of `{ x, y, width, height }`.
+Each region is in the screen's coordinates, from the top left of its content: points on iOS, dp on Android, the
+units of a React Native style on both, so a region gives an absolute position or a margin as it is.
+
+## The regions {#regions}
+
+Only the regions <Mark>active now</Mark> are there: a device opened flat has no division. Where there are none the
+lists are empty: before iOS 27.1, on a device without a fold or a camera over the screen, and before the screen's
+first layout.
+
+### `division` {#division}
+
+<ApiMember data={data} of="ReservedRegions" name="division" />
+
+Where the screen divides: the fold of a partly folded device. It is the fold itself, 0 wide on iPhone Duo and on
+Android, so keep controls about 20 points off it, as UIKit does with its own: a tap that lands on the fold is hard to
+aim, and text across it hard to read. Content such as a photo can reach it.
+
+A fold runs from top to bottom (a device that opens like a book: `height` is the screen's, `width` 0) or from side to
+side (a device half folded on a table: `width` is the screen's, `height` 0). Read it from the region, not from the
+device.
+
+### `occlusion` {#occlusion}
+
+<ApiMember data={data} of="ReservedRegions" name="occlusion" />
+
+Where hardware covers the screen, and what is under it doesn't show: a camera, a hinge between two displays. On
+<Os name="Android" /> the camera cutout is one too, and a fold that hides what is under it. A camera is usually
+outside the safe area, so a screen that keeps its safe area has nothing under it; a screen that draws to the edges
+keeps its controls off it. On iPhone Duo open the camera is at the top of the vertical bar, which a screen goes under
+by default (see [The vertical bar of iPhone Duo](/docs/screen-ui/system-ui#vertical-bar)): there the region is over
+the content. A hinge between two displays lies in the middle, as a fold does.
+
+## When it changes {#time}
+
+The component renders again when the regions change: the user folds the device halfway or opens it flat, turns it, or
+the screen moves within a [pair](/docs/containers/arrangement). Each screen gets its own regions, in its own
+coordinates; a pair split at the fold already keeps each of its screens on one side of it.
+
+<Os name="iOS" /> The regions are UIKit's (`reservedRegionsOfKind:`, iOS 27.1), read as the screen lays out, without
+the margins UIKit adds around them. <Os name="Android" /> They come from the folds of the window (`androidx.window`)
+and the camera cutout.
+
+## Outside a screen {#outside-screen}
+
+The hook reads the screen the component is in. In a component that isn't in a screen, such as `appProvider` itself,
+it throws. A native screen has no hooks.
+
+## See also {#see-also}
+
+- [The fold and the camera](/docs/screen-ui/system-ui#reserved-regions), and [the hinge](/docs/screen-ui/system-ui#hinge).
+- [Arrangement](/docs/containers/arrangement): two screens laid out at the fold by the system.
+- [`useSafeAreaInsets`](/api/system-ui/useSafeAreaInsets): what covers the edges of the screen.

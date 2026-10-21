@@ -1,0 +1,389 @@
+---
+title: An app with tabs
+description: 'Tabs with a stack each, icons and badges, a tap on the current tab, a screen without the tab bar, a tab that opens a modal, and switching tabs from code.'
+---
+
+import { Mark, Os } from '@site/src/components/Intro';
+import { TabStacks } from '@site/src/components/Screens';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+Most apps are a few sections side by side: Home, Inbox, Profile. In this guide you build them as tabs, each with its own history, and make them behave as users expect from the apps of their platform. You end with:
+
+- three tabs with icons, where each keeps where the user left it;
+- a badge with the number of unread messages, set from outside the screens;
+- a chat that takes the whole height, without the tab bar;
+- a New tab that opens a modal instead of a section;
+- code that opens a tab and a screen in it, from a button or a notification.
+
+<DeviceVideo name="flow-tabs" />
+
+## What you need {#need}
+
+- An app set up with [Installation](../start/installation).
+- The screens Home, Inbox, Chat, Profile and Compose, each made with `defineScreen`.
+- Icons: SF Symbol names for iOS, drawables of your Android app (`ic_home` and so on in `android/app/src/main/res/drawable`).
+- For the badge, the number of unread messages somewhere outside the screens: a store. The example uses [Zustand](https://zustand.docs.pmnd.rs) 5; any store with a subscription works.
+- [Tabs](../containers/tabs) and [Stack](../containers/stack) explain the parts this guide puts together.
+
+## How it will work {#plan}
+
+```text
+Tabs ─┬─ Home    → a stack: Home → …
+      ├─ Inbox   → a stack: Inbox → Chat   (id 'inbox', a badge)
+      ├─ New     → no stack: a button that shows Compose as a modal
+      └─ Profile → a stack: Profile → …
+```
+
+<TabStacks />
+
+- **Each tab has a stack of its own.** A push goes into the stack of the tab the screen is in, and stays there when the user switches tabs.
+- **The tab bar is native**: the system tab bar on iOS, the Material 3 bottom navigation on Android. The app gives it labels, icons and badges; it isn't a React component.
+- **Code that knows no screen** (a notification, a store) acts through `navigation` of the package, by the id of a tab.
+
+In React Navigation each tab is a screen of a tab navigator, and a stack inside it is a nested navigator you set up. Here `Tab('Inbox')` puts the stack around the screen for you.
+
+## 1. Build the tabs {#tabs}
+
+`Tabs` takes its tabs in order; each `Tab` takes a screen of `screens` by its name, and puts a stack around it:
+
+```ts title="Navigation.ts"
+import { createNavigation, Tab, Tabs } from '@apexnative/navigation';
+import { ChatScreen } from './src/screens/Chat';
+import { HomeScreen } from './src/screens/Home';
+import { InboxScreen } from './src/screens/Inbox';
+import { ProfileScreen } from './src/screens/Profile';
+
+export const Navigation = createNavigation({
+  screens: {
+    Home: HomeScreen,
+    Inbox: InboxScreen,
+    Chat: ChatScreen,
+    Profile: ProfileScreen,
+  },
+  root: Tabs(
+    Tab('Home').label('Home'),
+    Tab('Inbox').label('Inbox').id('inbox'),
+    Tab('Profile').label('Profile'),
+  ),
+});
+```
+
+Run the app: the system tab bar shows three tabs, Home selected. `id('inbox')` names the Inbox tab, so the code below can address it without knowing its place.
+
+## 2. Give them icons {#icons}
+
+An icon is an image, or a symbol of each platform: an SF Symbol on iOS, a drawable of the app on Android.
+
+```ts title="Navigation.ts"
+Tab('Home')
+  .label('Home')
+  .icon({ ios: 'house', android: 'ic_home' }),
+```
+
+The tab bar shows the icon over each label. <Os name="iOS" /> `selectedIcon` gives the selected tab another symbol, such as `'house.fill'`. The colors come from the [theme](../architecture/theme-and-context#theme): the selected tab takes its primary color.
+
+## 3. Push inside a tab {#push}
+
+A push from a screen goes into the stack of <Mark>the tab it is in</Mark>. Inbox opens a chat:
+
+```tsx title="src/screens/Inbox.tsx"
+import { Button, FlatList } from 'react-native';
+import { defineScreen, useNavigation } from '@apexnative/navigation';
+import { useMessages } from '../messages';
+
+function Inbox() {
+  const navigation = useNavigation();
+  const { messages } = useMessages(); // your own data
+
+  const open = (userId: string) =>
+    navigation.push('Chat', { props: { userId } });
+
+  return (
+    <FlatList
+      data={messages}
+      renderItem={({ item }) => (
+        <Button
+          title={item.from}
+          onPress={() => open(item.userId)}
+        />
+      )}
+    />
+  );
+}
+
+export const InboxScreen = defineScreen({
+  component: Inbox,
+  options: (s) => s.title('Inbox'),
+});
+```
+
+Open a chat in Inbox, tap Home, then Inbox again: the chat is still there. Each tab keeps its history until the user goes back in it, and its screens stay mounted, with their state.
+
+## 4. Hide the tab bar on a screen {#hide}
+
+A chat needs the whole height for its messages and its keyboard. `hideBottomTabs()` hides the tab bar while the screen is on top:
+
+```tsx title="src/screens/Chat.tsx"
+import { Text } from 'react-native';
+import { defineScreen } from '@apexnative/navigation';
+
+function Chat({ userId }: { userId: string }) {
+  return <Text>Chat with {userId}</Text>;
+}
+
+export const ChatScreen = defineScreen({
+  component: Chat,
+  options: (s) => s.title('Chat').hideBottomTabs(),
+});
+```
+
+The tab bar goes as the chat comes in, and comes back as the user goes back to Inbox.
+
+## 5. Show a badge {#badge}
+
+A badge is a number or a short text on a tab's icon. The count of unread messages changes all the time, and it changes while the user is in another tab, so it doesn't belong to the Inbox screen. Keep it in a store, and let the store set the badge by the tab's id:
+
+```ts title="src/unread.ts"
+import { navigation } from '@apexnative/navigation';
+import { create } from 'zustand';
+
+export const useUnread = create<{ count: number }>()(() => ({
+  count: 0,
+}));
+
+// the badge follows the count, wherever it changes
+useUnread.subscribe(({ count }, previous) => {
+  if (count === previous.count) return;
+  navigation.setTabBadge(count, 'inbox');
+});
+```
+
+```ts
+// your socket or your push handler
+useUnread.setState((s) => ({ count: s.count + 1 }));
+```
+
+A new message comes, and the Inbox tab shows 1, whatever tab the user is in. At 0 the badge goes: the number `0` shows none, as `null` does. `Tab('Inbox').badge(3)` sets the first one, and `Tab('Inbox').dot()` shows a dot without text.
+
+Not the app's context: it is made for what changes rarely, and each change renders every component that reads it, on every mounted screen. See [What goes in the context](../architecture/theme-and-context#context-roles).
+
+## 6. Handle a tap on the current tab {#tap}
+
+A second tap on the selected tab goes back to the first screen of the tab, and on the first screen scrolls it to the top. Both platforms do it in their own apps, and the navigation does it without code.
+
+A screen that does more on that tap, such as reloading, listens with `useTabPress`:
+
+```tsx title="src/screens/Inbox.tsx"
+import { useTabPress } from '@apexnative/navigation';
+
+function Inbox() {
+  const { messages, refetch } = useMessages(); // your own data
+  useTabPress(({ wasSelected }) => {
+    if (wasSelected) refetch();
+  });
+  // …
+}
+```
+
+Tap Inbox while it shows: the list goes to the top and reloads. `wasSelected` tells a second tap from the tap that selected the tab.
+
+## 7. Open a tab from code {#select}
+
+A notification about a message opens the chat in Inbox, whatever tab the user is on. `selectTab` resolves once the tab shows, and `navigation.push` acts from the screen the user sees, so a push after it goes into Inbox. A modal open over the tabs would take the push, so it closes first:
+
+```ts title="src/notifications.ts"
+import { navigation } from '@apexnative/navigation';
+
+export async function openChat(userId: string) {
+  await navigation.dismissAllModals();
+  await navigation.selectTab('inbox');
+  await navigation.push('Chat', { props: { userId } });
+}
+```
+
+Tap the notification: Inbox shows, then the chat comes in over it, and back goes to Inbox.
+
+Use the `navigation` of the package here, not the one of `useNavigation()`: a screen's own `push` goes into the stack of that screen, so a push from Home after `selectTab` would still land in Home.
+
+## 8. A tab that opens a modal {#button-tab}
+
+A New tab that opens a screen to write is a button, not a section. A `Tab()` without content never becomes the current tab, and `onPress` says what it does:
+
+```ts title="Navigation.ts"
+import { navigation } from '@apexnative/navigation';
+
+Tab()
+  .label('New')
+  .icon({ ios: 'square.and.pencil', android: 'ic_edit' })
+  .onPress(() => navigation.showModal('Compose')),
+```
+
+Tap New: Compose comes up as a modal, and the tab the user was on stays selected under it. Compose goes into `screens` like the others.
+
+## 9. Back on Android {#android-back}
+
+<Os name="Android" /> On the first screen of a tab, the system back leaves the app by default (`'exit'`). `backBehavior` changes it: `'first'` goes to the first tab, `'previous'` to the tab the user came from.
+
+```ts title="Navigation.ts"
+Tabs(/* … */).backBehavior('first');
+```
+
+Open Profile, press back: Home shows; press back again: the app goes to the background. iOS has no system back; the option is for Android only.
+
+## The chat that is open already {#same-chat}
+
+The notification of step 7 opens a chat with a person whose chat is already in the Inbox stack. Each push is a new screen, so the user would go back from the chat to the same chat. A `key` makes Chat one screen per person: a push of the same person goes back to the one in the stack.
+
+```tsx title="src/screens/Chat.tsx"
+export const ChatScreen = defineScreen({
+  component: Chat,
+  key: (props) => props.userId,
+  options: (s) => s.title('Chat').hideBottomTabs(),
+});
+```
+
+More: [One screen per item](../fundamentals/screens-and-props#key).
+
+## What every tab reads {#shared}
+
+Each screen is a React root of its own, and each tab holds its screens: a React provider in Home doesn't reach Profile. What every tab shows the same, such as the signed-in user, goes in the app's context or a store, which every screen reads; data of one tab stays in that tab. See [The app's context](../guides/app-context) and [State management](../guides/state-management).
+
+## Heavy tabs and a fast start {#lazy}
+
+By default every tab is created with the tabs. With many heavy tabs, `Tabs(…).lazy()` creates each the first time it shows, so the app starts faster. A tab not created yet runs none of its code: its `useTabPress` and its effects wait for the first visit. That is one more reason the badge of step 5 comes from a store, not from the Inbox screen. More: [When tabs are created](../containers/tabs#lazy).
+
+## On iPad and iOS 26 {#platforms}
+
+The tab bar looks as each platform draws it: Liquid Glass on iOS 26, a bar at the top on iPad that can turn into a sidebar, Material 3 bottom navigation on Android. Nothing in the code above changes. See [The tab bar on each platform](../containers/tabs#platforms).
+
+## The whole code {#files}
+
+```ts title="Navigation.ts"
+import {
+  createNavigation,
+  navigation,
+  Tab,
+  Tabs,
+} from '@apexnative/navigation';
+import { ChatScreen } from './src/screens/Chat';
+import { ComposeScreen } from './src/screens/Compose';
+import { HomeScreen } from './src/screens/Home';
+import { InboxScreen } from './src/screens/Inbox';
+import { ProfileScreen } from './src/screens/Profile';
+import './src/unread';
+
+export const Navigation = createNavigation({
+  screens: {
+    Home: HomeScreen,
+    Inbox: InboxScreen,
+    Chat: ChatScreen,
+    Compose: ComposeScreen,
+    Profile: ProfileScreen,
+  },
+  root: Tabs(
+    Tab('Home')
+      .label('Home')
+      .icon({ ios: 'house', android: 'ic_home' }),
+    Tab('Inbox')
+      .label('Inbox')
+      .icon({ ios: 'tray', android: 'ic_inbox' })
+      .id('inbox'),
+    Tab()
+      .label('New')
+      .icon({ ios: 'square.and.pencil', android: 'ic_edit' })
+      .onPress(() => navigation.showModal('Compose')),
+    Tab('Profile')
+      .label('Profile')
+      .icon({ ios: 'person', android: 'ic_person' }),
+  ).backBehavior('first'),
+});
+```
+
+```ts title="src/unread.ts"
+import { navigation } from '@apexnative/navigation';
+import { create } from 'zustand';
+
+export const useUnread = create<{ count: number }>()(() => ({
+  count: 0,
+}));
+
+useUnread.subscribe(({ count }, previous) => {
+  if (count === previous.count) return;
+  navigation.setTabBadge(count, 'inbox');
+});
+```
+
+```tsx title="src/screens/Inbox.tsx"
+import { Button, FlatList } from 'react-native';
+import {
+  defineScreen,
+  useNavigation,
+  useTabPress,
+} from '@apexnative/navigation';
+import { useMessages } from '../messages';
+
+function Inbox() {
+  const navigation = useNavigation();
+  const { messages, refetch } = useMessages();
+
+  useTabPress(({ wasSelected }) => {
+    if (wasSelected) refetch();
+  });
+
+  return (
+    <FlatList
+      data={messages}
+      renderItem={({ item }) => (
+        <Button
+          title={item.from}
+          onPress={() =>
+            navigation.push('Chat', {
+              props: { userId: item.userId },
+            })
+          }
+        />
+      )}
+    />
+  );
+}
+
+export const InboxScreen = defineScreen({
+  component: Inbox,
+  options: (s) => s.title('Inbox'),
+});
+```
+
+```tsx title="src/screens/Chat.tsx"
+import { Text } from 'react-native';
+import { defineScreen } from '@apexnative/navigation';
+
+function Chat({ userId }: { userId: string }) {
+  return <Text>Chat with {userId}</Text>;
+}
+
+export const ChatScreen = defineScreen({
+  component: Chat,
+  key: (props) => props.userId,
+  options: (s) => s.title('Chat').hideBottomTabs(),
+});
+```
+
+```ts title="src/notifications.ts"
+import { navigation } from '@apexnative/navigation';
+
+export async function openChat(userId: string) {
+  await navigation.dismissAllModals();
+  await navigation.selectTab('inbox');
+  await navigation.push('Chat', { props: { userId } });
+}
+```
+
+`useMessages` is your own data. The drawables `ic_home`, `ic_inbox`, `ic_edit` and `ic_person` are images of your Android app.
+
+## What's next {#next}
+
+- [List and details](./list-and-details): what a tab often holds.
+- [A search screen](./a-search-screen): a search tab.
+- [Notifications](../guides/notifications): the tap that calls `openChat`.
+- [Tabs](../containers/tabs): building, selecting, badges, lazy tabs, the tab bars of iOS 26, iPad and Android.
+- [Lifecycle and events](../fundamentals/lifecycle-and-events#events): `tabSelected`, `tabPressed`.

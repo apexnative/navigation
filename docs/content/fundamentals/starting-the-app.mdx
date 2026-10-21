@@ -1,0 +1,327 @@
+---
+title: Starting the app
+description: 'What createNavigation takes, what runs before and after the first screen, and what happens when the app launches again or fails to start.'
+---
+
+import { SectionStatus, SectionApi } from '@site/src/components/Api';
+import { Lifecycle, Mark, Os } from '@site/src/components/Intro';
+
+<SectionStatus id="starting-the-app" />
+
+Every app starts from one place, `createNavigation`. It describes <Mark>the whole app in one object</Mark>: its screens, what shows first, how the screens look, the data every screen reads, and what runs at launch. `index.js` registers it, and the app starts from it:
+
+```ts title="Navigation.ts"
+import { createNavigation } from '@apexnative/navigation';
+import { HomeScreen } from './screens/Home';
+
+export const Navigation = createNavigation({
+  screens: { Home: HomeScreen },
+  root: 'Home',
+});
+```
+
+```ts title="index.js"
+import { AppRegistry } from '@apexnative/navigation';
+import { name } from './app.json';
+import { Navigation } from './Navigation';
+
+AppRegistry.registerComponent(name, Navigation);
+```
+
+The CLI's `setup` writes both files: see [Installation](../start/installation#existing-app). Only `screens` and `root` are needed; every other key is optional.
+
+This page answers:
+
+1. [What createNavigation takes](#config): each key in short, with a link to its section.
+2. What runs [before](#before) and [after](#after) the first screen, and [in what order](#order).
+3. What happens when the app [launches again](#launches), [fails to start](#failure) or [is opened by a link](#links).
+
+## What createNavigation takes {#config}
+
+### The screens and the first root {#basics}
+
+#### Screens {#screens}
+
+`screens` — the screens of the app by name. A command names a screen by its name, and the props it gives are typed from the component. `groups` gathers screens that share options, such as the screens of signing in, without a top bar.
+
+```ts
+screens: { Home: HomeScreen, Profile: ProfileScreen },
+groups: {
+  auth: {
+    options: (s) => s.hideTopBar(),
+    screens: { Login: LoginScreen },
+  },
+},
+```
+
+More: [Screens and props](./screens-and-props).
+
+#### The first root {#root}
+
+`root` — what takes the window first. It is a screen name or a layout, as in the [Quick start](../start/quick-start#roots), or a function of [the context](#context), as [`willMount`](#before) left it:
+
+```ts
+root: (context) => (context.signedIn ? 'Home' : 'Login'),
+```
+
+An app that switches between whole layouts, such as signed out and signed in, names them in `roots` instead, and picks the first with `initialRoot`. See [Switching roots](./switching-roots).
+
+### Data and launch {#data}
+
+#### The app's data {#context}
+
+`context` — the app's own data that every screen reads, such as whether the user is signed in. This key is its first value. Screens read it with `useAppContext`; `root`, `initialRoot` and `didMount` get it too. `navigation.setContext` is the one way to change it.
+
+```ts
+context: { signedIn: false },
+```
+
+```tsx
+// in any screen
+const signedIn = useAppContext((context) => context.signedIn);
+```
+
+More: [Theme and context](../architecture/theme-and-context#context).
+
+#### At launch {#launch}
+
+`willMount` runs before the first screen, while the splash screen shows: the place to load what the first screen needs. `didMount` runs once the first screen shows: the place for what can wait. Both run once per JavaScript runtime, not once per launch: see [When the app launches again](#launches).
+
+`splash` adds a splash of your own in React Native, such as an animation of the logo, shown after the native splash on a cold start while `willMount` runs:
+
+```ts
+// Splash: your own component
+splash: { component: Splash, minDuration: 800 },
+```
+
+In detail: [Before the first screen](#before), [After the first screen](#after) and [The splash screen](#splash).
+
+### How the screens look and show {#appearance}
+
+#### How the screens look {#look}
+
+`options` — the default options of every screen: what all screens share. A screen's own options win over them. `theme` gives the colors of the bars, the tabs and the backgrounds; `navigation.setTheme` changes it while the app runs.
+
+```ts
+options: (s) => s.largeTitle(false),
+theme: {
+  colors: { primary: '#0A84FF', background: '#FFFFFF' },
+},
+```
+
+More: [Screen options](./screen-options), [Theme and context](../architecture/theme-and-context).
+
+#### How the screens show {#presentation}
+
+`presentation` — what every push, modal and overlay starts from; the settings of a command win over it. Here every modal gets a close button:
+
+```ts
+presentation: {
+  modal: { closeButton: true },
+},
+```
+
+More: [Moving between screens](./moving-between-screens).
+
+### Across the app {#app-wide}
+
+#### Events {#listeners}
+
+`listeners` — handlers of the events of the navigation for the whole app, outside any screen: for example, every screen that appears, for analytics, or every change of the state, for a log.
+
+```ts
+listeners: {
+  // your own analytics
+  screenDidAppear: ({ screen }) => trackScreen(screen.name),
+},
+```
+
+More: [Lifecycle and events](./lifecycle-and-events).
+
+#### Links {#linking}
+
+`linking` — the links that open the app's screens, by path. Here `myapp://user/42` pushes Profile with `{ userId: '42' }`:
+
+```ts
+linking: {
+  prefixes: ['myapp://'],
+  routes: { 'user/:userId': 'Profile' },
+},
+```
+
+More: [Opened by a link](#links) below, and [Deep links](../guides/deep-links).
+
+#### Providers {#providers}
+
+`appProvider` wraps the whole app once: every screen then renders in one React tree inside it, so a store or a query client is shared and lives as long as the app. `screenProvider` wraps each screen on its own.
+
+```tsx
+// your own store
+appProvider: ({ children }) => (
+  <StoreProvider store={store}>{children}</StoreProvider>
+),
+```
+
+More: [One tree](../architecture/one-tree).
+
+#### Errors and loading {#errors}
+
+`errorFallback` is what a screen that failed to render shows instead, with `retry`; when the start fails, it is the first screen. `loadingFallback` shows while a screen waits for a lazy component or data. `onError` gets every error the navigation catches, with where it came from.
+
+```tsx
+errorFallback: ({ error, retry }) => (
+  <ErrorView message={String(error)} onRetry={retry} />
+),
+loadingFallback: () => <ActivityIndicator />,
+onError: (error, source) => reportError(error, source.type),
+```
+
+More: [Errors and loading](../architecture/errors-and-loading).
+
+### Rarely needed {#system}
+
+Keys of the system; the defaults suit most apps.
+
+- `safeArea` — the edges on which every screen keeps its content out of the safe area: `{ edges: ['top', 'bottom'] }`.
+- `window` — <Os name="iOS" /> the color behind the screens, seen around a modal as it comes in: `{ backgroundColor: '#000000' }`.
+- `direction` — `'ltr'`, `'rtl'`, or `'locale'` for the language of the app; `navigation.setDirection` changes it.
+
+More: [System UI](../screen-ui/system-ui).
+
+## Before the first screen {#before}
+
+`willMount` is the place for what the first screen needs, such as whether the user is signed in. It may be async; <Mark>the splash screen stays</Mark> until it is done, so the first screen never shows half-ready. What it finds goes into the app's context with `navigation.setContext`, and `root` reads the context to choose the first screen:
+
+```ts title="Navigation.ts"
+import { createNavigation, navigation } from '@apexnative/navigation';
+import { HomeScreen } from './screens/Home';
+import { LoginScreen } from './screens/Login';
+
+export const Navigation = createNavigation({
+  screens: { Login: LoginScreen, Home: HomeScreen },
+  context: { signedIn: false },
+  willMount: async () => {
+    // your own check, for example a saved token
+    const signedIn = await isSignedIn();
+    navigation.setContext({ signedIn });
+  },
+  root: (context) => (context.signedIn ? 'Home' : 'Login'),
+});
+```
+
+`navigation` is the app's navigation for code outside the screens, such as `willMount`; a screen takes its own with `useNavigation()`. See [Moving between screens](./moving-between-screens).
+
+Keep `willMount` short: it is the time the user looks at the splash screen. Load what the first screen needs, and leave the rest to the screens or to `didMount`.
+
+The context is set in one way only, `setContext`: here in `willMount`, later when the user signs in or out. See [The context](../architecture/theme-and-context#context).
+
+### The splash screen {#splash}
+
+The splash screen that covers `willMount` is the platform's own: the launch screen of iOS, a storyboard, and the splash screen of Android, set by the activity's theme. The system shows it before any JavaScript runs, so it is a picture in the native files: `npx apex-navigation splash` makes it from your logo and colors. The navigation <Mark>keeps it on screen until the first root is drawn</Mark>, so no empty window shows between the two.
+
+An app that wants motion, such as a logo that grows into the first screen, or a progress while `willMount` loads, adds a splash of its own with `splash`. Its component takes the native splash's place on a cold start, with the same picture, and stays while `willMount` runs; then the first root comes in over it with a fade:
+
+```ts title="Navigation.ts"
+export const Navigation = createNavigation({
+  // …
+  splash: { component: Splash, minDuration: 800 },
+});
+```
+
+It shows once per cold start of the app's process: not after a reload of the JavaScript, and not when Android gives the app a new activity (see [below](#launches)). It renders before `willMount` ends, so it is a React root of its own, outside `appProvider` and `screenProvider`. How to make both, with an animation that starts from the native logo: [Splash screen](../guides/splash-screen).
+
+## After the first screen {#after}
+
+`didMount` runs once the first root is on screen, with the same context. It is the place for what should happen when the user already sees the app, not over the splash screen: a permission request, a prompt to update, work that can wait.
+
+```ts title="Navigation.ts"
+export const Navigation = createNavigation({
+  // …
+  didMount: (context) => {
+    // your own step: a system dialog over the first screen
+    if (context.signedIn) askForNotifications();
+  },
+});
+```
+
+Like `willMount`, it runs once per JavaScript runtime: not again when <Os name="Android" /> gives the app a new activity (see [below](#launches)).
+
+## The order {#order}
+
+What runs in each kind of launch:
+
+<Lifecycle />
+
+## When the app launches again {#launches}
+
+The native side can launch the app again while the JavaScript runtime keeps running. The navigation tells the cases apart, so `willMount` and `didMount` run once per runtime, not once per launch.
+
+| Launch | `willMount` | `splash` | The first root | `didMount` |
+| --- | --- | --- | --- | --- |
+| Cold start | runs | shows after the native splash, while `willMount` runs | built and shown, in place of the splash screen | runs |
+| JavaScript reload (development) | runs again: a new runtime | doesn't show | built and shown; no splash screen, a blank background for a moment | runs again |
+| <Os name="Android" /> A new activity, same runtime | doesn't run | doesn't show | the last root comes back, without the screens pushed or presented over it | doesn't run |
+
+A cold start is the first launch of the app's process: the user taps the icon of an app that isn't running, also after the system ended its process in the background.
+
+:::note
+
+On <Os name="Android" /> the system can destroy the activity and create a new one while the app's process lives, for example after the user leaves the app for a long time. The app doesn't start over: the navigation sets the <Mark>last root</Mark> again, as `root` or the last `switchTo` made it, with the props of its screens.
+
+:::
+
+## When the start fails {#failure}
+
+If `willMount` throws, or the first root can't be built, the start fails. The error goes to `onError` with `source.type === 'start'`, or to the console without it. What the user sees depends on `errorFallback`:
+
+- **With `errorFallback`,** it shows as the first screen, in place of the splash screen (the native one, or `splash`), and its `retry` runs the start again from `willMount`, without `splash`.
+- **Without it,** the splash screen stays, and the next launch tries again.
+
+So an app whose `willMount` can fail, such as without network, sets `errorFallback`. See [When the start fails](../architecture/errors-and-loading#start).
+
+```ts title="Navigation.ts"
+export const Navigation = createNavigation({
+  // …
+  onError: (error, source) => {
+    // your own crash reporting
+    if (source.type === 'start') reportError(error);
+  },
+});
+```
+
+## Opened by a link {#links}
+
+A link can launch the app: `myapp://user/42`, tapped in a message. The routes of `linking` say what each link opens. A link <Mark>waits for `willMount`</Mark>, so the screens it opens find the context ready. With `start` it makes the first root; without it, the usual first root shows, and `open` runs after `didMount`.
+
+```ts title="Navigation.ts"
+import { Screen, Stack } from '@apexnative/navigation';
+
+export const Navigation = createNavigation({
+  // …
+  linking: {
+    routes: {
+      'user/:userId': {
+        start: ({ userId }) =>
+          Stack('Home', Screen('Profile', { userId })),
+        open: ({ userId }) =>
+          navigation.push('Profile', { props: { userId } }),
+      },
+    },
+  },
+});
+```
+
+Launched by `myapp://user/42`, the app shows Profile, with Home to go back to, as the splash screen goes. In a running app the same link pushes Profile.
+
+- **When the start fails**, the links wait for the start that succeeds.
+- **A reload of the JavaScript** doesn't run the link that launched the app again.
+
+The routes, links in a running app, and links that wait for sign-in (`usePendingLink`): [Deep links](../guides/deep-links).
+
+## Next: screens and props {#next}
+
+The app starts with its first root. [Screens and props](./screens-and-props) shows what a screen is, how it gets its data, and how it lives.
+
+## API {#api}
+
+<SectionApi id="starting-the-app" />

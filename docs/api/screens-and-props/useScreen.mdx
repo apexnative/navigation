@@ -1,0 +1,80 @@
+`useScreen` returns the screen the component is in, as `{ id, name }`. Any component inside a screen can call it, at
+any depth, without the screen passing anything down. It is for code that needs to know where it runs: a button that
+logs which screen it was pressed on, a component that addresses its own screen, a cache kept per showing.
+
+## Usage {#usage}
+
+```tsx title="src/components/LikeButton.tsx"
+import { Button } from 'react-native';
+import { useScreen } from '@apexnative/navigation';
+import { track } from '../analytics'; // your own analytics
+
+export function LikeButton({ postId }: { postId: string }) {
+  const { name } = useScreen();
+  const like = () => track('like', { postId, screen: name });
+  return <Button title="Like" onPress={like} />;
+}
+```
+
+On Home and on Profile, the same button reports `screen: 'Home'` or `screen: 'Profile'`, without a prop telling it.
+
+## Signature {#signature}
+
+<ApiSignature data={data} name="useScreen" />
+
+It returns a `ScreenInfo`, the same object for the whole life of the screen, so it is safe in the dependencies of an
+effect. Outside a screen it throws (see [below](#where)).
+
+## The screen {#screen-group}
+
+### `id` {#id}
+
+<ApiMember data={data} of="ScreenInfo" name="id" />
+
+The id of this showing of the screen: `'Component12'`, made by the navigation, or the one a layout gave with
+[`Screen(…).id(…)`](/api/screens-and-props/Screen#id). Two profiles pushed one over the other have the same name and
+different ids. Commands that address a screen take it:
+
+```tsx
+import { navigation, useScreen } from '@apexnative/navigation';
+
+const { id } = useScreen();
+// a component inside a modal closes the modal it is in
+const close = () => navigation.dismissModal(id);
+```
+
+The id stays the same while the screen lives, and goes with it: a screen shown again after it closed has a new one,
+unless a layout gives it its own.
+
+### `name` {#name}
+
+<ApiMember data={data} of="ScreenInfo" name="name" />
+
+The screen's name in `screens` or a group: `'Profile'`. The same for every showing of the screen. Use it for what
+depends on the kind of screen, such as analytics; use `id` for what depends on this showing.
+
+## Where it works {#where}
+
+- **Inside a screen's component,** at any depth.
+- **In `screenProvider`, `errorFallback` and `loadingFallback`** of `createNavigation`: they render inside the screen,
+  so they know it too.
+- **Not outside a screen.** In a component of `appProvider` around the screens, or in code outside React, it throws:
+  "This hook is for the screens of createNavigation, and the component is not in one". Code outside React that knows
+  its screen gets it as an argument, and `screenNavigation(screen)` gives its commands.
+- **In a component of a bar,** such as a component in place of the title, it returns that component's own screen: it is
+  registered in `screens` and renders in a root of its own. Pass what it needs from the screen in its `passProps`.
+
+`useNavigation().screen` is the same object, for a component that uses the commands anyway.
+
+## Coming from React Navigation {#react-navigation}
+
+`useRoute()` gives the route with its params. Here the params are the component's props, so the screen has them
+without a hook; `useScreen` gives only what props don't: the id and the name.
+
+## See also {#see-also}
+
+- [Which screen a component is in](/docs/fundamentals/screens-and-props#use-screen).
+- [`useNavigation`](/docs/fundamentals/moving-between-screens#use-navigation): the commands of the screen the
+  component is in.
+- [Screens in Jest](/docs/guides/testing#screens): a component that calls the screen's hooks, rendered alone in a
+  test.

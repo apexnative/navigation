@@ -1,0 +1,83 @@
+import { Mark, Os } from '@site/src/components/Intro';
+
+`useHinge` gives the hinge of a device that folds: whether it is closed, partly open or open, and its angle. It is
+for effects that follow the device, such as a picture that tilts as the user opens it. The component renders again on
+every change. Any component can call it: it reads the device, not a screen.
+
+## Usage {#usage}
+
+```tsx title="src/screens/Settings.tsx"
+import { Text } from 'react-native';
+import { useHinge } from '@apexnative/navigation';
+
+function HingeAngle() {
+  const hinge = useHinge();
+  if (!hinge || hinge.angle === null) return null;
+  return <Text>The device is open {Math.round(hinge.angle)}°</Text>;
+}
+```
+
+On iPhone Duo or an Android foldable the text follows the angle as the user opens and folds the device. On a device
+without a hinge it renders nothing.
+
+## Signature {#signature}
+
+<ApiSignature data={data} name="useHinge" />
+
+It takes nothing, and returns the hinge, or `null` on a device without one and for the moment before the first value
+comes.
+
+## The hinge {#hinge}
+
+### `state` {#state}
+
+<ApiMember data={data} of="Hinge" name="state" />
+
+- `'closed'`: folded shut.
+- `'partiallyOpen'`: open part of the way, as a book or a laptop.
+- `'fullyOpen'`: open as far as the device goes.
+- `'unknown'`: the platform can't tell.
+
+<Os name="iOS" /> As UIKit's `UIHingeInteraction` says (iOS 27.1). It turns `'partiallyOpen'` early: iPhone Duo says
+so from 174°.
+
+<Os name="Android" /> `'partiallyOpen'` and `'fullyOpen'` come from the fold of the app's window (`HALF_OPENED` and
+`FLAT`). Android has no public closed state, so `'closed'` is told by the hinge angle sensor: the window has no fold
+and the angle is below 90°. `'unknown'` otherwise.
+
+### `angle` {#angle}
+
+<ApiMember data={data} of="Hinge" name="angle" />
+
+Degrees: 0 closed, 180 open flat. `null` where the platform gives none.
+
+- <Os name="iOS" />: `null` while the state is `'unknown'`.
+- <Os name="Android" />: from the hinge angle sensor, Android 11+; `null` without one. Some devices give only 0, 90
+  and 180, and a device that folds back goes beyond 180.
+
+## The layout belongs to pairs and regions {#layout}
+
+Apple's advice holds on both platforms: <Mark>lay a screen out by the pair and the regions, not by the angle</Mark>.
+The system decides when the screen divides, and [a pair](/docs/containers/arrangement) and
+[`useReservedRegions`](/api/system-ui/useReservedRegions) follow its decision; the angle at which it decides is the
+system's, and differs between devices. The hinge is for effects on top of that layout.
+
+## How often it renders {#time}
+
+While the user moves the hinge, a new value comes many times a second (on iPhone Duo every 30–50 ms), and the
+component renders each time. For an animation that follows the angle, use
+[`useHingeChange`](/api/system-ui/useHingeChange): it calls a function instead, without a render. Read `useHinge` in
+the small component that shows the value, not at the top of a screen.
+
+## What it costs {#cost}
+
+The hinge is watched only while a component with `useHinge` or `useHingeChange` is mounted: the first one starts it,
+the last one to unmount stops it. On <Os name="Android" /> the hinge angle sensor costs power, and runs only while a
+hook is mounted and the app is in the foreground. Mount the hook on the screen that needs it, not around the whole
+app.
+
+## See also {#see-also}
+
+- [The hinge](/docs/screen-ui/system-ui#hinge) on the System UI page.
+- [`useHingeChange`](/api/system-ui/useHingeChange), [`useReservedRegions`](/api/system-ui/useReservedRegions).
+- [Arrangement](/docs/containers/arrangement).

@@ -1,0 +1,263 @@
+import { Pair } from '@site/src/components/Intro';
+
+`defineScreen` describes a screen next to its component: the component, the options the platform draws around it (the
+title, the buttons, the bars), for a screen that should open once per item its key, and for a screen that comes with a
+second one in a large window its arrangement. You call it in the screen's own file and put the result in `screens` of
+[`createNavigation`](/api/starting-the-app/createNavigation#screens), so the registration stays one line and the screen
+carries its look wherever it is shown.
+
+## Usage {#usage}
+
+```tsx title="src/screens/Details.tsx"
+import { Text } from 'react-native';
+import { defineScreen } from '@apexnative/navigation';
+
+type Props = { id: string };
+
+function Details({ id }: Props) {
+  return <Text>Item {id}</Text>;
+}
+
+export const DetailsScreen = defineScreen({
+  component: Details,
+  options: (s, props) => s.title(`Item ${props.id}`),
+});
+```
+
+```ts title="src/Navigation.ts"
+export const Navigation = createNavigation({
+  screens: { Home: HomeScreen, Details: DetailsScreen },
+  root: 'Home',
+});
+```
+
+```ts
+// in Home, on a tap
+navigation.push('Details', { props: { id: '42' } });
+```
+
+Details slides in with "Item 42" in its top bar from the first frame, and "Item 42" in its content. The props are
+typed from `Details`: a push without `id`, or with a number, is a type error.
+
+A screen that has no options of its own doesn't need `defineScreen`: `screens: { Settings }` takes the component.
+
+<Pair left="React Navigation" right="Here">
+
+```tsx
+<Stack.Screen
+  name="Details"
+  component={Details}
+  options={({ route }) => ({
+    title: `Item ${route.params.id}`,
+  })}
+/>
+```
+
+```tsx
+export const DetailsScreen = defineScreen({
+  component: Details,
+  options: (s, props) => s.title(`Item ${props.id}`),
+});
+```
+
+</Pair>
+
+The options live with the screen, not with the navigator, and the component gets its data as plain props, not as
+`route.params`.
+
+## Signature {#signature}
+
+<ApiSignature data={data} name="defineScreen" />
+
+It returns the object it was given. Its work is in the types: `Props` is taken from `component`, and flows into
+`options`, `key`, and every command that shows the screen.
+
+## The component {#component-group}
+
+### `component` {#component}
+
+<ApiMember data={data} of="ScreenDefinition" name="component" />
+
+What the screen shows: any React component, a function, `memo` or `forwardRef`. It gets exactly the props the command
+gave, nothing else: no `navigation` or `route` props. Inside it, the hooks of the navigation give the rest:
+`useNavigation()` for commands, `useScreen()` for its id, `useScreenOptions` for options that change.
+
+```tsx
+function Details({ id }: Props) {
+  const navigation = useNavigation();
+  const open = () => navigation.push('Profile', { props: { id } });
+  // …
+}
+```
+
+**Its props are typed and checked.** The type of the component's props is the type `navigation.push('Details', …)`,
+`showModal`, `Screen('Details', …)` and the other commands check, once the app's type is registered (see
+[TypeScript checks them](/docs/fundamentals/screens-and-props#typed)). A screen whose props are all optional can be
+shown without them.
+
+**Props can be anything a component takes.** They stay in JavaScript, by the id of the screen; the native side gets
+only the id. So a prop can be a function, such as a callback that gives a result back, an object of a class, or a
+promise: nothing is serialized. See [Props stay in JavaScript](/docs/fundamentals/screens-and-props#props-in-js).
+
+**Props are given once.** A shown screen keeps the props it was shown with. To change what it displays, change state:
+its own, the app's context, or a store.
+
+**Each screen is a React root of its own.** Without `appProvider`, the native side renders every screen in a root
+of its own. A React context created at the top of your code doesn't reach it:
+
+```tsx
+// Don't: this provider wraps nothing the screens render in
+export default function App() {
+  return <ThemeProvider value={dark}>{/* … */}</ThemeProvider>;
+}
+```
+
+Wrap the screens in `appProvider` (one instance for the app, every screen in one tree) or `screenProvider` (one per
+screen) of `createNavigation`, or keep the data in the app's context: see
+[Providers](/api/starting-the-app/createNavigation#providers-group).
+
+Around the component, each screen has: the screen's provider (`screenProvider`), a Suspense boundary that shows
+`loadingFallback`, and an error boundary that shows `errorFallback`. A component that throws while rendering takes
+down its own screen only.
+
+## Options {#options-group}
+
+### `options` {#options}
+
+<ApiMember data={data} of="ScreenDefinition" name="options" />
+
+What the platform draws for the screen: the title, the buttons, the bars, the background. They go to the native side
+with the command that shows the screen, so they apply before it appears: the title is there in the first frame, not
+set after a render.
+
+Two forms:
+
+- **An object of options**, for options that never change:
+
+  ```ts
+  options: { topBar: { title: { text: 'Settings' } } },
+  ```
+
+- **A function** that builds them with the chain `s`, from the props of this showing and from `{ theme, context }`:
+
+  ```ts
+  options: (s, props, { theme }) =>
+    s.title({ text: props.name, color: theme.colors?.primary }),
+  ```
+
+The chain is the usual form. It is shorter (`s.title('Settings')`), it reads the props, and only the chain takes
+buttons with `onPress`, which stays in JavaScript and gets the screen's navigation:
+
+```ts
+options: (s, props) =>
+  s.title(props.name).rightButtons({
+    id: 'settings',
+    text: 'Settings',
+    onPress: ({ navigation }) => navigation.push('Settings'),
+  }),
+```
+
+Every method of the chain and every option: [Screen options](/docs/fundamentals/screen-options#chain).
+
+**Where they go among the other options.** From the weakest: the app's defaults (the theme, `options` of
+`createNavigation`), the kind of show and the app's `presentation`, the options of the screen's group, these, then
+those of the command (`push('Details', { options })`, `Screen(…).options()`). Later, `useScreenOptions` and
+`setOptions` change the shown screen. The full order: [Screen options](/docs/fundamentals/screen-options#layers).
+
+**The function runs once per showing,** when the command builds the screen. It doesn't run again when the props, the
+theme or the context change later:
+
+- For options that follow the state of the screen, such as a Save button enabled once the form is valid, use
+  `useScreenOptions` in the component.
+- For colors that follow dark mode, give a color with both values, `{ light: '#FFFFFF', dark: '#000000' }`: the
+  platform switches it by itself. The colors of `theme` reach every screen already, through the app's defaults.
+
+**`context` is typed** only when the app registers it, `interface Register { app: typeof Navigation; context:
+AppContext }`; otherwise it is `unknown`. See [Theme and context](/docs/architecture/theme-and-context#types).
+
+**Keep the function plain.** It runs inside the command, outside React: no hooks in it, and nothing slow. If it
+throws, the command that shows the screen rejects with the error.
+
+## One screen per item {#key-group}
+
+### `key` {#key}
+
+<ApiMember data={data} of="ScreenDefinition" name="key" />
+
+Makes the screen open once per item in a stack. The usual case is a chat: a notification opens the chat with a friend,
+and that chat is in the stack already, under two other screens. A second copy would make back go from the chat to the
+same chat.
+
+```tsx title="src/screens/Chat.tsx"
+export const ChatScreen = defineScreen({
+  component: Chat,
+  key: (props) => props.userId,
+});
+```
+
+- **A push of a screen whose key is in the stack goes back to that screen,** closing the screens over it. No second
+  copy opens. The push resolves with the id of the screen it went back to.
+- **That screen keeps its own props.** The props of the push are dropped, so a screen that can be reached with
+  newer data reads it from state, not from its props alone.
+- **Only in the same stack.** In another stack, such as another tab or a modal, the screen opens as usual: each stack
+  keeps its own history.
+- **The key is a string or a number** that tells the items apart: an id from your server. The name of the screen goes
+  in front of it, so the chat and the profile of the same user never clash.
+- **Without `key`,** every push is a new screen.
+
+Both platforms do the same. See [One screen per item](/docs/fundamentals/screens-and-props#key).
+
+## A second screen in a large window {#arrangement-group}
+
+### `arrangement` {#arrangement}
+
+<ApiMember data={data} of="ScreenDefinition" name="arrangement" />
+
+Makes the screen the primary of a pair: in a large window a second screen of `screens` shows beside it or under it,
+as one entry of the stack. A profile with its details, a photo with its facts:
+
+```ts
+export const ProfileScreen = defineScreen({
+  component: Profile,
+  arrangement: {
+    secondary: 'Details',
+    secondaryProps: (props) => ({ itemId: props.id }),
+  },
+});
+```
+
+- **Where it shows the pair.** On iPad and on an open iPhone Duo (iOS 27.1+), on an Android tablet and an open
+  foldable. Anywhere else, any phone, iPhone Duo folded, iOS before 27.1, the screen shows alone, as it does without
+  `arrangement`. On a partly folded device each screen takes its side of the fold.
+- **The bar is this screen's.** The secondary's `topBar` and `toolbar` have no effect; back takes both screens.
+- **`secondary`** is a name of `screens`, React or native. **`secondaryProps`** makes its props from those of the
+  command; without it the secondary gets the same props. **`style`**: `'split'`, side by side or one above the other,
+  or `'overlay'`, this screen over the secondary, side by side when the device is partly folded.
+- **No settings beyond these.** For a pair under a name of its own, with `axes`, `fraction`, `primaryEdge` and
+  `compact`, use [`defineArrangement`](/api/arrangement/defineArrangement).
+- **The key doesn't apply in a pair.** The place in the stack is the pair's, so the screens of a pair go without their
+  `key`. Where the native side shows no pairs (before iOS 27.1), the screen shows alone and keeps its `key`, as a plain
+  screen does.
+
+What each device shows, the bar, the state of the pair: [Arrangement](/docs/containers/arrangement).
+
+## Where to put it {#where}
+
+- **In the screen's file, exported next to the component.** `Navigation.ts` imports it; the screen doesn't import
+  `Navigation.ts`, which would make an import cycle. Screens open each other by name, so they don't import each other
+  either.
+- **As the default export, for a screen that loads later:** `screens: { Settings: { load: () =>
+  import('./screens/Settings') } }` takes the module's `default`, a component or a `defineScreen`. Its options and key
+  work as for any screen. See [Loading a screen later](/docs/fundamentals/screens-and-props#lazy).
+- **In a group**, the group's `options` go under the screen's own: see
+  [`groups`](/api/starting-the-app/createNavigation#groups).
+
+A definition is not a component: render `Details`, not `DetailsScreen`, in a test or in another component.
+
+## See also {#see-also}
+
+- [Screens and props](/docs/fundamentals/screens-and-props): what a screen is, props, the life of a screen.
+- [Screen options](/docs/fundamentals/screen-options): the chain, the layers, changing options while shown.
+- [`Screen`](/api/screens-and-props/Screen): a screen in a layout, with its props and options of one showing.
+- [Native screens](/docs/architecture/native-screens): `nativeScreen`, for a screen written in SwiftUI, UIKit or
+  Compose.

@@ -1,0 +1,64 @@
+import { Os } from '@site/src/components/Intro';
+
+`useHingeChange` calls a function on every change of the device's hinge, without rendering the component again. It is
+for animations that follow the angle as the user opens and folds the device, which would render many times a second
+with [`useHinge`](/api/system-ui/useHinge). Any component can call it.
+
+## Usage {#usage}
+
+A lid that tilts with the device, as an `Animated` value:
+
+```tsx title="src/components/Lid.tsx"
+import { useRef } from 'react';
+import { Animated } from 'react-native';
+import { useHingeChange } from '@apexnative/navigation';
+
+export function Lid() {
+  const angle = useRef(new Animated.Value(180)).current;
+  useHingeChange((hinge) => angle.setValue(hinge?.angle ?? 180));
+
+  const rotateX = angle.interpolate({
+    inputRange: [0, 180],
+    outputRange: ['90deg', '0deg'],
+  });
+  return <Animated.View style={{ transform: [{ rotateX }] }} />;
+}
+```
+
+As the user folds the device, the view tilts back; opened flat, it lies flat. The component renders once.
+
+## Signature {#signature}
+
+<ApiSignature data={data} name="useHingeChange" />
+
+`listener` gets the new hinge, `{ state, angle }`, or `null` when the hinge goes away (see
+[`useHinge`](/api/system-ui/useHinge#hinge) for the values). The hook keeps the last function it was given, so a
+function made in each render is fine, and reads the state of the latest render.
+
+It calls the listener when the hinge changes, not with the value there is when it mounts: a device that stands still
+calls nothing. A component that needs a value at once starts from one of its own, as 180 above, or from `useHinge`.
+
+## With Reanimated {#reanimated}
+
+A shared value of Reanimated takes the angle the same way, and runs the animation on the UI thread:
+
+```ts
+import { useSharedValue } from 'react-native-reanimated';
+
+// in the component
+const angle = useSharedValue(180);
+useHingeChange((hinge) => {
+  angle.value = hinge?.angle ?? 180;
+});
+```
+
+## What it costs {#cost}
+
+The hinge is watched only while a component with `useHinge` or `useHingeChange` is mounted. On
+<Os name="Android" /> the hinge angle sensor runs only then, and only while the app is in the foreground. See
+[What it costs](/api/system-ui/useHinge#cost).
+
+## See also {#see-also}
+
+- [`useHinge`](/api/system-ui/useHinge): the state and the angle, with a render.
+- [The hinge](/docs/screen-ui/system-ui#hinge) on the System UI page.

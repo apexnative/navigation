@@ -1,0 +1,130 @@
+---
+title: Quick start
+description: 'Build two screens in a native stack: Home, and Details that Home pushes with a title.'
+---
+
+import { Os } from '@site/src/components/Intro';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+In this tutorial you build an app with two screens. Home opens in a native stack and has a button; the button pushes Details, which shows the title Home gave it. You write three files and run the app.
+
+You start from an app set up for the navigation by `setup`, as in [The app you have](./installation#existing-app). An app made by `init` already has exactly these files: read along to see what they do.
+
+## 1. Write the first screen {#screens}
+
+A screen is a React component. `defineScreen` puts its options next to it; here the option is the title that the native top bar shows.
+
+Create `src/screens/Home.tsx`:
+
+```tsx title="src/screens/Home.tsx"
+import { Button, View } from 'react-native';
+import { defineScreen, useNavigation } from '@apexnative/navigation';
+
+function Home() {
+  const navigation = useNavigation();
+  const open = () =>
+    navigation.push('Details', { props: { title: 'Details' } });
+  return (
+    <View>
+      <Button title="Open Details" onPress={open} />
+    </View>
+  );
+}
+
+export const HomeScreen = defineScreen({
+  component: Home,
+  options: (s) => s.title('Home'),
+});
+```
+
+`useNavigation` gives the screen its commands. `push` shows the screen named `Details` on top of Home, with the props after the name.
+
+## 2. Write the screen it opens {#details}
+
+Details gets its props from the command that shows it. Its options read the same props, so the top bar shows the title Home passed.
+
+Create `src/screens/Details.tsx`:
+
+```tsx title="src/screens/Details.tsx"
+import { Text, View } from 'react-native';
+import { defineScreen } from '@apexnative/navigation';
+
+export interface DetailsProps {
+  title?: string;
+}
+
+function Details(props: DetailsProps) {
+  return (
+    <View>
+      <Text>{props.title ?? 'Details'}</Text>
+    </View>
+  );
+}
+
+export const DetailsScreen = defineScreen({
+  component: Details,
+  options: (s, props) => s.title(props.title ?? 'Details'),
+});
+```
+
+## 3. Create the navigation {#navigation}
+
+`createNavigation` takes the screens by name and the root, what takes the window first. A screen name alone as the root shows that screen in a native stack, so Home can push Details.
+
+Replace the `Navigation.ts` that `setup` made:
+
+```ts title="Navigation.ts"
+import { createNavigation } from '@apexnative/navigation';
+import { DetailsScreen } from './src/screens/Details';
+import { HomeScreen } from './src/screens/Home';
+
+export const Navigation = createNavigation({
+  screens: { Home: HomeScreen, Details: DetailsScreen },
+  root: 'Home',
+});
+```
+
+The names in `screens` are the names the commands use. They are typed: `navigation.push('Detail')` or a prop Details doesn't take is an error in the editor, not at run time. The file `navigation-env.d.ts` that `setup` wrote ties the commands to `screens`, and you don't edit it. More: [Typed commands](./installation#typed-commands).
+
+## 4. Check the entry point {#register}
+
+`setup` already changed `index.js`. It registers the navigation with `AppRegistry` from the package, not from `react-native`: this one takes the navigation instead of a root component, and starts it when the native side launches the app.
+
+```js title="index.js"
+import { AppRegistry } from '@apexnative/navigation';
+import { name } from './app.json';
+import { Navigation } from './Navigation';
+
+AppRegistry.registerComponent(name, Navigation);
+```
+
+## 5. Run the app {#run}
+
+```bash title="Terminal"
+npx react-native run-ios
+npx react-native run-android
+```
+
+Home opens in a native stack, with Home in the top bar. Tap Open Details: Details slides in with the system transition, and the top bar shows Details with a back button. The swipe from the left edge <Os name="iOS" /> or the back button <Os name="Android" /> returns to Home.
+
+<DeviceVideo name="quick-start-result" />
+
+## What a root can be {#roots}
+
+The app you built has one stack. `root` also takes a layout made of builders, and each builder is a real platform container:
+
+| Root | What you get |
+| --- | --- |
+| `'Home'` | A native stack with Home: push, pop and swipe back. |
+| `Stack('Home', 'Details')` | A stack that starts with more than one screen. |
+| `Tabs(Tab(Stack('Home')), …)` | The system tab bar; each tab keeps its own stack. |
+| `SideMenu(…)` | A side menu next to a center screen. |
+| `SplitView(…)` | Columns for the large iPad screen. |
+
+An app that switches between roots, such as signed out and signed in, uses `roots` instead. More: [Switching roots](../fundamentals/switching-roots) and the flow [Sign in and sign out](../flows/sign-in-and-sign-out).
+
+## Where to go next {#next}
+
+- **How the app starts:** [Starting the app](../fundamentals/starting-the-app) covers everything `createNavigation` takes.
+- **More about screens:** [Screens and props](../fundamentals/screens-and-props), then [Moving between screens](../fundamentals/moving-between-screens).
+- **Coming from another library:** [From React Navigation](../migration/from-react-navigation), [From Expo Router](../migration/from-expo-router) and [From react-native-navigation](../migration/from-react-native-navigation) map what you use now to this API.

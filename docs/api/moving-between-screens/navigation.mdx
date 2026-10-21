@@ -1,0 +1,569 @@
+import { Os } from '@site/src/components/Intro';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+`navigation` is the navigation of the whole app, for code that runs outside a screen: the handler of a push
+notification, a store, a timer, `didMount`, the `listeners` of `createNavigation`. You import it from the package; it
+needs no hook and no provider. Its stack commands act from **the screen the user sees**: `navigation.push('Chat')`
+pushes Chat into the stack the user is looking at, a modal's when a modal shows.
+
+Inside a screen, use [`useNavigation()`](/api/moving-between-screens/useNavigation) instead: the same commands, acting
+from that screen.
+
+## Usage {#usage}
+
+```ts title="src/notifications.ts"
+import { navigation } from '@apexnative/navigation';
+
+// Called by your push notification library when the user taps one.
+export async function openChat(chatId: string) {
+  await navigation.dismissAllModals();
+  await navigation.selectTab('inbox');
+  await navigation.push('Chat', { props: { chatId } });
+}
+```
+
+The user taps a notification while writing a message in a modal: the modal closes, the Inbox tab shows, and Chat slides
+in over the screen of that tab. Each `await` waits for the move before it to end, so the next one starts from where the
+last one left the user.
+
+The native side owns the navigation: the stacks, the tabs, the modals. A command asks it to change them, and its
+promise resolves once the change is done, the animation has ended and [`getState()`](#getState) shows it. When the command can't be made, the promise
+rejects with an error that names the command and the reason; the app doesn't crash.
+
+```ts
+try {
+  await navigation.pop();
+} catch (error) {
+  // [navigation] pop: Home is the first screen of its stack,
+  // there is nothing to go back to
+}
+```
+
+:::info[Typed names and props]
+
+Once the app is registered (`declare module '@apexnative/navigation' { interface Register { app: typeof Navigation } }`),
+every screen name is checked against `screens`, and `props` is required when the screen has a required prop. See
+[Screens and props](/docs/fundamentals/screens-and-props#typed).
+
+:::
+
+## Signature {#signature}
+
+<ApiSignature data={data} name="navigation" />
+
+An object with the commands below. It is the same object for the whole life of the app; you can pass its methods
+around (`onPress={navigation.pop}`).
+
+## The stack {#stack-group}
+
+The stack commands act from the screen the user sees, the one `getState().screen` names. They reject when that screen
+isn't in a stack: a screen shown alone as a tab, or a modal with `stack: false`.
+
+### `push` {#push}
+
+<ApiMember data={data} of="navigation" name="push" />
+
+<DeviceVideo name="moves-push" />
+
+Shows a screen over the one the user sees, in its stack. The second argument takes the screen's `props` and the
+settings of this push ([`PushConfig`](/api/stack/types#pushconfig)): `transition` and `options`.
+
+```ts
+const id = await navigation.push('Details', {
+  props: { id: '42' },
+  transition: 'fade',
+});
+```
+
+Details fades in over the screen the user sees; back fades it out. The promise resolves with the id of the screen
+shown, which [`popTo`](#popTo) takes later.
+
+- A screen whose definition has a `key` and is in the stack already isn't pushed again: the stack goes back to it, and
+  the promise resolves with its id. See [One screen per item](/docs/fundamentals/screens-and-props#key).
+- Two pushes in a row, such as a double tap, show two screens. Give the screen a `key`, or ignore the taps while the
+  first push is on its way.
+- A lazy screen (`React.lazy` in `screens`) loads first; the push waits for it.
+
+### `pop` {#pop}
+
+<ApiMember data={data} of="navigation" name="pop" />
+
+Goes back one screen in the stack of the screen the user sees, as the back button does. Resolves with the id of the
+screen that left.
+
+```ts
+await navigation.pop();
+```
+
+On the first screen of a stack it rejects: there is nothing to go back to. Use [`goBack`](#goBack) when the screen may
+be the first of a modal, and [`canPop`](#canPop) to ask first.
+
+### `popTo` {#popTo}
+
+<ApiMember data={data} of="navigation" name="popTo" />
+
+Goes back to a screen of its stack, by the id `push` resolved with: the screens over it leave in one animation.
+
+```ts
+const cartId = await navigation.push('Cart');
+// … later, after the checkout screens
+await navigation.popTo(cartId);
+```
+
+The id names the screen, not the screen the user sees, so `popTo` works from anywhere. It rejects when that screen has
+closed in the meantime.
+
+### `popToRoot` {#popToRoot}
+
+<ApiMember data={data} of="navigation" name="popToRoot" />
+
+Goes back to the first screen of the stack the user sees, past all the others at once. A tab that the user left deep
+in a thread comes back to its list:
+
+```ts
+await navigation.popToRoot();
+```
+
+### `replace` {#replace}
+
+<ApiMember data={data} of="navigation" name="replace" />
+
+Shows a screen in place of the whole history of the stack the user sees: it comes in as a push does and is alone in the
+stack, so there is no back. For a point the user shouldn't go back from, such as an order once it is placed:
+
+```ts
+await navigation.replace('OrderPlaced', { props: { orderId } });
+```
+
+The screens that were in the stack unmount. Resolves with the id of the new screen. To keep some screens under it, use
+[`setStack`](#setStack).
+
+### `setStack` {#setStack}
+
+<ApiMember data={data} of="navigation" name="setStack" />
+
+Replaces the screens of the stack the user sees with these: the last one shows, and back goes down the others. Each
+entry is a screen name, or `Screen(name, props)` for a screen with props.
+
+```ts
+import { Screen } from '@apexnative/navigation';
+
+await navigation.setStack(
+  'Inbox',
+  Screen('Chat', { chatId }),
+  Screen('Profile', { userId }),
+);
+```
+
+Profile shows; back goes to Chat, then to Inbox. Every screen is new, even one with the name of a screen that was
+there, so each gets what it needs in its props. The way to build the screens of a deep link: see
+[A whole stack at once](/docs/containers/stack#deep-link).
+
+### `canPop` {#canPop}
+
+<ApiMember data={data} of="navigation" name="canPop" />
+
+Whether there is a screen under the one the user sees, in its stack: whether `pop()` has somewhere to go. It answers
+at once, without a promise, from what the navigation knows in JavaScript. `false` while no screen shows.
+
+```ts
+if (navigation.canPop()) await navigation.pop();
+```
+
+## Going back {#back-group}
+
+### `goBack` {#goBack}
+
+<ApiMember data={data} of="navigation" name="goBack" />
+
+What the back button would do on the screen the user sees: `pop()` when there is a screen under it in its stack;
+otherwise, when it is in a modal or an overlay, it closes that. It rejects on the first screen of the root, where there
+is nothing to go back to.
+
+```ts
+// after a save: back to the list, or the modal closes
+await navigation.goBack();
+```
+
+### `canGoBack` {#canGoBack}
+
+<ApiMember data={data} of="navigation" name="canGoBack" />
+
+Whether `goBack()` has something to do: `canPop()` or `canDismiss()`. Answers at once.
+
+### `canDismiss` {#canDismiss}
+
+<ApiMember data={data} of="navigation" name="canDismiss" />
+
+Whether the screen the user sees is in a modal or an overlay. Answers at once. `navigation` has no `dismiss()`, as it
+needs a screen of its own: close what the user sees with [`goBack`](#goBack), a modal by id with
+[`dismissModal`](#dismissModal), or call `dismiss()` of `useNavigation()` in the screen.
+
+## Modals {#modals-group}
+
+### `showModal` {#showModal}
+
+<ApiMember data={data} of="navigation" name="showModal" />
+
+<DeviceVideo name="moves-modal" />
+
+Shows a screen over everything, in a stack of its own, so the modal can push screens too. The second argument takes the
+`props` and the settings of the modal ([`ModalConfig`](/api/modals/types#modalconfig)): `style`, `sheet`,
+`closeButton`, `onDismiss`, `transition`, `stack`, `options`.
+
+```ts
+const modalId = await navigation.showModal('Compose', {
+  sheet: { detents: ['medium', 'large'] },
+  closeButton: true,
+  onDismiss: () => refreshInbox(), // your own
+});
+```
+
+Compose comes up as a sheet at half height, with a close button. `onDismiss` runs once the modal is gone, however it
+went: the close button, a swipe down, a command, a new root. The promise resolves with the id of the modal, which
+[`dismissModal`](#dismissModal) takes.
+
+It doesn't depend on the screen the user sees, so it works from anywhere once the app has started. A second
+`showModal` goes over the first. See [Modals](/docs/containers/modals).
+
+### `dismissModal` {#dismissModal}
+
+<ApiMember data={data} of="navigation" name="dismissModal" />
+
+Closes a modal, with all its screens: by the id `showModal` resolved with, or by the id of any screen in it.
+
+```ts
+await navigation.dismissModal(modalId);
+```
+
+It rejects when the id isn't a modal or a screen in one, such as a modal the user has closed already: keep the promise
+from rejecting unhandled when the user may close the modal first.
+
+### `dismissAllModals` {#dismissAllModals}
+
+<ApiMember data={data} of="navigation" name="dismissAllModals" />
+
+Closes every modal at once, in one animation. With no modal it resolves and does nothing, so it is safe before a move
+that has to happen in the app under the modals, as in [Usage](#usage).
+
+```ts
+await navigation.dismissAllModals();
+```
+
+## Overlays {#overlays-group}
+
+### `showOverlay` {#showOverlay}
+
+<ApiMember data={data} of="navigation" name="showOverlay" />
+
+Shows a screen over everything, modals included, without taking the place of any: a toast, a banner, a call in
+progress. Its background is transparent, and touches outside its views reach the app under it unless `blockTouches`
+is set ([`OverlayConfig`](/api/overlays/types#overlayconfig)).
+
+```ts
+const toastId = await navigation.showOverlay('Toast', {
+  props: { text: 'Saved' },
+});
+setTimeout(() => navigation.dismissOverlay(toastId), 2000);
+```
+
+"Saved" shows over the screen for two seconds; the user can go on tapping the screen under it. The promise resolves
+with the id of the overlay. See [Overlays](/docs/containers/overlays).
+
+### `dismissOverlay` {#dismissOverlay}
+
+<ApiMember data={data} of="navigation" name="dismissOverlay" />
+
+Closes an overlay by the id `showOverlay` resolved with. It rejects when no overlay shows with that id, such as one
+that closed itself already. Inside the overlay, `useNavigation().dismiss()` closes it without the id.
+
+### `dismissAllOverlays` {#dismissAllOverlays}
+
+<ApiMember data={data} of="navigation" name="dismissAllOverlays" />
+
+Closes every overlay. A new root (`switchTo`) leaves the overlays in place; this is the way to close them with it.
+
+## Roots {#roots-group}
+
+### `switchTo` {#switchTo}
+
+<ApiMember data={data} of="navigation" name="switchTo" />
+
+Replaces the whole navigation with another root: the stacks, the tabs and the modals of the old root go away, and their
+screens unmount. The overlays stay. Two forms:
+
+- **A name of `roots`**, with its param when the root takes one: `switchTo('main', 'inbox')`. Typed by the `roots` of
+  `createNavigation`.
+- **A layout** made on the go, such as the screens of a deep link: `switchTo(Stack('Home', Screen('Details', { id })))`.
+  A screen name alone is read as a root name, so a single screen goes as `Stack('Name')`.
+
+```ts
+// after the sign-in
+await navigation.switchTo('main', 'home');
+```
+
+There is no way back to the old root. It resolves once the new root shows. See
+[Switching roots](/docs/fundamentals/switching-roots).
+
+## Tabs {#tabs-group}
+
+### `selectTab` {#selectTab}
+
+<ApiMember data={data} of="navigation" name="selectTab" />
+
+Selects a tab of the tabs the user is in: by its index, from 0, or by the id the layout gave it,
+`Tab('Inbox').id('inbox')`. An id doesn't change when tabs are added or moved, so prefer it.
+
+```ts
+await navigation.selectTab('inbox');
+await navigation.push('Chat', { props: { chatId } });
+```
+
+It resolves once the state shows the tab, so the `push` after it goes into Inbox's stack. For tabs over the root's
+tabs (tabs in a modal) the state can't tell: it resolves on the next change of the state, at the latest after 300 ms.
+See [Selecting a tab](/docs/containers/tabs#select).
+
+### `setTabBadge` {#setTabBadge}
+
+<ApiMember data={data} of="navigation" name="setTabBadge" />
+
+The badge of a tab: a text or a number; `null` and the number `0` take it away. With a tab id, the badge of that
+tab, wherever the user is; without one, the badge of the tab of the screen the user sees.
+
+```ts
+navigation.setTabBadge(unread, 'inbox');
+```
+
+A count of unread messages goes as it is: at 0 the badge goes. The text `'0'` shows "0". See
+[Badges and dots](/docs/containers/tabs#badges).
+
+## Split view {#split-group}
+
+### `showInColumn` {#showInColumn}
+
+<ApiMember data={data} of="navigation" name="showInColumn" />
+
+Shows a screen in a column of the split view the user is in, in place of what that column shows: the details beside a
+list. `column` ([`ColumnConfig`](/api/split-view/types#columnconfig)) is `'secondary'`, the default, or
+`'supplementary'`.
+
+```ts
+await navigation.showInColumn('Details', { props: { id } });
+```
+
+Where there is one column (an iPhone, a narrow window, an Android phone) the screen is pushed over the one the user
+sees instead, so the same call works on every device. In a screen, call it on `useNavigation()`: see
+[`showInColumn`](/api/moving-between-screens/useNavigation#showInColumn) for the details, and
+[Split view](/docs/containers/split-view#show).
+
+### `showColumn` {#showColumn}
+
+<ApiMember data={data} of="navigation" name="showColumn" />
+
+Shows a column of the split view the user is in, as the platform does: the sidebar (`'primary'`), the middle column
+(`'supplementary'`), the inspector. Resolves once the columns have moved.
+
+<Os name="Android" /> There is the primary pane only: beside the secondary pane it comes back, over it the secondary
+pane goes away. The other columns resolve and change nothing.
+
+### `hideColumn` {#hideColumn}
+
+<ApiMember data={data} of="navigation" name="hideColumn" />
+
+Hides a column of the split view the user is in: `hideColumn('primary')` leaves the item alone on screen. Resolves once
+the columns have moved.
+
+## Side menu {#menu-group}
+
+### `openMenu` {#openMenu}
+
+<ApiMember data={data} of="navigation" name="openMenu" />
+
+Opens the `'left'` or `'right'` menu of the side menu the user is in. Resolves once the menu is open and `getState()`
+shows its screen; at once when it is open already. It rejects when the screen the user sees isn't in a side menu.
+
+```ts
+await navigation.openMenu('left');
+```
+
+In a screen, a menu button opens it without an import: `onPress: ({ navigation }) => navigation.openMenu('left')`. See
+[Side menu](/docs/containers/side-menu#open).
+
+### `closeMenu` {#closeMenu}
+
+<ApiMember data={data} of="navigation" name="closeMenu" />
+
+Closes the menu that is open. Resolves once it is closed and `getState()` shows the center, so a `push` right after it
+goes into the center's stack; at once when none is open.
+
+## Theme and direction {#look-group}
+
+### `setTheme` {#setTheme}
+
+<ApiMember data={data} of="navigation" name="setTheme" />
+
+Changes the theme of the navigation (`theme` of `createNavigation`) while the app runs. The bars and tabs of the screens
+shown take it at once, and every `useNavigationTheme()` renders again.
+
+```ts
+navigation.setTheme({
+  colors: { primary: '#FF9500', background: '#FFFFFF' },
+});
+```
+
+The new theme replaces the old one: a color left out goes back to the platform's look. Pass every color you set. For
+dark mode you don't need it: a color `{ light, dark }` follows the system. See
+[Changing the theme](/docs/architecture/theme-and-context#set-theme).
+
+### `setDirection` {#setDirection}
+
+<ApiMember data={data} of="navigation" name="setDirection" />
+
+Changes the direction of the app: `'ltr'`, `'rtl'`, or `'locale'`. The bars, the transitions and the swipe back follow at
+once. React content follows in the screens created after it; the screens already shown keep their layout. A language
+switch in the app therefore ends with a `switchTo`, which creates every screen again. See [Right to left](/docs/guides/right-to-left#switch).
+
+<Os name="iOS" /> On iOS 15–16 a stack already shown keeps its direction until its next push: its bar, its swipe back
+and its transitions. Before iOS 17 UIKit turns only the views it creates after the change; `switchTo` creates them all.
+
+## The app's context {#context-group}
+
+### `getContext` {#getContext}
+
+<ApiMember data={data} of="navigation" name="getContext" />
+
+The app's context now: `context` of `createNavigation`, as `setContext` has changed it since. For code outside React;
+a component reads it with `useAppContext`, which renders again when it changes.
+
+```ts
+const { signedIn } = navigation.getContext();
+```
+
+### `setContext` {#setContext}
+
+<ApiMember data={data} of="navigation" name="setContext" />
+
+Changes the app's context; every `useAppContext` renders again. It takes the new value, or a
+function of the previous one. The value replaces the whole context, so to change one key, spread the rest:
+
+```ts
+navigation.setContext((context) => ({ ...context, signedIn: true }));
+```
+
+`willMount` fills the context with it before the first root. See
+[Theme and context](/docs/architecture/theme-and-context#context).
+
+## What the user sees {#state-group}
+
+### `getState` {#getState}
+
+<ApiMember data={data} of="navigation" name="getState" />
+
+What the user sees now: `screen`, as `{ id, name }`, and `tab`, the index of the selected tab of the tabs it is in. The
+screen is that of the top modal when one shows; overlays don't count. Both are `null` before the first root.
+
+```ts
+const { screen } = navigation.getState();
+if (screen?.name !== 'Chat') showBanner(message); // your own
+```
+
+It answers at once. After a command resolves, it already shows what the command did:
+
+```ts
+await navigation.showModal('Login');
+navigation.getState().screen?.name; // 'Login'
+```
+
+The state changes at the end of the move, so read it after `await`: on the line after the call without `await`, it
+still names the screen before. A component that renders from it uses `useNavigationState`; to hear each change,
+`on('stateChanged')`.
+
+### `on` {#on}
+
+<ApiMember data={data} of="navigation" name="on" />
+
+Listens to an event of the navigation, for any screen; returns the function that stops listening. Screen events come
+with the screen as `{ id, name }`.
+
+```ts
+const stop = navigation.on('screenDidAppear', ({ screen }) => {
+  analytics.screen(screen.name); // your own
+});
+```
+
+For listeners as long as the app runs, `listeners` of `createNavigation` is the place; a screen listens to its own
+events with hooks. The events: [Every event](/docs/fundamentals/lifecycle-and-events#events).
+
+## Waiting links {#links-group}
+
+A link whose route has `when` waits until the app is ready for it, such as after the sign-in. These three handle the
+waiting link by hand. See [Links that wait](/docs/guides/deep-links#when).
+
+### `getPendingLink` {#getPendingLink}
+
+<ApiMember data={data} of="navigation" name="getPendingLink" />
+
+The latest link that waits, with its `url`, `path`, `route`, `params` and `query`; `null` when none waits. A screen
+that shows it uses `usePendingLink`, which renders again when it changes.
+
+### `openPendingLink` {#openPendingLink}
+
+<ApiMember data={data} of="navigation" name="openPendingLink" />
+
+Runs the waiting link now, whatever its `when` says, and forgets it. Resolves with `true` once its route has run, with
+`false` when no link waits. A route that fails goes to `onError`, not to this promise.
+
+```ts
+await signIn(credentials); // your own
+await navigation.switchTo('main');
+await navigation.openPendingLink();
+```
+
+### `clearPendingLink` {#clearPendingLink}
+
+<ApiMember data={data} of="navigation" name="clearPendingLink" />
+
+Forgets the waiting link, such as when the user signs out or declines it.
+
+## Before the app has started {#before-start}
+
+A command made while the app starts waits for its first root, then runs: a notification that launched the app pushes
+its screen over the first screen. Three cases differ:
+
+- **Before the app launches.** A command called at the top level of a module, while the bundle loads, rejects: "a
+  command before the app started". Call it from a handler, `didMount` or a screen.
+- **Awaited in `willMount`.** The command waits for the first root, and the first root waits for `willMount`: the
+  splash screen stays forever. Set the context in `willMount`, and move in `didMount`.
+
+  ```ts
+  willMount: async () => {
+    // Don't: waits for the root, which waits for this
+    await navigation.push('Onboarding');
+  },
+  ```
+
+- **The commands that close by id** (`dismissModal`, `dismissOverlay` and the `dismissAll…` ones) don't wait: there is
+  nothing to close before the first root.
+
+## `navigation` or `useNavigation()` {#which}
+
+| | `navigation` | `useNavigation()` |
+| --- | --- | --- |
+| Where | Anywhere: stores, notifications, `didMount`. | In the components of a screen. |
+| Acts from | The screen the user sees, when the command runs. | The screen the component is in. |
+| Has | The commands of the app. | The same, plus `screen`, `dismiss`, `setOptions`. |
+| Before the start | Waits for the first root. | Can't be called: there is no screen yet. |
+
+The difference shows when the user moves on before the code runs. A screen loads data, then pushes Details; meanwhile
+the user selected another tab. `useNavigation().push` pushes into the stack of the screen that asked, in the tab the
+user left; `navigation.push` pushes where the user is now. In a screen, use `useNavigation()`; a command from outside
+that is about one screen goes through [`screenNavigation(screen)`](/api/moving-between-screens/screenNavigation).
+
+## See also {#see-also}
+
+- [Moving between screens](/docs/fundamentals/moving-between-screens): the moves, where commands come from, when they
+  finish.
+- [`useNavigation`](/api/moving-between-screens/useNavigation): the same commands in a screen.
+- [Stack](/docs/containers/stack), [Modals](/docs/containers/modals), [Overlays](/docs/containers/overlays),
+  [Tabs](/docs/containers/tabs), [Switching roots](/docs/fundamentals/switching-roots).
+- [Notifications](/docs/guides/notifications): opening a screen from a notification.

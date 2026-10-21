@@ -1,0 +1,170 @@
+import { Os } from '@site/src/components/Intro';
+
+`defineArrangement` pairs two screens of `screens` under a name of its own: commands show the pair as one screen of a
+stack, the two side by side, one above the other or one over the other, as the window and the fold allow. It takes
+every setting of how the two lie. You call it in `screens` of
+[`createNavigation`](/api/starting-the-app/createNavigation#screens), next to the screens it names. For a screen that
+always comes with the same second one, [`arrangement`](/api/screens-and-props/defineScreen#arrangement) of
+`defineScreen` is shorter.
+
+## Usage {#usage}
+
+```ts title="src/Navigation.ts"
+import {
+  createNavigation,
+  defineArrangement,
+} from '@apexnative/navigation';
+import { DetailsScreen } from './screens/Details';
+import { HomeScreen } from './screens/Home';
+import { ProfileScreen } from './screens/Profile';
+
+export const Navigation = createNavigation({
+  screens: {
+    Home: HomeScreen,
+    Profile: ProfileScreen,
+    Details: DetailsScreen,
+    ProfileWithDetails: defineArrangement<{ id: string }>({
+      primary: 'Profile',
+      secondary: 'Details',
+      compact: 'pair',
+    }),
+  },
+  root: 'Home',
+});
+```
+
+```ts
+// in Home, on a tap
+navigation.push('ProfileWithDetails', { props: { id: '7' } });
+```
+
+Profile and Details come in together, under Profile's bar: side by side on iPad and on an open iPhone Duo, one above
+the other on a phone held upright, as `compact: 'pair'` asks. Back takes both. `push('Profile')` still shows Profile
+on its own. What a pair is, and what each device shows: [Arrangement](/docs/containers/arrangement).
+
+## Signature {#signature}
+
+<ApiSignature data={data} name="defineArrangement" />
+
+- **`Props`**, the type argument: the props of the pair. The commands that show it are checked against it, and both
+  screens get them, unless [`secondaryProps`](#secondaryProps) makes others for the secondary.
+- **Returns** an `Arrangement`, a value for `screens`. Commands, layouts and links name it as a screen.
+
+A `fraction` outside 0–1 throws at once: `[navigation] arrangement: fraction is 1.5, it goes above 0 and below 1`.
+
+## The screens {#screens-group}
+
+### `primary` {#primary}
+
+<ApiMember data={data} of="ArrangementDefinition" name="primary" />
+
+The screen the pair is about, and the one that owns its bar: its title, buttons, search field, toolbar and status bar
+are the pair's. A name of `screens`, a React screen or a native one. Where only one screen shows, it is this one.
+
+Its own `arrangement`, if it has one, doesn't count here: a pair has two screens.
+
+### `secondary` {#secondary}
+
+<ApiMember data={data} of="ArrangementDefinition" name="secondary" />
+
+The screen beside, under or behind the primary. A name of `screens`, a React screen or a native one. Its `topBar`,
+`toolbar`, `statusBar` and `layout.orientation` have no effect: see
+[The bar of the pair](/docs/containers/arrangement#bar).
+
+A name that isn't in `screens`, or one that is a `defineArrangement` itself, stops the start of the app with an error
+that names the pair: `[navigation] The pair of 'ProfileWithDetails' names 'Detail', which is not in screens`.
+
+### `secondaryProps` {#secondaryProps}
+
+<ApiMember data={data} of="ArrangementDefinition" name="secondaryProps" />
+
+The props of the secondary, made from those of the command. Without it the secondary gets the same props as the
+primary.
+
+```ts
+defineArrangement<{ id: string }>({
+  primary: 'Profile',
+  secondary: 'Details',
+  secondaryProps: (props) => ({ itemId: props.id }),
+});
+```
+
+It runs once for each show of the pair. What it returns isn't checked against the props of the secondary: keep the two
+in line.
+
+## How the pair lies {#layout-group}
+
+### `style` {#style}
+
+<ApiMember data={data} of="ArrangementDefinition" name="style" />
+
+- `'split'`, the default: side by side, or one above the other in a tall window; neither covers the other. On a partly
+  folded device each takes one side of the fold.
+- `'overlay'`: the primary over the secondary, both full size, so the user sees the primary. On a partly folded device
+  they go side by side, the primary at [`primaryEdge`](#primaryEdge).
+
+Outside a large window with `compact: 'primary'` both show the primary alone.
+
+### `axes` {#axes}
+
+<ApiMember data={data} of="ArrangementDefinition" name="axes" />
+
+The ways the pair may lie: `'horizontal'` side by side only, `'vertical'` one above the other only, `'both'` either,
+by the shape of the window. Where the window allows none of them, only the primary shows. With `compact: 'pair'` and
+`axes: 'horizontal'`, a phone held upright shows the primary alone, and a wide window the pair.
+
+### `fraction` {#fraction}
+
+<ApiMember data={data} of="ArrangementDefinition" name="fraction" />
+
+In a split, the primary's share of the window along the split, above 0 and below 1: `0.4` gives the primary 40%.
+It applies where the fold doesn't decide: on a partly folded device each screen takes its side of the fold.
+
+### `primaryEdge` {#primaryEdge}
+
+<ApiMember data={data} of="ArrangementDefinition" name="primaryEdge" />
+
+In an overlay that goes side by side at a fold, the side the primary takes: `'leading'`, `'trailing'`, or at a fold
+from side to side `'top'` and `'bottom'`. A split has no such setting.
+
+## A window that isn't large {#compact-group}
+
+### `compact` {#compact}
+
+<ApiMember data={data} of="ArrangementDefinition" name="compact" />
+
+What shows outside a large window, that is on any phone, on iPhone Duo folded, and in a narrow iPad window:
+
+- `'primary'`, the default: the primary alone, as a plain screen. The secondary waits out of the window, and comes in
+  when the window grows (the user opens iPhone Duo).
+- `'pair'`: the pair as the system lays it out: on a phone held upright, one above the other.
+
+A large window is one with both size classes regular <Os name="iOS" />, or at least 600 dp wide and 480 dp high
+<Os name="Android" />. See [What each device shows](/docs/containers/arrangement#devices).
+
+## The value {#value-group}
+
+### `definition` {#definition}
+
+<ApiMember data={data} of="Arrangement" name="definition" />
+
+The object given to `defineArrangement`, as it was. `screens` reads it; the app doesn't need to.
+
+### `props` {#props}
+
+<ApiMember data={data} of="Arrangement" name="props" />
+
+Carries the type of the props, so that `navigation.push('ProfileWithDetails', { props })` is checked against it. It
+is never set and has no value at run time.
+
+## Where a pair goes {#where}
+
+Wherever a screen of a stack goes by its name: `push`, `setStack`, `replace`, the screens of a `Stack`, a tab, a link
+route. Before iOS 27.1, or in an app built with an older SDK, the primary shows alone as a plain screen, and the
+secondary isn't created.
+
+## See also {#see-also}
+
+- [Arrangement](/docs/containers/arrangement): what a pair is, the devices, the bar, a pair or a split view.
+- [`useArrangement`](/api/arrangement/useArrangement): how the pair lies now.
+- [`arrangement`](/api/screens-and-props/defineScreen#arrangement) of `defineScreen`.

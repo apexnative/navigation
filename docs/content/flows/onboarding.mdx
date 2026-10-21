@@ -1,0 +1,472 @@
+---
+title: Onboarding
+description: 'A few screens shown on the first launch only, with Skip and Get started, then the main app; the next launches open on the app at once.'
+---
+
+import { Mark, Os } from '@site/src/components/Intro';
+import DocTabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+Onboarding is a few screens the user sees on the first launch: what the app does, a permission to ask for, then the app. In this guide you build it as a root of its own that the app starts with once, and leaves for good. You end with:
+
+- onboarding steps the user goes through with Next, or leaves with Skip;
+- a Get started that brings in the main app with a fade;
+- next launches that open on the main app, with no onboarding screen in between.
+
+<DeviceVideo name="flow-onboarding" />
+
+## What you need {#need}
+
+- An app set up with [Installation](../start/installation), and its main screens: Home and Settings here.
+- Three onboarding screens: Welcome, Features and Ready, each made with `defineScreen`.
+- A key-value storage on the device for one flag, such as AsyncStorage. This guide calls it through `loadFlag` and `saveFlag`, your own.
+- Where the app keeps the flag while it runs: the app's context, or a store. The steps show both; the store is [Zustand](https://zustand.docs.pmnd.rs) 5. See [The app's context](../guides/app-context) and [State management](../guides/state-management).
+
+## How it will work {#plan}
+
+```text
+launch → willMount reads the flag
+  ├─ not onboarded → onboarding: Stack(Welcome → Features → Ready)
+  └─ onboarded     → main: Tabs(Home, Settings)
+
+Get started, Skip → save the flag → switchTo('main')
+```
+
+- **Onboarding is a root**, a stack of its steps. The main app is another root.
+- **A flag** says onboarding was shown. It is saved on the device, and read before the first screen.
+- **One `finishOnboarding()`** that Skip and Get started both call.
+
+Why a root and not a modal over the app: the main app isn't created behind the onboarding, so its screens don't load data or ask for permissions before the user has read a word. When onboarding ends, its screens <Mark>unmount</Mark>, and nothing of it stays in memory.
+
+## 1. Make onboarding a root {#roots}
+
+A root is what takes the whole window. Onboarding gets one, the main app another, and `initialRoot` picks one at launch:
+
+```ts title="Navigation.ts"
+import {
+  createNavigation,
+  Root,
+  Stack,
+  Tab,
+  Tabs,
+} from '@apexnative/navigation';
+import { FeaturesScreen } from './src/screens/Features';
+import { HomeScreen } from './src/screens/Home';
+import { ReadyScreen } from './src/screens/Ready';
+import { SettingsScreen } from './src/screens/Settings';
+import { WelcomeScreen } from './src/screens/Welcome';
+
+export type AppContext = { onboarded: boolean };
+
+const context: AppContext = { onboarded: false };
+
+const main = Tabs(
+  Tab('Home').label('Home'),
+  Tab('Settings').label('Settings'),
+);
+
+export const Navigation = createNavigation({
+  screens: {
+    Welcome: WelcomeScreen,
+    Features: FeaturesScreen,
+    Ready: ReadyScreen,
+    Home: HomeScreen,
+    Settings: SettingsScreen,
+  },
+  context,
+  roots: {
+    onboarding: Stack('Welcome'),
+    main: Root(main).transition('fade'),
+  },
+  initialRoot: (context) =>
+    context.onboarded ? 'main' : 'onboarding',
+});
+```
+
+Run the app: Welcome shows, as the flag is false. With a store, leave `context` out and read the store in `initialRoot`, as the next step shows.
+
+## 2. Remember that it was shown {#launch}
+
+The app saves the flag once onboarding ends, and reads it at every launch. `willMount` runs before the first root, while the splash screen shows, so the flag is in place when `initialRoot` reads it:
+
+<DocTabs groupId="app-state">
+<TabItem value="context" label="The app's context" default>
+
+```ts title="Navigation.ts"
+import { navigation } from '@apexnative/navigation';
+import { loadFlag } from './src/storage';
+
+export const Navigation = createNavigation({
+  // …
+  willMount: async () => {
+    // your own storage; a flag that can't be read is false
+    const onboarded = await loadFlag('onboarded').catch(
+      () => false,
+    );
+    navigation.setContext((c) => ({ ...c, onboarded }));
+  },
+  initialRoot: (context) =>
+    context.onboarded ? 'main' : 'onboarding',
+});
+```
+
+</TabItem>
+<TabItem value="store" label="A store (Zustand)">
+
+```ts title="src/appStore.ts"
+import { create } from 'zustand';
+
+export const useAppStore = create<{ onboarded: boolean }>()(
+  () => ({ onboarded: false }),
+);
+```
+
+```ts title="Navigation.ts"
+import { useAppStore } from './src/appStore';
+import { loadFlag } from './src/storage';
+
+export const Navigation = createNavigation({
+  // … without `context`
+  willMount: async () => {
+    const onboarded = await loadFlag('onboarded').catch(
+      () => false,
+    );
+    useAppStore.setState({ onboarded });
+  },
+  initialRoot: () =>
+    useAppStore.getState().onboarded ? 'main' : 'onboarding',
+});
+```
+
+</TabItem>
+</DocTabs>
+
+On the first launch the user sees Welcome after the splash screen; once the flag is saved (step 4), Home. A `willMount` that throws fails the start, so the `.catch` treats a storage error as a first launch: onboarding once more is better than no app.
+
+## 3. Go through the steps {#steps}
+
+Each step pushes the next. They are in a stack, so the user can go back to read a step again:
+
+```tsx title="src/screens/Welcome.tsx"
+import { Button, Text, View } from 'react-native';
+import { defineScreen, useNavigation } from '@apexnative/navigation';
+
+function Welcome() {
+  const navigation = useNavigation();
+  return (
+    <View>
+      <Text>Keep your notes in one place.</Text>
+      <Button
+        title="Next"
+        onPress={() => navigation.push('Features')}
+      />
+    </View>
+  );
+}
+
+export const WelcomeScreen = defineScreen({
+  component: Welcome,
+  options: (s) => s.title('Welcome'),
+});
+```
+
+Features pushes Ready the same way. Tap Next: Features slides in, and back returns to Welcome.
+
+## 4. Finish it {#finish}
+
+The end of onboarding saves the flag, puts it in place, and switches to the main app. Skip and Get started both call it, so it lives in one function outside the screens:
+
+<DocTabs groupId="app-state">
+<TabItem value="context" label="The app's context" default>
+
+```ts title="src/onboarding.ts"
+import { navigation } from '@apexnative/navigation';
+import { saveFlag } from './storage';
+
+export async function finishOnboarding() {
+  await saveFlag('onboarded', true); // your own storage
+  navigation.setContext((c) => ({ ...c, onboarded: true }));
+  await navigation.switchTo('main');
+}
+```
+
+</TabItem>
+<TabItem value="store" label="A store (Zustand)">
+
+```ts title="src/onboarding.ts"
+import { navigation } from '@apexnative/navigation';
+import { useAppStore } from './appStore';
+import { saveFlag } from './storage';
+
+export async function finishOnboarding() {
+  await saveFlag('onboarded', true); // your own storage
+  useAppStore.setState({ onboarded: true });
+  await navigation.switchTo('main');
+}
+```
+
+</TabItem>
+</DocTabs>
+
+The last step calls it:
+
+```tsx title="src/screens/Ready.tsx"
+import { Button, Text, View } from 'react-native';
+import { defineScreen } from '@apexnative/navigation';
+import { finishOnboarding } from '../onboarding';
+
+function Ready() {
+  return (
+    <View>
+      <Text>You're all set.</Text>
+      <Button title="Get started" onPress={finishOnboarding} />
+    </View>
+  );
+}
+
+export const ReadyScreen = defineScreen({
+  component: Ready,
+  options: (s) => s.title('Ready'),
+});
+```
+
+Tap Get started: the onboarding fades out and the tabs come in at Home. There is no way back to it: the old root is gone. Close the app and open it again: Home shows after the splash screen.
+
+## 5. Let the user skip {#skip}
+
+Skip belongs on every step, so it goes on all of them at once: a group gives its screens shared options (see [Screens that share options](../fundamentals/screens-and-props#groups)). The steps move from `screens` into the group:
+
+```ts title="Navigation.ts"
+import { finishOnboarding } from './src/onboarding';
+
+export const Navigation = createNavigation({
+  screens: { Home: HomeScreen, Settings: SettingsScreen },
+  groups: {
+    onboarding: {
+      options: (s) =>
+        s.rightButtons({
+          id: 'skip',
+          text: 'Skip',
+          onPress: () => finishOnboarding(),
+        }),
+      screens: {
+        Welcome: WelcomeScreen,
+        Features: FeaturesScreen,
+        Ready: ReadyScreen,
+      },
+    },
+  },
+  // …
+});
+```
+
+Skip shows at the right of the top bar on each step, and does what Get started does. A command still names a step without its group: `push('Features')`.
+
+## With a sign-in {#sign-in}
+
+An app with a sign-in has three roots. Onboarding comes first, then Login or the app:
+
+```ts title="Navigation.ts"
+roots: {
+  onboarding: Stack('Welcome'),
+  signedOut: Stack('Login'),
+  signedIn: Root(main).transition('fade'),
+},
+initialRoot: (context) =>
+  !context.onboarded
+    ? 'onboarding'
+    : context.user
+      ? 'signedIn'
+      : 'signedOut',
+```
+
+`finishOnboarding` then switches to `'signedOut'`: a user on the first launch isn't signed in yet. The context now has two keys, which is why every `setContext` here takes a function and keeps the others: `setContext({ onboarded: true })` would drop the user. The sign-in itself: [Sign in and sign out](./sign-in-and-sign-out).
+
+## A step that asks for a permission {#permission}
+
+A step that asks for notifications or the location asks on its button, so the user knows why. The answer doesn't decide whether onboarding goes on: a user who says no still gets the app.
+
+```tsx title="src/screens/Features.tsx"
+const allow = async () => {
+  await requestNotifications(); // your own, any answer is fine
+  await navigation.push('Ready');
+};
+```
+
+The system dialog shows over Features; whatever the user picks, Ready comes in.
+
+## The user leaves halfway {#halfway}
+
+The flag is saved only at the end. A user who closes the app on Features starts again from Welcome on the next launch, which is what they need: they haven't seen it all.
+
+<Os name="Android" /> can create a new activity while the JavaScript keeps running, after the app was in the background for long. The navigation then sets the last root again, the onboarding stack with Welcome, and doesn't run `willMount` again. See [When Android brings the app back](../fundamentals/switching-roots#android).
+
+## The back button on the steps {#android-back}
+
+<Os name="Android" /> On Welcome, the first screen of its root, the system back leaves the app; on Features and Ready it goes back a step. <Os name="iOS" /> The back button and the swipe back go back a step; Welcome has neither. After Get started, back on Home leaves the app: onboarding isn't under the tabs.
+
+## Showing it again from Settings {#again}
+
+A Show the intro again row in Settings switches to the onboarding root:
+
+```ts
+await navigation.switchTo('onboarding');
+```
+
+The tabs go, and Welcome comes in. Get started at the end runs `finishOnboarding` again, which saves the same flag and comes back to the tabs, built again on Home.
+
+## A link on the first launch {#links}
+
+A link that opens the app the first time would land over Welcome. `when` of `linking` makes it wait for the end of onboarding; with the app's context it runs by itself once `finishOnboarding` sets the flag:
+
+```ts title="Navigation.ts"
+linking: {
+  prefixes: ['myapp://'],
+  when: (context) => context.onboarded,
+  routes: { 'note/:id': 'Details' },
+},
+```
+
+With a store, see [Make links wait](./sign-in-and-sign-out#links) for `pending: 'manual'`. More: [Links that wait](../guides/deep-links#when).
+
+## A tour over the app {#tour}
+
+A short "what's new" after an update is a different thing: the app is already there, and the user may close the tour at any point. That is a modal over the main root, not a root of its own. `Root(…).modal(…)` shows it as the app starts:
+
+```ts title="Navigation.ts"
+roots: {
+  main: Root(main),
+  mainWithTour: Root(main).modal(Stack('WhatsNew')),
+},
+initialRoot: (context) =>
+  context.seenWhatsNew ? 'main' : 'mainWithTour',
+```
+
+The tabs show, then WhatsNew slides up over them; the user closes it, and the app is under it. More: [A root with a modal](../fundamentals/switching-roots#with-modal).
+
+## The whole code {#files}
+
+With the app's context; the store version differs in the lines the tabs above show.
+
+```ts title="Navigation.ts"
+import {
+  createNavigation,
+  navigation,
+  Root,
+  Stack,
+  Tab,
+  Tabs,
+} from '@apexnative/navigation';
+import { finishOnboarding } from './src/onboarding';
+import { FeaturesScreen } from './src/screens/Features';
+import { HomeScreen } from './src/screens/Home';
+import { ReadyScreen } from './src/screens/Ready';
+import { SettingsScreen } from './src/screens/Settings';
+import { WelcomeScreen } from './src/screens/Welcome';
+import { loadFlag } from './src/storage';
+
+export type AppContext = { onboarded: boolean };
+
+const context: AppContext = { onboarded: false };
+
+const main = Tabs(
+  Tab('Home').label('Home'),
+  Tab('Settings').label('Settings'),
+);
+
+export const Navigation = createNavigation({
+  screens: { Home: HomeScreen, Settings: SettingsScreen },
+  groups: {
+    onboarding: {
+      options: (s) =>
+        s.rightButtons({
+          id: 'skip',
+          text: 'Skip',
+          onPress: () => finishOnboarding(),
+        }),
+      screens: {
+        Welcome: WelcomeScreen,
+        Features: FeaturesScreen,
+        Ready: ReadyScreen,
+      },
+    },
+  },
+  context,
+  roots: {
+    onboarding: Stack('Welcome'),
+    main: Root(main).transition('fade'),
+  },
+  willMount: async () => {
+    const onboarded = await loadFlag('onboarded').catch(
+      () => false,
+    );
+    navigation.setContext((c) => ({ ...c, onboarded }));
+  },
+  initialRoot: (context) =>
+    context.onboarded ? 'main' : 'onboarding',
+});
+```
+
+```ts title="src/onboarding.ts"
+import { navigation } from '@apexnative/navigation';
+import { saveFlag } from './storage';
+
+export async function finishOnboarding() {
+  await saveFlag('onboarded', true);
+  navigation.setContext((c) => ({ ...c, onboarded: true }));
+  await navigation.switchTo('main');
+}
+```
+
+```tsx title="src/screens/Welcome.tsx"
+import { Button, Text, View } from 'react-native';
+import { defineScreen, useNavigation } from '@apexnative/navigation';
+
+function Welcome() {
+  const navigation = useNavigation();
+  return (
+    <View>
+      <Text>Keep your notes in one place.</Text>
+      <Button
+        title="Next"
+        onPress={() => navigation.push('Features')}
+      />
+    </View>
+  );
+}
+
+export const WelcomeScreen = defineScreen({
+  component: Welcome,
+  options: (s) => s.title('Welcome'),
+});
+```
+
+```tsx title="src/screens/Ready.tsx"
+import { Button, Text, View } from 'react-native';
+import { defineScreen } from '@apexnative/navigation';
+import { finishOnboarding } from '../onboarding';
+
+function Ready() {
+  return (
+    <View>
+      <Text>You're all set.</Text>
+      <Button title="Get started" onPress={finishOnboarding} />
+    </View>
+  );
+}
+
+export const ReadyScreen = defineScreen({
+  component: Ready,
+  options: (s) => s.title('Ready'),
+});
+```
+
+`loadFlag` and `saveFlag` are your own: any key-value storage of the device.
+
+## What's next {#next}
+
+- [Sign in and sign out](./sign-in-and-sign-out): the flow that often follows.
+- [Splash screen](../guides/splash-screen): what the user sees while `willMount` runs.
+- [Switching roots](../fundamentals/switching-roots): roots, `switchTo`, transitions.
+- [Starting the app](../fundamentals/starting-the-app#before): what runs before the first screen.

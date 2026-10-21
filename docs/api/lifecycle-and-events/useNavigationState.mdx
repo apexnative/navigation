@@ -1,0 +1,111 @@
+`useNavigationState` gives a component what the user sees now: the screen and the selected tab. The component renders
+again when it changes, and with a selector, only when the part it picked changes. It works in any component that
+renders inside the app, in a screen or not: a mini player, a banner, a component of `appProvider`.
+
+## Usage {#usage}
+
+```tsx title="src/components/MiniPlayer.tsx"
+import { useNavigationState } from '@apexnative/navigation';
+import { PlayerBar } from './PlayerBar'; // your own
+
+export function MiniPlayer() {
+  const name = useNavigationState((state) => state.screen?.name);
+  if (name === 'Player') return null; // the full player shows
+  return <PlayerBar />;
+}
+```
+
+The mini player hides while the full Player screen is in front, and shows on every other screen. It renders again only
+when the name of the screen the user sees changes.
+
+Without a selector it returns the whole state:
+
+```tsx
+const { screen, tab } = useNavigationState();
+```
+
+## Signature {#signature}
+
+<ApiSignature data={data} name="useNavigationState" />
+
+**`select`**, optional: a function of the state that returns the part the component needs. The component renders again
+when its result changes, compared with `Object.is`. Without it, the component renders on every change of the state.
+
+It returns the `NavigationState`, or what `select` returned.
+
+## The state {#state}
+
+The navigation keeps one small state, sent by the native side each time it changes. It is the same object
+`navigation.getState()` returns and `stateChanged` carries.
+
+### `screen` {#screen}
+
+<ApiMember data={data} of="NavigationState" name="screen" />
+
+The screen the user sees, as `{ id, name }`: the top screen of the top modal, or, without a modal, of the root down to
+the visible screen. Overlays don't count: a toast shown with `showOverlay` leaves `screen` as it was. A modal does
+count, a sheet too, though the screen under the sheet still shows.
+
+`null` before the first screen has appeared. `name` is the screen's name in `screens`; `id` is the id of this one
+instance, the one [`useScreen`](/api/screens-and-props/useScreen) gives in that screen, so two Details pushed one on
+another have the same name and different ids.
+
+### `tab` {#tab}
+
+<ApiMember data={data} of="NavigationState" name="tab" />
+
+The index of the selected tab of the tabs that `screen` is in, from 0. In a modal with tabs inside, it is the tab of
+the modal's tabs. `null` when the screen isn't in tabs: a modal without tabs over the main tabs gives `null`, not the
+main tab.
+
+```tsx
+const onSecondTab = useNavigationState((state) => state.tab === 1);
+```
+
+## When it changes {#timing}
+
+The native side sends the state after a screen appears or disappears, or a tab is selected, once the move has ended,
+and only when the state is different. So:
+
+- A push, a pop, a modal, a tab switch: one change, at the end of the move.
+- A sheet over the screen: `screen` turns to the sheet's screen. When the sheet goes, `screen` turns back.
+- An overlay, the app going to the background: no change.
+- A screen of the same name pushed over itself changes `id`, not `name`: a selector of `name` doesn't render again.
+
+A command that changes what the user sees sends the new state before its promise resolves. So after `await`, the state
+already shows what the command did, and the next command acts from there:
+
+```ts
+import { navigation } from '@apexnative/navigation';
+
+await navigation.push('Details');
+navigation.getState().screen?.name; // 'Details'
+```
+
+## Pitfalls {#pitfalls}
+
+- **Select a small part.** `useNavigationState()` without a selector renders on every move of the app. A selector that
+  returns a new object each time, such as `(s) => ({ ...s })`, renders every time too: return a value or a field.
+- **Read it after `await`, not after the call.** The state changes at the end of the move, not when a command is
+  called: `getState()` on the line after `navigation.push(…)` without `await` still names the screen before. Once the
+  promise resolves, it names the new one.
+- **It isn't React Navigation's state.** There are no routes, no stack, no history here: the native side owns them.
+  The state says what shows, nothing more.
+
+## Compared with React Navigation {#react-navigation}
+
+React Navigation's `useNavigationState(selector)` selects from the state of the navigator around the screen: its
+`routes` and `index`. Here the state is one for the whole app and has two fields, `screen` and `tab`. The usual uses
+of React Navigation's hook map to it like this:
+
+| React Navigation | Here |
+| --- | --- |
+| `state.routes[state.index].name` | `state.screen?.name` |
+| `state.index` in a tab navigator | `state.tab` |
+| `state.routes.length` to know if back is possible | `useNavigation().canGoBack()` |
+
+## See also {#see-also}
+
+- [What the user sees now](/docs/fundamentals/lifecycle-and-events#state).
+- [`useIsFocused`](/api/lifecycle-and-events/useIsFocused): the same state, for one screen.
+- [Analytics](/docs/guides/analytics#state).

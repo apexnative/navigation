@@ -1,0 +1,563 @@
+---
+title: Notifications that open a screen
+description: 'A tap on a push notification opens its screen: with Firebase Cloud Messaging, Notifee or expo-notifications, in a running app, at a launch with the screen already in place, and after the user signs in.'
+---
+
+import { Mark, Os, Steps } from '@site/src/components/Intro';
+import DocTabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+A push notification says "New message from Anna", and a tap on it should open the chat with Anna. The notification itself is received and shown by your notification library; the navigation opens the screen. Here you connect the two. You end with:
+
+- a tap that opens the chat over the Inbox tab, wherever the user is in the app;
+- a tap that launches the app with the chat already shown, back going to Inbox;
+- a tap while signed out that opens the chat after the sign-in.
+
+## What you need {#need}
+
+- A notification library that already delivers notifications to your app. This guide shows three, written against these versions: [`@react-native-firebase/messaging`](https://rnfirebase.io/messaging/usage) 26 (Firebase Cloud Messaging), [`@notifee/react-native`](https://notifee.app) 9, and [`expo-notifications`](https://docs.expo.dev/versions/latest/sdk/notifications/) of Expo SDK 58. Their setup (permissions, push certificates, `google-services.json`) is in their own docs.
+- A notification that carries the id of the chat in its data: `{ "chatId": "7" }`.
+- An app with tabs, Inbox and Settings, and a Chat screen that takes `{ chatId: string }`: [Tabs](../containers/tabs), [Screens and props](../fundamentals/screens-and-props).
+- How the app starts: `willMount`, `didMount` and named roots. See [Starting the app](../fundamentals/starting-the-app#before) and [Switching roots](../fundamentals/switching-roots).
+
+## How it will work {#plan}
+
+A tap comes at one of three moments, and each wants something different:
+
+```text
+the app runs (front or background)
+  → the library's tap listener → openChat(chatId): a push
+
+the app isn't running: the tap launches it
+  → willMount reads the launching notification → the context
+  → initialRoot builds the tabs with the chat on top: no push
+
+the user is signed out
+  → the chat is kept → opened after the sign-in
+```
+
+- **One function, `openChat`,** opens the chat from wherever the user is. Every tap ends in it.
+- **One file, `src/notifications.ts`,** is the only one that knows your library. It gives the rest of the app two things: the chat of the notification that launched the app, and a listener for the taps that come later.
+- **The navigation's own places** for each moment: `willMount` before the first screen, `initialRoot` for the first root, `didMount` once the app shows.
+
+In React Navigation you would wait for the navigator to be ready and then navigate, or give `linking` a `getInitialURL` that reads the notification. Here the first root itself can be the chat, built before the splash screen goes.
+
+## 1. One function that opens the screen {#open}
+
+A tap can come at any moment, wherever the user is. Put what it does in one function, outside the screens. `navigation` works anywhere, and its commands act from the screen the user sees:
+
+```ts title="src/openChat.ts"
+import { navigation } from '@apexnative/navigation';
+
+export async function openChat(chatId: string) {
+  await navigation.dismissAllModals();
+  await navigation.selectTab('inbox');
+  await navigation.push('Chat', { props: { chatId } });
+}
+```
+
+Each command waits for the one before: the modals close, the Inbox tab shows, then Chat comes in over it. `'inbox'` is the id of the tab, given in the layout with `Tab('Inbox').id('inbox')`. More: [Anywhere else: navigation](../fundamentals/moving-between-screens#navigation).
+
+The user may have that chat open already, under other screens. A `key` makes Chat one screen per chat, so a second tap goes back to it instead of opening a copy:
+
+```ts title="src/screens/Chat.tsx"
+export const ChatScreen = defineScreen({
+  component: Chat,
+  key: (props) => props.chatId,
+});
+```
+
+More: [One screen per item](../fundamentals/screens-and-props#key).
+
+## 2. Read the taps from your library {#library}
+
+Every library has a listener for a tap and a way to read the notification that launched the app, under its own names. Put them in one file with the same two exports, whichever library it is: `getLaunchChat` and `onChatTapped`.
+
+<DocTabs groupId="push-library">
+<TabItem value="firebase" label="Firebase Messaging" default>
+
+`getInitialNotification` gives the message whose tap launched the app, and `onNotificationOpenedApp` the taps that bring it from the background. The modular API of version 26:
+
+```ts title="src/notifications.ts"
+import {
+  getInitialNotification,
+  getMessaging,
+  onNotificationOpenedApp,
+} from '@react-native-firebase/messaging';
+
+const messaging = getMessaging();
+
+function chatOf(data?: Record<string, unknown>) {
+  const chatId = data?.chatId;
+  return typeof chatId === 'string' ? chatId : null;
+}
+
+export async function getLaunchChat() {
+  const message = await getInitialNotification(messaging);
+  return chatOf(message?.data);
+}
+
+export function onChatTapped(open: (chatId: string) => void) {
+  return onNotificationOpenedApp(messaging, (message) => {
+    const chatId = chatOf(message.data);
+    if (chatId) open(chatId);
+  });
+}
+```
+
+Firebase reports the launching tap to `getInitialNotification` only, so the two don't overlap. With the app in front, Firebase shows no banner: see [A notification while the user is in the app](#foreground).
+
+</TabItem>
+<TabItem value="notifee" label="Notifee">
+
+`getInitialNotification` gives the notification whose tap launched the app, and `onForegroundEvent` the taps while the app runs, as `EventType.PRESS`:
+
+```ts title="src/notifications.ts"
+import { AppState, Platform } from 'react-native';
+import notifee, {
+  EventType,
+  type Notification,
+} from '@notifee/react-native';
+
+// The notification opened last, so none opens twice.
+let openedId: string | undefined;
+
+function chatOf(data?: Record<string, unknown>) {
+  const chatId = data?.chatId;
+  return typeof chatId === 'string' ? chatId : null;
+}
+
+function chatOnce(notification?: Notification) {
+  if (!notification?.id || notification.id === openedId) {
+    return null;
+  }
+  openedId = notification.id;
+  return chatOf(notification.data);
+}
+
+export async function getLaunchChat() {
+  const initial = await notifee.getInitialNotification();
+  return chatOnce(initial?.notification);
+}
+
+export function onChatTapped(open: (chatId: string) => void) {
+  const stopPress = notifee.onForegroundEvent(
+    ({ type, detail }) => {
+      if (type !== EventType.PRESS) return;
+      // Android keeps this tap for getInitialNotification too.
+      if (Platform.OS === 'android') {
+        void notifee.getInitialNotification();
+      }
+      const chatId = chatOnce(detail.notification);
+      if (chatId) open(chatId);
+    },
+  );
+  // Android: a tap from the background, read once the app
+  // is in front.
+  const active = AppState.addEventListener(
+    'change',
+    async (state) => {
+      if (Platform.OS !== 'android' || state !== 'active') {
+        return;
+      }
+      const initial = await notifee.getInitialNotification();
+      const chatId = chatOnce(initial?.notification);
+      if (chatId) open(chatId);
+    },
+  );
+  return () => {
+    stopPress();
+    active.remove();
+  };
+}
+```
+
+`chatOnce` opens each notification once. On iOS, Notifee reports every tap to `onForegroundEvent`, the launching one too, which `getLaunchChat` has read already. On Android, a tap that brings the app from the background goes to Notifee's `onBackgroundEvent`, not `onForegroundEvent`, as the app isn't in front yet at that moment. Notifee also keeps the last tap for `getInitialNotification`, which gives it once, so the listener reads it there when the app comes to the front, and takes it out after a tap in front. On Android, a notification opens the app on a tap only when it is displayed with a press action: `android: { pressAction: { id: 'default' } }`.
+
+</TabItem>
+<TabItem value="expo" label="expo-notifications">
+
+`getLastNotificationResponse` gives the tap that launched the app, and `addNotificationResponseReceivedListener` the taps while it runs. The app needs Expo modules: a bare app adds them with `npx install-expo-modules`.
+
+```ts title="src/notifications.ts"
+import * as Notifications from 'expo-notifications';
+
+let launchId: string | undefined;
+
+function chatOf(data?: Record<string, unknown>) {
+  const chatId = data?.chatId;
+  return typeof chatId === 'string' ? chatId : null;
+}
+
+function isTap(response: Notifications.NotificationResponse) {
+  return (
+    response.actionIdentifier ===
+    Notifications.DEFAULT_ACTION_IDENTIFIER
+  );
+}
+
+export async function getLaunchChat() {
+  const response = Notifications.getLastNotificationResponse();
+  if (!response || !isTap(response)) return null;
+  launchId = response.notification.request.identifier;
+  return chatOf(response.notification.request.content.data);
+}
+
+export function onChatTapped(open: (chatId: string) => void) {
+  const subscription =
+    Notifications.addNotificationResponseReceivedListener(
+      (response) => {
+        const { request } = response.notification;
+        if (!isTap(response)) return;
+        if (request.identifier === launchId) return;
+        const chatId = chatOf(request.content.data);
+        if (chatId) open(chatId);
+      },
+    );
+  return () => subscription.remove();
+}
+```
+
+`isTap` leaves out the action buttons of a notification, which have their own identifiers. The listener skips the notification `getLaunchChat` read, in case it reports that tap too.
+
+</TabItem>
+</DocTabs>
+
+Nothing changes on screen yet: the next steps call these two.
+
+## 3. A tap while the app runs {#running}
+
+The app listens for taps once it shows its first screen: `didMount` runs then, once per run of the JavaScript, so the listener is added once and stays for as long as the app runs.
+
+```ts title="Navigation.ts"
+import { onChatTapped } from './src/notifications';
+import { openChat } from './src/openChat';
+
+export const Navigation = createNavigation({
+  // …
+  didMount: () => {
+    onChatTapped(openChat);
+  },
+});
+```
+
+The app is in the background, a notification comes, and the user taps it. The app comes to the front, its modals close, Inbox shows, and the chat slides in. Back goes to Inbox.
+
+## 4. A tap that launches the app {#launch}
+
+When the app isn't running, the tap launches it. `openChat` in `didMount` would work: the user would see Inbox, then the push of the chat. Better: <Mark>the chat is the first screen</Mark>, shown as the splash screen goes, with Inbox under it to go back to.
+
+`willMount` runs before the first root, while the splash screen shows. It reads the notification that launched the app and puts its chat into the app's context:
+
+```ts title="Navigation.ts"
+import { getLaunchChat } from './src/notifications';
+
+export type AppContext = { launchChat: string | null };
+
+export const Navigation = createNavigation({
+  // …
+  context: { launchChat: null } as AppContext,
+  willMount: async () => {
+    // null without a notification
+    const launchChat = await getLaunchChat();
+    navigation.setContext({ launchChat });
+  },
+});
+```
+
+Then the first root comes from the context. A root of `roots` can take a param, so the tabs are built once, with or without a chat on top of Inbox:
+
+```ts title="Navigation.ts"
+const tabs = (chatId?: string) =>
+  Tabs(
+    Tab(
+      chatId
+        ? Stack('Inbox', Screen('Chat', { chatId }))
+        : Stack('Inbox'),
+    )
+      .label('Inbox')
+      .id('inbox'),
+    Tab('Settings').label('Settings'),
+  );
+
+export const Navigation = createNavigation({
+  // …
+  roots: {
+    signedIn: tabs(),
+    chat: (chatId: string) => tabs(chatId),
+  },
+  initialRoot: (context) =>
+    context.launchChat ? ['chat', context.launchChat] : 'signedIn',
+});
+```
+
+The user taps a notification with the app closed. The splash screen shows, then the chat, at once and with no transition; after a [splash of your own](./splash-screen#own-splash), with its transition. Back goes to Inbox. More: [A root with a param](../fundamentals/switching-roots#param).
+
+`didMount` then listens for the taps that come later, as in step 3. A library that also reports the launching tap to its listener is handled in step 2: the listener skips that notification.
+
+## 5. A tap while signed out {#signed-out}
+
+A chat means nothing to a signed-out user: the app shows Login first. The tap is kept, and the chat opens once the user signs in. The context has the user here, as in [Sign in and sign out](../flows/sign-in-and-sign-out#context):
+
+```ts title="src/openChat.ts"
+let waitingChat: string | null = null;
+
+// The latest tap wins.
+export function keepChat(chatId: string) {
+  waitingChat = chatId;
+}
+
+export function openChatWhenSignedIn(chatId: string) {
+  if (!navigation.getContext().user) return keepChat(chatId);
+  return openChat(chatId);
+}
+
+export async function openWaitingChat() {
+  const chatId = waitingChat;
+  waitingChat = null;
+  if (chatId) await openChat(chatId);
+}
+```
+
+The tap listener of step 3 calls `openChatWhenSignedIn` instead of `openChat`, and the sign-in opens the waiting chat once the signed-in root shows:
+
+```ts title="src/session.ts"
+export async function signIn(email: string, password: string) {
+  const user = await api.signIn(email, password); // your own request
+  navigation.setContext((context) => ({ ...context, user }));
+  await navigation.switchTo('signedIn');
+  await openWaitingChat();
+}
+```
+
+The user taps a notification while signed out: Login shows. After the sign-in, the tabs come in, then the chat opens over Inbox.
+
+At a launch signed out, `willMount` calls `keepChat` with the chat of the notification instead of putting it into the context, and `initialRoot` picks the signed-out root: see [the whole code](#code). The whole sign-in: [Sign in and sign out](../flows/sign-in-and-sign-out).
+
+## The order of a launch by a tap {#order}
+
+<Steps
+  items={[
+    { text: <>The user taps the notification; the app launches, and the splash screen shows.</> },
+    { text: <><code>willMount</code> reads the notification that launched the app and sets the context.</>, code: "setContext({ launchChat: '7' })" },
+    { text: <><code>initialRoot</code> picks the root with the chat: Inbox, and Chat over it.</>, code: "['chat', '7']" },
+    { text: <>The splash screen goes, and the chat shows.</> },
+    { text: <><code>didMount</code> starts listening for the next taps.</>, code: 'onChatTapped(…)' },
+  ]}
+/>
+
+## A command too early {#too-early}
+
+Two places run before the app shows, and a command there doesn't do what it seems to:
+
+- **In `willMount`.** A command waits for the first root, and the first root waits for `willMount`. Awaited there, it never resolves: the start stops, and the splash screen stays. Not awaited, it runs after the first root, as a push the user sees. That is why the launch chat goes through the context instead.
+- **In a background handler.** Firebase's `setBackgroundMessageHandler` and Notifee's `onBackgroundEvent` are registered in `index.js` and can run with no screen at all, while the app isn't launched. A command there rejects: `[navigation] A command before the app started: register it with AppRegistry.registerComponent`. Keep them to data work, such as updating a badge count, and let the tap listener open the screen.
+
+## A notification while the user is in the app {#foreground}
+
+With the app in front, Firebase shows no system banner, and its `onMessage` gets the message instead. An overlay can show your own: a screen over everything that doesn't move the user, and that opens the chat when tapped.
+
+```tsx title="src/screens/MessageBanner.tsx"
+import { Pressable, Text } from 'react-native';
+import { defineScreen, useNavigation } from '@apexnative/navigation';
+import { openChat } from '../openChat';
+
+type Props = { chatId: string; text: string };
+
+function MessageBanner({ chatId, text }: Props) {
+  const navigation = useNavigation();
+  const open = async () => {
+    await navigation.dismiss();
+    await openChat(chatId);
+  };
+  return (
+    <Pressable onPress={open}>
+      <Text>{text}</Text>
+    </Pressable>
+  );
+}
+
+export const MessageBannerScreen = defineScreen({
+  component: MessageBanner,
+});
+```
+
+The banner is listed in `screens` as `MessageBanner`, like any screen. With Firebase, `src/notifications.ts` gets one more export, and `didMount` calls it next to `onChatTapped`:
+
+```ts title="src/notifications.ts"
+import { navigation } from '@apexnative/navigation';
+import { onMessage } from '@react-native-firebase/messaging';
+// …
+
+// A message while the app is in front: a banner of your own.
+export function showMessagesInFront() {
+  return onMessage(messaging, (message) => {
+    const chatId = chatOf(message.data);
+    if (!chatId) return;
+    navigation.showOverlay('MessageBanner', {
+      props: { chatId, text: message.notification?.body ?? '' },
+    });
+  });
+}
+```
+
+The user is in Settings when a message comes: the banner shows over it, and the user stays where they are. A tap on it closes the banner and opens the chat over Inbox.
+
+`push` from an overlay acts from the screen the user sees, so the banner needs nothing else; its own close and where the touches go: [Overlays](../containers/overlays#touches).
+
+Notifee and expo-notifications can show the system banner with the app in front too: Notifee with `foregroundPresentationOptions` on iOS, expo-notifications with `setNotificationHandler`. A tap on that banner comes to the tap listener of step 3.
+
+## When the notification has a link {#links}
+
+A notification can carry a link, such as `myapp://chat/7`, that the app opens with `linking` too. Keep one function per target, as `openChat` here, and call it from both places: the route of the link and the tap listener.
+
+```ts
+linking: {
+  routes: {
+    'chat/:chatId': ({ chatId }) => openChat(chatId),
+  },
+},
+```
+
+The routes of `linking` run for the links the system gives the app. A tap that your library reports is not one of them, so it calls the function itself. More: [Deep links](./deep-links).
+
+## When Android brings the app back {#relaunch}
+
+<Os name="Android" /> Android can destroy the app's activity in the background and create a new one when the user taps a notification, while the JavaScript keeps running. `willMount` and `didMount` don't run again: the last root comes back, and `getLaunchChat` isn't read. The listener of step 3 still runs, so when your library reports the tap to it, the chat opens over the root that came back. More: [When the app launches again](../fundamentals/starting-the-app#launches).
+
+A reload of the JavaScript in development runs `willMount` again. Libraries differ in whether they give the launching notification a second time then; test the launch by a tap with the app quit, not with a reload.
+
+## Testing a tap {#testing}
+
+A tap takes a different way at each moment, so try each one with a real notification, from your server or your provider's console:
+
+- the app in front, in the background, and quit;
+- signed in, and signed out;
+- the chat already open under other screens: the tap goes back to it.
+
+`openChat` and `openChatWhenSignedIn` are functions of their own, so Jest checks the commands they make without a device: see [Code outside the screens](./testing#outside).
+
+## The whole code {#code}
+
+`src/notifications.ts` is the file of your library, from [step 2](#library).
+
+```ts title="src/openChat.ts"
+import { navigation } from '@apexnative/navigation';
+
+export async function openChat(chatId: string) {
+  await navigation.dismissAllModals();
+  await navigation.selectTab('inbox');
+  await navigation.push('Chat', { props: { chatId } });
+}
+
+let waitingChat: string | null = null;
+
+// Signed out, the chat waits; the latest tap wins.
+export function keepChat(chatId: string) {
+  waitingChat = chatId;
+}
+
+export function openChatWhenSignedIn(chatId: string) {
+  if (!navigation.getContext().user) return keepChat(chatId);
+  return openChat(chatId);
+}
+
+export async function openWaitingChat() {
+  const chatId = waitingChat;
+  waitingChat = null;
+  if (chatId) await openChat(chatId);
+}
+```
+
+```ts title="Navigation.ts"
+import {
+  createNavigation,
+  navigation,
+  Screen,
+  Stack,
+  Tab,
+  Tabs,
+} from '@apexnative/navigation';
+import { getLaunchChat, onChatTapped } from './src/notifications';
+import { keepChat, openChatWhenSignedIn } from './src/openChat';
+import { loadSession, type User } from './src/session';
+import { ChatScreen } from './src/screens/Chat';
+import { InboxScreen } from './src/screens/Inbox';
+import { LoginScreen } from './src/screens/Login';
+import { SettingsScreen } from './src/screens/Settings';
+
+export type AppContext = {
+  user: User | null;
+  launchChat: string | null;
+};
+
+const tabs = (chatId?: string) =>
+  Tabs(
+    Tab(
+      chatId
+        ? Stack('Inbox', Screen('Chat', { chatId }))
+        : Stack('Inbox'),
+    )
+      .label('Inbox')
+      .id('inbox'),
+    Tab('Settings').label('Settings'),
+  );
+
+export const Navigation = createNavigation({
+  screens: {
+    Login: LoginScreen,
+    Inbox: InboxScreen,
+    Chat: ChatScreen,
+    Settings: SettingsScreen,
+  },
+  roots: {
+    signedOut: Stack('Login'),
+    signedIn: tabs(),
+    chat: (chatId: string) => tabs(chatId),
+  },
+  context: { user: null, launchChat: null } as AppContext,
+  willMount: async () => {
+    const user = await loadSession(); // your own saved session
+    const chatId = await getLaunchChat();
+    // Signed out, the chat waits for the sign-in.
+    if (chatId && !user) keepChat(chatId);
+    navigation.setContext({
+      user,
+      launchChat: user ? chatId : null,
+    });
+  },
+  initialRoot: (context) => {
+    if (!context.user) return 'signedOut';
+    return context.launchChat
+      ? ['chat', context.launchChat]
+      : 'signedIn';
+  },
+  didMount: () => {
+    onChatTapped(openChatWhenSignedIn);
+  },
+});
+```
+
+```ts title="src/session.ts"
+import { navigation } from '@apexnative/navigation';
+import { openWaitingChat } from './openChat';
+
+export type User = { id: string; name: string };
+
+export async function signIn(email: string, password: string) {
+  const user = await api.signIn(email, password); // your own request
+  navigation.setContext((context) => ({ ...context, user }));
+  await navigation.switchTo('signedIn');
+  await openWaitingChat();
+}
+```
+
+`loadSession` and the sign-out live in `src/session.ts` too, as in [Sign in and sign out](../flows/sign-in-and-sign-out#files).
+
+## What's next {#next}
+
+- [Deep links](./deep-links): the same targets from links.
+- [Sign in and sign out](../flows/sign-in-and-sign-out): the two roots of a sign-in.
+- [Overlays](../containers/overlays): banners over the app.
+- [Switching roots](../fundamentals/switching-roots): roots with a param.
+- [Moving between screens](../fundamentals/moving-between-screens#navigation): commands from outside the screens.

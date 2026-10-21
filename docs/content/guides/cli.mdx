@@ -1,0 +1,424 @@
+---
+title: The CLI
+description: 'Every command of apex-navigation: what it changes, its options and one example each, the JSON it prints for scripts and AI agents, its exit codes, and the MCP server for coding agents.'
+---
+
+import { Os } from '@site/src/components/Intro';
+
+`apex-navigation` is the command line of the package. It sets an app up, adds screens, declares links, makes the app icon and the splash screen, checks the app and the machine, upgrades the navigation, and moves an app from another navigation library. It comes with `@apexnative/navigation`, so there is nothing more to install: run it with `npx` in the root of your app.
+
+```bash title="Terminal"
+npx apex-navigation doctor
+```
+
+`npx apex-navigation --help` lists the commands and their options.
+
+| Command | What it does |
+| --- | --- |
+| [`init`](#init) | Makes a new React Native app with the navigation set up. |
+| [`setup`](#setup) | Sets the app you have up: the native files, the entry point, the typed commands, the pods. |
+| [`screen`](#screen) | Adds a screen, React or native. |
+| [`codegen`](#codegen) | Generates the Swift and Kotlin side of the native screens. |
+| [`doctor`](#doctor) | Checks the app and the machine, and makes the fixes it can. |
+| [`info`](#info) | Prints what the app is made and built with, for an issue. |
+| [`links`](#links) | Declares the links of `linking` natively, opens a link on a device, writes the files of your web site. |
+| [`icons`](#icons) | Makes the app icon of both platforms. |
+| [`splash`](#splash) | Makes the native splash screen. |
+| [`upgrade`](#upgrade) | Upgrades the navigation. |
+| [`migrate`](#migrate) | Moves an app from react-native-navigation or React Navigation. |
+| [`mcp`](#ai-agents) | The MCP server for AI coding agents. |
+
+## How the commands work {#how}
+
+A command that changes files lists every file it looks at, shows the diff of each change, and asks before it writes. Three options change that, the same for every such command:
+
+| Option | What it does |
+| --- | --- |
+| `--yes` | Writes without asking. |
+| `--dry-run` | Shows the changes and writes nothing. |
+| `--json` | Prints one JSON document instead of talking to the terminal, for CI, scripts and AI agents. It never asks, so it writes only with `--yes` too; without it the document is the plan. |
+
+- **A file the command can't change** — changed by hand, or not where React Native's template puts it — stays as it is. The command lists it as `manual` and prints the change to make.
+- **A file with changes you haven't committed** gets a warning before the write, so you can tell your changes from the command's in the diff.
+- **Run it in the root of the app**, the folder of its `package.json`; `init` makes that folder.
+- **An Expo app:** `setup`, `links` and `migrate` stop, as Expo makes the native files itself.
+- **Native files changed:** build the app again. A reload of the JavaScript doesn't bring changes of `setup`, `links`, `icons`, `splash` or a native screen.
+
+### Exit codes {#exit-codes}
+
+| Code | When |
+| --- | --- |
+| `0` | Done, or nothing to do. |
+| `1` | A problem stopped the command, or files are left to change by hand. For `doctor`: a check found an error. |
+
+### The JSON {#json}
+
+The commands that change files print the same document:
+
+```ts
+interface Result {
+  command: string; // 'setup', 'links files', …
+  ok: boolean; // false: an error, or files left by hand
+  applied: boolean; // whether the files were written
+  files: {
+    name: string;
+    platform: string; // 'ios', 'android', 'js', 'web'
+    file?: string; // the path from the app's root
+    status: 'create' | 'change' | 'remove' | 'done' | 'manual';
+    note: string;
+    diff?: string; // a unified diff of the change
+    howTo?: string; // the change to make by hand
+  }[];
+  warnings: string[];
+  errors: { code: string; message: string }[];
+  next: string[]; // what to run after
+}
+```
+
+Each error has a `code` that tells it apart, such as `react-native-missing` or `expo-unsupported`. `init` adds `reactNative`, `packageManager` and the `checks` of the machine; `migrate` adds `from` and `report`. The commands that change nothing print what they found, with `ok`:
+
+| Command | Its document |
+| --- | --- |
+| `doctor` | `{ ok, checks }` |
+| `info` | `{ command, ok, info }` |
+| `links open` | `{ command, ok, url, opened, warnings, errors }` |
+| `upgrade` | `{ command, ok, from, to, steps, notes, warnings, errors, next }` |
+
+## init {#init}
+
+Makes a new React Native app with the navigation set up: React Native's own `init` at the version the navigation is checked with, the package, the changes of [`setup`](#setup), and a starter in place of the template's `App`. Then one install of the dependencies, the pods on a Mac, and a check of what the machine still needs to build for iOS and Android.
+
+```bash title="Terminal"
+npx @apexnative/navigation init MyApp --template tabs
+```
+
+A new app doesn't have the package yet, so `init` runs through the package's name.
+
+| Option | What it does |
+| --- | --- |
+| `Name` | The app's name: one word of letters and digits that starts with a letter. |
+| `--template name` | The starter: `stack` (the default), `tabs` or `auth`. What each has: [The starters](../start/installation#templates). |
+| `--version v` | The React Native of the app, a version or a tag; by default the one the navigation is checked with. |
+| `--pm name` | `npm`, `yarn` or `bun`; by default the one the command runs with. |
+| `--directory path` | The folder of the app, new or empty; its name by default. |
+| `--package-name id` | The Android package and the iOS bundle id, such as `com.example.app`. |
+| `--title text` | The name the app shows. |
+| `--skip-install` | Makes the app without installing the dependencies and the pods. |
+| `--skip-pods` | Installs the dependencies, not the pods. |
+| `--skip-git-init` | No git repository. |
+| `--json` | Only with `--yes`. `init` has no `--dry-run`: there is nothing to show before the app is made. |
+
+## setup {#setup}
+
+Sets the app you have up for the navigation: the native entry points of both platforms, `index.js`, a new `Navigation.ts` with your `App` as the first screen, and `navigation-env.d.ts`, the [typed commands](../start/installation#typed-commands). Each change and why: [What setup changes, and why](../start/installation#why-native).
+
+```bash title="Terminal"
+npx apex-navigation setup
+```
+
+| Option | What it does |
+| --- | --- |
+| `--skip-pods` | Leaves the pods for later, and prints the line to run. |
+| `--yes`, `--dry-run`, `--json` | As [every command](#how). |
+
+Then, on a Mac, it installs the pods when it changed a file of the iOS app or the pods don't have the navigation yet: `pod install` in `ios/`, or `bundle install` and `bundle exec pod install` when the app has a `Gemfile`. On Linux and Windows it says to run `pod install` on a Mac. A failed install keeps its output on screen, and the command exits with 1.
+
+Run it again at any time: a file that is set up shows as `done`, and only what is missing changes.
+
+## screen {#screen}
+
+Adds a screen: its file, with its props and options, and its entry in `screens` of `createNavigation`. A native screen also gets its Swift and Kotlin files and the [generated code](#codegen) of its props.
+
+```bash title="Terminal"
+npx apex-navigation screen Profile
+```
+
+| Option | What it does |
+| --- | --- |
+| `Name` | The screen's name, one word in PascalCase, such as `Profile`. |
+| `--dir path` | The folder of the screens, from the app's root; `src/screens` by default. It is kept in `package.json` for the next screens. |
+| `--native` | A native screen on both platforms, in SwiftUI and Jetpack Compose. |
+| `--ios kind` | A native screen on iOS, `swiftui` or `uikit`; alone, on iOS only. |
+| `--android kind` | A native screen on Android, `compose` or `views`; alone, on Android only. |
+| `--yes`, `--dry-run`, `--json` | As [every command](#how). |
+
+A React screen shows after a reload of the JavaScript; a native screen needs a native build. The whole way of a native screen: [Native screens](../architecture/native-screens#example).
+
+## codegen {#codegen}
+
+Generates the Swift and Kotlin side of the native screens from their props in TypeScript: the props as native types, the registration of each screen under its name, and the [typed commands](../architecture/native-screens#commands) that open the app's screens from native code.
+
+```bash title="Terminal"
+npx apex-navigation codegen
+```
+
+- **What it writes:** `ApexNavigation.generated.swift` next to `AppDelegate.swift`, in the app's target, and `ApexNavigationGenerated.kt` in the package `dev.apexnative.navigation.generated`. Each file is made whole each time.
+- **When to run it:** after a change of the props of a native screen. `screen` runs it for a new one, and `doctor` says when the generated code is older than the props.
+- **When it stops:** a prop of a native screen with a type that has no native form, named with its file and line. See [Types](../architecture/native-screens#types). A screen left out of the typed commands is a warning only.
+- **An app without native screens:** nothing to generate.
+
+Options: `--yes`, `--dry-run`, `--json`.
+
+## doctor {#doctor}
+
+Checks what the navigation needs in the app and on the machine, in six groups: App, Navigation, Android, iOS, Devices, Conflicts. Each problem comes with its fix. What each group checks: [Check everything with doctor](../start/installation#doctor).
+
+```bash title="Terminal"
+npx apex-navigation doctor --fix
+```
+
+| Option | What it does |
+| --- | --- |
+| `--fix` | Makes the fixes the CLI has, for errors and warnings alike: `setup`, `links`, `icons`, `codegen` and `pod install`, asking before each. It needs a terminal to ask in. |
+| `--json` | `{ ok, checks: [{ group, title, status, detail, fix }] }`; `status` is `ok`, `warn`, `error` or `info`, and `fix` is `{ label, run }`, where `run` names the command `--fix` runs. Not with `--fix`. |
+
+It exits with 1 when a check finds an error; warnings leave it at 0.
+
+## info {#info}
+
+Prints what the app is made with and what builds it, as Markdown to paste into an issue. It changes nothing.
+
+```bash title="Terminal"
+npx apex-navigation info
+```
+
+Pasted into an issue, it reads:
+
+> - OS: macOS 27.0 (arm64)
+> - Node: 22.14.0 · yarn 4.9.1
+> - React Native: 0.87.1 · New Architecture
+> - @apexnative/navigation: 1.0.0-alpha.0 · a React root per screen
+> - Expo: no
+> - iOS: Xcode 27.0 · CocoaPods 1.16.2 · deployment target 15.1
+> - Android: JDK 17.0.12 · SDK found · compileSdk 37 · minSdk 24 · targetSdk 36 · Gradle 9.0
+
+The navigation's line says how the screens render: `one React tree` with `appProvider`, `a React root per screen` without it. The iOS line shows on a Mac only.
+
+`--json` prints `{ "command": "info", "ok": true, "info": { … } }`, with `os`, `node`, `packageManager`, `reactNative`, `newArchitecture`, `navigation`, `mode` (`one-tree` or `root-per-screen`), `expo`, `ios` (`xcode`, `cocoapods`, `deploymentTarget`) and `android` (`jdk`, `sdk`, `compileSdk`, `minSdk`, `targetSdk`, `gradle`). What it can't find is `null`.
+
+## links {#links}
+
+Three commands for the links of `linking` in `createNavigation`: declare them, open one on a device, and write the files your web site serves. The whole way of a link, with the routes: [Deep links](./deep-links).
+
+### Declare the links {#links-declare}
+
+```bash title="Terminal"
+npx apex-navigation links
+```
+
+It reads `prefixes` from your code and declares each one natively:
+
+| Prefix | <Os name="iOS" /> | <Os name="Android" /> |
+| --- | --- | --- |
+| A scheme, `myapp://` | `Info.plist`: an entry of `CFBundleURLTypes` with the scheme. | `AndroidManifest.xml`: an intent filter of the main activity with the scheme. |
+| A web site, `https://example.com` | `<App>.entitlements`: `applinks:example.com` in the associated domains, and the entitlements file named in the app's target. | One intent filter with `android:autoVerify="true"`, apart from the schemes, with a host per site. |
+
+- **The prefixes** are a list of strings in `linking`, or a constant the list is in. Prefixes computed at run time, such as from an environment variable, stop the command, with how to write them.
+- **It only adds.** A prefix taken out of the code keeps its declaration; `doctor` lists the declarations no prefix has, and you remove them by hand.
+- **A prefix with a path**, `https://example.com/app`, gets a warning: Android opens every link of the site in the app, and iOS only the paths of [`links files`](#links-files).
+- **A main activity that isn't `singleTask`** gets a warning: a link would start another copy of it.
+
+Options: `--yes`, `--dry-run`, `--json`. What it writes, and how to write it by hand: [Declare the links](./deep-links#declare).
+
+### Open a link {#links-open}
+
+```bash title="Terminal"
+npx apex-navigation links open "myapp://user/42" --cold
+```
+
+Opens the link as a tap would: on the booted iOS simulator and on the connected Android device or emulator. It names the app on each, so the link goes to it.
+
+| Option | What it does |
+| --- | --- |
+| `url` | The link to open. |
+| `--platform name` | `ios` or `android` only. Without it, a platform with no device is left out, and the command fails only when no platform opened the link. |
+| `--cold` | Quits the app first, so the link launches it. |
+| `--json` | `opened` lists each platform, with the device or why it didn't open there. |
+
+With several Android devices connected, `ANDROID_SERIAL=<serial>` picks one. A URL that starts with none of the prefixes gets a warning and opens anyway.
+
+### Write the files of your web site {#links-files}
+
+```bash title="Terminal"
+npx apex-navigation links files --team-id ABCDE12345
+```
+
+Writes `apple-app-site-association` and `assetlinks.json` for the `https` prefixes, into `.well-known/` of the app, and says where each goes: `https://<host>/.well-known/<file>`, over HTTPS, with no redirect.
+
+| Option | What it does |
+| --- | --- |
+| `--team-id id` | The team of the Apple Developer account, 10 letters and digits; the `DEVELOPMENT_TEAM` of the Xcode project by default. |
+| `--fingerprint sha256` | The SHA-256 of a signing key for `assetlinks.json`, such as the release key, or the app signing key of Google Play. Repeat it for several. The debug key's is added by itself. |
+| `--out path` | The folder of the files, from the app's root; `.well-known` by default. |
+| `--platform name` | `ios` or `android`: that file only. |
+| `--yes`, `--dry-run`, `--json` | As [every command](#how). |
+
+What goes in each file: [Links to your web site](./deep-links#web-links).
+
+## icons {#icons}
+
+Makes the app icon of both platforms from a logo and a color, or from a ready square icon.
+
+```bash title="Terminal"
+npx apex-navigation icons --logo assets/logo.png --background "#F3E9D2"
+```
+
+| Option | What it does |
+| --- | --- |
+| `--logo path` | The logo: PNG, JPEG, WebP or SVG, on a transparent background, 1024 px or more on its long side. |
+| `--background color` | The color behind it; `#FFFFFF` by default. |
+| `--dark-logo path` | The logo of the dark icon of iOS; the logo by default. |
+| `--logo-size n` | The logo's width in percent of the icon, 20 to 100; 60 by default. On iOS of the whole icon, on Android of the part the mask shows. |
+| `--image path` | Instead of `--logo`: a ready square icon, 1024 px or more. `--background` fills its transparent parts. |
+| `--yes`, `--dry-run`, `--json` | As [every command](#how). |
+
+What it makes:
+
+- <Os name="iOS" /> The icon set of the app's catalog, `AppIcon` in the template, written anew: one 1024 px image for every size, the logo on the color with no transparency, as the App Store asks; and a dark and a tinted icon, the logo on a transparent background in color and in gray. From `--image`, the one image; iOS makes the dark and tinted ones from it.
+- <Os name="Android" /> The adaptive icon (`mipmap-anydpi-v26/ic_launcher.xml` and `ic_launcher_round.xml`): the color as the background, the logo as the foreground, and its shape in white as the monochrome layer of themed icons. For each density the layers, and the square and round icons of Android 7. The manifest gets `android:icon` and `android:roundIcon` when it doesn't name them. From `--image`, no monochrome layer.
+
+The old icon files of the same names go, `.webp` ones too. A logo whose corners leave the safe circle of Android's icon gets a warning, as a round mask cuts them: make `--logo-size` smaller.
+
+The settings go into `package.json`, under `apexNavigation.icons`, so a run without options makes the icon again from them, for example after a new logo. `doctor` warns when the icon files aren't made from these settings, and when the iOS icon set has no image at all, which the App Store refuses.
+
+:::note
+
+The images are made with [`sharp`](https://sharp.pixelplumbing.com), loaded from your app. When the app doesn't have it, the command offers to add it to the dev dependencies; with `--json` and no `--yes` it stops with `sharp-missing` instead. `splash` uses it the same way.
+
+:::
+
+## splash {#splash}
+
+Makes the native splash screen of both platforms from a logo and colors, light and dark: a storyboard on iOS, a splash theme on Android. The navigation keeps it on screen until the first screen is drawn. Without options, it makes it again from the settings in `package.json`.
+
+```bash title="Terminal"
+npx apex-navigation splash --logo assets/logo.png --background "#F3E9D2"
+```
+
+| Option | What it does |
+| --- | --- |
+| `--logo path` | The logo: PNG, JPEG, WebP or SVG, on a transparent background. A PNG, JPEG or WebP at least four times as wide as `--logo-width`, as the densest Android screens draw it at 4×. |
+| `--background color` | The color behind it, `#RGB` or `#RRGGBB`; `#FFFFFF` by default. |
+| `--dark-logo path` | The logo in the dark appearance, with the same proportions as the logo; the logo without it. |
+| `--dark-background color` | The color in the dark appearance; the light one without it. |
+| `--logo-width n` | The logo's width on screen, in points on iOS and dp on Android, up to 288; 100 by default. Its height follows the logo's proportions, up to 288 too. |
+| `--yes`, `--dry-run`, `--json` | As [every command](#how). |
+
+What it makes:
+
+- <Os name="iOS" /> `SplashScreen.storyboard`, the logo centered in the whole screen on the color, added to the app's target; in `Images.xcassets` the logo and the color, each with its dark variant, under names with a hash of the settings and the logos (`SplashLogo-<hash>`, `SplashBackground-<hash>`), so iOS doesn't show a launch screen it keeps from before; the sets of an older splash removed. `Info.plist` gets `UILaunchStoryboardName` set to `SplashScreen`, and `ApexNavigationSplashLogo`, the logo's size for [`useSplash`](/api/starting-the-app/useSplash#logo). The template's `LaunchScreen.storyboard` stays as it is.
+- <Os name="Android" /> The logo on a transparent square of 288 dp for each density, as Android 12's splash icon takes it, with its dark variant in `drawable-night-*`; the colors, the logo's size and the theme `ApexNavigationSplash` in `res/values*/apex_navigation_splash.xml`. The theme goes over the app's theme, with the system splash's attributes on Android 12 and newer and a window background of the color and the logo before. The main activity gets it in `AndroidManifest.xml`, and the navigation switches the activity to the app's theme as it starts. No library is added.
+
+Each file and why: [What the command writes](./splash-screen#files).
+
+- **The settings** go into `package.json`, under `apexNavigation.splash`. An option given replaces its saved value; to drop the dark logo or color, remove `darkLogo` or `darkBackground` there and run the command again.
+- **A logo whose corners leave the circle** of Android 12's splash icon, 192 dp, gets a warning: Android cuts them. Make `--logo-width` smaller, or give the logo room around it.
+- **A file it can't change** is listed as `manual`, with the change to make: an app without `Images.xcassets` next to `Info.plist`, a manifest whose `MainActivity` and `<application>` have no theme to go over.
+- **`Info.plist` with `UILaunchScreen`** as well gets a warning: remove that dictionary, so that iOS shows the storyboard.
+- **Its errors** in the JSON: `splash-settings` for a setting it can't take, `splash-image` for a logo it can't read or that doesn't fit (too tall at its width, a dark logo of other proportions), and `sharp-missing`, as for `icons`.
+
+`doctor` checks the splash in the App group:
+
+| Check | It warns when |
+| --- | --- |
+| Splash | The files of iOS or Android aren't made from the settings in `package.json`: changed by hand, made on one platform only, or by an older version of the command. Or the settings themselves are wrong, such as a logo that isn't there. |
+| Splash logo | The logo's corners leave Android 12's circle. |
+| Launch screen | Without settings: `Info.plist` has `UILaunchScreen` and no storyboard. iOS shows it at launch, but the navigation can only keep a storyboard on screen, so an empty window shows between it and the first screen. |
+
+Each warning names its fix, such as `npx apex-navigation splash`; `--fix` leaves these to you. What the user sees, and a splash of your own after the native one: [Splash screen](./splash-screen).
+
+## upgrade {#upgrade}
+
+Upgrades the navigation of the app, not React Native.
+
+```bash title="Terminal"
+npx apex-navigation upgrade
+```
+
+1. It asks npm for the version, and for the React Native it takes. An app whose React Native is outside that range stops here: upgrade React Native first, with the link to the [Upgrade Helper](https://react-native-community.github.io/upgrade-helper/). The version the app has already: up to date.
+2. It shows the plan and asks: the install with the package manager of the app's lock file, then the new version's `setup`, its `codegen` when the app has native screens, and the pods on a Mac.
+3. It runs them. `setup` and `codegen` are those of the new version, so they know what its native side needs.
+4. It prints what changed between the two versions, from the package's `CHANGELOG.md`, breaking changes first.
+
+| Option | What it does |
+| --- | --- |
+| `version` | A version, a range or a tag; `latest` by default. An older version than the app has goes back, with a warning. |
+| `--dry-run` | Shows the versions and the plan, and changes nothing. |
+| `--yes`, `--json` | As [every command](#how); `--json` prints `steps`, each with whether it went through, and `notes`. |
+
+Without the network it stops with `registry-unreachable`.
+
+## migrate {#migrate}
+
+Moves an app from react-native-navigation or React Navigation: the package, the native files, and what it can of the code. The rest is a report, place by place, with the step of the migration guide that explains it.
+
+```bash title="Terminal"
+npx apex-navigation migrate
+```
+
+| Option | What it does |
+| --- | --- |
+| `--from name` | `react-native-navigation` or `react-navigation`; by default the one in `package.json`. |
+| `--skip-pods` | Leaves the pods for later. |
+| `--yes`, `--dry-run` | As [every command](#how). |
+| `--json` | Adds `from` and `report: [{ file, line, step, what, before, after, docs }]`. |
+
+What it moves from each library: [From react-native-navigation](../migration/from-react-native-navigation#migrate) and [From React Navigation](../migration/from-react-navigation#migrate).
+
+- **The report** lists each place in the files that import the old library: the file and the line, the line as it is, its new form, and the step of the guide. It changes none of them.
+- **While the report has places**, the command exits with 1, as any command with files left to change by hand.
+- **It reads the app's code with TypeScript**, so the app needs `typescript` in its dev dependencies.
+
+## AI agents {#ai-agents}
+
+`apex-navigation mcp` is an [MCP](https://modelcontextprotocol.io) server for AI coding agents, such as Claude Code, Cursor, VS Code and Codex. Through it an agent reads the map of your app's navigation and the docs of the version you have installed, and runs the commands of the CLI as plans it can show you before anything is written. Add it to the agent's config in the project:
+
+```bash title="Terminal"
+npx apex-navigation mcp install claude
+```
+
+| Client | What `mcp install` does |
+| --- | --- |
+| `claude` | Adds the server to `.mcp.json`, for Claude Code. |
+| `cursor` | Adds it to `.cursor/mcp.json`. |
+| `vscode` | Adds it to `.vscode/mcp.json`, under `servers`, with `"type": "stdio"`. |
+| `codex` | Prints the line that adds it, `codex mcp add apex-navigation -- npx apex-navigation mcp`: Codex keeps its servers per user, in `~/.codex/config.toml`. |
+
+The entry goes into what the file has, shown and asked as any change; commit it, and the agents of your team get it too:
+
+```json title=".mcp.json"
+{
+  "mcpServers": {
+    "apex-navigation": {
+      "command": "npx",
+      "args": ["apex-navigation", "mcp"]
+    }
+  }
+}
+```
+
+Then restart the client, or reload its servers, and allow `apex-navigation` when it asks. The server runs in the folder the client starts it in, the root of your app, and talks over stdio.
+
+### The tools {#mcp-tools}
+
+| Tool | What it does |
+| --- | --- |
+| `app_map` | The navigation of the app from its code: each screen with its props and whether it is React or native, the roots, the prefixes and routes of `linking`, and whether the screens render in one React tree. |
+| `docs_search` | Searches the docs by words, `query`, and gives pages and sections with a line each. |
+| `docs_read` | A page of the docs as Markdown, `page` such as `guides/deep-links`, or one of its sections, `section`. |
+| `doctor`, `info` | The checks and the versions, as their `--json`. |
+| `setup`, `screen`, `codegen`, `links` | The commands, with their options. Without `apply` they return the plan with every diff, as `--dry-run --json`; with `apply: true` they write, as `--yes --json`. |
+| `icons`, `splash`, `migrate` | The same, marked as destructive: they replace image files or move code. |
+
+The first five only read, and are marked so: some clients, such as VS Code and Codex, run them without asking. `init` and `upgrade` aren't tools, as they take minutes and the network: the server tells the agent to run them in a shell. A command that fails comes back as an error the agent can read and act on.
+
+### The docs in the package {#docs-in-package}
+
+The package ships these docs as Markdown, in `node_modules/@apexnative/navigation/docs-md/`: one file per page, such as `guides/deep-links.md`, and `index.json` with the titles and the sections. They are the docs of the version installed, so an agent reads what matches the code it writes. `docs_search` and `docs_read` read them, and an agent without the server can read the files. The pages of the API reference aren't in them: the types and their comments are in the package itself.
+
+## What's next {#next}
+
+- [Installation](../start/installation): `init`, `setup` and `doctor` in order, for a new app or the one you have.
+- [Deep links](./deep-links): `links` in the whole way of a link.
+- [Native screens](../architecture/native-screens): `screen --native` and `codegen`, from the command to the device.
+- [From react-native-navigation](../migration/from-react-native-navigation) and [From React Navigation](../migration/from-react-navigation): `migrate`, then the steps by hand.

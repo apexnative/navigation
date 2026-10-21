@@ -1,0 +1,105 @@
+import { Os } from '@site/src/components/Intro';
+
+`useArrangement` tells a screen of a pair how it shows now: which screen of the pair it is, whether the two lie side
+by side, one above the other or one over the other, and whether this one is out of the window. The component renders
+again when it changes, as the window and the fold change. It is called in a component of a screen.
+
+## Usage {#usage}
+
+```tsx title="src/screens/Profile.tsx"
+import { Button, View } from 'react-native';
+import {
+  useArrangement,
+  useNavigation,
+} from '@apexnative/navigation';
+
+function Profile({ id }: { id: string }) {
+  const navigation = useNavigation();
+  const pair = useArrangement();
+  // Details is beside or under Profile
+  const detailsShown =
+    pair?.layout === 'sideBySide' || pair?.layout === 'stacked';
+
+  return (
+    <View>
+      {/* … the profile */}
+      {!detailsShown && (
+        <Button
+          title="Details"
+          onPress={() =>
+            navigation.push('Details', { props: { itemId: id } })
+          }
+        />
+      )}
+    </View>
+  );
+}
+```
+
+Profile is the primary of a pair with Details (`arrangement: { secondary: 'Details' }`). On a phone Details is out of
+the window, and the button pushes it. On iPad, and on an open iPhone Duo, Details is beside Profile, and the button is
+gone. When the user folds iPhone Duo, the button comes back.
+
+## Signature {#signature}
+
+<ApiSignature data={data} name="useArrangement" />
+
+It takes nothing, and returns the state of the pair the screen is in, or `null` for a screen outside a pair: a screen
+shown by itself, or a screen of a split view.
+
+## The state {#state}
+
+### `placement` {#placement}
+
+<ApiMember data={data} of="ArrangementState" name="placement" />
+
+Which screen of the pair this one is: `'primary'`, the one the command named and whose bar shows, or `'secondary'`.
+It doesn't change while the screen is shown.
+
+### `layout` {#layout}
+
+<ApiMember data={data} of="ArrangementState" name="layout" />
+
+How the two lie now. Both screens of a pair get the same value.
+
+- `'sideBySide'`: next to each other, in a wide window, or on each side of the fold of a partly folded device.
+- `'stacked'`: one above the other, in a tall window.
+- `'overlay'`: one over the other, both full size: the primary of an overlay is in front.
+- `'single'`: only one screen is in the window, the primary: outside a large window, or where the `axes` of the pair
+  allow neither way.
+
+### `front` {#front}
+
+<ApiMember data={data} of="ArrangementState" name="front" />
+
+With `'overlay'`: `true` for the screen that lies over the other one. A secondary under its primary can stop work the
+user can't see, such as a video.
+
+### `hidden` {#hidden}
+
+<ApiMember data={data} of="ArrangementState" name="hidden" />
+
+With `'single'`: `true` for the screen out of the window, the secondary. It is still mounted, and comes into the
+window when the window grows, as when the user opens iPhone Duo.
+
+## When it changes {#time}
+
+The first render already has a state: the one the shape of the window makes likely. The first layout gives the real
+one, and the component renders again when it differs. After that it changes as the user folds or opens the device,
+turns it, or changes the size of an iPad window.
+
+<Os name="iOS" /> Before iOS 27.1, or in an app built with an older SDK, the native side shows no pairs: the primary
+shows alone and gets `{ placement: 'primary', layout: 'single', front: false, hidden: false }`, at once.
+
+## Outside a screen {#outside-screen}
+
+The hook reads the screen the component is in. In a component that isn't in a screen, such as `appProvider` itself,
+it throws. A native screen of a pair has no hooks: on iOS its code asks UIKit (see
+[Native screens in a pair](/docs/containers/arrangement#native)).
+
+## See also {#see-also}
+
+- [Arrangement](/docs/containers/arrangement): what a pair is, and what each device shows.
+- [`defineArrangement`](/api/arrangement/defineArrangement), [`arrangement`](/api/screens-and-props/defineScreen#arrangement)
+  of `defineScreen`.
+- [`useReservedRegions`](/api/system-ui/useReservedRegions): the fold within one screen.

@@ -1,0 +1,356 @@
+---
+title: Building a screen
+description: 'One screen from start to end: its component and props, its title and a Save button, fresh data each time it shows, and leaving it without losing changes.'
+---
+
+import { Mark } from '@site/src/components/Intro';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+Here you build one real screen: a note the user opens from a list, edits and saves. It touches every part a screen has, in the order you need them. You end with a screen that:
+
+- opens with the id of a note, checked by TypeScript;
+- shows the title of the note in the top bar, and a Save button that turns on with the first change;
+- loads the note each time it shows, so it is fresh when the user comes back;
+- goes back after a save, and asks before the user leaves with unsaved changes.
+
+<DeviceVideo name="guide-screen" devices={['ios']} />
+
+## What you need {#need}
+
+- An app with the navigation installed, and the typed commands that `setup` writes: see [Installation](../start/installation#typed-commands).
+- What a screen is and how its props reach it: [Screens and props](../fundamentals/screens-and-props). The rest of the parts are linked where they come in.
+- Two functions of your own, `loadNote(id)` and `saveNote(id, text)`: a request to your server, or a local database. The guide doesn't care which.
+
+## How it will work {#plan}
+
+The screen is a React component, but what is around it is native: the top bar, its button, the back button and the swipe back are the platform's. So each part has its place:
+
+| What | Where it goes |
+| --- | --- |
+| Which note to show | The screen's props, given by `push` |
+| The first title | `options` of `defineScreen`, there before the first frame |
+| The note | Loaded by `useFocusEffect`, each time the screen gets the focus |
+| The title of the note, the Save button | `useScreenOptions`, from the state of the component |
+| Back after a save | `goBack()` of `useNavigation` |
+| Asking before leaving | `usePreventLeave`, which holds the back button and the gestures |
+
+## 1. The component and its props {#component}
+
+A screen is a React component, and its props are the data of one showing: here, which note. `defineScreen` keeps the component and its options together, so the screen has its title wherever it opens:
+
+```tsx title="src/screens/Note.tsx"
+import { Text } from 'react-native';
+import { defineScreen } from '@apexnative/navigation';
+
+type Props = { noteId: string };
+
+export function Note({ noteId }: Props) {
+  return <Text>Note {noteId}</Text>;
+}
+
+export const NoteScreen = defineScreen({
+  component: Note,
+  options: (s) => s.title('Note'),
+});
+```
+
+The list opens it with the id of the note. Here the list is one button, to keep the guide on the Note screen:
+
+```tsx title="src/screens/Notes.tsx"
+import { Button, View } from 'react-native';
+import { defineScreen, useNavigation } from '@apexnative/navigation';
+
+export function Notes() {
+  const navigation = useNavigation();
+  const open = (noteId: string) =>
+    navigation.push('Note', { props: { noteId } });
+
+  return (
+    <View>
+      <Button title="Shopping" onPress={() => open('7')} />
+    </View>
+  );
+}
+
+export const NotesScreen = defineScreen({
+  component: Notes,
+  options: (s) => s.title('Notes'),
+});
+```
+
+The app lists both in `screens`, under the names the commands use:
+
+```ts title="Navigation.ts"
+import { createNavigation } from '@apexnative/navigation';
+import { NoteScreen } from './src/screens/Note';
+import { NotesScreen } from './src/screens/Notes';
+
+export const Navigation = createNavigation({
+  screens: { Notes: NotesScreen, Note: NoteScreen },
+  root: 'Notes',
+});
+```
+
+The user taps Shopping: the Note screen slides in with "Note" in the top bar, and back goes to the list. TypeScript checks the name and the props: `push('Note')` without `noteId` doesn't compile. More: [Props](../fundamentals/screens-and-props#props).
+
+## 2. The data, each time the screen shows {#data}
+
+A screen under another one <Mark>stays mounted</Mark>: when the user comes back to it, React's `useEffect` doesn't run again. `useFocusEffect` runs each time the screen gets the focus, the first time too, so the note is loaded when the screen opens and again when the user comes back to it, from a screen pushed over it or a sheet:
+
+```tsx title="src/screens/Note.tsx"
+import { useState } from 'react';
+import { TextInput } from 'react-native';
+import { useFocusEffect } from '@apexnative/navigation';
+import { loadNote, type NoteData } from '../notes'; // your own data
+
+export function Note({ noteId }: Props) {
+  const [note, setNote] = useState<NoteData | null>(null);
+  const [text, setText] = useState('');
+
+  useFocusEffect(() => {
+    loadNote(noteId).then((loaded) => {
+      setNote(loaded);
+      setText(loaded.text);
+    });
+  });
+
+  return (
+    <TextInput value={text} onChangeText={setText} multiline />
+  );
+}
+```
+
+The note shows once it is loaded. When the user opens another screen from here and comes back, the note is loaded again. Unlike React Navigation's hook, this one takes a plain function, with no `useCallback`: it runs the latest one each time. Every hook of the life of a screen: [The hooks of a screen](../fundamentals/lifecycle-and-events#hooks).
+
+## 3. The title from the data {#title}
+
+The title of `defineScreen` is there from the first frame, before the note is loaded. Once it is, the bar shows the note's own title. `useScreenOptions` builds options from the state of the component, and applies them when they change:
+
+```tsx
+useScreenOptions((s) => s.title(note?.title ?? 'Note'));
+```
+
+The user sees "Note" while the screen comes in, then the title of the note. More: [From the state: useScreenOptions](../fundamentals/screen-options#use-screen-options).
+
+## 4. A Save button {#button}
+
+The button goes into the same options. It is on only while the text differs from the saved note, and its `onPress` sees the state of the component:
+
+```tsx
+const changed = note !== null && text !== note.text;
+
+const save = async () => {
+  await saveNote(noteId, text); // your own data
+};
+
+useScreenOptions((s) =>
+  s.title(note?.title ?? 'Note').rightButtons({
+    id: 'save',
+    text: 'Save',
+    enabled: changed,
+    onPress: save,
+  }),
+);
+```
+
+Save shows at the right of the top bar, dimmed. The user types a letter, and it turns on. A button that needs no state, such as one that opens a screen, goes into the options of `defineScreen` instead: see [Where the press is handled](../screen-ui/bar-buttons#press).
+
+## 5. Keep the edits when the user comes back {#keep-edits}
+
+Step 2 loads the note each time the screen gets the focus, and that would also replace what the user typed. Load it only while there is nothing to lose:
+
+```tsx
+useFocusEffect(() => {
+  if (changed) return; // the user is editing
+  loadNote(noteId).then((loaded) => {
+    setNote(loaded);
+    setText(loaded.text);
+  });
+});
+```
+
+The effect is the latest one each time it runs, so it reads the current `changed`. The user types, opens another screen, comes back: the text is still theirs.
+
+## 6. Leave after a save {#leave}
+
+Once the note is saved, the screen goes back. `goBack()` does what the back button would do: it pops the screen when it was pushed, and closes the modal when the screen is the first one of a modal. So the same screen works both ways:
+
+```tsx
+const navigation = useNavigation();
+
+const save = async () => {
+  await saveNote(noteId, text); // your own data
+  await navigation.goBack();
+};
+```
+
+The user taps Save: the note is saved, and the list shows again. More: [Going back](../fundamentals/moving-between-screens#back).
+
+## 7. Ask before the changes are lost {#prevent}
+
+A swipe back would drop the unsaved text. `usePreventLeave` holds the ways the user goes back from this screen to another screen of the app while its condition is true: the back button, the swipe back, the system back of Android, the swipe down of a modal. It calls its handler instead, so the screen can ask:
+
+```tsx
+usePreventLeave(changed, () => {
+  Alert.alert('Discard the changes?', undefined, [
+    { text: 'Keep editing', style: 'cancel' },
+    {
+      text: 'Discard',
+      style: 'destructive',
+      onPress: () => navigation.goBack(),
+    },
+  ]);
+});
+```
+
+The user edits and swipes back: the screen stays, and the alert asks. Discard goes back. The commands of the app are not held, which is why `goBack()` in Discard and in Save leaves at once. Leaving the app isn't held either; Note is pushed, so back always has a screen to go to. On the first screen of the app, see [Asking before the user leaves the app](/api/back-and-gestures/usePreventLeave#leaving-the-app). More: [Keeping the user on a screen](../screen-ui/back-and-gestures#prevent).
+
+## The complete file {#file}
+
+```tsx title="src/screens/Note.tsx"
+import { useState } from 'react';
+import { Alert, TextInput } from 'react-native';
+import {
+  defineScreen,
+  useFocusEffect,
+  useNavigation,
+  usePreventLeave,
+  useScreenOptions,
+} from '@apexnative/navigation';
+import { loadNote, saveNote, type NoteData } from '../notes';
+
+type Props = { noteId: string };
+
+export function Note({ noteId }: Props) {
+  const navigation = useNavigation();
+  const [note, setNote] = useState<NoteData | null>(null);
+  const [text, setText] = useState('');
+  const changed = note !== null && text !== note.text;
+
+  // Each time the screen shows, unless the user is editing.
+  useFocusEffect(() => {
+    if (changed) return;
+    loadNote(noteId).then((loaded) => {
+      setNote(loaded);
+      setText(loaded.text);
+    });
+  });
+
+  const save = async () => {
+    await saveNote(noteId, text);
+    await navigation.goBack();
+  };
+
+  useScreenOptions((s) =>
+    s.title(note?.title ?? 'Note').rightButtons({
+      id: 'save',
+      text: 'Save',
+      enabled: changed,
+      onPress: save,
+    }),
+  );
+
+  usePreventLeave(changed, () => {
+    Alert.alert('Discard the changes?', undefined, [
+      { text: 'Keep editing', style: 'cancel' },
+      {
+        text: 'Discard',
+        style: 'destructive',
+        onPress: () => navigation.goBack(),
+      },
+    ]);
+  });
+
+  return (
+    <TextInput value={text} onChangeText={setText} multiline />
+  );
+}
+
+export const NoteScreen = defineScreen({
+  component: Note,
+  options: (s) => s.title('Note'),
+});
+```
+
+The sections below change this file for the cases a real app meets.
+
+## Coming from React Navigation {#react-navigation}
+
+The parts have the same jobs; where they differ, it is because the bar and the back gestures are native:
+
+| React Navigation | Here |
+| --- | --- |
+| `navigation.setOptions({ title })` in an effect | `useScreenOptions((s) => s.title(…))`, applied before the screen paints |
+| `headerRight: () => <Button … />` | `rightButtons({ id, text, onPress })`: a native button |
+| `useFocusEffect(useCallback(() => …, [deps]))` | `useFocusEffect(() => …)`: the latest function runs |
+| `usePreventRemove(changed, callback)` | `usePreventLeave(changed, callback)` |
+| `route.params.noteId` | `noteId` as a prop of the component |
+
+## A save that fails {#save-fails}
+
+When `saveNote` throws, `goBack()` doesn't run, and the user is left with a button that did nothing. Catch the error, say so, and stay: the text is still there to try again. A second tap while the first save runs would save twice, so the button turns off meanwhile:
+
+```tsx
+const [saving, setSaving] = useState(false);
+
+const save = async () => {
+  setSaving(true);
+  try {
+    await saveNote(noteId, text);
+  } catch {
+    setSaving(false);
+    Alert.alert('The note was not saved. Try again.');
+    return;
+  }
+  await navigation.goBack();
+};
+
+// in useScreenOptions
+enabled: changed && !saving,
+```
+
+A command that fails, such as `goBack()` when there is nowhere to go, rejects its promise; it doesn't crash the app. More: [Where the errors go](../architecture/errors-and-loading#on-error).
+
+## The same note opened twice {#same-note}
+
+The list opens Note, Note opens a linked note, and that one links back to the first. Each push adds a screen, so the stack can hold the same note twice, edited in two places. A `key` makes Note one screen per note in a stack: a push of a note already open goes back to its screen, closing the screens over it:
+
+```tsx title="src/screens/Note.tsx"
+export const NoteScreen = defineScreen({
+  component: Note,
+  options: (s) => s.title('Note'),
+  key: (props) => props.noteId,
+});
+```
+
+More: [One screen per item](../fundamentals/screens-and-props#key).
+
+## The note in a modal {#modal}
+
+The same screen opens as a modal, for a new note over the list:
+
+```ts
+navigation.showModal('Note', { props: { noteId: 'new' } });
+```
+
+Nothing in the screen changes: `goBack()` closes the modal, and `usePreventLeave` holds the swipe down too, so the alert asks there as well. A Cancel button for the modal and the form patterns: [Forms in a modal](../flows/forms-in-a-modal).
+
+## The note from a store or a query client {#stores}
+
+Without `appProvider`, <Mark>each screen is a React root of its own</Mark>. A provider you put around the list, or around the app's first screen, doesn't reach Note. So a store, a React Query client or a UI kit's theme goes around every screen through the navigation, not around one of them:
+
+- the ways to give every screen the same providers: [App context](./app-context);
+- Redux, Zustand and the others: [State management](./state-management);
+- React Query and SWR in place of `loadNote` and `useFocusEffect`: [Data fetching](./data-fetching).
+
+## When Android brings the app back {#relaunch}
+
+Android can destroy the app's activity while the app is in the background, and create a new one when the user returns. The JavaScript keeps running, but the navigation shows the last root again <Mark>without the screens pushed over it</Mark>: the user comes back to the list, and the unsaved text of Note is gone. When drafts matter, keep the text in your own storage as the user types, and read it in `loadNote`. More: [When the app launches again](../fundamentals/starting-the-app#launches).
+
+## What's next {#next}
+
+- [Testing](./testing): a Jest test for the Notes list, and an end-to-end test that opens a note and goes back.
+- [Bar buttons](../screen-ui/bar-buttons): icons, menus, buttons from a component.
+- [Screen options](../fundamentals/screen-options): where options come from, and how they merge.
+- [Lifecycle and events](../fundamentals/lifecycle-and-events): every event of a screen.
+- [List and details](../flows/list-and-details): the list side, with one screen per item and a split view on iPad.

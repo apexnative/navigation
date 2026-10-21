@@ -1,0 +1,712 @@
+---
+title: Troubleshooting
+description: 'Problems you may meet with the navigation, by area: what you see, why it happens, how to fix it, and the page that explains it.'
+---
+
+import { Os } from '@site/src/components/Intro';
+
+What you see when something goes wrong, why it happens, and how to fix it. The problems are grouped by area; an error of the navigation starts with `[navigation]`, so search this page for the words after it. Each entry links to the page that explains the part in full.
+
+1. [Setup and build](#setup)
+2. [Starting the app](#start)
+3. [Moving between screens](#moves)
+4. [Bars, tabs and buttons](#bars)
+5. [Modals, sheets and overlays](#modals)
+6. [Theme, context and direction](#theme)
+7. [Links and notifications](#links)
+8. [Tests](#tests)
+
+Run `npx apex-navigation doctor` first when a build fails for no clear reason: it checks the app and the machine, and gives a fix for each problem. See [Check everything with doctor](../start/installation#doctor).
+
+A problem that isn't here is welcome as [an issue](https://github.com/apexnative/navigation/issues). Paste into it what `info` prints, run in the root of the app: the versions of the system, Node, React Native, the navigation and how its screens render, Xcode and CocoaPods, the JDK and the Android SDK, as Markdown. It changes nothing in the app. See [info](../guides/cli#info).
+
+```bash title="Terminal"
+npx apex-navigation info
+```
+
+## Setup and build {#setup}
+
+### setup stops: "This is an Expo app" {#expo}
+
+`setup` stops with `This is an Expo app: Expo makes its native files itself, so setup doesn't change them.`, and `doctor` warns about Expo.
+
+**Why:** the app depends on the `expo` package. Expo generates the native files, and the config plugin that would make the changes through Expo isn't ready yet.
+
+**Fix:** make a new app with `init` and move the screens into it, or wait for the config plugin. The app runs from its own native project, never in Expo Go. More: [Before you start](../migration/from-expo-router#before).
+
+### setup says a file is changed by hand {#changed-by-hand}
+
+`setup` lists a file, such as `index.js` or `App.tsx`, as changed by hand, and prints a change instead of making it.
+
+**Why:** the file isn't as React Native's template makes it, so `setup` doesn't rewrite it.
+
+**Fix:** make the printed change yourself. For `index.js` it is this:
+
+```js title="index.js"
+import { AppRegistry } from '@apexnative/navigation';
+import { name } from './app.json';
+import { Navigation } from './Navigation';
+
+AppRegistry.registerComponent(name, Navigation);
+```
+
+Then run `doctor`: it lists what is still not set up. More: [What setup changes, and why](../start/installation#why-native).
+
+### doctor warns "Another navigation" {#another-navigation}
+
+`doctor` warns `two navigations in one app don't see each other's screens`, naming a package such as `@react-navigation/native`.
+
+**Why:** a package of another navigation library is still among the dependencies.
+
+**Fix:** while you move an app, it is expected. Once no file imports the old packages, remove them, and the warning goes. More: [Remove the old packages](../migration/from-react-navigation#cleanup).
+
+### Android: unresolved `com.reactnativenavigation` after setup {#old-imports}
+
+The Android build fails on an import of `com.reactnativenavigation`, while `setup` said the activity and the application are already set up.
+
+**Why:** the classes keep their names, `NavigationActivity` and `NavigationApplication`, so `setup` sees them and doesn't look at the imports.
+
+**Fix:** change the imports to `dev.apexnative.navigation` by hand in `MainActivity` and `MainApplication`, or let `npx apex-navigation migrate` change them, with the other files of the old library. More: [The native files](../migration/from-react-native-navigation#native), [Start with migrate](../migration/from-react-native-navigation#migrate).
+
+### A screen ignores its static options {#static-options}
+
+Options set in `static options` on a component no longer apply.
+
+**Why:** the screen's options come from `defineScreen`; `static options` is not read.
+
+**Fix:** move them into `defineScreen({ component, options })`; the object carries over as it is. More: [Options next to the screen](../migration/from-react-native-navigation#options).
+
+### The Android app crashes at start: React Native loads twice {#loads-twice}
+
+<Os name="Android" /> The app closes at once, and `doctor` reports `MainApplication.kt calls loadReactNative(this), NavigationApplication loads it too`.
+
+**Why:** `NavigationApplication` loads React Native itself, and a second load crashes the app.
+
+**Fix:** remove the `loadReactNative(this)` call from `MainApplication.kt`. More: [Android files](../start/installation#android-files).
+
+### doctor warns about the JDK {#jdk}
+
+<Os name="Android" /> `doctor` warns that JDK 17 is installed but another JDK is in use.
+
+**Why:** the Android build needs JDK 17.
+
+**Fix:** point `JAVA_HOME` at JDK 17 in the shell that builds the app. On a Mac:
+
+```bash title="Terminal"
+export JAVA_HOME=$(/usr/libexec/java_home -v 17)
+```
+
+More: [Requirements](../start/installation#requirements).
+
+### codegen stops on a prop {#codegen}
+
+`npx apex-navigation codegen` stops, naming a prop of a native screen.
+
+**Why:** the prop has a type with no form in Swift and Kotlin: `any`, `unknown`, a union of different types, a tuple, or a function inside an object.
+
+**Fix:** give the prop a type from the table of types, such as an object with named keys instead of a tuple. More: [Types](../architecture/native-screens#types).
+
+### Commands take any screen name {#untyped}
+
+`navigation.push('Detials')` compiles, props aren't checked, and `useAppContext()` returns `unknown`.
+
+**Why:** nothing tells the package about the screens of your app. The `Register` declaration in `navigation-env.d.ts` does that, and it is missing, outside the files `tsconfig.json` includes, or points to a renamed export. `useAppContext()` alone returning `unknown`: the file has no `context` line, as `Navigation.ts` exports no type or interface named `AppContext`.
+
+**Fix:** run `npx apex-navigation doctor --fix`: it runs `setup`, which writes the file again from the import of the navigation in `index.js`, and adds it to `tsconfig.json` when that leaves it out. The file looks like this, and the app doesn't edit it: `setup` knows it by its first line, and only prints what to write into a file without that line.
+
+```ts title="navigation-env.d.ts"
+// Made by apex-navigation setup: the types of the app's screens
+// for the navigation's commands. Don't edit.
+declare module '@apexnative/navigation' {
+  interface Register {
+    app: typeof import('./Navigation').Navigation;
+    context: import('./Navigation').AppContext;
+  }
+}
+export {};
+```
+
+More: [Typed commands](../start/installation#typed-commands), [Typing it](../architecture/theme-and-context#types).
+
+## Starting the app {#start}
+
+### iOS logs "RCTStatusBarManager module requires…" {#status-bar}
+
+<Os name="iOS" /> The console shows `RCTStatusBarManager module requires that the UIViewControllerBasedStatusBarAppearance key in the Info.plist is set to NO`.
+
+**Why:** the app still renders React Native's `<StatusBar>` or calls `StatusBar.setBarStyle`, while the screens set the status bar themselves. `setup` sets that key to `true` for them.
+
+**Fix:** remove `StatusBar` from the app, and give each screen its status bar in its options:
+
+```ts
+options: (s) => s.statusBar({ style: 'light' }),
+```
+
+More: [JavaScript files](../start/installation#js-files), [The status bar](../screen-ui/system-ui#status-bar).
+
+### registerComponent "expects the navigation made by createNavigation" {#register-component}
+
+The app doesn't start, with `[navigation] AppRegistry.registerComponent('MyApp', ...) expects the navigation made by createNavigation, or a function returning it`.
+
+**Why:** `index.js` gives the package's `AppRegistry` a component, such as `() => App`.
+
+**Fix:** give it the navigation itself: `AppRegistry.registerComponent(name, Navigation)`. More: [Starting the app](../fundamentals/starting-the-app).
+
+### The app doesn't start: "a name goes once" {#duplicate-name}
+
+The start fails with `[navigation] The screen 'Login' is in screens and in the group 'auth': a name goes once`.
+
+**Why:** a command finds a screen by its name alone, so a name can be used once across `screens` and every group.
+
+**Fix:** rename one of the two screens, or keep it in one place. More: [How the app knows its screens](../fundamentals/screens-and-props#register).
+
+### The splash screen never goes away {#splash-stays}
+
+The app stays on the splash screen.
+
+**Why:** one of three:
+
+- The start failed: `willMount` threw, or the first root couldn't be built. Without `errorFallback` the splash screen stays, and the error goes to `onError`, or to the console.
+- `willMount` never ends, such as a request with no timeout. In development the console warns after 10 seconds: `[navigation] willMount: still running after 10 s`.
+- A splash of your own with `hide: 'manual'` never calls `useSplash().hide()`, such as when its animation stops before its end.
+
+**Fix:** set `errorFallback`, so a failed start shows the error and Try again. In `willMount`, catch what can fail, such as storage, and give a request a timeout:
+
+```ts
+willMount: async () => {
+  // your own storage; a session that can't be read is none
+  const user = await loadSession().catch(() => null);
+  navigation.setContext({ user });
+},
+```
+
+With `hide: 'manual'`, call `hide()` on every path. More: [When the start fails](../architecture/errors-and-loading#start), [`hide()`](/api/starting-the-app/useSplash#hide).
+
+### The splash of your own doesn't show {#own-splash-missing}
+
+`splash` of `createNavigation` is set, but the app goes from the native splash straight to the first screen.
+
+**Why:** it shows once per cold start of the app's process. A reload of the JavaScript, the usual way to see a change in development, isn't one.
+
+**Fix:** quit the app and launch it from its icon. More: [When the splash shows](../guides/splash-screen#launches).
+
+### The splash of your own throws: no provider {#splash-provider}
+
+The splash component fails with an error of a provider, such as react-redux's "could not find react-redux context value".
+
+**Why:** the splash renders while `willMount` runs, as a React root of its own, outside `appProvider` and `screenProvider`.
+
+**Fix:** read the app's context with `useAppContext`, or put the provider inside the splash component. More: [The splash of your own is outside the providers](../guides/splash-screen#providers).
+
+### Login flashes before the tabs {#login-flash}
+
+A signed-in user sees Login for a moment, then the app.
+
+**Why:** the app checks the saved session after the first root shows, in a screen or in `didMount`.
+
+**Fix:** read the session in `willMount`, put it in the context, and pick the first root with `initialRoot`. The splash screen stays until `willMount` is done. More: [Read the saved session at launch](../flows/sign-in-and-sign-out#launch).
+
+### iOS shows the old launch screen {#launch-screen-cache}
+
+<Os name="iOS" /> After a change of the launch screen, the app still shows the old one.
+
+**Why:** iOS keeps the launch screen of an installed app in a cache, and shows it again until the names of its images change.
+
+**Fix:** make the splash with `npx apex-navigation splash`: it puts a hash of the logo and the colors into the names of what it writes, so the new one shows after the next build. A storyboard changed by hand needs the app deleted from the simulator or the device, and installed again. More: [A launch screen of your own](../guides/splash-screen#custom).
+
+### An empty screen shows after the launch screen {#empty-after-launch}
+
+<Os name="iOS" /> Between the launch screen and the first screen, the window is empty for a moment.
+
+**Why:** the launch screen is made with the `UILaunchScreen` dictionary of `Info.plist`, not a storyboard. The navigation keeps a copy of a storyboard on screen until the first root, and can't make one of the dictionary. `doctor` warns about it under Launch screen.
+
+**Fix:** run `npx apex-navigation splash`, or name a storyboard in `UILaunchStoryboardName` and remove `UILaunchScreen`. More: [Make the native splash](../guides/splash-screen#command).
+
+### Android brings the app back without its pushed screens {#android-relaunch}
+
+<Os name="Android" /> After the user leaves the app for a long time, it comes back on its root, without the screens pushed or presented over it.
+
+**Why:** the system created a new activity while the JavaScript kept running. The navigation sets the last root again, and `willMount` and `didMount` don't run again.
+
+**Fix:** keep what must outlive it, such as a draft, in a store or the app's own storage, not only in the state of a screen. More: [When the app launches again](../fundamentals/starting-the-app#launches).
+
+## Moving between screens {#moves}
+
+### A hook throws "is for the screens of createNavigation" {#hook-outside-screen}
+
+The app shows `[navigation] This hook is for the screens of createNavigation, and the component is not in one`, or the same words about `useNavigation`.
+
+**Why:** a hook that needs a screen, such as `useNavigation`, `useScreenOptions` or `useFocusEffect`, runs in a component that isn't in one. `appProvider` is above every screen, and a test renders the component alone.
+
+**Fix:** outside the screens, use `navigation` from the package. In Jest, replace the hooks: see [A hook throws in Jest](#jest-hook). More: [Where the commands come from](../fundamentals/moving-between-screens#where).
+
+### pop rejects: "the first screen of its stack" {#pop-first}
+
+`await navigation.pop()` rejects with `[navigation] pop: Home is the first screen of its stack, there is nothing to go back to`.
+
+**Why:** there is no screen under this one. `goBack()` on the first screen of the root rejects the same way.
+
+**Fix:** check before going back, or use `goBack()`, which closes a modal when the screen is its first one:
+
+```tsx
+{navigation.canGoBack() && (
+  <Button title="Back" onPress={() => navigation.goBack()} />
+)}
+```
+
+More: [Going back](../fundamentals/moving-between-screens#back).
+
+### A command rejects: "before the app started" {#command-before-start}
+
+A command rejects with `[navigation] A command before the app started: register it with AppRegistry.registerComponent`.
+
+**Why:** no navigation is registered. `index.js` registers the app with React Native's `AppRegistry` instead of the package's, or the code runs in Jest.
+
+**Fix:** register the navigation as in [setup says a file is changed by hand](#changed-by-hand). A command made while the app starts doesn't fail: it waits for the first root. In Jest, see [A command rejects in Jest](#jest-command).
+
+### navigation has no dismiss or setOptions {#no-dismiss}
+
+TypeScript says that `dismiss` or `setOptions` doesn't exist on `navigation`.
+
+**Why:** `navigation` of the package acts from the screen the user sees, and these two need a screen of their own.
+
+**Fix:** in a screen, use `useNavigation()`. From code that knows the screen, use `screenNavigation(screen)`. To close a modal from outside, keep the id `showModal` resolved with, and call `navigation.dismissModal(id)`. More: [Anywhere else: navigation](../fundamentals/moving-between-screens#navigation).
+
+### switchTo fails: "There is no root" {#switch-to-name}
+
+`navigation.switchTo('Home')` rejects with `[navigation] There is no root 'Home' in the roots of createNavigation`.
+
+**Why:** a name alone in `switchTo` is a root of `roots`, not a screen.
+
+**Fix:** give a screen on its own as a layout, or name it in `roots`:
+
+```ts
+navigation.switchTo(Stack('Home'));
+```
+
+More: [A root made on the go](../fundamentals/switching-roots#on-the-go).
+
+### selectTab doesn't select the tab {#select-tab-id}
+
+`navigation.selectTab('inbox')` doesn't select the Inbox tab.
+
+**Why:** a string in `selectTab` is the id of a tab, given in the layout, not the name of its screen.
+
+**Fix:** give the tab the id, or select it by its index:
+
+```ts
+Tab('Inbox').label('Inbox').id('inbox');
+```
+
+More: [Selecting a tab](../containers/tabs#select).
+
+### A push after selectTab lands in the old tab {#push-after-select-tab}
+
+A screen selects Inbox, then pushes Chat, and Chat shows in the tab the user left.
+
+**Why:** a push from `useNavigation()` goes into the stack of the screen that asked, wherever the user is now.
+
+**Fix:** use `navigation` of the package, which acts from the screen the user sees, and close the modals first:
+
+```ts
+import { navigation } from '@apexnative/navigation';
+
+await navigation.dismissAllModals();
+await navigation.selectTab('inbox');
+await navigation.push('Chat', { props: { userId } });
+```
+
+More: [Open a tab from code](../flows/an-app-with-tabs#select).
+
+### The same chat opens twice {#duplicate-screen}
+
+A notification opens a chat that is already in the stack, and back goes from the chat to the same chat.
+
+**Why:** every push is a new screen by default.
+
+**Fix:** give the screen a `key`, so a push of the same item goes back to it:
+
+```ts
+export const ChatScreen = defineScreen({
+  component: Chat,
+  key: (props) => props.chatId,
+});
+```
+
+More: [One screen per item](../fundamentals/screens-and-props#key).
+
+### A command fails: "an id goes to one screen" {#id-clash}
+
+A command rejects with `the screen 'support' shows already: an id goes to one screen`.
+
+**Why:** an id given with `Screen('Chat', props).id('support')` is already used by a screen that shows.
+
+**Fix:** give each screen its own id, or use a `key` for one screen per item. More: [One screen per item](../fundamentals/screens-and-props#key).
+
+### Pushing a native screen fails {#use-props}
+
+The push of a native screen rejects, and `onError` gets the error as an error of the screen.
+
+**Why:** the screen's `useProps` threw. The command waits for its first result, so the screen never shows without its data.
+
+**Fix:** catch what can fail inside `useProps`, and return props the screen can show. More: [What happens when it shows](../architecture/native-screens#flow).
+
+### useFocusEffect doesn't restart when a value changes {#focus-effect}
+
+An effect in `useFocusEffect` reads an id, the id changes while the screen shows, and the effect doesn't run again.
+
+**Why:** `useFocusEffect` runs when the screen gets the focus and cleans up when it loses it, not on renders. It reads the latest values when it runs.
+
+**Fix:** put what should restart with a value in a `useEffect` with that value in its dependencies. More: [Hooks of a screen](../migration/from-react-navigation#hooks).
+
+### A custom pop animation doesn't play on the swipe back {#custom-pop}
+
+<Os name="iOS" /> A `pop` animation of `options.animations` plays for the back button, but the swipe back slides as usual.
+
+**Why:** the swipe back always follows the finger with the system's slide.
+
+**Fix:** none is needed: the custom animation plays for the back button and `pop()`. More: [Animations of your own](../architecture/transitions#custom).
+
+### Back on the first screen leaves without the system's animation {#back-animation}
+
+<Os name="Android" /> A swipe back on the first screen leaves the app at once: the home screen doesn't show behind the app as the user swipes.
+
+**Why:** the app targets an API below 36 and its `AndroidManifest.xml` doesn't turn predictive back on, or a `BackHandler` listener is registered: while one is, the navigation keeps the back for it.
+
+**Fix:** run `npx apex-navigation setup`, which adds `android:enableOnBackInvokedCallback="true"` to `<application>`, and listen to `BackHandler` only while a screen needs it, in `useFocusEffect`. More: [Back to the home screen](../screen-ui/back-and-gestures#system-animation).
+
+### A BackHandler listener isn't called on the first screen {#back-handler-early}
+
+<Os name="Android" /> A `hardwareBackPress` listener runs on pushed screens, but on the first screen back leaves the app without calling it.
+
+**Why:** the listener was added before `createNavigation` ran, by a module that loads ahead of your navigation file. The navigation counts the listeners from that call on, and on the first screen leaves the back to the system when it counts none.
+
+**Fix:** import that module after the navigation file, or add the listener in a component, in `useFocusEffect` or `useEffect`. More: [Handling back yourself](../screen-ui/back-and-gestures#back-handler).
+
+### The zoom or the preview does nothing {#zoom}
+
+A `transition: { zoom }` shows the usual push, or a long press shows no preview.
+
+**Why:** the zoom needs <Os name="iOS" /> 18 or newer, and the preview is <Os name="iOS" /> only. On Android and older iOS the screen comes in with the platform's transition.
+
+**Fix:** none is needed: the move still works there. More: [Zoom](../architecture/transitions#zoom), [Preview](../architecture/transitions#preview).
+
+### A split view on Android has no middle column {#split-android}
+
+<Os name="Android" /> The `supplementary` column or the `inspector` doesn't show.
+
+**Why:** Android has two panes: the primary and the secondary. It leaves the others out.
+
+**Fix:** design the Android screens around two panes; `showInColumn` works the same way on both platforms. More: [Android](../containers/split-view#android).
+
+## Bars, tabs and buttons {#bars}
+
+### The first rows of a list hide under the top bar {#rows-under-bar}
+
+With `hideOnScroll`, `drawBehind`, or a large title on Android, the first rows of a list sit under the bar.
+
+**Why:** with these options the screen goes under the bar, so its list keeps its rows clear itself.
+
+**Fix:** on <Os name="iOS" /> give the list `contentInsetAdjustmentBehavior="automatic"`; on <Os name="Android" /> pad it by the top inset:
+
+```tsx
+const insets = useSafeAreaInsets();
+return (
+  <FlatList
+    data={items}
+    contentInsetAdjustmentBehavior="automatic"
+    contentContainerStyle={{
+      paddingTop: Platform.OS === 'android' ? insets.top : 0,
+    }}
+    renderItem={renderItem}
+  />
+);
+```
+
+More: [Hiding the bar](../screen-ui/top-bar#hide), [The large title](../screen-ui/top-bar#large-title).
+
+### A pick in the overflow menu does nothing {#overflow-pick}
+
+The user picks Export in the overflow menu, and nothing happens.
+
+**Why:** the items of `overflowMenu` are plain options, without `onPress`. A pick comes as a press with the id of the item. The same goes for the items of the title menu.
+
+**Fix:** handle the id in the component:
+
+```tsx
+useNavigationButton('export', () => exportNote()); // your own
+```
+
+More: [The overflow menu](../screen-ui/bar-buttons#overflow).
+
+### A press runs the handler of another button {#button-ids}
+
+A pick in a menu runs what a button of the bar does, or the other way round.
+
+**Why:** the ids of menu items and the ids of buttons share one space.
+
+**Fix:** give every button and every item its own id. More: [Menus](../screen-ui/bar-buttons#menus).
+
+### The toolbar hides behind the tab bar {#toolbar-tabs}
+
+<Os name="iOS" /> 26 on iPhone: a screen in tabs has a toolbar, and the user can't reach it.
+
+**Why:** the floating tab bar takes the same place at the bottom.
+
+**Fix:** hide the tab bar on that screen with `hideBottomTabs()`. More: [The toolbar](../screen-ui/toolbar-and-fab#toolbar).
+
+### A list that loads later has no edge effect {#scroll-edge}
+
+<Os name="iOS" /> 26: the content doesn't fade under the bar, or `scrollEdgeEffect` doesn't apply, until the screen shows again.
+
+**Why:** the effect belongs to the scroll views the screen has when it appears; a list that mounts later gets it at the next appearance.
+
+**Fix:** render the list at once, and fill it when the data comes. More: [The edge of the scroll](../screen-ui/system-ui#scroll-edge).
+
+### The tab bar doesn't hide on scroll on Android {#tabs-hide-on-scroll}
+
+<Os name="Android" /> `hideOnScroll` of the tab bar is set, and the bar stays.
+
+**Why:** it needs the scroll view to be the root view of the screen, with `nestedScrollEnabled`.
+
+**Fix:**
+
+```tsx
+return <ScrollView nestedScrollEnabled>{/* … */}</ScrollView>;
+```
+
+More: [The tab bar on each platform](../containers/tabs#platforms).
+
+### The user can't arrange the tabs on iPad {#customizable}
+
+<Os name="iPadOS" /> `Tabs().customizable(id)` is set, and the tabs can't be arranged.
+
+**Why:** the user arranges the tabs in the sidebar, so it works only with it.
+
+**Fix:** turn the sidebar on with `Tabs().sidebar(…)`. iPhone always shows the tab bar. More: [The tab bar on each platform](../containers/tabs#platforms).
+
+## Modals, sheets and overlays {#modals}
+
+### An overlay blocks the app under it {#overlay-touches}
+
+A toast shows at the bottom, and the user can't scroll or tap the screen under it.
+
+**Why:** a view that fills the overlay only to place its content takes the touches too.
+
+**Fix:** let the touches through it:
+
+```tsx
+<View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+  <Toast text="Saved" />
+</View>
+```
+
+More: [Where the touches go](../containers/overlays#touches).
+
+### An overFullScreen modal hides the screen under it {#over-full-screen}
+
+A modal with `style: 'overFullScreen'` covers the app with a plain background.
+
+**Why:** the modal's screen draws its own background.
+
+**Fix:** make it transparent in the modal's options: `backgroundColor('transparent')`. More: [How a modal looks](../containers/modals#styles).
+
+### Cancel closes a form with unsaved changes {#cancel-not-held}
+
+`usePreventLeave` asks before a swipe closes the form, but Cancel closes it at once.
+
+**Why:** `usePreventLeave` holds the ways the system offers: the swipe down, the system back, the close button, the back of a stack. A button of your own and the commands of the app aren't held.
+
+**Fix:** let Cancel ask the same question itself:
+
+```ts
+onPress: () => (changed ? discard() : navigation.dismiss()),
+```
+
+More: [Ask before changes are lost](../flows/forms-in-a-modal#prevent).
+
+### A content sheet doesn't fit its content {#content-sheet}
+
+A sheet with the detent `'content'` isn't as tall as what it shows.
+
+**Why:** a screen that fills its parent (`flex: 1`) has no height of its own to measure. On <Os name="Android" /> `'content'` stops at half the height, as the Material sheet has no height of its content.
+
+**Fix:** give the content of the screen its natural height, without `flex: 1`. More: [A sheet as tall as its content](../flows/bottom-sheets#content).
+
+### A sheet leaves out a detent on iOS 15 {#detents-ios-15}
+
+<Os name="iOS" /> 15: a sheet doesn't stop at a height in points or at `'content'`.
+
+**Why:** both need iOS 16; iOS 15 leaves them out.
+
+**Fix:** keep `'medium'` or `'large'` among the detents, so the sheet has a height it stops at on iOS 15 too. More: [On each platform](../flows/bottom-sheets#platforms).
+
+## Theme, context and direction {#theme}
+
+### setTheme drops colors {#set-theme}
+
+After `navigation.setTheme({ colors: { primary } })`, the bars lose their color.
+
+**Why:** `setTheme` replaces the whole theme: a color left out goes back to the platform's look.
+
+**Fix:** keep each theme as a whole object, and pass all of it. More: [Changing the theme](../architecture/theme-and-context#set-theme).
+
+### A title from the context doesn't change {#context-options}
+
+The title is built from the context, and after `setContext` it still shows the old value.
+
+**Why:** a screen's options read the context once, when a command shows the screen.
+
+**Fix:** build the title in the component, from `useAppContext`, with `useScreenOptions`:
+
+```tsx
+const user = useAppContext((c) => c.user);
+useScreenOptions((s) => s.title(user ? user.name : 'Home'));
+```
+
+More: [Reading it](../architecture/theme-and-context#read).
+
+### A screen keeps old theme colors after setTheme {#theme-options}
+
+A screen's own options take a color from `theme`, and keep the old color after `setTheme`.
+
+**Why:** a screen's own options are built when a command shows it. Only the app's `options` are built again on every `setTheme`.
+
+**Fix:** put the color in the theme itself, or in the app's `options`. More: [The theme in options](../architecture/theme-and-context#theme-options).
+
+### State in screenProvider starts over on each screen {#screen-provider-state}
+
+A counter kept in `screenProvider` is back at zero on every new screen.
+
+**Why:** each screen has its own copy of `screenProvider`.
+
+**Fix:** state the screens share goes in `appProvider`, or in a store kept in a module. More: [A provider around every screen](../architecture/one-tree#screen-provider).
+
+### A shown screen keeps its direction after setDirection {#direction}
+
+After `navigation.setDirection('rtl')`, the bars turn, but the content of the screen on display is still laid out left to right.
+
+**Why:** React content follows the direction in the screens created after the change. On iOS 15–16 a stack already shown
+also keeps its bar, its swipe back and its transitions until its next push: before iOS 17 UIKit turns only the views it
+creates after the change.
+
+**Fix:** switch to a root after the change, so every screen is created again:
+
+```ts
+navigation.setDirection('rtl');
+await navigation.switchTo('main');
+```
+
+More: [A language switch in the app](../guides/right-to-left#switch).
+
+## Links and notifications {#links}
+
+### A link doesn't open the app {#link-not-declared}
+
+Tapping `myapp://user/42` does nothing, or opens a web page.
+
+**Why:** the system gives a link to the app only when the app declares it natively. The `scheme` of an Expo `app.json` doesn't count here.
+
+**Fix:** run `npx apex-navigation links`, which declares the prefixes of `linking` on both platforms, then build the app again. By hand: the scheme in `CFBundleURLTypes` of `Info.plist` and in an intent filter of `AndroidManifest.xml`; a link to your domain needs universal links and App Links, and the files your site serves. `doctor` lists the prefixes not declared yet. More: [Declare the links](../guides/deep-links#declare).
+
+### The console warns "No route of linking takes" {#unmatched}
+
+A development build warns `[navigation] No route of linking takes 'myapp://…'`, and nothing opens.
+
+**Why:** no route matches the path, or the URL starts with none of `prefixes`.
+
+**Fix:** add the route or the prefix, or handle such links in `unmatched`. More: [Which route takes a URL](../guides/deep-links#matching).
+
+### A waiting link opens in the old root {#link-old-root}
+
+After the sign-in, the waiting link opens on Login, and the switch to the app then replaces it.
+
+**Why:** something is awaited between `setContext` and `switchTo`. The link waits for the commands on their way when the context changed, and the switch wasn't on its way yet.
+
+**Fix:** make the switch right after `setContext`:
+
+```ts
+navigation.setContext({ user });
+await navigation.switchTo('signedIn');
+```
+
+More: [Opened after the sign-in](../guides/deep-links#auto).
+
+### A failed link doesn't reach onError {#link-error}
+
+A route's command fails, and `onError` never hears of it.
+
+**Why:** the handler doesn't return the promise of the command: an arrow function with braces and no `return`.
+
+**Fix:** `return` the command, or `await` it in an `async` function. More: [Errors, and links no route takes](../guides/deep-links#errors).
+
+### The launch link doesn't run after a reload {#launch-link-reload}
+
+You reload the JavaScript, and the link that launched the app doesn't open again.
+
+**Why:** the navigation gets the link that launched the app once.
+
+**Fix:** to try a launch by a link, quit the app, then open the link again. More: [Testing](../guides/deep-links#testing).
+
+### A notification that launched the app opens its screen twice {#notification-twice}
+
+The app launches on the chat of the notification, then pushes the same chat again.
+
+**Why:** some notification libraries also report the notification that launched the app to the tap listener.
+
+**Fix:** skip that notification in the listener, or give the screen a [`key`](#duplicate-screen). More: [A tap that launches the app](../guides/notifications#launch).
+
+## Tests {#tests}
+
+### Jest can't parse the package {#jest-esm}
+
+Jest stops with a `SyntaxError` on an `import` or `export` of `@apexnative/navigation`.
+
+**Why:** the package is published as ES modules, and Jest doesn't transform `node_modules` by default.
+
+**Fix:** let Jest transform it, as React Native itself:
+
+```js title="jest.config.js"
+module.exports = {
+  preset: '@react-native/jest-preset',
+  transformIgnorePatterns: [
+    'node_modules/(?!(@react-native|react-native|@apexnative)/)',
+  ],
+};
+```
+
+More: [Screens in Jest](../guides/testing#screens).
+
+### A hook throws in Jest {#jest-hook}
+
+A test of a screen fails with `[navigation] This hook is for the screens of createNavigation, and the component is not in one`.
+
+**Why:** the test renders the component alone, outside a screen.
+
+**Fix:** replace the hooks of the screen with stand-ins:
+
+```tsx
+const mockNavigation = { push: jest.fn(), goBack: jest.fn() };
+
+jest.mock('@apexnative/navigation', () => ({
+  ...jest.requireActual('@apexnative/navigation'),
+  useNavigation: () => mockNavigation,
+  useScreenOptions: jest.fn(),
+}));
+```
+
+More: [Screens in Jest](../guides/testing#screens).
+
+### A command rejects in Jest {#jest-command}
+
+A function that moves the user fails in a test with `[navigation] A command before the app started`.
+
+**Why:** in Jest there is no native side and no app started, so a command can't run.
+
+**Fix:** replace `navigation` with mocks, and check the commands and their order. More: [Code outside the screens](../guides/testing#outside).
+
+## Related {#related}
+
+- [Glossary](./glossary): the words these docs use.
+- [Installation](../start/installation#doctor): `doctor` and its checks.
+- [Errors and loading](../architecture/errors-and-loading#on-error): where each kind of error goes.

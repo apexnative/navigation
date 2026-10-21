@@ -1,0 +1,362 @@
+---
+title: System UI
+description: 'The parts of the system around a screen: the safe area, the fold and the camera, the hinge, the status bar, the bottom of the system, orientation, backgrounds, keyboard shortcuts and the direction of the app.'
+---
+
+import { SectionStatus, SectionApi } from '@site/src/components/Api';
+import { Mark, Os } from '@site/src/components/Intro';
+import { SystemAnatomy } from '@site/src/components/Screens';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+<SectionStatus id="system-ui" />
+
+Around every screen is the system: the status bar, the camera cutout, the home indicator, the keyboard. A screen says what it needs from them in its options, and the navigation applies it <Mark>while the screen is on top</Mark>. A photo viewer asks for light status bar text over its dark photo:
+
+```tsx title="src/screens/Photo.tsx"
+import { defineScreen } from '@apexnative/navigation';
+
+export const PhotoScreen = defineScreen({
+  component: Photo,
+  options: (s) => s.statusBar({ style: 'light' }),
+});
+```
+
+When the user goes back to a light list, the status bar text turns dark again, because the list has options of its own. This page answers:
+
+1. [The parts of the system](#parts) around a screen.
+2. [The safe area](#safe-area): where the content is not covered.
+3. [The fold and the camera](#reserved-regions) of a device that folds, and [the hinge](#hinge).
+4. [The status bar](#status-bar), and [the bottom of the system](#bottom).
+5. [Orientation](#orientation).
+6. [Backgrounds](#backgrounds), [the window](#window) and [the edge of the scroll](#scroll-edge).
+7. [Keyboard shortcuts](#shortcuts) and [the direction of the app](#direction).
+
+## The parts of the system {#parts}
+
+The status bar sits at the top, with the camera cutout in it; the home indicator, or the navigation bar of Android, at the bottom. The bars of the navigation sit inside them:
+
+<SystemAnatomy />
+
+## The safe area {#safe-area}
+
+The safe area is where nothing covers the content: not the bars of the navigation, not the status bar, not the cutout, not the home indicator. <Mark>The navigation keeps every screen in it by default</Mark>, so a screen doesn't need its own padding:
+
+| Platform | By default |
+| --- | --- |
+| <Os name="iOS" /> | Every edge, except one under a bar that shows: a list goes under the top bar and keeps its rows clear itself, so the bar's glass shows the content scrolling under it. A screen with a large title leaves the top out too, and on iPhone Duo the side of the [vertical bar](#vertical-bar). |
+| <Os name="Android" /> | All four edges: under the status bar, out of the cutout, above the navigation bar. |
+
+:::tip[No safe area library]
+
+Screens need no `SafeAreaView` and no safe area library. The navigation knows its own bars, so it measures each screen on the native side, with the bars it has: under a top bar, in a sheet, in a tab, each screen gets its own insets. A library that measures the window sees the system, not the bars of the navigation.
+
+:::
+
+A screen that should go under the system, such as a photo or a map, says which edges it keeps:
+
+```ts
+s.safeArea('bottom'); // only the bottom: the photo goes under the top
+s.safeArea(); // no edge: the content goes everywhere
+```
+
+The edges for every screen of the app go in `createNavigation`, and a screen's own `safeArea` wins over them:
+
+```ts title="Navigation.ts"
+export const Navigation = createNavigation({
+  // …
+  safeArea: { edges: ['top', 'bottom'] },
+});
+```
+
+Content that keeps clear of the system itself, such as a list that scrolls under the home indicator, reads what still covers it with `useSafeAreaInsets()`. The insets are <Mark>what is left after the screen's own padding</Mark>: 0 on an edge the screen keeps, all of what covers it on an edge its content goes under. So the content adds them to its own padding, and no edge is padded twice. Here the screen keeps the top only, and the list pads its own bottom:
+
+```tsx title="src/screens/Inbox.tsx"
+import { ScrollView } from 'react-native';
+import {
+  defineScreen,
+  useSafeAreaInsets,
+} from '@apexnative/navigation';
+
+function Inbox() {
+  const insets = useSafeAreaInsets();
+  return (
+    <ScrollView
+      contentContainerStyle={{ paddingBottom: insets.bottom }}
+    >
+      {/* the rows scroll under the home indicator,
+          and the last one ends above it */}
+    </ScrollView>
+  );
+}
+
+export const InboxScreen = defineScreen({
+  component: Inbox,
+  options: (s) => s.safeArea('top'),
+});
+```
+
+On a screen that keeps the bottom edge, the default on Android and on iOS without a bar at the bottom, `insets.bottom` is 0, so the same code works there: the content is already above the home indicator. Below a top bar the top inset is 0; on a screen drawn behind the bars it is their height. On <Os name="iOS" /> a scroll view with `contentInsetAdjustmentBehavior="automatic"` keeps clear of the bars by itself: leave the inset out on those edges. More: [The insets and the safe area of the screen](/api/system-ui/useSafeAreaInsets#safe-area).
+
+### The vertical bar of iPhone Duo {#vertical-bar}
+
+<Os name="iOS" /> 27.1 iPhone Duo, folded and open, has a vertical bar at the side of the window, on the side the system picks (the right in a left-to-right app, the left in a right-to-left one), with the status bar, the tab bar and the buttons of the bars in it. By default the screen <Mark>goes under it, as under a top bar</Mark>: the blur under the bars is drawn by the list's scroll view, the edge effect of the scroll, so it reaches the edge of the screen. The list keeps its rows clear with the insets:
+
+
+```tsx
+import { FlatList } from 'react-native';
+
+// in the screen's component
+const insets = useSafeAreaInsets();
+return (
+  <FlatList
+    data={items} // your own
+    renderItem={renderItem}
+    contentContainerStyle={{
+      paddingLeft: 16 + insets.left,
+      paddingRight: 16 + insets.right,
+    }}
+  />
+);
+```
+
+On iPhone Duo folded the right inset is 84, the width of the vertical bar, and the rows end 16 points before it; on any other iPhone the sides are 0. `layout.drawBehindVerticalBar: false` keeps the content of a screen off the vertical bar, as off the other edges of its safe area; the blur then stops at the bar:
+
+```ts
+s.layout({ drawBehindVerticalBar: false });
+```
+
+An explicit `safeArea` decides instead: a side it lists keeps the content off the bar, a side it leaves out lets it under. Android has no vertical bars.
+
+<DeviceVideo name="duo-vertical-bar" devices={['duo']} />
+
+## The fold and the camera {#reserved-regions}
+
+A device that folds partly, such as iPhone Duo or an Android foldable held like a book, divides the screen at the fold: a button on the fold is hard to tap, a line of text across it hard to read. A camera can cover a part of the screen too. These lie inside the screen, where the safe area doesn't reach. `useReservedRegions()` gives them in the screen's coordinates:
+
+| Region | What it is |
+| --- | --- |
+| `division` | Where the screen divides: the fold of a partly folded device. It is the fold itself, 0 wide on iPhone Duo and on Android: <Mark>keep controls about 20 points off it</Mark>, as UIKit does with its own. |
+| `occlusion` | Where hardware covers the screen: a camera, a hinge between two displays. On <Os name="Android" /> the camera cutout too. |
+
+Each region is `{ x, y, width, height }`, in points on iOS and dp on Android, from the top left of the screen's content, so it goes into a style as it is. Only what is active now is there: a device opened flat has no division. Where there are none the lists are empty: before iOS 27.1, and on a device without a fold or a camera over the screen.
+
+A photo editor puts the photo on one side of the fold and its controls on the other:
+
+```tsx title="src/screens/Editor.tsx"
+import { View } from 'react-native';
+import { useReservedRegions } from '@apexnative/navigation';
+import { Controls, Photo } from '../editor'; // your own
+
+const GAP = 20; // controls stay this far from the fold
+
+export function Editor() {
+  const { division } = useReservedRegions();
+  // a fold from top to bottom, as in a book
+  const fold = division.find((r) => r.height > r.width);
+
+  if (!fold) {
+    // flat: the controls under the photo
+    return (
+      <View style={{ flex: 1 }}>
+        <Photo style={{ flex: 1 }} />
+        <Controls />
+      </View>
+    );
+  }
+  return (
+    <View style={{ flex: 1, flexDirection: 'row' }}>
+      <Photo style={{ width: fold.x }} />
+      <Controls style={{ flex: 1, marginLeft: fold.width + GAP }} />
+    </View>
+  );
+}
+```
+
+Folded halfway like a book, the photo reaches the fold and the controls start 20 points after it. Opened flat, the division goes, and the controls are under the photo again. The component renders again each time the regions change, as with the insets.
+
+<DeviceVideo name="duo-fold" devices={['duo']} />
+
+
+Two screens that should each take a side of the fold are a [pair](../containers/arrangement): the system lays them out at the fold, and neither needs the regions for it. More: [`useReservedRegions`](/api/system-ui/useReservedRegions).
+
+### The hinge {#hinge}
+
+`useHinge()` gives the hinge of the device: its `state`, `'closed'`, `'partiallyOpen'`, `'fullyOpen'` or `'unknown'`, and its `angle` in degrees, 0 closed and 180 open flat. It is `null` on a device without a hinge, and any component can read it, in a screen or not.
+
+```tsx
+import { Text } from 'react-native';
+import { useHinge } from '@apexnative/navigation';
+
+function HingeAngle() {
+  const hinge = useHinge();
+  if (!hinge || hinge.angle === null) return null;
+  return <Text>{Math.round(hinge.angle)}°</Text>;
+}
+```
+
+The hinge is <Mark>for effects</Mark>, such as a picture that tilts as the device opens. The layout of a screen belongs to the [pairs](../containers/arrangement) and the regions above: the system decides when the screen divides, and they follow its decision, whatever the angle. This is Apple's advice for iPhone Duo, and it holds on Android too.
+
+<DeviceVideo name="duo-hinge" devices={['duo']} />
+
+
+`useHinge` renders on every change, and while the user moves the hinge that is many times a second. For an animation that follows the angle, `useHingeChange(listener)` calls a function instead, without a render:
+
+```tsx
+import { useRef } from 'react';
+import { Animated } from 'react-native';
+import { useHingeChange } from '@apexnative/navigation';
+
+function Lid() {
+  const angle = useRef(new Animated.Value(180)).current;
+  useHingeChange((hinge) => angle.setValue(hinge?.angle ?? 180));
+  const rotateX = angle.interpolate({
+    inputRange: [0, 180],
+    outputRange: ['90deg', '0deg'],
+  });
+  return <Animated.View style={{ transform: [{ rotateX }] }} />;
+}
+```
+
+| | The state | The angle |
+| --- | --- | --- |
+| <Os name="iOS" /> 27.1 | UIKit's `UIHingeInteraction`, on iPhone Duo. It says `'partiallyOpen'` from 174°. | `null` while the state is `'unknown'`. |
+| <Os name="Android" /> | `'partiallyOpen'` and `'fullyOpen'` from the fold of the window. Android has no public closed state: `'closed'` is a window without a fold and a hinge angle sensor below 90°. | The hinge angle sensor, Android 11+; `null` without one. Some devices give only 0, 90 and 180; a device that folds back goes beyond 180. |
+
+The hinge is watched only while a component with one of the hooks is mounted; on Android the sensor, which costs power, runs only then and while the app is in the foreground. Mount the hook on the screen that needs it, not around the whole app. More: [`useHinge`](/api/system-ui/useHinge), [`useHingeChange`](/api/system-ui/useHingeChange).
+
+## The status bar {#status-bar}
+
+| Option | What it does |
+| --- | --- |
+| `style` | `'light'` or `'dark'` text: light over a dark photo, dark over a light list. |
+| `visible: false` | Hides it, such as in a video player. |
+| `animate` | <Os name="iOS" /> Fades the change. |
+| `hideWithTopBar` | <Os name="iOS" /> Hides it together with the top bar. |
+| `backgroundColor`, `drawBehind`, `translucent` | <Os name="Android" /> What is under it: a color of its own, or the screen. |
+
+<DeviceVideo name="system-status" />
+
+A photo goes under the status bar and keeps light text over it:
+
+```ts
+export const PhotoScreen = defineScreen({
+  component: Photo,
+  options: (s) => s.statusBar({ style: 'light' }).safeArea(),
+});
+```
+
+<Os name="Android" /> A top bar reaches under the status bar by default, as one surface with it. `drawBehind: false` starts the top bar below the status bar, which then shows `backgroundColor`.
+
+## The bottom of the system {#bottom}
+
+| Platform | The bottom |
+| --- | --- |
+| <Os name="iOS" /> | The home indicator. `layout.autoHideHomeIndicator` fades it out while the screen isn't touched, as in a video. `layout.deferSystemGestures` makes the first swipe on those edges go to the app, for a game or a drawing; the second swipe goes home. |
+| <Os name="Android" /> | The navigation bar: a handle, or three buttons. The screen goes under it, and its safe area keeps the content above it. `navigationBar` sets its `backgroundColor`, hides it with `visible: false`, or puts the screen above it with `drawBehind: false`. |
+
+<Os name="Android" /> The screen goes edge to edge as the platform says: always on Android 16+ for apps targeting SDK 36, on Android 15 for SDK 35, and on every version with `edgeToEdgeEnabled=true` in `android/gradle.properties`, the default of new React Native apps.
+
+## Orientation {#orientation}
+
+A screen says which orientations it allows, and <Mark>the screen on top decides</Mark>: a portrait app can open a video in landscape, and turn back to portrait when the user goes back.
+
+```ts
+s.orientation('landscape');
+```
+
+`'portrait'`, `'landscape'` and `'all'` follow the device within them. On <Os name="iOS" /> 16+ the screen turns as it shows, when the current orientation isn't allowed. On <Os name="iPadOS" /> the system applies it only to an app that requires full screen: an app that shares the screen with others turns with the device, as every iPad app does.
+
+iPhone Duo decides by itself too: folded, the outer display shows the app in portrait only; open, the inner display shows it as the device is held, whatever the screen allows.
+
+## Backgrounds {#backgrounds}
+
+`backgroundColor` colors the screen, behind its React content. Without it, the screen has the background of the [theme](../architecture/theme-and-context).
+
+```ts
+s.backgroundColor('#F3E9D2');
+```
+
+### The window {#window}
+
+<Os name="iOS" /> The window is what shows behind the screens, such as around a modal as it comes in. It belongs to the whole app, so its color is set in `createNavigation`:
+
+```ts title="Navigation.ts"
+export const Navigation = createNavigation({
+  // …
+  window: { backgroundColor: '#101828' },
+});
+```
+
+### The edge of the scroll {#scroll-edge}
+
+<Os name="iOS" /> 26 Content that scrolls under a bar fades into it at the edge. `scrollEdgeEffect` sets how, for all edges or for each on its own: `style: 'soft'` fades, `'hard'` draws a sharp edge, `hidden: true` turns it off.
+
+```ts
+s.scrollEdgeEffect({ top: { style: 'hard' } });
+```
+
+The effect belongs to the scroll views of the screen, so a list that mounts after the screen shows gets it the next time the screen appears. Render the list at once, and fill it when the data comes.
+
+## Keyboard shortcuts {#shortcuts}
+
+<Os name="iOS" /> With a hardware keyboard, on iPad or on iPhone, a screen can have shortcuts. On iPad the user sees them listed when holding ⌘. A press sends `keyCommandPressed` with the shortcut's id as `keyCommandId`:
+
+```tsx title="src/screens/Inbox.tsx"
+import {
+  defineScreen,
+  useNavigation,
+  useScreenEvent,
+} from '@apexnative/navigation';
+
+export const InboxScreen = defineScreen({
+  component: Inbox,
+  options: (s) =>
+    s.keyCommands({
+      id: 'new',
+      input: 'n',
+      modifiers: ['command'],
+      title: 'New Message',
+    }),
+});
+
+function Inbox() {
+  const navigation = useNavigation();
+
+  useScreenEvent('keyCommandPressed', ({ keyCommandId }) => {
+    if (keyCommandId === 'new') navigation.showModal('Compose');
+  });
+
+  return <MessageList />; // your own list
+}
+```
+
+⌘N opens Compose while Inbox is on screen. A shortcut without a `title` works but isn't listed.
+
+## The direction of the app {#direction}
+
+Right-to-left languages turn the app around: the back button on the right, the swipe back from the right edge. The direction belongs to the whole app, so it is set in `createNavigation`; `'locale'` follows the language of the app:
+
+<DeviceVideo name="system-rtl" />
+
+```ts title="Navigation.ts"
+export const Navigation = createNavigation({
+  // …
+  direction: 'locale',
+});
+```
+
+`navigation.setDirection('rtl')` changes it while the app runs. The bars, the transitions and the swipe back follow at once; on iOS 15–16 a stack already shown keeps its direction until its next push. React content follows in the screens created after the change: React Native's `I18nManager` holds its direction, and keeps it between launches. More: [Right to left](../guides/right-to-left).
+
+## Rarely needed {#rare}
+
+| Option | What it does |
+| --- | --- |
+| `layout.componentBackgroundColor` | A color behind the React content only, over `backgroundColor`. |
+| `layout.adjustResize` | <Os name="Android" /> By default the screen makes room for the keyboard: its React content ends above it. `false`: the screen keeps its size and the keyboard covers its bottom, as on iOS, for a screen that handles the keyboard itself; it needs edge-to-edge (Android 15+, or `edgeToEdgeEnabled=true`). On <Os name="iOS" /> the keyboard always covers the screen. |
+| `blurOnUnmount` | <Os name="Android" /> A focused field loses focus and the keyboard hides when the screen unmounts. |
+| `statusBar.blur` | <Os name="iOS" /> A blur under the status bar. |
+| `layout.verticalBars` | <Os name="iOS" /> 27.1 `false` keeps the bars of the screen and the status bar horizontal on iPhone Duo, where the system puts them in a vertical bar at the side. Set it once for a screen. See [Buttons on iPhone Duo](./bar-buttons#iphone-duo). |
+
+## API {#api}
+
+<SectionApi id="system-ui" />

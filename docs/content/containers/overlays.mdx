@@ -1,0 +1,123 @@
+---
+title: Overlays
+description: 'What an overlay is and what it is for, how to show and close one, where the touches go, the keyboard, and how overlays live with modals and roots.'
+---
+
+import { SectionStatus, SectionApi } from '@site/src/components/Api';
+import { Mark, Os } from '@site/src/components/Intro';
+import { OverlayKinds } from '@site/src/components/Screens';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+<SectionStatus id="overlays" />
+
+An overlay shows over the whole app <Mark>without taking the place of any screen</Mark>: a toast, a dialog of your own, a mini player, a banner. The user goes on with the app under it. `showOverlay` shows one:
+
+```ts
+import { navigation } from '@apexnative/navigation';
+
+navigation.showOverlay('Toast', { props: { text: 'Saved' } });
+```
+
+The Toast screen shows over everything, and the screen under it still scrolls and takes taps.
+
+This page answers:
+
+1. [What an overlay is](#what), and what it is for.
+2. [How to show and close one](#show).
+3. [Where the touches go](#touches).
+4. [The keyboard](#keyboard) in an overlay.
+5. [Overlays, modals and roots](#layers).
+
+## What an overlay is {#what}
+
+A push or a modal moves the user somewhere. An overlay doesn't move anyone: it puts a screen <Mark>on top of everything</Mark>, and the app goes on under it.
+
+<DeviceVideo name="overlay-kinds" />
+
+An overlay is a screen of `screens` like any other: a component, its props, its options. It shows above the tabs, the bars and the modals; on <Os name="iOS" /> it is in a window of its own. Its background is transparent, so the app shows wherever the overlay draws nothing. What overlays are for:
+
+<OverlayKinds />
+
+## Showing and closing {#show}
+
+`showOverlay` takes the screen and its props, and resolves with the id of the overlay. An overlay usually closes itself: a toast after a moment, a dialog when the user answers. `dismiss()` from the overlay's own screen closes it:
+
+```tsx title="src/overlays/Toast.tsx"
+import { useEffect } from 'react';
+import { Text } from 'react-native';
+import { useNavigation } from '@apexnative/navigation';
+
+function Toast({ text }: { text: string }) {
+  const navigation = useNavigation();
+
+  useEffect(() => {
+    const timer = setTimeout(() => navigation.dismiss(), 2000);
+    return () => clearTimeout(timer);
+  }, [navigation]);
+
+  return <Text style={{ padding: 16 }}>{text}</Text>;
+}
+```
+
+The toast shows for two seconds and goes. Other code closes an overlay by the id `showOverlay` resolved with, `navigation.dismissOverlay(id)`, or all of them with `dismissAllOverlays()`.
+
+## Where the touches go {#touches}
+
+An overlay covers the whole window, but only its views take touches. <Mark>Where it draws nothing, the touches reach the app under it</Mark>, so a toast or a mini player doesn't stop the user:
+
+| The overlay | Touches outside its views |
+| --- | --- |
+| A toast, a mini player, a banner | Reach the app: the user scrolls and taps under it. |
+| A dialog with a dimmed backdrop | Land on the backdrop, which is a view of the overlay: the app gets nothing until the user answers. |
+
+A view that fills the overlay only to place its content, such as a wrapper that puts a toast at the bottom, takes the touches too. `pointerEvents="box-none"` on it lets them through to the app.
+
+A small overlay that should still stop the app, without drawing a backdrop, says so with `blockTouches: true`:
+
+```ts
+navigation.showOverlay('Confirm', { blockTouches: true });
+```
+
+## The keyboard {#keyboard}
+
+A text field in an overlay gets the keyboard as one on a screen does: the user taps it, and the keyboard comes up for the overlay. A form in an overlay, such as a quick note over the app, needs no setting.
+
+## Overlays, modals and roots {#layers}
+
+Overlays stay on top whatever the app does under them:
+
+| When | The overlays |
+| --- | --- |
+| A modal shows | Stay over it. |
+| The user pushes, switches tabs | Stay on top; the app moves under them. |
+| `switchTo` replaces the root | Stay: a call in progress goes on while the user signs out. See [What a switch does](../fundamentals/switching-roots#switch). |
+| `dismissAllOverlays()` | Close, all of them. |
+
+Overlays don't count in what the user sees: `getState()` names the screen under them. An overlay has no stack of its own, so <Mark>its commands act on the app under it</Mark>.
+
+A banner of a new message shows over whatever the user is doing. A tap on it opens the chat in the stack the user is looking at, and the banner goes:
+
+```tsx title="src/overlays/MessageBanner.tsx"
+import { Pressable } from 'react-native';
+import { useNavigation } from '@apexnative/navigation';
+
+function MessageBanner({ chatId }: { chatId: string }) {
+  const navigation = useNavigation();
+
+  const open = async () => {
+    // into the stack under the banner: Inbox → … → Chat
+    await navigation.push('Chat', { props: { chatId } });
+    await navigation.dismiss(); // the banner goes
+  };
+
+  return <Pressable onPress={open}>{/* … */}</Pressable>;
+}
+```
+
+Back from the chat returns to the screen the user was on.
+
+A mini player works the same way, but its full player usually opens as a modal, `showModal('Player')`. While the full player shows, the mini player hides itself: it reads what the user sees with `useNavigationState`. See [What the user sees now](../fundamentals/lifecycle-and-events#state).
+
+## API {#api}
+
+<SectionApi id="overlays" />

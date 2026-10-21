@@ -1,0 +1,380 @@
+import { Os } from '@site/src/components/Intro';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+`Tab` is one tab of [`Tabs`](/api/tabs/Tabs): what the tab shows, and its item in the tab bar, its label, icon and
+badge, with what a tap on it does. You write it only inside `Tabs(…)`.
+
+## Usage {#usage}
+
+```ts title="src/Navigation.ts"
+import {
+  createNavigation,
+  navigation,
+  Tab,
+  Tabs,
+} from '@apexnative/navigation';
+import { HomeScreen } from './screens/Home';
+import { InboxScreen } from './screens/Inbox';
+import { ComposeScreen } from './screens/Compose';
+
+export const Navigation = createNavigation({
+  screens: {
+    Home: HomeScreen,
+    Inbox: InboxScreen,
+    Compose: ComposeScreen,
+  },
+  root: Tabs(
+    Tab('Home').label('Home').icon(require('./icons/home.png')),
+    Tab()
+      .label('New')
+      .icon(require('./icons/plus.png'))
+      .onPress(() => navigation.showModal('Compose')),
+    Tab('Inbox')
+      .label('Inbox')
+      .icon(require('./icons/inbox.png'))
+      .id('inbox')
+      .badge(3),
+  ),
+});
+```
+
+The bar shows three items. Home and Inbox are tabs, each with a stack; Inbox has a badge with 3. New is a button: a
+tap opens Compose in a modal, and the tab the user was on stays selected.
+
+## Signature {#signature}
+
+<ApiSignature data={data} name="Tab" />
+
+`Tab` takes what the tab shows, one argument, or none:
+
+| Content | The tab shows |
+| --- | --- |
+| `'Inbox'` | The screen in a stack of its own: the usual tab. |
+| `Stack('Inbox', Screen('Chat', { userId }))` | That stack: the tab opens with Chat over Inbox. |
+| `SideMenu(…)`, `SplitView(…)`, another layout | That layout. |
+| `Screen('Inbox', { folder })` | The screen **alone, without a stack**: no top bar, no push. |
+| Nothing: `Tab()` | Nothing: the tab is a [button](#button). |
+
+It returns a `TabElement`. Each method returns a new one, so a tab can be kept in a constant and given to several
+`Tabs`.
+
+### What a tab holds {#content}
+
+A screen named alone gets a stack around it, so the screen has a top bar and pushes into its own tab. A screen with
+props needs the stack written out, because `Screen(…)` alone is a screen without a stack:
+
+```ts
+// Don't: a tab without a top bar, which can't push
+Tab(Screen('Inbox', { folder: 'work' }));
+
+// The tab with its stack
+Tab(Stack(Screen('Inbox', { folder: 'work' })));
+```
+
+The screens are checked by the types where the tabs are used (`root`, `roots`, `switchTo`).
+
+### A tab that is a button {#button}
+
+`Tab()` without content is a button in the tab bar: it never becomes the selected tab, and its [`onPress()`](#onPress)
+decides what a tap does, such as a New item that opens a modal to write. It takes the methods of the item (`label`,
+`icon`, `badge`); `selectOnPress()` and the methods of a stack (`popToRootOnPress`, `popToRootOnBlur`) mean nothing
+for it.
+
+## The item {#item-group}
+
+### `label()` {#label}
+
+<ApiMember data={data} of="TabElement" name="label" />
+
+The text of the tab, under its icon.
+
+```ts
+Tab('Inbox').label('Inbox');
+```
+
+Whether the label shows is the tab bar's `titleDisplayMode`: on Android, by default, labels show with up to three tabs,
+and only the selected tab's from four, as Material 3 does.
+
+### `icon()` {#icon}
+
+<ApiMember data={data} of="TabElement" name="icon" />
+
+The icon of the tab. Two forms:
+
+- **An image**: `require('./icons/home.png')`, the same on both platforms.
+- **A symbol of each platform**: `{ ios: 'house', android: 'ic_home' }`, an SF Symbol on iOS and a drawable of the
+  app (`res/drawable`) on Android. A platform left out shows no icon.
+
+```ts
+Tab('Home').icon({ ios: 'house', android: 'ic_home' });
+```
+
+On iOS 18+ the tab bar draws an SF Symbol filled and in the colors of the tab's state, as the system's apps do; a
+bitmap takes `iconColor` and `selectedIconColor`.
+
+### `selectedIcon()` {#selectedIcon}
+
+<ApiMember data={data} of="TabElement" name="selectedIcon" />
+
+The icon while the tab is selected; without it the tab keeps its `icon`. It takes the same forms as `icon()`.
+
+```ts
+Tab('Home')
+  .icon(require('./icons/home.png'))
+  .selectedIcon(require('./icons/home-filled.png'));
+```
+
+Both platforms show it. On <Os name="iOS" /> 18 to 26.0 the tab bar doesn't: the system tab API of iOS 18 has a
+selected image only from iOS 26.1.
+
+### `badge()` {#badge}
+
+<ApiMember data={data} of="TabElement" name="badge" />
+
+<DeviceVideo name="tabs-badge" />
+
+A number or a short text on the icon: unread messages, new items. `null` and the number `0` show no badge, so a
+count goes as it is; the text `'0'` shows "0".
+
+```ts
+Tab('Inbox').id('inbox').badge(3);
+```
+
+This is the badge the tab starts with. The app changes it from anywhere with `navigation.setTabBadge(count, 'inbox')`,
+and a screen of the tab with `setTabBadge(count)`; both read `0` the same way. See
+[Badges and dots](/docs/containers/tabs#badges).
+
+### `dot()` {#dot}
+
+<ApiMember data={data} of="TabElement" name="dot" />
+
+A dot at the top of the icon: a badge without text, for "something new" without a count.
+
+- `dot()` or `dot(true)`: shows it;
+- `dot(false)`: hides it;
+- `dot({ color, size })`: shows it with a color and a size. The color is red on iOS and the theme's error color on
+  Android by default; `size` (6 by default) applies on iOS before 26 only, as Android and iOS 26 draw the dot in the
+  system's size.
+
+```ts
+Tab('Profile').dot({ color: '#FF9500' });
+```
+
+A badge takes its place while the tab has one. <Os name="iOS" /> 26 draws the dot as an empty badge: in a badge's
+size, colored only on the selected tab. The iPad tab bar at the top shows no dot: use a badge there.
+
+### `itemStyle()` {#itemStyle}
+
+<ApiMember data={data} of="TabElement" name="itemStyle" />
+
+The look of this tab's item: colors of the icon and the text, selected and not, the font, the icon's size and insets.
+It goes over the [`itemStyle()` of `Tabs`](/api/tabs/Tabs#itemStyle), key by key, so a tab changes only what is its
+own:
+
+```ts
+Tabs(
+  Tab('Home'),
+  Tab('Live').itemStyle({ selectedIconColor: '#FF3B30' }),
+).itemStyle({ selectedIconColor: '#0A84FF' });
+```
+
+Live turns red when selected; Home turns blue. The platforms read some keys only: see [the options](/api/tabs/options).
+
+### `role()` {#role}
+
+<ApiMember data={data} of="TabElement" name="role" />
+
+<Os name="iOS" />. A tab of the system, with its look and place:
+
+- **`'search'`**: on iOS 26 a separate Liquid Glass button at the end of the bar; selected, the bar gives its place to
+  the search field. One per tab bar; a second one is a normal tab.
+- **The others** (`'favorites'`, `'history'`, `'more'`…): before iOS 18, the system's icon and title. On iOS 18+ they
+  show the tab's own label and icon.
+
+```ts
+Tab('Search').role('search');
+```
+
+The search tab keeps the system's title and image unless `label()` or `icon()` sets them. Android shows a normal tab.
+
+### `testID()` {#testID}
+
+<ApiMember data={data} of="TabElement" name="testID" />
+
+The id end-to-end tests find the tab item by, such as Detox's `by.id('inbox-tab')`.
+
+```ts
+Tab('Inbox').testID('inbox-tab');
+```
+
+### `options()` {#options}
+
+<ApiMember data={data} of="TabElement" name="options" />
+
+The `bottomTab` options no method covers: `badgeColor`, `animateBadge` on Android, `disableIconTint`, a component of
+your own for the item (`component`, see [`customRow()`](/api/tabs/Tabs#customRow)).
+
+```ts
+Tab('Inbox').badge(3).options({ badgeColor: '#FF3B30' });
+```
+
+These are the options of the tab's item, not of its screens: the screens' options go on the screens. Every key is in
+[the options](/api/tabs/options).
+
+## A tap on the tab {#press-group}
+
+A second tap on the selected tab is a convention of both platforms: back to the start of the tab. These methods change
+what a tap does.
+
+### `popToRootOnPress()` {#popToRootOnPress}
+
+<ApiMember data={data} of="TabElement" name="popToRootOnPress" />
+
+<DeviceVideo name="tab-repress" />
+
+On by default. A tap on the selected tab:
+
+| The user is | The tap |
+| --- | --- |
+| Deep in the tab: Inbox → Chat → Profile | Goes back to Inbox, the first screen of the tab. |
+| On the first screen, scrolled down | Scrolls its list back to the top. |
+
+`popToRootOnPress(false)` turns both off, such as for a tab where going back would lose a form:
+
+```ts
+Tab('Compose').popToRootOnPress(false);
+```
+
+The scroll goes to the first scroll view the navigation finds in the screen, such as a `FlatList` or `ScrollView`
+filling it.
+
+### `popToRootOnBlur()` {#popToRootOnBlur}
+
+<ApiMember data={data} of="TabElement" name="popToRootOnBlur" />
+
+When the user leaves the tab, its stack goes back to its first screen, so the tab always opens at its start.
+
+```ts
+Tab('Search').popToRootOnBlur();
+```
+
+It happens out of sight: nothing animates, and the screens taken off send no appear or disappear events. They
+unmount. Off by default: the tab keeps its stack.
+
+### `selectOnPress()` {#selectOnPress}
+
+<ApiMember data={data} of="TabElement" name="selectOnPress" />
+
+`false`: a tap doesn't select the tab. The current tab stays, the tap only sends its events, and
+[`onPress()`](#onPress) decides. For a tab that sometimes acts as a button, such as a Profile tab that asks to sign in
+first:
+
+```ts
+Tab('Profile')
+  .selectOnPress(false)
+  .onPress(async () => {
+    if (navigation.getContext().signedIn) {
+      await navigation.selectTab('profile');
+    } else {
+      await navigation.showModal('Login');
+    }
+  })
+  .id('profile');
+```
+
+`selectTab('profile')` from code still selects it. A [button tab](#button) has this set already.
+
+### `onPress()` {#onPress}
+
+<ApiMember data={data} of="TabElement" name="onPress" />
+
+Called on every tap on the tab, a second one too, with `{ index, wasSelected, screenId }`:
+
+- `index`: the tab's place, from 0;
+- `wasSelected`: the tab was selected already: a second tap;
+- `screenId`: the screen on top of the tab's stack.
+
+```ts
+Tab('Inbox').onPress(({ wasSelected }) => {
+  if (wasSelected) analytics.track('inbox_retap'); // your own
+});
+```
+
+It runs **after** the native side has acted on the tap: the tab is selected, or with `popToRootOnPress` its stack went
+back. It runs outside React, so it uses the app's `navigation`, not a hook. A screen that wants the taps on its own
+tab, such as to refetch, uses [`useTabPress`](/api/tabs/useTabPress) instead. The handler lives as long as the tabs
+are shown.
+
+## iPad {#ipad-group}
+
+### `customization()` {#customization}
+
+<ApiMember data={data} of="TabElement" name="customization" />
+
+<Os name="iPadOS" /> 18+, with [`Tabs().customizable()`](/api/tabs/Tabs#customizable). What the user can do with this
+tab when they arrange the tabs:
+
+- `'fixed'`: stays in its place in the bar;
+- `'movable'`: can be moved, not removed (the default);
+- `'optional'`: can be moved, removed and added back from the sidebar;
+- `'pinned'`: stays at the trailing end of the bar;
+- `'sidebarOnly'`: is in the sidebar only.
+
+The second argument: `shownByDefault: false` keeps an `'optional'` tab in the sidebar until the user adds it to the
+bar; `allowsHiding: true` lets the user hide the tab.
+
+```ts
+Tab('Archive')
+  .id('archive')
+  .customization('optional', { shownByDefault: false });
+```
+
+Read when the tabs are created. The search tab (`role('search')`) is `'pinned'` unless set.
+
+## One platform only {#platform-group}
+
+### `ios()` {#ios}
+
+<ApiMember data={data} of="TabElement" name="ios" />
+
+Methods for iOS only; on Android the function isn't called. For a value that differs by platform:
+
+```ts
+Tab('Search')
+  .label('Search')
+  .ios((tab) => tab.role('search'))
+  .android((tab) => tab.icon(require('./icons/search.png')));
+```
+
+### `android()` {#android}
+
+<ApiMember data={data} of="TabElement" name="android" />
+
+Methods for Android only; on iOS the function isn't called. See `ios()` above.
+
+## Addressing the tab {#id-group}
+
+### `id()` {#id}
+
+<ApiMember data={data} of="TabElement" name="id" />
+
+A fixed id for the tab. The commands and methods that name a tab take it:
+
+```ts
+Tabs(
+  Tab('Home').id('home'),
+  Tab('Inbox').id('inbox'),
+).selected('inbox');
+
+// later, from anywhere
+await navigation.selectTab('inbox');
+await navigation.setTabBadge(5, 'inbox');
+```
+
+An index works too, but an id keeps working when the tabs change order, and iPad customization needs ids. The id goes
+to the tab's layout, the stack around its screen, and is unique in the app.
+
+## See also {#see-also}
+
+- [`Tabs`](/api/tabs/Tabs), [`useTabPress`](/api/tabs/useTabPress), [the options](/api/tabs/options).
+- [Tabs](/docs/containers/tabs): selecting a tab, presses, badges, the tab bar on each platform.

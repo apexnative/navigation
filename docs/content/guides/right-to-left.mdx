@@ -1,0 +1,279 @@
+---
+title: Right-to-left and languages
+description: 'An app in several languages on iOS and Android: translated texts and titles with i18next, the language of the device, a language switch inside the app, and right-to-left languages that turn the whole app around.'
+---
+
+import { Mark, Os } from '@site/src/components/Intro';
+import { DeviceVideo } from '@site/src/components/DeviceVideo';
+
+An app in English, German and Arabic shows its texts, its titles and its tab labels in the user's language. In Arabic, Hebrew or Persian it also reads from the right: the back button is on the right, the swipe back starts at the right edge, a pushed screen comes in from the left. Here you set the direction of the app once, translate the app with i18next, and switch both when the user picks another language. You end with:
+
+- an app that turns around by itself for a right-to-left language;
+- texts, titles and tab labels in the language of the device;
+- a language switch in the app that turns the bars at once, and the content with them;
+- the choice kept between launches.
+
+The direction option itself is described in [The direction of the app](../screen-ui/system-ui#direction).
+
+:::info[Versions]
+
+The translation part is written against i18next 26 with react-i18next 17, and expo-localization (Expo SDK 58) or react-native-localize 3.7 for the language of the device.
+
+:::
+
+## 1. Follow the language of the app {#locale}
+
+The direction belongs to the whole app, so it is set in `createNavigation`. `'locale'` takes it from the language of the app:
+
+```ts title="Navigation.ts"
+export const Navigation = createNavigation({
+  screens: { Home: HomeScreen, Settings: SettingsScreen },
+  root: 'Home',
+  direction: 'locale',
+});
+```
+
+On a device in Arabic the app opens turned around: the title and the back button on the right, the tabs from the right. On a device in English it opens left to right.
+
+The language of the app comes from the platform, and each one needs to know that the app has it:
+
+- <Os name="iOS" /> iOS gives the app a language only among those the app declares. Add the language to the project in Xcode (Project › Info › Localizations), or list it in `CFBundleLocalizations` of `Info.plist`; otherwise the app stays left to right in it.
+- <Os name="Android" /> The direction comes from the language of the device. `android:supportsRtl="true"` on the `<application>` of `AndroidManifest.xml` lets the app turn around; React Native's template sets it.
+
+## 2. Or a fixed direction {#fixed}
+
+An app that is only in Arabic doesn't follow the device: `'rtl'` keeps it right to left everywhere. `'ltr'` does the opposite, for an app that never turns around.
+
+```ts title="Navigation.ts"
+export const Navigation = createNavigation({
+  // …
+  direction: 'rtl',
+});
+```
+
+## What follows the direction {#what-follows}
+
+The navigation turns its own parts around, and tells React Native to lay out the content the same way:
+
+<DeviceVideo name="system-rtl" />
+
+| Part | Right to left |
+| --- | --- |
+| The top bar | The back button and the title on the right, the right buttons on the left. |
+| The transitions | A pushed screen comes in from the left. |
+| <Os name="iOS" /> The swipe back | From the right edge. |
+| The tab bar | The first tab on the right. |
+| React content | Laid out from the right: `flexDirection: 'row'` starts at the right, `start` and `end` swap. |
+| The side menus | Keep their sides: `left` stays on the left. |
+
+<Os name="Android" /> The system back is a swipe from either edge in any direction, so nothing changes there.
+
+## 3. Translate the texts {#translate}
+
+The texts of the app come from a translation library. Here it is i18next with react-i18next; others go the same way. Install them, with a library that tells the language of the device:
+
+```sh
+npm install i18next react-i18next
+npx expo install expo-localization
+# or: npm install react-native-localize
+```
+
+### Start i18next in a module {#i18n-module}
+
+Each screen is a React root of its own by default, so a provider at the top of the app doesn't reach the screens. react-i18next doesn't need one: `initReactI18next` hands the i18next instance to every `useTranslation`, in every root. Start it in a module:
+
+```ts title="src/i18n.ts"
+import i18n from 'i18next';
+import { initReactI18next } from 'react-i18next';
+import { getLocales } from 'expo-localization';
+import en from './locales/en.json';
+import de from './locales/de.json';
+import ar from './locales/ar.json';
+
+export const languages = ['en', 'de', 'ar'] as const;
+export type Language = (typeof languages)[number];
+
+export function deviceLanguage(): Language {
+  const code = getLocales()[0]?.languageCode;
+  return languages.find((l) => l === code) ?? 'en';
+}
+
+export const i18nReady = i18n.use(initReactI18next).init({
+  resources: {
+    en: { translation: en },
+    de: { translation: de },
+    ar: { translation: ar },
+  },
+  lng: deviceLanguage(),
+  fallbackLng: 'en',
+});
+
+export { i18n };
+```
+
+### Wait for it before the first screen {#i18n-will-mount}
+
+The titles of the first screen are read when it shows. `willMount` runs before the first root, while the splash screen shows, so the first screen has its texts:
+
+```ts title="Navigation.ts"
+import { i18nReady } from './src/i18n';
+
+export const Navigation = createNavigation({
+  // …
+  direction: 'locale',
+  willMount: async () => {
+    await i18nReady;
+  },
+});
+```
+
+The app opens in the language of the device, with no screen in English first. With the translations bundled, as here, the wait is short.
+
+### The language of the device {#device-language}
+
+Both libraries read the languages the user set, in their order:
+
+| | expo-localization | react-native-localize |
+| --- | --- | --- |
+| The language | `getLocales()[0].languageCode`, such as `'ar'` | `findBestLanguageTag(['en', 'de', 'ar'])?.languageTag` |
+| Its direction | `getLocales()[0].textDirection`: `'rtl'` or `'ltr'` | `isRTL` of the same result |
+
+`findBestLanguageTag` picks the best of the app's languages for the user's list, so a user with French first and German second gets German. With expo-localization, go through `getLocales()` for the same result.
+
+## 4. Titles and tab labels {#titles}
+
+Inside a screen, `useTranslation` translates the content:
+
+```tsx title="src/screens/Settings.tsx"
+import { Text } from 'react-native';
+import { useTranslation } from 'react-i18next';
+
+function Settings() {
+  const { t } = useTranslation();
+  return <Text>{t('settings.notifications')}</Text>;
+}
+```
+
+Titles and tab labels are options and layouts, which are not React. They read i18next directly:
+
+```ts title="src/screens/Settings.tsx"
+import { defineScreen } from '@apexnative/navigation';
+import { i18n } from '../i18n';
+
+export const SettingsScreen = defineScreen({
+  component: Settings,
+  options: (s) => s.title(i18n.t('settings.title')),
+});
+```
+
+```ts title="Navigation.ts"
+roots: {
+  main: () =>
+    Tabs(
+      Tab('Home').label(i18n.t('tabs.home')),
+      Tab('Settings').label(i18n.t('tabs.settings')),
+    ),
+},
+```
+
+<Mark>An options chain runs when a command shows the screen</Mark>, with the language of that moment. The same goes for the layout a root function makes. So each pushed screen has its title in the current language, and the tabs get their labels when the root is made.
+
+The chain also gets the app's context (`(s, props, { context }) => …`), but it doesn't run again when the context changes: a language kept in the context doesn't retitle a shown screen either. Read i18next, as above, and see the next step for the screens already shown.
+
+## 5. A language switch in the app {#switch}
+
+Some apps let the user pick a language in their settings. The switch changes the language of your texts, then the direction with `navigation.setDirection`, then shows the app again:
+
+```ts title="src/language.ts"
+import { navigation } from '@apexnative/navigation';
+import { i18n, type Language } from './i18n';
+
+export async function setLanguage(language: Language) {
+  await i18n.changeLanguage(language);
+  await saveLanguage(language); // your own storage
+  navigation.setDirection(i18n.dir(language));
+  await navigation.switchTo('main');
+}
+```
+
+`i18n.dir` gives `'rtl'` for Arabic and `'ltr'` for German. `setDirection` turns the bars, the transitions and the swipe back <Mark>at once</Mark>. React content follows in the screens created after the change, not in those already shown: a shown screen keeps its layout. That is why the switch ends with `switchTo`: a new root creates every screen again, so the whole app is in the new direction, with titles and tab labels in the new language.
+
+The user picks Arabic in Settings: the app comes in again from its main root, turned around, with the texts in Arabic. The user starts from the main root again, so put the switch where that is expected, such as at the end of a language picker.
+
+`'main'` is a root of `roots`; an app with one `root` switches to its layout, such as `navigation.switchTo(Stack('Home'))`. More: [Switching roots](../fundamentals/switching-roots).
+
+<Os name="iOS" /> On iOS 15–16 a stack already shown keeps its direction until its next push: its bar, its swipe back and its transitions. Before iOS 17 UIKit turns only the views it creates after the change; the `switchTo` at the end of the switch creates them all. On iOS 17 and later everything turns at once.
+
+### What the screens already shown do {#shown-screens}
+
+Without `switchTo`, the screens already shown change in part:
+
+| Part | After `changeLanguage` |
+| --- | --- |
+| Texts of `useTranslation` | The new language at once: react-i18next renders them again. |
+| Titles and buttons from options | The old language, until the screen shows again from a command. |
+| Tab labels | The old language, until the root is made again. |
+| Layout of React content | The old direction, until the screen is created again. |
+| <Os name="iOS" /> A stack's bar, swipe back and transitions on iOS 15–16 | The old direction, until its next push. |
+
+Between two languages of one direction, such as English and German, a switch can keep the user where they are: set the titles with `useScreenOptions` in the screen, which renders again with the language, and skip `switchTo`:
+
+```tsx
+const { t } = useTranslation();
+useScreenOptions((s) => s.title(t('settings.title')));
+```
+
+The title follows the language at once, as the content does. The tab labels still wait for a new root. See [From the state: useScreenOptions](../fundamentals/screen-options#use-screen-options).
+
+## 6. Keep the choice between launches {#launch}
+
+A language the user picked in the app is your own setting, so the app reads it at launch. `setDirection` in `willMount` applies before any screen is created:
+
+```ts title="Navigation.ts"
+export const Navigation = createNavigation({
+  // …
+  direction: 'locale',
+  willMount: async () => {
+    await i18nReady;
+    const language = await loadLanguage(); // your own storage
+    if (language) {
+      await i18n.changeLanguage(language);
+      navigation.setDirection(i18n.dir(language));
+    }
+  },
+});
+```
+
+The first launch follows the device (`'locale'`); after the user picked a language, every launch opens in it, with the first screen already turned.
+
+### The user changes the language of the device {#device-change}
+
+- <Os name="iOS" /> The language doesn't change while the app runs: after a change in Settings, the app starts again, and the language is read at launch.
+- <Os name="Android" /> The activity is created again while the JavaScript keeps running. `willMount` doesn't run again: the app shows its last root as it was, with the texts of the old language. Read the language again when the app comes back to the foreground, and switch as in step 5 when it changed:
+
+```ts title="src/language.ts"
+import { AppState } from 'react-native';
+
+AppState.addEventListener('change', (state) => {
+  const language = deviceLanguage();
+  if (state === 'active' && language !== i18n.language) {
+    setLanguage(language);
+  }
+});
+```
+
+An app that keeps a language the user picked skips this while that choice stands.
+
+## Direction in your own code {#own-code}
+
+Most layouts need nothing: React Native swaps `start` and `end`, and rows start at the right. Code that decides by the direction itself, such as an arrow icon that points the way forward, reads your own language state: `i18n.dir()` of i18next gives the direction of the current language.
+
+React Native's `I18nManager.isRTL` is read when the JavaScript starts, so it doesn't change with `setDirection` until the next launch. A reload of the JavaScript in development lays out the screens already open in the new direction too.
+
+## Related {#related}
+
+- [The direction of the app](../screen-ui/system-ui#direction): the option.
+- [Screen options](../fundamentals/screen-options): when options are built, and how a shown screen changes them.
+- [Switching roots](../fundamentals/switching-roots): what `switchTo` does to the screens.
+- [Starting the app](../fundamentals/starting-the-app#before): `willMount` and the first root.
+- [Side menu](../containers/side-menu): its sides.
