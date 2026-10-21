@@ -5,19 +5,22 @@ paths:
 
 # GitHub Actions
 
-- `ci.yml` runs on pushes and pull requests to `main` and in the merge queue: lint (ESLint, `tsc`, headers), Jest, the
-  package build (`yarn prepare`), the Android example, the iOS example with static libraries and with SwiftPM. Its
-  first job, `changes`, runs `scripts/ci-changes.mjs` on the files the change touches: the code jobs run for any file
-  but the docs, the native builds for native code, codegen specs, the Showcase's native projects, dependencies and
-  the build setup; the docs alone and a release run none of them. A new job takes `needs: changes` and the `if` of its
-  kind; a file a job newly depends on goes into the lists of the script.
+- `ci.yml` runs on pushes and pull requests to `main` (and in a merge queue, which is off): lint (ESLint, `tsc`,
+  headers), Jest, the package build (`yarn prepare`), the Android example, the iOS example with static libraries and
+  with SwiftPM. Its first job, `changes`, runs `scripts/ci-changes.mjs` on the files the change touches: the code
+  jobs run for any file but the docs, the native builds for native code, codegen specs, the Showcase's native
+  projects, dependencies and the build setup; the docs alone and a release run none of them. A new job takes
+  `needs: changes` and the `if` of its kind; a file a job newly depends on goes into the lists of the script.
   `nightly.yml` (03:00 UTC, or by hand) builds the iOS example with CocoaPods frameworks (static, dynamic, React Native
   from source) and an Expo app with the packed library.
 - `release.yml` runs on every push to `main`: release-please keeps the release pull request open (the `release` skill),
   and after it is merged publishes to npm through the `npm` environment (trusted publishing, no token).
   `docs.yml` builds the docs site on a pull request that changes `docs/`, `src/` or `package.json`, and on `main`
-  publishes it to GitHub Pages (navigation.apexnative.dev). `pr-title.yml` checks that a pull request's title is a conventional commit; in the merge queue it passes with no
-  steps.
+  publishes it to GitHub Pages (navigation.apexnative.dev). `pr-title.yml` checks that a pull request's title is a
+  conventional commit; in a merge queue it passes with no steps.
+- The rulesets: `main` takes squashed pull requests with the checks of `ci.yml` and `pr-title`, no force push or
+  deletion; `release tags` lets only the maintainer and the release app create, move or delete `v*` tags. A renamed
+  job is renamed in the `main` ruleset too, or pull requests wait for a check that never comes.
 - Every job but `changes` starts with `actions/checkout` and the local `./.github/actions/setup` (Node from `.nvmrc`,
   the Yarn cache, `yarn install --immutable`). A new job does too.
 - Third-party actions are pinned to a full commit SHA with the version in a comment

@@ -1,6 +1,6 @@
 ---
 name: git
-description: Commits, branches and pull requests of this repository, and what to do when GitHub Actions fails — conventional commits under commitlint, one behavior per commit, the pre-commit checks, the pull request text, the merge queue. Use before any commit, branch, push or pull request, and when CI or the nightly build fails.
+description: Commits, branches and pull requests of this repository, and what to do when GitHub Actions fails — conventional commits under commitlint, one behavior per commit, the pre-commit checks, the pull request text, the rules of main. Use before any commit, branch, push or pull request, and when CI or the nightly build fails.
 argument-hint: [commit | pr | ci <run, or PR number>]
 ---
 
@@ -27,7 +27,9 @@ Never `--no-verify`, never force-push `main`, never rewrite history that was pus
 
 ## Branches and pull requests
 
-- `main` takes changes through pull requests, CI and the merge queue (`merge_group` in `ci.yml`). A branch is
+- `main` takes changes only through pull requests, squashed, once the required checks pass (the ruleset `main`:
+  `lint`, `test`, `build-library`, `build-android`, `build-ios`, `build-ios-spm`, `pr-title`; a job that `changes`
+  skips counts as passed). There is no merge queue: the maintainer merges a green pull request. A branch is
   `<type>/<short-slug>`: `fix/stack-double-pop`.
 - A pull request is one change, titled like a commit subject: it is squashed into one commit named by its title, and
   that title is its line in the changelog (`pr-title.yml` checks it with commitlint). Its body: what changes for an

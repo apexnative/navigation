@@ -9,9 +9,9 @@ argument-hint: [check | beta | rc | stable]
 
 A release is a pull request. After every merge into `main`, `.github/workflows/release.yml` (release-please) keeps one
 pull request open, `chore: release <version>`: the version in `package.json` and `.release-please-manifest.json`, and
-`CHANGELOG.md` from the conventional commits since the last release. The maintainer merges it through the merge queue;
-the workflow then tags `v<version>`, makes the GitHub release, and publishes to npm under the stage's tag (`alpha`,
-`beta`, `rc`, or `latest`) once the maintainer approves the `npm` environment. npm trusts the workflow (trusted
+`CHANGELOG.md` from the conventional commits since the last release. The maintainer merges it; the workflow then tags
+`v<version>`, makes the GitHub release, and publishes to npm under the stage's tag (`alpha`, `beta`, `rc`, or
+`latest`) once the maintainer approves the `npm` environment. npm trusts the workflow (trusted
 publishing): no npm token anywhere. Claude never merges the release pull request and never approves the environment.
 
 ## check (the default)
