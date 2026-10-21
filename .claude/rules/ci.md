@@ -11,7 +11,8 @@ paths:
   from source) and an Expo app with the packed library.
 - `release.yml` runs on every push to `main`: release-please keeps the release pull request open (the `release` skill),
   and after it is merged publishes to npm through the `npm` environment (trusted publishing, no token).
-  `pr-title.yml` checks that a pull request's title is a conventional commit; in the merge queue it passes with no
+  `docs.yml` builds the docs site on a pull request that changes `docs/`, `src/` or `package.json`, and on `main`
+  publishes it to GitHub Pages (navigation.apexnative.dev). `pr-title.yml` checks that a pull request's title is a conventional commit; in the merge queue it passes with no
   steps.
 - Every job starts with `actions/checkout` and the local `./.github/actions/setup` (Node from `.nvmrc`, the Yarn cache,
   `yarn install --immutable`). A new job does too.
