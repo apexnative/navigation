@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Tells ahead of time that a new React Native version is out, so its work starts before apps ask for it. It takes the
 // newest of npm's `latest` and `next` whose minor is newer than the one the repository builds with (devDependencies of
-// package.json), or the version given as an argument. Each minor gets one issue, `React Native 0.89`, labeled
+// package.json), or the version given as an argument. Each minor gets one issue, `React Native <minor>`, labeled
 // `react-native`; every later version of that minor (a new RC, the release, a patch) adds a comment to it. Each version
 // leaves a marker in the issue, so it is reported once. The issues of a minor the repository has moved to are closed.
 // `--dry-run` prints what it would do. Needs `gh` with access to the repository.
@@ -27,7 +27,7 @@ const gh = (...ghArgs) => {
   return run('gh', ghArgs);
 };
 
-// 0.89.0-rc.1 → { minor: '0.89', parts: [0, 89, 0], pre: ['rc', 1] }
+// "<major>.<minor>.<patch>[-<prerelease>]" → its minor, its three numbers and the parts of the prerelease.
 function parse(version) {
   const match = /^(\d+)\.(\d+)\.(\d+)(?:-(.+))?$/.exec(version);
   if (!match) throw new Error(`Not a React Native version: ${version}`);
