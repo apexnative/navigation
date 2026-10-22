@@ -1,6 +1,6 @@
 import React from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { defineScreen, useNavigation } from '@apexnative/navigation';
+import { defineScreen, useNavigation, useScreenEvent } from '@apexnative/navigation';
 import { log } from '../showcase/journal';
 import { useTheme } from '../ui';
 
@@ -16,11 +16,15 @@ const SIZES: { title: string; size: { width?: number; height?: number }; android
 /**
  * A menu of the side menu demo. A menu has no stack: a pick acts on the center, and the menu closes once the center
  * changed — Home starts the center over (`replace`), the others push Details over it. The size buttons change the
- * menu's `width` and `height` while it is open. On glass (`sideMenu.*.glass`) it has no background of its own, so the glass shows.
+ * menu's `width` and `height` while it is open. Its WillAppear goes to the Journal, before the DidAppear every screen
+ * logs. On glass (`sideMenu.*.glass`) it has no background of its own, so the glass shows.
  */
 function SideMenuMenu({ side, glass }: { side: 'left' | 'right'; glass?: boolean }) {
   const t = useTheme();
   const nav = useNavigation();
+  useScreenEvent('screenWillAppear', ({ screen }) =>
+    log('event', 'screenWillAppear', `${screen.name} ${screen.id}`)
+  );
   const pick = (item: string) => {
     log('event', `Side menu (${side})`, item);
     if (item === 'Home') nav.replace('SideMenuCenter');

@@ -16,8 +16,8 @@ import dev.apexnative.navigation.viewcontrollers.viewcontroller.ViewController
  *   the drawer calls `onDrawerClosed` only for a drawer that had opened.
  * - The menu screen's events: WillAppear at the side's first movement, DidAppear when it opened, DidDisappear when it
  *   rests closed; only while the side menu has appeared ([Host.appeared]) — otherwise they come with the side menu's
- *   own appearance (its visible children). An open without animation sends DidAppear without WillAppear
- *  (`AppearanceDispatcher.withoutWillAppear`).
+ *   own appearance (its visible children). An open without animation sends both too, WillAppear first, as on iOS:
+ *   the drawer jumps to its open offset before it calls the open.
  * - At each rest: one state update after the menu's events, the back callback, and the layers that follow the shown
  *  screen.
  * - A drawer that doesn't call back (not laid out since it joined the window, or not in one: `DrawerLayout` only
@@ -246,11 +246,8 @@ internal class SideMenuMotion(
     private fun move(side: Side, open: Boolean, animate: Boolean) {
         val drawer = drawer()
         val silent = !drawer.callsBack
-        val run = {
-            if (open) drawer.open(side, animate) else drawer.close(side, animate)
-            if (silent) record(side, open)
-        }
-        if (open && !animate && host.appeared) AppearanceDispatcher.withoutWillAppear(run) else run()
+        if (open) drawer.open(side, animate) else drawer.close(side, animate)
+        if (silent) record(side, open)
     }
 
     private fun record(side: Side, open: Boolean) {

@@ -45,12 +45,6 @@ internal class ScreenAppearance(
     /** Cancels the hold limit running for [held]; none when nothing is held. */
     internal var cancelLimit: (() -> Unit)? = null
 
-    /**
-     * This appearance started without its WillAppear (`AppearanceDispatcher.withoutWillAppear`: a side menu's drawer
-     * that jumped open); its DidAppear is its first event. Cleared as it is hidden.
-     */
-    internal var skippedWill = false
-
     private var ready = content == null
     private var waitsForContent = false
 

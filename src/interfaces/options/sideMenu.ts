@@ -18,8 +18,8 @@ export interface SideMenuSide {
   visible?: boolean;
   /**
    * Whether the opening or closing that `visible` asks for is animated. With `false` it happens at once and the
-   * screens of the menu get the same appearance events in the same order, except that on Android a menu that opens at
-   * once sends its screens DidAppear without WillAppear. It acts only together with `visible` in the same merge.
+   * screens of the menu get the same appearance events in the same order: WillAppear, then DidAppear. It acts only
+   * together with `visible` in the same merge.
    * @default true
    */
   animate?: boolean;

@@ -16,6 +16,10 @@ function SideMenuCenter() {
         <Button title="Open the left menu" onPress={() => nav.openMenu('left')} />
         <Button title="Open the right menu" onPress={() => nav.openMenu('right')} />
         <Button
+          title="Open the left menu at once"
+          onPress={() => nav.setOptions({ sideMenu: { left: { visible: true, animate: false } } })}
+        />
+        <Button
           title="Back to the Showcase"
           variant="primary"
           onPress={() => nav.switchTo('showcase')}
