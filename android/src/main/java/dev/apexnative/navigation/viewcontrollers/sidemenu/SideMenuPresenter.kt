@@ -18,15 +18,14 @@ import dev.apexnative.navigation.views.sidemenu.SideMenuView
  * `testID`s. Each moment applies its part, from the side menu's resolved options
  * (`SideMenuController.resolveShownOptions`: the current part's chain, the center's `sideMenu` over an open menu's) —
  * at creation everything with the heights, at every appearance of a screen inside everything but the heights, at a
- * merge the fields it names, at a repaint the background and the `testID`s. The locks of `enabled` and the command
+ * merge the fields it names (a width or a height at once, an open menu too), at a repaint the background and the
+ * `testID`s. The locks of `enabled` and the command
  * `visible` are the node's ([SideMenuMotion]). Main thread only.
  */
 internal class SideMenuPresenter(activity: Activity) : Presenter(activity, Options()) {
-    /** The side menu's [view] is made, with [options], resolved: the heights, read only now. */
+    /** The side menu's [view] is made, with [options], resolved: the heights too, which only a merge changes after. */
     fun applyOnCreation(view: SideMenuView, options: Options) {
-        for (side in Side.entries) {
-            view.setPartHeight(side, SideMenuRules.height(SideMenuRules.sideOf(options.sideMenu, side), ::toPixels))
-        }
+        applyHeights(view, options.sideMenu)
         applyWidths(view, options.sideMenu)
         applyBackground(view, options)
         applyTestIds(view, options.sideMenu)
@@ -46,14 +45,18 @@ internal class SideMenuPresenter(activity: Activity) : Presenter(activity, Optio
     /**
      * A merge reached the side menu, its own or through a screen inside (`mergeOptions` step 3): the fields [options]
      * name, with the values of the side menu's resolution now, so a screen off what shows changes nothing until it
-     * appears. A width waits for the next appearance, a height for nothing.
+     * appears. A width or a height resizes its menu at once, open or closed, as on iOS.
      */
     override fun mergeOptions(viewController: ViewController<*>, options: Options) {
         val layout = viewController.peekView() as? SideMenuView ?: return
         val touchesBackground = SideMenuRules.touchesBackground(options)
         val touchesTestIds = SideMenuRules.touchesTestIds(options.sideMenu)
-        if (!touchesBackground && !touchesTestIds) return
+        val touchesWidths = SideMenuRules.touchesWidths(options.sideMenu)
+        val touchesHeights = SideMenuRules.touchesHeights(options.sideMenu)
+        if (!touchesBackground && !touchesTestIds && !touchesWidths && !touchesHeights) return
         val shown = viewController.resolveShownOptions(DefaultOptions.current)
+        if (touchesWidths) applyWidths(layout, shown.sideMenu)
+        if (touchesHeights) applyHeights(layout, shown.sideMenu)
         if (touchesBackground) applyBackground(layout, shown)
         if (touchesTestIds) applyTestIds(layout, shown.sideMenu)
     }
@@ -68,6 +71,12 @@ internal class SideMenuPresenter(activity: Activity) : Presenter(activity, Optio
     private fun applyWidths(view: SideMenuView, options: SideMenuOptions) {
         for (side in Side.entries) {
             view.setWantedWidth(side, SideMenuRules.wantedWidth(SideMenuRules.sideOf(options, side), ::toPixels))
+        }
+    }
+
+    private fun applyHeights(view: SideMenuView, options: SideMenuOptions) {
+        for (side in Side.entries) {
+            view.setPartHeight(side, SideMenuRules.height(SideMenuRules.sideOf(options, side), ::toPixels))
         }
     }
 

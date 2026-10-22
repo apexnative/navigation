@@ -133,6 +133,12 @@ class SideMenuRulesTest {
         assertFalse(SideMenuRules.touchesTestIds(menu { right.enabled = Bool(false) }))
         assertTrue(SideMenuRules.touchesBackground(Options().apply { layout.backgroundColor = ThemeColour(1, 2) }))
         assertFalse(SideMenuRules.touchesBackground(Options()))
+        // A width or a height resizes the menus at the merge itself.
+        assertTrue(SideMenuRules.touchesWidths(menu { left.width = Fraction(200.0) }))
+        assertTrue(SideMenuRules.touchesWidths(menu { right.width = Fraction(320.5) }))
+        assertFalse(SideMenuRules.touchesWidths(menu { left.height = Fraction(400.0) }))
+        assertTrue(SideMenuRules.touchesHeights(menu { right.height = Fraction(400.0) }))
+        assertFalse(SideMenuRules.touchesHeights(menu { right.width = Fraction(320.0) }))
     }
 
     @Test
