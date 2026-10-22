@@ -8,7 +8,7 @@ const ts = require('typescript');
 const { planFiles } = require('..');
 
 const REPOSITORY = path.join(__dirname, '..', '..', '..');
-const TEMPLATE = path.join(REPOSITORY, 'cli', 'setup', '__fixtures__', 'template-0.87');
+const TEMPLATE = path.join(REPOSITORY, 'cli', 'setup', '__fixtures__', 'template-0.88');
 const noCli = () => ({ ok: false, stdout: '', stderr: '' });
 
 /** React Native's template as its init makes it, with a tsconfig.json. */
@@ -21,13 +21,14 @@ function template() {
   copy('MainApplication.kt', 'android/app/src/main/java/com/myapp/MainApplication.kt');
   copy('MainActivity.kt', 'android/app/src/main/java/com/myapp/MainActivity.kt');
   copy('AppDelegate.swift', 'ios/MyApp/AppDelegate.swift');
+  copy('SceneDelegate.swift', 'ios/MyApp/SceneDelegate.swift');
   copy('Info.plist', 'ios/MyApp/Info.plist');
   copy('index.js', 'index.js');
   copy('App.tsx', 'App.tsx');
   fs.writeFileSync(path.join(root, 'tsconfig.json'), '{}\n');
   fs.writeFileSync(
     path.join(root, 'package.json'),
-    JSON.stringify({ name: 'MyApp', dependencies: { 'react-native': '0.87.1' } }) + '\n'
+    JSON.stringify({ name: 'MyApp', dependencies: { 'react-native': '0.88.0' } }) + '\n'
   );
   fs.mkdirSync(path.join(root, 'node_modules'));
   // The packages the starter's code imports, as the app installs them.

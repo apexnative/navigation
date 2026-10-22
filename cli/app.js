@@ -9,7 +9,7 @@ const { exec } = require('./exec');
 const MINIMUM = [0, 85];
 
 /** The newest React Native the navigation was checked with: `init` makes apps of its newest patch. */
-const TESTED = [0, 87];
+const TESTED = [0, 88];
 
 /** The name the navigation is installed under. */
 const PACKAGE = '@apexnative/navigation';

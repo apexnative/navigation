@@ -19,7 +19,10 @@ its delegate (the bundle URL) before calling super.
       self.reactNativeDelegate = ReactNativeDelegate()
       return super.application(application, didFinishLaunchingWithOptions: launchOptions)
     }
-  }`;
+  }
+
+ReactNativeDelegate is the app's RCTDefaultReactNativeFactoryDelegate, which gives the bundle URL (bundleURL()); in
+React Native 0.88's template that method is in SceneDelegate.`;
 
 // Lines of the template's launch: ANNAppDelegate does all of it.
 const TEMPLATE_LINES = [
@@ -42,6 +45,20 @@ const LAUNCH_OVERRIDE =
 const DELEGATE = /^([ \t]*)let\s+delegate\s*=\s*ReactNativeDelegate\(\)[ \t]*$/m;
 const RETURN_TRUE = /^([ \t]*)return\s+true[ \t]*$/m;
 
+// React Native 0.88's template starts React Native in its scene delegate: the app delegate only returns true. The
+// bundle URL moves into a delegate of React Native's factory, as the earlier templates had it.
+const REACT_NATIVE_DELEGATE = `class ReactNativeDelegate: RCTDefaultReactNativeFactoryDelegate {
+  override func bundleURL() -> URL? {
+    #if DEBUG
+    RCTBundleURLProvider.sharedSettings().jsBundleURL(forBundleRoot: "index")
+    #else
+    Bundle.main.url(forResource: "main", withExtension: "jsbundle")
+    #endif
+  }
+}
+`;
+const RETURN_TRUE_OR_TRUE = /^([ \t]*)(?:return\s+)?true[ \t]*$/m;
+
 /**
  * AppDelegate.swift: the app delegate becomes an ANNAppDelegate.
  * @param {string} text
@@ -55,13 +72,30 @@ function planAppDelegate(text) {
     note: 'changed by hand, see below',
     howTo: HOW_TO,
   });
-  if (!HEADER.test(text) || !LAUNCH.test(text) || !DELEGATE.test(text)) return manual;
+  if (!HEADER.test(text) || !LAUNCH.test(text)) return manual;
+  let next = DELEGATE.test(text) ? fromFactoryLaunch(text) : fromSceneLaunch(text);
+  if (next === undefined) return manual;
 
+  // The dependency provider is ANNAppDelegate's now.
+  if (!/\bRCTAppDependencyProvider\b/.test(next)) {
+    next = next.replace(/^import\s+ReactAppDependencyProvider[ \t]*\n/m, '');
+  }
+  next = addImport(next, 'import ApexNavigation', { sorted: false });
+  return { status: 'change', next, note: 'ANNAppDelegate' };
+}
+
+/**
+ * The app delegate of the templates before React Native 0.88, which makes React Native's factory and window in its
+ * launch; undefined when the launch has code of the app's own that uses them.
+ * @param {string} text
+ * @returns {string | undefined}
+ */
+function fromFactoryLaunch(text) {
   let next = text
     .replace(HEADER, 'class $1: ANNAppDelegate {')
     .replace(LAUNCH, '$1override func$2');
   for (const line of TEMPLATE_LINES) {
-    if (!line.test(next)) return manual;
+    if (!line.test(next)) return undefined;
     next = next.replace(line, '');
   }
   next = next.replace(DELEGATE, '$1self.reactNativeDelegate = ReactNativeDelegate()');
@@ -69,10 +103,10 @@ function planAppDelegate(text) {
   // The launch now ends in super's, which starts React Native.
   const launchAt = next.search(LAUNCH_OVERRIDE);
   const returnAt = next.slice(launchAt).search(RETURN_TRUE);
-  if (returnAt < 0) return manual;
+  if (returnAt < 0) return undefined;
   const body = next.slice(launchAt, launchAt + returnAt).replace(/self\.reactNativeDelegate/g, '');
   // Code of the app's own that used the template's factory, delegate or window: it has to move by hand.
-  if (/\b(factory|delegate|window)\b/.test(body)) return manual;
+  if (/\b(factory|delegate|window)\b/.test(body)) return undefined;
   const rest = next
     .slice(launchAt + returnAt)
     .replace(
@@ -82,17 +116,38 @@ function planAppDelegate(text) {
   next = next.slice(0, launchAt + returnAt) + rest;
 
   // The blank lines the template's launch leaves behind.
-  next = next
+  return next
     .replace(/(class\s+\w+:\s*ANNAppDelegate\s*\{\n)(?:[ \t]*\n)+/, '$1')
     .replace(/(self\.reactNativeDelegate = ReactNativeDelegate\(\)\n)(?:[ \t]*\n)+/, '$1')
     .replace(/\n(?:[ \t]*\n)+([ \t]*return super\.application\()/, '\n$1');
+}
 
-  // The dependency provider is ANNAppDelegate's now.
-  if (!/\bRCTAppDependencyProvider\b/.test(next)) {
-    next = next.replace(/^import\s+ReactAppDependencyProvider[ \t]*\n/m, '');
+/**
+ * The app delegate of React Native 0.88's template, whose launch only returns true; undefined when the app delegate
+ * makes React Native or a window of its own.
+ * @param {string} text
+ * @returns {string | undefined}
+ */
+function fromSceneLaunch(text) {
+  if (/\b(RCTReactNativeFactory|ReactNativeDelegate|window)\b/.test(text)) return undefined;
+  let next = text
+    .replace(HEADER, 'class $1: ANNAppDelegate {')
+    .replace(LAUNCH, '$1override func$2');
+  const launchAt = next.search(LAUNCH_OVERRIDE);
+  const returnAt = next.slice(launchAt).search(RETURN_TRUE_OR_TRUE);
+  if (returnAt < 0) return undefined;
+  const rest = next
+    .slice(launchAt + returnAt)
+    .replace(
+      RETURN_TRUE_OR_TRUE,
+      '$1self.reactNativeDelegate = ReactNativeDelegate()\n' +
+        '$1return super.application(application, didFinishLaunchingWithOptions: launchOptions)'
+    );
+  next = `${next.slice(0, launchAt + returnAt)}${rest.trimEnd()}\n\n${REACT_NATIVE_DELEGATE}`;
+  for (const module of ['React', 'React_RCTAppDelegate']) {
+    next = addImport(next, `import ${module}`, { sorted: false });
   }
-  next = addImport(next, 'import ApexNavigation', { sorted: false });
-  return { status: 'change', next, note: 'ANNAppDelegate' };
+  return next;
 }
 
 module.exports = { planAppDelegate };

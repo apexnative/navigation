@@ -9,6 +9,9 @@ NS_ASSUME_NONNULL_BEGIN
  * When the scene connects, the navigation window moves into it. URLs, user activities and foreground/background
  * changes that UIKit now delivers to the scene are forwarded to the app delegate's usual methods, so
  * the deep links (`dispatchDeepLinkURL:`) and app delegate overrides keep working.
+ *
+ * The app's own scene delegate can extend it (`class SceneDelegate: ANNSceneDelegate {}`, which `setup` makes of React
+ * Native 0.88's template); a method it overrides calls `super`.
  */
 @interface ANNSceneDelegate : UIResponder <UIWindowSceneDelegate>
 
