@@ -185,6 +185,8 @@ top-level folder. Main thread only, unless a line says otherwise.
 - The bar measures to its children: a picture laid into it for a transition that is taller than the bar the incoming
   screen gives holds the bar at that height to the end (the row's picture of a pop from a large title). What doesn't
   stay in the bar rides with the leaving screen (`TopBarPresenter.pictureUnderRow`).
+- A `Toolbar` centers its navigation button and its menu in `min(minimumHeight, height)` (`buttonGravity` is top):
+  the row's toolbars take the row's height as their minimum (`TitleBar`); 0 pins the buttons to the row's top.
 - A React screen without `layout.backgroundColor` is opaque with the theme's `android:colorBackground`
   (`ComponentPresenter`): a push keeps the covered screen under the new one until it ends, and a transparent screen
   shows it. Only an explicit `'transparent'` / `null` (overlays, see-through modals) lets it through.
