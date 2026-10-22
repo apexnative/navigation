@@ -16,6 +16,7 @@ import dev.apexnative.navigation.viewcontrollers.stack.StackDisplay.Motion
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.ViewController
 import dev.apexnative.navigation.views.animations.AnimationRules
 import dev.apexnative.navigation.views.animations.SideAnimator
+import dev.apexnative.navigation.views.animations.SystemTransition
 import dev.apexnative.navigation.views.element.ElementTransition
 import dev.apexnative.navigation.views.element.TargetsWait
 import dev.apexnative.navigation.views.stack.StackLayout
@@ -110,8 +111,9 @@ internal class StackViews(private val stack: StackController) : StackDisplay {
     override fun animate(screen: ViewController<*>, motion: Motion, fromCurrent: Boolean, done: () -> Unit) {
         stop(screen)
         val view = screen.peekView() ?: return done()
-        val animator = StackTransitions.animator(view, motion, fromCurrent)
-        cleanups[screen] = dress(view, motion)
+        val layout = layout
+        val animator = StackTransitions.animator(view, motion, fromCurrent) { layout?.edgesMoved() }
+        cleanups[screen] = dress(view, motion, layout)
         animator.addListener(object : AnimatorListenerAdapter() {
             // Ended or cancelled by anything else than [stop]: the screen's part is done.
             override fun onAnimationEnd(animation: Animator) {
@@ -126,12 +128,17 @@ internal class StackViews(private val stack: StackController) : StackDisplay {
         animator.start()
     }
 
-    // For the default transition [view] fades through a hardware layer, so the whole screen isn't drawn again at every
-    // frame of its fade. What undoes it.
-    private fun dress(view: View, motion: Motion): () -> Unit {
+    // For the default transition [view] moves as the system's windows do: its edge extended by the distance it moves,
+    // and its fade drawn through a hardware layer, so the whole screen isn't drawn again at every frame of it. What
+    // undoes both.
+    private fun dress(view: View, motion: Motion, layout: StackLayout?): () -> Unit {
+        StackTransitions.extendsStart(motion)?.let { start ->
+            layout?.extendEdge(view, start, (SystemTransition.DISTANCE_DP * view.resources.displayMetrics.density).toInt())
+        }
         val layered = StackTransitions.fades(motion) && view.layerType == View.LAYER_TYPE_NONE
         if (layered) view.setLayerType(View.LAYER_TYPE_HARDWARE, null)
         return {
+            layout?.dropEdge(view)
             if (layered && view.layerType == View.LAYER_TYPE_HARDWARE) view.setLayerType(View.LAYER_TYPE_NONE, null)
         }
     }

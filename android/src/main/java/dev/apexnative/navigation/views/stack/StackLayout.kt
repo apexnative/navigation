@@ -2,6 +2,8 @@ package dev.apexnative.navigation.views.stack
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Canvas
+import android.graphics.drawable.Drawable
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -133,5 +135,48 @@ class StackLayout(context: Context) : CoordinatorLayout(context) {
     private fun moved() {
         requestLayout()
         invalidate()
+    }
+
+    // The edges of the screens in a transition: drawn beside each, under it, where it moves and as transparent as it.
+    private val edges = HashMap<View, Edge>()
+
+    private class Edge(val picture: Drawable, val width: Int, val atStart: Boolean)
+
+    /**
+     * [view] extends its start edge ([atStart]) or its end edge by [width] pixels while it moves, as the system's
+     * transitions between activities extend a window: its background fills the room it moves away from, so the screen
+     * under it never shows at its edge. [dropEdge] ends it. Each frame of the move calls [edgesMoved].
+     */
+    fun extendEdge(view: View, atStart: Boolean, width: Int) {
+        val left = atStart != (layoutDirection == LAYOUT_DIRECTION_RTL)
+        val picture = ScreenEdge.pictureOf(view) ?: return
+        edges[view] = Edge(picture, width, left)
+        invalidate()
+    }
+
+    /** [view] moves no more: its edge goes. */
+    fun dropEdge(view: View) {
+        if (edges.remove(view) != null) invalidate()
+    }
+
+    /** A screen with an extended edge moved: the edges are drawn again where the screens are now. */
+    fun edgesMoved() {
+        if (edges.isNotEmpty()) invalidate()
+    }
+
+    override fun drawChild(canvas: Canvas, child: View, drawingTime: Long): Boolean {
+        edges[child]?.let { drawEdge(canvas, child, it) }
+        return super.drawChild(canvas, child, drawingTime)
+    }
+
+    private fun drawEdge(canvas: Canvas, child: View, edge: Edge) {
+        if (child.visibility != VISIBLE || child.alpha <= 0f) return
+        val x = child.translationX
+        val top = (child.top + child.translationY).toInt()
+        val bottom = (child.bottom + child.translationY).toInt()
+        val left = if (edge.atStart) (child.left + x).toInt() - edge.width else (child.right + x).toInt()
+        edge.picture.setBounds(left, top, left + edge.width, bottom)
+        edge.picture.alpha = (child.alpha * 255).toInt()
+        edge.picture.draw(canvas)
     }
 }

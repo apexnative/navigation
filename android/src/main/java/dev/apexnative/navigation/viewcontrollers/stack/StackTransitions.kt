@@ -16,11 +16,15 @@ import dev.apexnative.navigation.views.animations.SystemTransition
  * system's transition between activities (`SystemTransition`: 96 dp along the axis in 450 ms on
  * `fast_out_extra_slow_in`, mirrored right to left), `setStackRoot` is Material's fade through (`FadeThrough`). What
  * leaves starts from where it is; what comes in on a push is hidden explicitly until it fades in, as a delay doesn't
- * apply an animator's first value. Main thread only.
+ * apply an animator's first value. The system's windows also extend their edge by the distance they move
+ * ([extendsStart], `StackLayout.extendEdge`). Main thread only.
  */
 internal object StackTransitions {
-    /** The animator of [view] for [motion]; [fromCurrent] for a screen taken over from a transition still running. */
-    fun animator(view: View, motion: Motion, fromCurrent: Boolean): Animator {
+    /**
+     * The animator of [view] for [motion]; [fromCurrent] for a screen taken over from a transition still running.
+     * [onSlide] runs at each frame of its slide.
+     */
+    fun animator(view: View, motion: Motion, fromCurrent: Boolean, onSlide: () -> Unit = {}): Animator {
         val distance = SystemTransition.DISTANCE_DP * view.resources.displayMetrics.density
         // Forward is to the end of the line: right to left, the screens move the other way. The stack's view inherits
         // the app's direction, which `layout.direction` sets on the activity's content (`AppDirection`).
@@ -30,22 +34,32 @@ internal object StackTransitions {
                 view.translationX = forward
                 view.alpha = 0f
                 together(
-                    slide(view, 0f),
+                    slide(view, 0f, onSlide),
                     fade(view, 1f, SystemTransition.PUSH_FADE_DELAY),
                 )
             }
-            Motion.PushCover -> slide(view, -forward)
+            Motion.PushCover -> slide(view, -forward, onSlide)
             Motion.PopOut -> together(
-                slide(view, forward),
+                slide(view, forward, onSlide),
                 fade(view, 0f, SystemTransition.POP_FADE_DELAY),
             )
             Motion.PopReveal -> {
                 if (!fromCurrent) view.translationX = -forward
-                if (view.alpha < 1f) together(slide(view, 0f), fade(view, 1f, 0L)) else slide(view, 0f)
+                if (view.alpha < 1f) together(slide(view, 0f, onSlide), fade(view, 1f, 0L)) else slide(view, 0f, onSlide)
             }
             Motion.FadeIn -> FadeThrough.enter(view)
             Motion.FadeOut -> FadeThrough.exit(view)
         }
+    }
+
+    /**
+     * Whether a screen moving by [motion] extends its start edge (the side it moves away from on a push in and a pop
+     * out), its end edge (a push cover, a pop reveal), or none (a fade through: null), as the system's windows do.
+     */
+    fun extendsStart(motion: Motion): Boolean? = when (motion) {
+        Motion.PushIn, Motion.PopOut -> true
+        Motion.PushCover, Motion.PopReveal -> false
+        Motion.FadeIn, Motion.FadeOut -> null
     }
 
     /** Whether [motion] animates the screen's alpha: it draws through a hardware layer meanwhile. */
@@ -68,10 +82,11 @@ internal object StackTransitions {
         }
     }
 
-    private fun slide(view: View, to: Float): Animator =
+    private fun slide(view: View, to: Float, onFrame: () -> Unit): Animator =
         ObjectAnimator.ofFloat(view, View.TRANSLATION_X, view.translationX, to).apply {
             duration = SystemTransition.DURATION
             interpolator = SystemTransition.CURVE
+            addUpdateListener { onFrame() }
         }
 
     private fun fade(view: View, to: Float, delay: Long): Animator =
