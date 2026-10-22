@@ -1,4 +1,4 @@
-#import <Foundation/Foundation.h>
+#import <UIKit/UIKit.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -19,6 +19,25 @@ typedef void (^ANNLaunchLinkCompletion)(NSURL *_Nullable url);
 
 /// Hands `url` to `Linking`, or keeps it until React content first appears and no `takeLaunchLink:` waits.
 + (void)dispatchURL:(NSURL *)url;
+
+/**
+ * Runs `forward`, which hands the scene's link to the app delegate (`ANNSceneDelegate`). The URL the app delegate
+ * dispatches in it keeps the scene and its context, which React Native 0.88 and newer need to take a scene's link.
+ */
++ (void)forwardURLContext:(UIOpenURLContext *)context
+                  ofScene:(UIScene *)scene
+                  through:(NS_NOESCAPE dispatch_block_t)forward;
+
+/// `forwardURLContext:ofScene:through:` for a web link (`webpageURL`) of the scene.
++ (void)forwardUserActivity:(NSUserActivity *)activity
+                    ofScene:(UIScene *)scene
+                    through:(NS_NOESCAPE dispatch_block_t)forward;
+
+/// Hands the scene's link to `Linking` at once, past the queue: for an app delegate that doesn't take links.
++ (void)openURLContext:(UIOpenURLContext *)context ofScene:(UIScene *)scene;
+
+/// `openURLContext:ofScene:` for a web link (`webpageURL`) of the scene; an activity without one does nothing.
++ (void)openUserActivity:(NSUserActivity *)activity ofScene:(UIScene *)scene;
 
 /// The app's window scene connected (`+[ApexNavigation attachToWindowScene:]`).
 + (void)windowSceneDidConnect;

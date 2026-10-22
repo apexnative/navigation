@@ -1,12 +1,40 @@
 #import "ANNDeepLinkQueue.h"
 #import "ANNAssert.h"
 #import <React/RCTLinkingManager.h>
+#import <React/RCTLog.h>
 #import <React/RCTRootView.h>
 #import <UIKit/UIKit.h>
 
+// A link on its way to `Linking`, with the scene's own context or user activity it came in when it came from a scene.
+@interface ANNDeepLink : NSObject
+@property(nonatomic, readonly) NSURL *url;
+@property(nonatomic, readonly, nullable) UIOpenURLContext *context;
+@property(nonatomic, readonly, nullable) NSUserActivity *activity;
+@property(nonatomic, readonly, weak, nullable) UIScene *scene;
+@end
+
+@implementation ANNDeepLink
+
+- (instancetype)initWithURL:(NSURL *)url
+                    context:(UIOpenURLContext *)context
+                   activity:(NSUserActivity *)activity
+                      scene:(UIScene *)scene {
+    if (self = [super init]) {
+        _url = url;
+        _context = context;
+        _activity = activity;
+        _scene = scene;
+    }
+    return self;
+}
+
+@end
+
 // Main queue only.
 static BOOL ANNDeepLinkQueueStarted = NO;
-static NSMutableArray<NSURL *> *ANNPendingDeepLinkURLs;
+static NSMutableArray<ANNDeepLink *> *ANNPendingDeepLinks;
+// The scene's link the scene delegate is handing to the app delegate: the app delegate dispatches its URL.
+static ANNDeepLink *ANNForwardedSceneLink;
 // React content appeared: `RCTLinkingManager` exists and JS listens to `url` events.
 static BOOL ANNReactContentAppeared = NO;
 // Every URL that launched the app was dispatched.
@@ -20,7 +48,7 @@ static ANNLaunchLinkCompletion ANNWaitingLaunchLinkCompletion;
 
 + (void)initialize {
     if (self == ANNDeepLinkQueue.class) {
-        ANNPendingDeepLinkURLs = [NSMutableArray new];
+        ANNPendingDeepLinks = [NSMutableArray new];
     }
 }
 
@@ -46,11 +74,44 @@ static ANNLaunchLinkCompletion ANNWaitingLaunchLinkCompletion;
 
 + (void)dispatchURL:(NSURL *)url {
     ANNAssertMainQueue();
+    // The URL of the scene's link keeps its context; one the app delegate changed is a URL of its own.
+    ANNDeepLink *link = [ANNForwardedSceneLink.url isEqual:url]
+                            ? ANNForwardedSceneLink
+                            : [[ANNDeepLink alloc] initWithURL:url context:nil activity:nil scene:nil];
     if (ANNReactContentAppeared && ANNWaitingLaunchLinkCompletion == nil) {
-        [self openURL:url];
+        [self openLink:link];
         return;
     }
-    [ANNPendingDeepLinkURLs addObject:url];
+    [ANNPendingDeepLinks addObject:link];
+}
+
++ (void)forwardURLContext:(UIOpenURLContext *)context
+                  ofScene:(UIScene *)scene
+                  through:(NS_NOESCAPE dispatch_block_t)forward {
+    [self forwardLink:[[ANNDeepLink alloc] initWithURL:context.URL context:context activity:nil scene:scene]
+              through:forward];
+}
+
++ (void)forwardUserActivity:(NSUserActivity *)activity
+                    ofScene:(UIScene *)scene
+                    through:(NS_NOESCAPE dispatch_block_t)forward {
+    if (activity.webpageURL == nil) {
+        forward();
+        return;
+    }
+    [self forwardLink:[[ANNDeepLink alloc] initWithURL:activity.webpageURL context:nil activity:activity scene:scene]
+              through:forward];
+}
+
++ (void)openURLContext:(UIOpenURLContext *)context ofScene:(UIScene *)scene {
+    [self openLink:[[ANNDeepLink alloc] initWithURL:context.URL context:context activity:nil scene:scene]];
+}
+
++ (void)openUserActivity:(NSUserActivity *)activity ofScene:(UIScene *)scene {
+    if (activity.webpageURL == nil) {
+        return;
+    }
+    [self openLink:[[ANNDeepLink alloc] initWithURL:activity.webpageURL context:nil activity:activity scene:scene]];
 }
 
 + (void)windowSceneDidConnect {
@@ -98,10 +159,10 @@ static ANNLaunchLinkCompletion ANNWaitingLaunchLinkCompletion;
     if (ANNWaitingLaunchLinkCompletion != nil) {
         return;
     }
-    NSArray<NSURL *> *urls = [ANNPendingDeepLinkURLs copy];
-    [ANNPendingDeepLinkURLs removeAllObjects];
-    for (NSURL *url in urls) {
-        [self openURL:url];
+    NSArray<ANNDeepLink *> *links = [ANNPendingDeepLinks copy];
+    [ANNPendingDeepLinks removeAllObjects];
+    for (ANNDeepLink *link in links) {
+        [self openLink:link];
     }
 }
 
@@ -124,13 +185,46 @@ static ANNLaunchLinkCompletion ANNWaitingLaunchLinkCompletion;
 // One link opens the app. The links queued before it are dropped: opened after it, they would take the app elsewhere.
 + (void)giveLaunchLink:(ANNLaunchLinkCompletion)completion {
     ANNLaunchLinkTaken = YES;
-    NSURL *url = ANNPendingDeepLinkURLs.lastObject;
-    [ANNPendingDeepLinkURLs removeAllObjects];
+    NSURL *url = ANNPendingDeepLinks.lastObject.url;
+    [ANNPendingDeepLinks removeAllObjects];
     completion(url);
 }
 
-+ (void)openURL:(NSURL *)url {
-    [RCTLinkingManager application:UIApplication.sharedApplication openURL:url options:@{}];
++ (void)forwardLink:(ANNDeepLink *)link through:(NS_NOESCAPE dispatch_block_t)forward {
+    ANNAssertMainQueue();
+    ANNDeepLink *outer = ANNForwardedSceneLink;
+    ANNForwardedSceneLink = link;
+    forward();
+    ANNForwardedSceneLink = outer;
+}
+
+// React Native 0.88 and newer take a scene's links through its scene methods: in an app whose Info.plist names a scene
+// delegate, its app delegate methods take none. The earlier versions have only the app delegate methods.
++ (void)openLink:(ANNDeepLink *)link {
+    UIScene *scene = link.scene;
+    if (scene != nil && link.context != nil) {
+        SEL openContexts = NSSelectorFromString(@"scene:openURLContexts:");
+        if ([RCTLinkingManager respondsToSelector:openContexts]) {
+            IMP implementation = [RCTLinkingManager methodForSelector:openContexts];
+            ((void (*)(id, SEL, UIScene *, NSSet<UIOpenURLContext *> *))implementation)(
+                RCTLinkingManager.class, openContexts, scene, [NSSet setWithObject:link.context]);
+            return;
+        }
+    }
+    if (scene != nil && link.activity != nil) {
+        SEL continueActivity = NSSelectorFromString(@"scene:continueUserActivity:");
+        if ([RCTLinkingManager respondsToSelector:continueActivity]) {
+            IMP implementation = [RCTLinkingManager methodForSelector:continueActivity];
+            ((void (*)(id, SEL, UIScene *, NSUserActivity *))implementation)(
+                RCTLinkingManager.class, continueActivity, scene, link.activity);
+            return;
+        }
+    }
+    if (![RCTLinkingManager application:UIApplication.sharedApplication openURL:link.url options:@{}]) {
+        RCTLogWarn(@"[ApexNavigation] React Native didn't take the link %@: with a scene delegate in Info.plist, "
+                   @"React Native 0.88 and newer take only the links a scene opened.",
+                   link.url);
+    }
 }
 
 @end
