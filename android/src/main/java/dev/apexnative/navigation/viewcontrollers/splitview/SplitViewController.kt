@@ -31,6 +31,7 @@ import dev.apexnative.navigation.viewcontrollers.parent.ShownChildren
 import dev.apexnative.navigation.viewcontrollers.stack.StackController
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.Presenter
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.ViewController
+import kotlin.math.roundToInt
 
 /**
  * A split view: the primary pane beside the secondary one when the width takes both (a tablet, a phone in landscape).
@@ -489,7 +490,7 @@ class SplitViewController(
         root.mergeOptions(options)
     }
 
-    private fun dp(value: Double) = UiUtils.dpToPx(activity, value.toFloat()).toInt()
+    private fun dp(value: Double) = UiUtils.dpToPx(activity, value.toFloat()).roundToInt()
 
     companion object {
         private const val PRIMARY = "primary"

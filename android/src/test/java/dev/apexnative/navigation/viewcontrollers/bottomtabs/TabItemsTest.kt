@@ -31,7 +31,7 @@ class TabItemsTest {
             textColor = colour(2)
             fontSize = Fraction(12.0)
             selectedFontSize = Fraction(14.0)
-            iconWidth = Fraction(24.0)
+            iconWidth = Fraction(24.5)
             testID = Text("home.tab")
             disableIconTint = Bool(true)
             badge = Text("3")
@@ -42,7 +42,7 @@ class TabItemsTest {
         // The selected icon's color is the icon's when it has none (`bottomTab.selectedIconColor`).
         assertTrue(TabItems.Call.Colors(0, 1, 1, null, 2) in calls)
         assertTrue(TabItems.Call.FontSizes(0, 14f, 12f) in calls)
-        assertTrue(TabItems.Call.IconSize(0, 24, null) in calls)
+        assertTrue(TabItems.Call.IconSize(0, 24.5, null) in calls)
         assertTrue(TabItems.Call.TestId(0, "home.tab") in calls)
         assertTrue(TabItems.Call.TintDisabled(0, true, false) in calls)
         assertTrue(TabItems.Call.Badge(0, "3", 5, false, null) in calls)

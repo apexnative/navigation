@@ -279,6 +279,9 @@ class ReadersTest {
     fun dpToPixels() {
         assertEquals(42, UiUtils.dpToPixels(16.0, 420))
         assertEquals(43, UiUtils.dpToPixels(16.5, 420))
+        // A fraction is kept to the end and rounded there, as iOS places 12.5 points: 32.8 pixels are 33, not 32.
+        assertEquals(33, UiUtils.dpToPixels(12.5, 420))
+        assertEquals(21, UiUtils.dpToPixels(7.9, 420))
         assertEquals(0, UiUtils.dpToPixels(0.0, 420))
         assertEquals(-3, UiUtils.dpToPixels(-3.0, 420))
     }

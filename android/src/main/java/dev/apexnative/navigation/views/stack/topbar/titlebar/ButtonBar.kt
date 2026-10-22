@@ -37,6 +37,7 @@ import dev.apexnative.navigation.utils.MaterialTheme
 import dev.apexnative.navigation.utils.TestIds
 import dev.apexnative.navigation.utils.UiUtils
 import java.util.WeakHashMap
+import kotlin.math.roundToInt
 
 /**
  * The buttons of one side of the bar in its toolbar: each button a menu item — a text, an icon (on its background), or
@@ -171,7 +172,7 @@ internal class ButtonBar(
                 options.fontSize.get(0.0).toFloat(),
                 context.resources.displayMetrics,
             )
-            spannable.setSpan(AbsoluteSizeSpan(size.toInt()), 0, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            spannable.setSpan(AbsoluteSizeSpan(size.roundToInt()), 0, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         }
         if (options.font.hasValue()) {
             val typeface = options.font.getTypeface(typefaces, Typeface.DEFAULT)
@@ -207,8 +208,8 @@ internal class ButtonBar(
             icon,
             color,
             UiUtils.dpToPx(context, background.cornerRadius.get(0.0).toFloat()),
-            UiUtils.dpToPx(context, background.width.get(0.0).toFloat()).toInt(),
-            UiUtils.dpToPx(context, background.height.get(0.0).toFloat()).toInt(),
+            UiUtils.dpToPx(context, background.width.get(0.0).toFloat()).roundToInt(),
+            UiUtils.dpToPx(context, background.height.get(0.0).toFloat()).roundToInt(),
         )
     }
 

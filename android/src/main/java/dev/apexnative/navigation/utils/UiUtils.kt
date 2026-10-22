@@ -22,8 +22,8 @@ object UiUtils {
     fun pxToDp(context: Context, px: Float): Float = px / context.resources.displayMetrics.density
 
     /**
-     * A size of the options in dp, in whole pixels of the screen of [context]: times `densityDpi / 160`, the fraction
-     * of a pixel dropped; a size of 0 or less is not converted.
+     * A size of the options in dp, in whole pixels of the screen of [context]: times `densityDpi / 160`, rounded to the
+     * nearest pixel only here, as iOS places a size in points on whole pixels; a size of 0 or less is not converted.
      */
     @JvmStatic
     fun dpToPixels(context: Context, dp: Double): Int = dpToPixels(dp, context.resources.displayMetrics.densityDpi)
@@ -31,7 +31,7 @@ object UiUtils {
     /** [dp] in whole pixels at [densityDpi], as [dpToPixels] converts it. */
     @JvmStatic
     fun dpToPixels(dp: Double, densityDpi: Int): Int =
-        if (dp <= 0) dp.toInt() else (dp * densityDpi / BASE_DENSITY_DPI).toInt()
+        if (dp <= 0) dp.toInt() else (dp * densityDpi / BASE_DENSITY_DPI).roundToInt()
 
     /**
      * A font size of the options in sp, in pixels of the screen of [context]: it follows the system's text scale,
