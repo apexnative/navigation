@@ -26,8 +26,8 @@ import dev.apexnative.navigation.viewcontrollers.navigator.Navigator
 import dev.apexnative.navigation.viewcontrollers.parent.ChildOffsetFromRest
 import dev.apexnative.navigation.viewcontrollers.parent.ParentController
 import dev.apexnative.navigation.viewcontrollers.parent.ReturnsScreenFromColumn
-import dev.apexnative.navigation.viewcontrollers.parent.ShowsColumns
 import dev.apexnative.navigation.viewcontrollers.parent.ShownChildren
+import dev.apexnative.navigation.viewcontrollers.parent.ShowsColumns
 import dev.apexnative.navigation.viewcontrollers.stack.StackController
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.Presenter
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.ViewController
@@ -364,6 +364,19 @@ class SplitViewController(
             else -> secondary.canHandleBack() || primary.canHandleBack()
         }
         return can || super.canHandleBack()
+    }
+
+    // As handleBack: the pane whose back goes first decides; an open sliding pane that would close previews nothing.
+    override fun stackPoppedByBack(): StackController? {
+        if (!isViewCreated) return super.stackPoppedByBack()
+        val layout = getView()
+        return when {
+            layout.isCompact -> compact?.stackPoppedByBack()
+            isSliding && !layout.panes.isOpen -> primary.stackPoppedByBack()
+            isSliding -> if (secondary.canHandleBack()) secondary.stackPoppedByBack() else null
+            secondary.canHandleBack() -> secondary.stackPoppedByBack()
+            else -> primary.stackPoppedByBack()
+        }
     }
 
     /**

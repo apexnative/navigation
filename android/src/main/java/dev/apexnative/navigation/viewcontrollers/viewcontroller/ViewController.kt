@@ -265,6 +265,12 @@ abstract class ViewController<V : ViewGroup>(
     /** Whether [handleBack] would go back. */
     open fun canHandleBack(): Boolean = false
 
+    /**
+     * The stack whose top [handleBack] would take away with the default pop, which a back gesture previews; none when
+     * back would do anything else (hold, close a menu or a pane, a pop of its own) or nothing.
+     */
+    internal open fun stackPoppedByBack(): StackController? = null
+
     /** Starts the node's content (a native screen's view, a React screen's surface). */
     open fun start() = Unit
 

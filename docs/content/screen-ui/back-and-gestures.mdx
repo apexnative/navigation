@@ -111,6 +111,12 @@ export const MapScreen = defineScreen({
 | The first screen of a tab | What `Tabs().backBehavior(…)` says: leave the app, go to the first tab, or to the tab before. See [Back on Android](../containers/tabs#back). |
 | The first screen of the app | Leaves the app, as every Android app does, with the system's own animation ([below](#system-animation)). `usePreventLeave` doesn't hold it; to ask first, see [Asking before the user leaves the app](/api/back-and-gestures/usePreventLeave#leaving-the-app). |
 
+### The preview of a pop {#pop-preview}
+
+<Os name="Android" /> 14+ The back gesture on a pushed screen shows where it goes before the user lets go, as the system does between apps' screens: the screen shrinks toward the side of the swipe with rounded corners and follows the finger, and the screen under it shows behind it, dimmed, with its own bar. Letting go pops the screen; swiping back cancels, and the screen grows back into place.
+
+The preview shows when back pops the screen with the default transition. It doesn't when back does something else first, or when the app takes it: a menu or a search that closes, a screen that holds back (`hardwareBackButton.popStackOnPress: false`, a [`BackHandler` listener](#back-handler), `usePreventLeave`), or a pop with an animation of its own (`animations.pop`). On Android 13 and older the screen pops when the swipe ends.
+
 ### Back to the home screen {#system-animation}
 
 <Os name="Android" /> On the first screen of the app, with nothing left to go back to, the navigation leaves the back to the system. The system then plays its predictive back animation: as the user swipes, the app shrinks and the home screen shows behind it, and the user can still change their mind halfway. The system decides this as the swipe starts, so the navigation takes the back only while it has something to do with it: a screen to pop, a modal, a menu or a search to close, a tab to go to (`backBehavior`), or a [`BackHandler` listener](#back-handler) of the app.

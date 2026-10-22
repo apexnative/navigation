@@ -46,8 +46,9 @@ export interface OptionsLayout {
    * The color of the screen, also under its React content. On iOS it is the background of the screen's view (the
    * system background without it); stacks, tabs and side menus paint their view with the color of the screen that
    * shows, seen behind transparent bars and around screens during transitions. On Android it fills the screen and
-   * its containers but leaves room at the top for the status bar while it shows. `null` makes the background
-   * transparent. Without it, Android shows the window's background (the app theme).
+   * its containers but leaves room at the top for the status bar while it shows; without it a React screen takes
+   * `android:colorBackground` of the app's theme (in a sheet it shows the sheet's surface, and a native screen paints
+   * its own view), so the screen below never shows through. `null` makes the background transparent.
    */
   backgroundColor?: Color;
   /**

@@ -11,6 +11,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import android.widget.EditText
+import androidx.activity.BackEventCompat
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge as enableActivityEdgeToEdge
@@ -37,6 +38,7 @@ import dev.apexnative.navigation.utils.MaterialTheme
 import dev.apexnative.navigation.viewcontrollers.navigator.BackCallbackState
 import dev.apexnative.navigation.viewcontrollers.navigator.Navigator
 import dev.apexnative.navigation.viewcontrollers.navigator.Navigators
+import dev.apexnative.navigation.viewcontrollers.stack.StackController
 
 /**
  * The activity of an app with the navigation: its content holds, bottom to top, the copy of the splash and the layers
@@ -67,9 +69,35 @@ open class NavigationActivity : AppCompatActivity(), DefaultHardwareBackBtnHandl
     private val reloadBroadcast = ReloadBroadcast(this) { reloadFromDeveloperTools() }
 
     // Enabled while back has something to do in the app (BackCallbackState); otherwise the system does its own back.
+    // From Android 14, where the app hears the progress of the back gesture, a gesture that would pop a stack with the
+    // default transition previews the pop as the system previews back between activities (`StackController
+    // .BackGesture`); JavaScript's listeners hear back first, so with them there is no preview.
     private val backCallback = object : OnBackPressedCallback(false) {
-        override fun handleOnBackPressed() = passBack()
+        override fun handleOnBackStarted(backEvent: BackEventCompat) {
+            backGesture = null
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE || BackCallbackState.hasJsListeners) return
+            val stack = navigator?.stackPoppedByBack() ?: return
+            backGesture = stack.startBackGesture(backEvent.swipeEdge == BackEventCompat.EDGE_LEFT, backEvent.touchY)
+        }
+
+        override fun handleOnBackProgressed(backEvent: BackEventCompat) {
+            backGesture?.progress(backEvent.progress, backEvent.touchY)
+        }
+
+        override fun handleOnBackCancelled() {
+            backGesture?.cancel()
+            backGesture = null
+        }
+
+        override fun handleOnBackPressed() {
+            val gesture = backGesture
+            backGesture = null
+            if (gesture?.commit() == true) BackCallbackState.update() else passBack()
+        }
     }
+
+    // The back gesture that previews a pop now; none.
+    private var backGesture: StackController.BackGesture? = null
 
     // Before each frame of the window: what back does may have changed, and the system decides at the start of a
     // gesture whether the app takes it.

@@ -16,6 +16,7 @@ import dev.apexnative.navigation.viewcontrollers.navigator.Navigator
 import dev.apexnative.navigation.viewcontrollers.parent.ChildOffsetFromRest
 import dev.apexnative.navigation.viewcontrollers.parent.ParentController
 import dev.apexnative.navigation.viewcontrollers.sidemenu.SideMenuMotion.Side
+import dev.apexnative.navigation.viewcontrollers.stack.StackController
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.Presenter
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.ViewController
 import dev.apexnative.navigation.views.sidemenu.SideMenuView
@@ -182,6 +183,9 @@ internal class SideMenuController(
     override fun handleBack(listener: CommandListener): Boolean = motion.back() || center.handleBack(listener)
 
     override fun canHandleBack(): Boolean = motion.canGoBack || center.canHandleBack()
+
+    // An open menu closes first: no preview of a pop then.
+    override fun stackPoppedByBack(): StackController? = if (motion.canGoBack) null else center.stackPoppedByBack()
 
     // A button's press addressed to the side menu goes to the center.
     override fun sendOnNavigationButtonPressed(buttonId: String) = center.sendOnNavigationButtonPressed(buttonId)

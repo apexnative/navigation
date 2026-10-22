@@ -41,6 +41,10 @@ internal object BackCallbackState {
         entries.removeAll { it.navigator.get().let { attached -> attached == null || attached === navigator } }
     }
 
+    /** JavaScript listens to back (`BackHandler`): it hears a press before the navigation does. */
+    val hasJsListeners: Boolean
+        get() = jsListeners
+
     /** `setBackListeners` of JavaScript; false again when its JavaScript goes. */
     fun setJsListeners(active: Boolean) {
         jsListeners = active
