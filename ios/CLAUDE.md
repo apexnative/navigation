@@ -114,6 +114,8 @@ Top-level files: `Package.swift` (SwiftPM; `headerFolders` lists every folder wh
   `descendantDidAppear:`.
 - Hold and release of the navigation state come in pairs; a `setRoot` chain with layout modals or overlays holds it
   until its answer.
+- UIKit draws a dismissal without animation too (a sheet's dim goes a frame before its card): what goes out of sight
+  that way goes under a snapshot of the window (the old root's modals at `setRoot`, `startTransitionOf:done:`).
 - Use an `@available` check for newer OS APIs, and `#if __IPHONE_OS_VERSION_MAX_ALLOWED >= …` for names of a newer SDK.
 - React Native hears of the app's light or dark style only from its hosting views in the window. A view that stands in
   for one (`ANNSlotScreenView`, the screens of one tree) posts the trait change itself, with the window filter of
