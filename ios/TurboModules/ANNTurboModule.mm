@@ -5,6 +5,7 @@
 #import "ANNComponentViewController.h"
 #import "ANNDeepLinkQueue.h"
 #import "ANNDefaultOptions.h"
+#import "ANNErrorHandler.h"
 #import "ANNErrorTexts.h"
 #import "ANNEventContract.h"
 #import "ANNExternalViewController.h"
@@ -249,7 +250,7 @@ RCT_EXPORT_MODULE(ANNTurboModule)
              layout:(NSDictionary *)layout
             resolve:(RCTPromiseResolveBlock)resolve
              reject:(RCTPromiseRejectBlock)reject {
-    resolve(nil);
+    [ANNErrorHandler resolve:resolve of:@"preparePush" value:nil];
 }
 
 - (void)cancelPreparedPush:(NSString *)componentId {

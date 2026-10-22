@@ -10,8 +10,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (instancetype)initWithCommandName:(NSString *)commandName
                           commandId:(nullable NSString *)commandId
                          generation:(NSUInteger)generation
-                            resolve:(RCTPromiseResolveBlock)resolve
-                             reject:(RCTPromiseRejectBlock)reject NS_DESIGNATED_INITIALIZER;
+                            resolve:(nullable RCTPromiseResolveBlock)resolve
+                             reject:(nullable RCTPromiseRejectBlock)reject NS_DESIGNATED_INITIALIZER;
 
 - (instancetype)init NS_UNAVAILABLE;
 + (instancetype)new NS_UNAVAILABLE;

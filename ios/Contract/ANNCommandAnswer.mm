@@ -45,10 +45,10 @@ static NSSet<NSString *> *ANNCompletedCommandNames(void) {
 // JavaScript that still runs rejects, so it never waits forever. Any thread: the promise blocks are React Native's,
 // safe from any thread, and the generation is readable from any thread.
 - (void)dealloc {
-    if (_answered || !_reject || !self.isCurrent) {
+    if (_answered || !self.isCurrent) {
         return;
     }
-    [ANNErrorHandler reject:_reject text:[ANNErrorTexts notAnswered:_commandName]];
+    [ANNErrorHandler reject:_reject of:_commandName text:[ANNErrorTexts notAnswered:_commandName]];
 }
 
 - (BOOL)isCurrent {
@@ -87,7 +87,7 @@ static NSSet<NSString *> *ANNCompletedCommandNames(void) {
                                                             reason:reason]];
         }
     }
-    resolve(value);
+    [ANNErrorHandler resolve:resolve of:_commandName value:value];
     if (_commandId && [ANNCompletedCommandNames() containsObject:_commandName]) {
         double completionTime = floor(NSDate.date.timeIntervalSince1970 * 1000);
         [ApexNavigation.eventEmitter sendCommandCompleted:_commandName
@@ -103,7 +103,7 @@ static NSSet<NSString *> *ANNCompletedCommandNames(void) {
     RCTPromiseRejectBlock reject = _reject;
     _resolve = nil;
     _reject = nil;
-    [ANNErrorHandler reject:reject text:text];
+    [ANNErrorHandler reject:reject of:_commandName text:text];
 }
 
 @end
