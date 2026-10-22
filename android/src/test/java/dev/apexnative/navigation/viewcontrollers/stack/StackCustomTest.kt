@@ -53,8 +53,9 @@ class StackCustomTest {
         h.push(b)
         h.assertEvents("will:B")
         assertEquals(listOf("Custom:B:alpha:1.0", "Custom:A:-:1.0"), display.starts)
-        // The row changes at once; the bar would show or hide animated; the tab bar slides.
+        // No row motion: the bar goes with the screens; it would show or hide animated; the tab bar slides.
         assertEquals(listOf("none"), h.host.barMotions)
+        assertEquals(listOf("Forward"), h.host.barTravels)
         assertEquals(listOf("animated"), h.host.barVisibilities)
         assertEquals(listOf("Slide"), h.host.tabBarMoves)
         assertTrue(display.isRunning(b))
@@ -115,6 +116,8 @@ class StackCustomTest {
         h.pop()
         assertEquals(listOf("Custom:B:translationY:1.0", "Custom:A:-:1.0"), display.starts)
         assertEquals(listOf("none"), h.host.barMotions)
+        // The bar goes with the screens, the leaving one over it.
+        assertEquals(listOf("Back"), h.host.barTravels)
         assertEquals(listOf("Slide"), h.host.tabBarMoves)
         display.finish(b)
         h.assertEvents(
@@ -167,6 +170,7 @@ class StackCustomTest {
         h.assertEvents("will:B")
         assertEquals(listOf("Custom:B:- fade-in elements:A>B:0.0", "Custom:A:-:1.0"), display.starts)
         assertEquals(listOf("none"), h.host.barMotions)
+        assertEquals(listOf("none"), h.host.barTravels)
         assertEquals(listOf("at once"), h.host.barVisibilities)
         assertEquals(listOf("AtOnce"), h.host.tabBarMoves)
         display.finish(b)
@@ -351,6 +355,7 @@ class StackCustomTest {
         assertEquals(listOf("Custom:C:alpha:1.0", "Custom:B:scaleX:1.0"), display.starts)
         assertTrue(h.views.contains("hide:A"))
         assertEquals(listOf("none"), h.host.barMotions)
+        assertEquals(listOf("Forward"), h.host.barTravels)
         display.finishAll()
         assertTrue(h.journal.any { it.startsWith("setStackRoot1 resolve C") })
     }
@@ -400,6 +405,7 @@ class StackCustomTest {
         assertEquals(listOf(true), h.host.tabBarSides)
         // The row still rides with the system's push: the bars' sides don't make the transition own.
         assertEquals(listOf("Push"), h.host.barMotions)
+        assertEquals(listOf("none"), h.host.barTravels)
         assertEquals(listOf("PushIn:B:0.0:96.0", "PushCover:A:1.0:0.0"), display.starts)
     }
 }

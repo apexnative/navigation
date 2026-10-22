@@ -15,6 +15,7 @@ import dev.apexnative.navigation.viewcontrollers.component.Readiness
 import dev.apexnative.navigation.viewcontrollers.component.RenderWait
 import dev.apexnative.navigation.viewcontrollers.parent.OptionsScreen
 import dev.apexnative.navigation.viewcontrollers.stack.StackDisplay.BarMotion
+import dev.apexnative.navigation.viewcontrollers.stack.StackDisplay.BarTravel
 import dev.apexnative.navigation.viewcontrollers.stack.StackDisplay.BarVisibility
 import dev.apexnative.navigation.viewcontrollers.stack.StackDisplay.Custom
 import dev.apexnative.navigation.viewcontrollers.stack.StackDisplay.Elements
@@ -77,9 +78,14 @@ internal class StackQueue(
         /**
          * The current child is about to change, right before [currentChildChanged]: [motion] is the default transition
          * the bar's row goes with, none when the change comes at once or with an animation of its own; [visibility] is
-         * how the bar shows or hides when the new top wants it otherwise.
+         * how the bar shows or hides when the new top wants it otherwise; [travel]: the bar goes with the screens of an
+         * animation of its own without elements.
          */
-        fun barTransition(motion: StackDisplay.BarMotion?, visibility: BarVisibility) = Unit
+        fun barTransition(
+            motion: StackDisplay.BarMotion?,
+            visibility: BarVisibility,
+            travel: StackDisplay.BarTravel? = null,
+        ) = Unit
 
         /**
          * The current child is about to change, right before [barTransition]: [move] is how the transition goes, which
@@ -461,7 +467,7 @@ internal class StackQueue(
         val elements = own && AnimationRules.hasElements(push)
         // The bar's row goes with the default transition only; with an animation of its own it changes at once. The tab
         // bar moves with its screens or by its own side.
-        tellBars(animated, own, elements, push, TabBarMotion.Move.WithPush, BarMotion.Push)
+        tellBars(animated, own, elements, push, TabBarMotion.Move.WithPush, BarMotion.Push, BarTravel.Forward)
         host.currentChildChanged()
         finishTakenOver(ended)
         running += op
@@ -594,7 +600,7 @@ internal class StackQueue(
         val elements = own && AnimationRules.hasElements(pop)
         // A back gesture's preview shows the target and its bar already: the bar stays as it is.
         val gesture = op.gesture && animated && !own && leaving.size == 1 && display.hasBackPreview(top, target)
-        tellBars(animated, own, elements, pop, TabBarMotion.Move.WithPop, BarMotion.Pop, barAtOnce = gesture)
+        tellBars(animated, own, elements, pop, TabBarMotion.Move.WithPop, BarMotion.Pop, BarTravel.Back, gesture)
         host.currentChildChanged()
         finishTakenOver(ended)
         if (display.hasView) target.onViewBroughtToFront()
@@ -681,7 +687,7 @@ internal class StackQueue(
         val elements = own && !op.asPush && AnimationRules.hasElements(played)
         val motion = if (op.asPush) BarMotion.Push else BarMotion.FadeThrough
         val system = if (op.asPush) TabBarMotion.Move.WithPush else TabBarMotion.Move.Slide
-        tellBars(animated, own, elements, played, system, motion)
+        tellBars(animated, own, elements, played, system, motion, BarTravel.Forward)
         host.currentChildChanged()
         finishTakenOver(ended)
         op.owned += moved
@@ -1105,9 +1111,10 @@ internal class StackQueue(
     private fun awaitsTargets(animation: StackAnimationOptions, enabled: Boolean): Boolean = enabled &&
         display.canAnimate && !animation.waitForRender.isFalse && AnimationRules.hasElements(animation)
 
-    // The bars with a change of the current child. The row goes with the default transition only; the tab bar rides
-    // with the system's [system] move, slides with an animation of its own or a side of its own, and is where the new
-    // top wants it at once without animation; with elements every bar changes at once.
+    // The bars with a change of the current child. The row goes with the default transition; with an animation of its
+    // own the top bar goes with the screens ([travel]). The tab bar rides with the system's [system] move, slides with an
+    // animation of its own or a side of its own, and is where the new top wants it at once without animation; with
+    // elements every bar changes at once.
     private fun tellBars(
         animated: Boolean,
         own: Boolean,
@@ -1115,6 +1122,7 @@ internal class StackQueue(
         animation: StackAnimationOptions,
         system: TabBarMotion.Move,
         row: BarMotion,
+        travel: BarTravel,
         // The top bar shows the new top already (a back gesture's preview): it changes at once, the tab bar still moves.
         barAtOnce: Boolean = false,
     ) {
@@ -1127,7 +1135,11 @@ internal class StackQueue(
         }
         host.tabBarTransition(move, tabs.takeIf { move == TabBarMotion.Move.Slide })
         val barMoves = animated && !barAtOnce
-        host.barTransition(if (barMoves && !own) row else null, barVisibility(barMoves && !elements, animation.topBar))
+        host.barTransition(
+            if (barMoves && !own) row else null,
+            barVisibility(barMoves && !elements, animation.topBar),
+            travel.takeIf { barMoves && own && !elements },
+        )
     }
 
     private fun barVisibility(animated: Boolean, side: TopBarEnterExitAnimationOptions): BarVisibility =

@@ -187,6 +187,9 @@ top-level folder. Main thread only, unless a line says otherwise.
   stay in the bar rides with the leaving screen (`TopBarPresenter.pictureUnderRow`).
 - A `Toolbar` centers its navigation button and its menu in `min(minimumHeight, height)` (`buttonGravity` is top):
   the row's toolbars take the row's height as their minimum (`TitleBar`); 0 pins the buttons to the row's top.
+- A screen's overlay is clipped to the screen, and a screen without a large title is laid out under the bar (its `top`
+  is the bar's height): a picture of the bar in its overlay doesn't show. The bar's picture in a transition of the
+  stack's own is drawn by the stack's view with the screen's transform (`StackLayout.barTravels`).
 - A React screen without `layout.backgroundColor` is opaque with the theme's `android:colorBackground`
   (`ComponentPresenter`): a push keeps the covered screen under the new one until it ends, and a transparent screen
   shows it. Only an explicit `'transparent'` / `null` (overlays, see-through modals) lets it through.
