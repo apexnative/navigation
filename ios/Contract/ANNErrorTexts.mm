@@ -223,6 +223,10 @@ static NSString *ANNText(NSString *format, ...) {
     return ANNText(@"could not run '%@': the native core doesn't do it yet", method);
 }
 
++ (NSString *)notAnswered:(NSString *)method {
+    return ANNText(@"could not run '%@': the native core let it go without an answer", method);
+}
+
 + (NSException *)rejection:(NSString *)text {
     return [NSException exceptionWithName:ANNCommandRejectionException reason:text userInfo:nil];
 }

@@ -123,6 +123,8 @@ Top-level files: `Package.swift` (SwiftPM; `headerFolders` lists every folder wh
   (the root, a modal, an overlay: their record is listed and parked by then), and the modal's end steps inside UIKit's
   completions and delegate calls (`protectEndOf:showing:step:`, `protectBatch:step:`); the overlay's guard is
   `protectWaitOf:step:`.
+- An `ANNCommandAnswer` that goes away unanswered rejects (`notAnswered:`), but only once nothing holds it: a record,
+  list or queue that keeps an answer still answers it on every exit, or the promise waits as long as the record lives.
 - On iOS 26 UIKit draws a screen's large title, for a whole pop or swipe back, inside the scroll view the bar follows
   for the top edge: a detached scroll view or a list below the bar hides it. `ANNLargeTitlePresenter` lays its title
   host over the screen's view for the transition and fills the band behind the title from the screen's top

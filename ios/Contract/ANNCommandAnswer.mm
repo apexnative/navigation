@@ -41,6 +41,16 @@ static NSSet<NSString *> *ANNCompletedCommandNames(void) {
     return self;
 }
 
+// The last reference went without an answer: nothing took the command, or what took it let it go. The promise of a
+// JavaScript that still runs rejects, so it never waits forever. Any thread: the promise blocks are React Native's,
+// safe from any thread, and the generation is readable from any thread.
+- (void)dealloc {
+    if (_answered || !_reject || !self.isCurrent) {
+        return;
+    }
+    [ANNErrorHandler reject:_reject text:[ANNErrorTexts notAnswered:_commandName]];
+}
+
 - (BOOL)isCurrent {
     return _generation == ANNReloadCoordinator.generation;
 }
