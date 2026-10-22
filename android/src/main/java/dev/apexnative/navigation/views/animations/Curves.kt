@@ -96,6 +96,9 @@ internal object Curves {
      * linear between them — the values of AndroidX's `FastOutSlowInInterpolator`, computed here.
      */
     object FastOutSlowIn : Curve() {
+        // Before the table, which is made from it.
+        private val curve = CubicBezier(0.4, 0.0, 0.2, 1.0)
+
         /** The 201 values. */
         val table: DoubleArray = DoubleArray(TABLE_STEPS + 1) {
             round(bezierAt(it.toDouble() / TABLE_STEPS) * DECIMALS) / DECIMALS
@@ -109,7 +112,25 @@ internal object Curves {
         }
 
         /** y of the Bézier at its x = [x], exactly (to 1e-12). */
-        fun bezierAt(x: Double): Double {
+        fun bezierAt(x: Double): Double = curve.yAt(x)
+
+        private const val DECIMALS = 1e4
+    }
+
+    /**
+     * A cubic Bézier from (0, 0) to (1, 1) with the control points ([x1], [y1]) and ([x2], [y2]), as the framework's
+     * `PathInterpolator` draws it, computed exactly: the system's curves without a framework class.
+     */
+    class CubicBezier(
+        private val x1: Double,
+        private val y1: Double,
+        private val x2: Double,
+        private val y2: Double,
+    ) : Curve() {
+        override fun at(p: Double): Double = yAt(p)
+
+        /** y of the curve at its x = [x], exactly (to 1e-12). */
+        fun yAt(x: Double): Double {
             if (x <= 0.0) return 0.0
             if (x >= 1.0) return 1.0
             // x(t) only grows with t: a bisection finds t, then y(t).
@@ -118,23 +139,20 @@ internal object Curves {
             var t = x
             repeat(BISECTION_STEPS) {
                 t = (low + high) / 2
-                if (bezier(t, X1, X2) < x) low = t else high = t
+                if (coordinate(t, x1, x2) < x) low = t else high = t
             }
-            return bezier(t, Y1, Y2)
+            return coordinate(t, y1, y2)
         }
 
-        // One coordinate of the curve from (0, 0) to (1, 1) with the control points' coordinates [c1], [c2].
-        private fun bezier(t: Double, c1: Double, c2: Double): Double {
+        // One coordinate of the curve with the control points' coordinates [c1], [c2].
+        private fun coordinate(t: Double, c1: Double, c2: Double): Double {
             val u = 1 - t
             return 3 * u * u * t * c1 + 3 * u * t * t * c2 + t * t * t
         }
 
-        private const val X1 = 0.4
-        private const val Y1 = 0.0
-        private const val X2 = 0.2
-        private const val Y2 = 1.0
-        private const val BISECTION_STEPS = 60
-        private const val DECIMALS = 1e4
+        private companion object {
+            const val BISECTION_STEPS = 60
+        }
     }
 
     /**
