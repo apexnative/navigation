@@ -127,7 +127,7 @@ Each of these owns one rule. Call it; do not copy it.
 - `ANNModalCoordinator`, `ANNModal`: One record per modal, its states and waiting commands. Called by: Commands, root, state, repaint, reload.
 - `ANNPresentationGate`: The one queue of every UIKit present and dismiss in the main window. Called by: Modals, root, reload, search.
 - `ANNOverlayCoordinator`: Overlays, each in its own window, kept over a new root. Called by: Commands, root, reload.
-- `ANNSystemUI`: The system UI of the windows: marks groups, coalesces, asks UIKit once per turn; who decides. `ANNSystemUIRules` has the pure rules. Called by: Screens, containers, `ANNShownScreens`, `mergeOptions`.
+- `ANNSystemUI`: The system UI of the windows: marks groups, coalesces, asks UIKit once per turn; who decides; after a status bar ask, the screens' status bar blurs take its frame. `ANNSystemUIRules` has the pure rules. Called by: Screens, containers, `ANNShownScreens`, `mergeOptions`.
 - `ANNReloadCoordinator`: The generation of the JavaScript; the reset after a reload. Called by: Runner, emitter, answer.
 - Stack answer id: `ANNStackAnswerIdOf(entry, command)` in `ANNStackQueue.h`: the id a stack command answers with. `push` answers the node's own id (a pair's id); every other command, the entry's options screen (a pair's primary). Called by: The queue, `ANNStackCommands`, `ANNPreviewPush`, `ANNSplitViewCommands`.
 - Waited screens: `waitedComponentViewControllers`: the screens a wait is about (a pair: the ones it puts in the window). `ANNStackScreensOfEntry` is every screen of an entry, for what means all of them. Called by: `ANNRenderWait` owners: root, stack queue, modals, overlays, `ANNSplitViewCommands`.

@@ -19,10 +19,18 @@ NS_ASSUME_NONNULL_BEGIN
 /// it. Nothing before the screen's view is loaded.
 - (void)applyBackground:(ANNNavigationOptions *)resolvedOptions;
 
-/// `statusBar.blur` (iOS): UIKit's regular blur over the screen's own view in the frame of the scene's status bar at
-/// this moment (x 0, the view's width; it doesn't follow a rotation); `false` or none removes it. At each appearance
-/// and at a merge that names it; nothing before the screen's view is loaded.
+/// `statusBar.blur` (iOS): UIKit's regular blur over the screen's own view in the frame of the scene's status bar (x 0,
+/// the view's width), laid out at once; `false` or none removes it. At each appearance and at a merge that names it;
+/// nothing before the screen's view is loaded.
 - (void)applyStatusBarBlur:(ANNNavigationOptions *)resolvedOptions;
+
+/// The blur takes the status bar's frame as it is now; nothing without a blur. The single place of its frame: the blur
+/// as it is applied, the screen's view laid out (a rotation, a new window size, a new safe area), a size transition
+/// along its animation and at its end, the turn after new traits, and `statusBarDidChange`.
+- (void)layOutStatusBarBlur;
+
+/// The status bar was asked again (hidden or shown, a new style): every blur takes its frame.
++ (void)statusBarDidChange;
 
 /// The blur stays the last subview of the screen's view: the content added after it goes under it.
 - (void)keepStatusBarBlurOnTop;

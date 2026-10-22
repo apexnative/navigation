@@ -66,6 +66,12 @@
 
 #pragma mark - The view
 
+- (nullable ANNComponentPresenter *)componentPresenter {
+    ANNNodePresenter *presenter = self.presenter;
+    return [presenter isKindOfClass:ANNComponentPresenter.class] ? (ANNComponentPresenter *)presenter
+                                                                  : nil;
+}
+
 // The size of the screen of the navigation window's scene, not the deprecated main screen: a surface made before the
 // screen is in a window starts with the width it will have.
 - (void)loadView {
@@ -94,6 +100,22 @@
     }
     // The pair the screen is in may lie otherwise now.
     [self.arrangement screenDidChangeLayout:self];
+    [self.componentPresenter layOutStatusBarBlur];
+}
+
+// UIKit names the size transition as the moment the status bar's frame changes (a rotation, a new window size): the
+// blur follows it along the animation and takes the final frame at its end.
+- (void)viewWillTransitionToSize:(CGSize)size
+       withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator {
+    [super viewWillTransitionToSize:size withTransitionCoordinator:coordinator];
+    __weak ANNComponentViewController *weakSelf = self;
+    [coordinator
+        animateAlongsideTransition:^(id<UIViewControllerTransitionCoordinatorContext> context) {
+          [weakSelf.componentPresenter layOutStatusBarBlur];
+        }
+        completion:^(id<UIViewControllerTransitionCoordinatorContext> context) {
+          [weakSelf.componentPresenter layOutStatusBarBlur];
+        }];
 }
 
 - (void)viewSafeAreaInsetsDidChange {
@@ -110,6 +132,7 @@
     __weak ANNComponentViewController *weakSelf = self;
     dispatch_async(dispatch_get_main_queue(), ^{
       [weakSelf updateRootLayout];
+      [weakSelf.componentPresenter layOutStatusBarBlur];
     });
 }
 
@@ -200,9 +223,7 @@
 #pragma mark - The root frame and the safe area
 
 - (void)applyBackground {
-    if ([self.presenter isKindOfClass:ANNComponentPresenter.class]) {
-        [(ANNComponentPresenter *)self.presenter applyBackground:[self resolveOptionsWithDefault]];
-    }
+    [self.componentPresenter applyBackground:[self resolveOptionsWithDefault]];
 }
 
 // The navigation controller that shows the screen's stack: the stack, or UIKit's More navigation while a tab of More
@@ -606,9 +627,7 @@
     content.autoresizingMask = UIViewAutoresizingNone;
     content.frame = [self rootFrameForOptions:[self resolveOptionsWithDefault]];
     [view addSubview:content];
-    if ([self.presenter isKindOfClass:ANNComponentPresenter.class]) {
-        [(ANNComponentPresenter *)self.presenter keepStatusBarBlurOnTop];
-    }
+    [self.componentPresenter keepStatusBarBlurOnTop];
     [self applyBackground];
     [self updateRootLayout];
 }
