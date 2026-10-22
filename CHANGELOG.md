@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.0.0-alpha.3](https://github.com/apexnative/navigation/compare/v1.0.0-alpha.2...v1.0.0-alpha.3) (2026-10-22)
+
+
+### Features
+
+* **android:** system stack transitions, an opaque default screen background and predictive back ([#26](https://github.com/apexnative/navigation/issues/26)) ([9f28969](https://github.com/apexnative/navigation/commit/9f28969a30a8902c1512cd2a24c3ddf5439f4642))
+
+
+### Bug Fixes
+
+* **android:** center the back button and the bar buttons in the row ([#35](https://github.com/apexnative/navigation/issues/35)) ([c908971](https://github.com/apexnative/navigation/commit/c9089716ea4e3b3f4bcdc42b16e57134018d76c0))
+* **android:** fade through on a tab switch, a new tab's first frame in place ([#29](https://github.com/apexnative/navigation/issues/29)) ([60d69b6](https://github.com/apexnative/navigation/commit/60d69b618a97c8f7da974fbdf6f427461960d672))
+* **android:** let an overlay cover the status bar ([#27](https://github.com/apexnative/navigation/issues/27)) ([2632194](https://github.com/apexnative/navigation/commit/26321945cf0c457780b3eb7bba1f3d988dad4d96))
+* **android:** match each modal presentation style to its Android equivalent ([#31](https://github.com/apexnative/navigation/issues/31)) ([54ab265](https://github.com/apexnative/navigation/commit/54ab2651f3139e869a2d99a43465b33bfb171414))
+* **android:** move the top bar with its screen in transitions of their own ([#34](https://github.com/apexnative/navigation/issues/34)) ([4d12ee6](https://github.com/apexnative/navigation/commit/4d12ee6d6ec26a04e529bdef8b8111d20e5116aa))
+* close the side menu as a pick in it changes the center ([#28](https://github.com/apexnative/navigation/issues/28)) ([c4b3e81](https://github.com/apexnative/navigation/commit/c4b3e81ba44d2edb6d93d3ddc906eca165d46e29))
+
+
+### Performance Improvements
+
+* **android:** render the modals of a setRoot's layout together with its root ([#32](https://github.com/apexnative/navigation/issues/32)) ([cf3e1d9](https://github.com/apexnative/navigation/commit/cf3e1d98ff7c5d2a05aba6485203e6fe35a3423d))
+
 ## [1.0.0-alpha.2](https://github.com/apexnative/navigation/compare/v1.0.0-alpha.1...v1.0.0-alpha.2) (2026-10-22)
 
 
