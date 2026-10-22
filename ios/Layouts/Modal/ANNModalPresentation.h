@@ -20,7 +20,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// `modalPresentationStyle`: one to one; unset is UIKit's automatic style; an unknown string full screen.
 @property(nonatomic, readonly) UIModalPresentationStyle style;
-/// `modalTransitionStyle`: `coverVertical` unless one of the others is given.
+/// `modalTransitionStyle`: `coverVertical` unless one of the others is given; `partialCurl` only where UIKit curls
+/// (`fitToPresenting:windowRoot:`).
 @property(nonatomic, readonly) UIModalTransitionStyle transitionStyle;
 /// The present is animated: `enter.enabled` is not `false`.
 @property(nonatomic, readonly) BOOL animated;
@@ -47,10 +48,12 @@ NS_ASSUME_NONNULL_BEGIN
                                     animation:(nullable ANNModalAnimationOptions *)animation
                                         under:(nullable UIViewController *)under;
 
-/// Why UIKit can't make this show from `presenting` (`partialCurl` only full screen, to and from), as the reason of the
-/// rejection; nil when it can. `windowRoot` is the main window's root.
-- (nullable NSString *)problemPresentingFrom:(UIViewController *)presenting
-                                  windowRoot:(nullable UIViewController *)windowRoot;
+/// Fits the show to `presenting`, before `prepare:…`: `partialCurl` stays only for a full-screen modal over a
+/// controller that fills the screen (`presenting` is `windowRoot`, the main window's root, or a full-screen modal);
+/// otherwise `transitionStyle` becomes `coverVertical`. Returns why UIKit can't make the show (`presenting` was shown
+/// with `partialCurl`), as the reason of the rejection; nil when it can.
+- (nullable NSString *)fitToPresenting:(UIViewController *)presenting
+                            windowRoot:(nullable UIViewController *)windowRoot;
 
 /// Before `presentViewController:`: the style and the transition, the presentation's delegate, the popover kept a
 /// popover (`adaptive: false`), the sheet, the size, the popover's source on `presentingLayout`, the hold, the
