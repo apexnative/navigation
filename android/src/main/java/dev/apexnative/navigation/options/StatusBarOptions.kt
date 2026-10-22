@@ -22,9 +22,13 @@ class StatusBarOptions {
     @JvmField var hideWithTopBar: Bool = NullBool()
     @JvmField var blur: Bool = NullBool()
 
-    /** The status bar is hidden, or the screen is drawn under it: the screen keeps no room for it. */
-    val isHiddenOrDrawBehind: Boolean
-        get() = visible.isFalse || drawBehind.isTrue
+    /**
+     * The status bar is hidden, or the screen is drawn under it: the screen keeps no room for it. Without `drawBehind`, a
+     * screen or a layout in an overlay ([inOverlay]) is drawn under it: an overlay covers the whole window, its dimmed
+     * backdrop the status bar too.
+     */
+    fun isHiddenOrDrawBehind(inOverlay: Boolean): Boolean =
+        visible.isFalse || if (drawBehind.hasValue()) drawBehind.isTrue else inOverlay
 
     fun hasValue(): Boolean = visible.hasValue() || style.hasValue() || backgroundColor.hasValue() ||
         drawBehind.hasValue() || translucent.hasValue() || animate.hasValue() || hideWithTopBar.hasValue() ||

@@ -140,6 +140,28 @@ class OverlayCoordinatorTest {
     }
 
     @Test
+    fun anOverlaysNodesAreInAnOverlayBeforeItsViewsArePlaced() {
+        val stack = TestLayout(activity, registry, "Overlay1")
+        val inner = screen("Inner")
+        stack.add(inner)
+        var placedInOverlay = false
+        val placing = object : OverlayCoordinator.Views {
+            override fun place(record: OverlayRecord) {
+                placedInOverlay = record.root.isInOverlay && inner.isInOverlay
+            }
+
+            override fun show(record: OverlayRecord) = Unit
+
+            override fun remove(record: OverlayRecord) = Unit
+
+            override fun update(record: OverlayRecord, options: Options) = Unit
+        }
+        OverlayCoordinator(placing, readiness, fixture.scheduler, host).show({ stack }, answer("showOverlay"))
+        assertTrue(placedInOverlay)
+        assertFalse(screen("Home").isInOverlay)
+    }
+
+    @Test
     fun itsWaitEndsAtTheLimit() {
         show(screen("Toast", ready = false))
         fixture.scheduler.advance(OverlayCoordinator.WAIT_LIMIT_MILLIS)
