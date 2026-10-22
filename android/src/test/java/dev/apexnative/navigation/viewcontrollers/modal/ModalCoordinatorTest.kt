@@ -656,9 +656,9 @@ class ModalCoordinatorTest {
         views.instant = true
         show(stack)
         views.log.clear()
-        modals.optionsMergedInto(details)
+        modals.optionsMergedInto(details, Options())
         modals.visibleScreenChanged(stack)
-        modals.optionsMergedInto(host.root ?: details)
+        modals.optionsMergedInto(host.root ?: details, Options())
         assertEquals(listOf("update:Stack1:true", "update:Stack1:false"), views.log)
     }
 

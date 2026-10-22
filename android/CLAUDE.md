@@ -166,6 +166,8 @@ top-level folder. Main thread only, unless a line says otherwise.
 - Only `SystemUiWindow` writes to the window. A presenter that changes a bar option calls `SystemUiOwner.invalidate`.
 - The core names a module container only in `LayoutFactory`; elsewhere use a capability or `visibleChildren()`.
 - A hidden stack keeps a `mergeOptions` per entry; applying it for the wrong entry paints the wrong screen's bar.
+- A `mergeOptions` moves or resizes only by what the merge names: the resolved options still hold the values of the
+  show, and acting on them undoes what the user did since (a dragged sheet snapped back to `selectedDetent`).
 - A sync getter reads a store, never a node; the store is written on main and cleared with its node.
 - A re-apply of the large title (a pop back, a light/dark switch, `mergeOptions`) collapses it to the list's last
   offset that `ScrollEventListener.lastOffset` keeps, never to 0, or it comes back expanded over a scrolled list.

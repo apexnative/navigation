@@ -245,10 +245,10 @@ internal class ModalViews(
         hideEmptyLayer()
     }
 
-    override fun update(record: ModalRecord, options: Options, move: Boolean) {
+    override fun update(record: ModalRecord, options: Options, merge: Options?) {
         val parts = parts[record] ?: return
         applyTestIds(record, parts, options)
-        parts.sheet?.update(options.modal.sheet, swipeToDismissOf(options), move)
+        parts.sheet?.update(options.modal.sheet, swipeToDismissOf(options), merge?.modal?.sheet)
     }
 
     override fun repaint(record: ModalRecord) {

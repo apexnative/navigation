@@ -5,7 +5,7 @@ export default defineScenario({
   id: '7.2',
   title: 'Sheet',
   check:
-    'A sheet stops at its `detents`: drag it between them; a drag goes to the Journal as `sheetDetentChanged`. `selectedDetent` is where it opens. Up to `largestUndimmedDetent` the panel under it stays bright and takes touches, as under the sheet of Maps. `grabber` shows the handle; with `expandsOnScroll: false` only the top drags the sheet. Out of order, a repeat: the sheet stops at 300, medium and large, from the lowest up, and a drag down from 300 closes it. On Android it is the Material bottom sheet: Its content stops at half the height.',
+    'A sheet stops at its `detents`: drag it between them; a drag goes to the Journal as `sheetDetentChanged`. `selectedDetent` is where it opens; on Details a pick of it moves the sheet there, while a change of another option (`grabber`, `cornerRadius`) leaves the sheet where it was dragged. Up to `largestUndimmedDetent` the panel under it stays bright and takes touches, as under the sheet of Maps. `grabber` shows the handle; with `expandsOnScroll: false` only the top drags the sheet. Out of order, a repeat: the sheet stops at 300, medium and large, from the lowest up, and a drag down from 300 closes it. On Android it is the Material bottom sheet: Its content stops at half the height.',
   controls: {
     'modal.sheet.detents': presets({
       'Medium and large': ['medium', 'large'],

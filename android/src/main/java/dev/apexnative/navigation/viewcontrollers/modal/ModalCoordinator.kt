@@ -147,8 +147,11 @@ internal class ModalCoordinator(
          */
         fun carry(record: ModalRecord, oldRoot: ViewController<*>?)
 
-        /** New [options] (resolved) of the record: its `testID`s, its sheet's `update` ([move]: to its selection). */
-        fun update(record: ModalRecord, options: Options, move: Boolean)
+        /**
+         * New [options] (resolved) of the record: its `testID`s, its sheet's `update`; [merge] is the `mergeOptions`
+         * that brought them, which alone may move the sheet, or null when the shown screen changed.
+         */
+        fun update(record: ModalRecord, options: Options, merge: Options?)
 
         /** The colors of the record's own views again (a light/dark switch). */
         fun repaint(record: ModalRecord) = Unit
@@ -353,13 +356,14 @@ internal class ModalCoordinator(
     // Options.
 
     /**
-     * A `mergeOptions` went into [node] (`mergeOptions` step 5): when it is in a modal, the modal's sheet takes its
-     * options again (it re-reads the resolved ones at any merge) and its `testID`s apply again.
+     * A `mergeOptions` of [merge] went into [node] (`mergeOptions` step 5): when it is in a modal, the modal's sheet
+     * takes its resolved options again, moving only to a `selectedDetent` that [merge] names, and its `testID`s apply
+     * again.
      */
-    fun optionsMergedInto(node: ViewController<*>) {
+    fun optionsMergedInto(node: ViewController<*>, merge: Options) {
         val record = recordOf(node) ?: return
         if (record.root.isDestroyed) return
-        views.update(record, record.root.resolveShownOptions(DefaultOptions.current), move = true)
+        views.update(record, record.root.resolveShownOptions(DefaultOptions.current), merge)
     }
 
     /**
@@ -369,7 +373,7 @@ internal class ModalCoordinator(
     fun visibleScreenChanged(node: ViewController<*>) {
         val record = recordOf(node) ?: return
         if (record.state == State.Waiting || record.root.isDestroyed) return
-        views.update(record, record.root.resolveShownOptions(DefaultOptions.current), move = false)
+        views.update(record, record.root.resolveShownOptions(DefaultOptions.current), merge = null)
     }
 
     /** The colors of the modals' own views again, after a light/dark switch. */
@@ -1230,7 +1234,7 @@ internal class ModalCoordinator(
         val screen = AppearanceDispatcher.visibleNode(record.root)
         if (screen.isDestroyed) return
         screen.mergeOptions(options)
-        optionsMergedInto(screen)
+        optionsMergedInto(screen, options)
     }
 
     private inline fun whileTaking(work: () -> Unit) {
