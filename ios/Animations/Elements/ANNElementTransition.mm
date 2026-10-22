@@ -15,23 +15,20 @@
     return self;
 }
 
-+ (UIView *)viewOf:(NSString *)identifier
-       leavingRoot:(UIView *)leavingRoot
-      arrivingRoot:(UIView *)arrivingRoot {
-    return [ANNElementFinder viewWithNativeID:identifier inView:leavingRoot]
-               ?: [ANNElementFinder viewWithNativeID:identifier inView:arrivingRoot];
++ (UIView *)viewOf:(NSString *)identifier views:(ANNTransitionViews *)views {
+    return [views leavingViewWithNativeID:identifier]
+               ?: [views arrivingViewWithNativeID:identifier];
 }
 
 + (NSArray<ANNElementTransition *> *)
     transitionsOf:(NSArray<ANNElementTransitionOptions *> *)elements
-      leavingRoot:(UIView *)leavingRoot
-     arrivingRoot:(UIView *)arrivingRoot {
+            views:(ANNTransitionViews *)views {
     NSMutableArray<ANNElementTransition *> *transitions = [NSMutableArray new];
     // One view takes one item: a second item for the same view would read the values the first one writes.
     NSHashTable<UIView *> *taken = [NSHashTable weakObjectsHashTable];
     for (ANNElementTransitionOptions *element in elements) {
         NSString *identifier = ANNNativeIDOf(element.identifier);
-        UIView *view = [self viewOf:identifier leavingRoot:leavingRoot arrivingRoot:arrivingRoot];
+        UIView *view = [self viewOf:identifier views:views];
         if (!view || [taken containsObject:view]) {
             continue;
         }
@@ -50,12 +47,9 @@
 }
 
 + (BOOL)allFound:(NSArray<ANNElementTransitionOptions *> *)elements
-     leavingRoot:(UIView *)leavingRoot
-    arrivingRoot:(UIView *)arrivingRoot {
+           views:(ANNTransitionViews *)views {
     for (ANNElementTransitionOptions *element in elements) {
-        if (![self viewOf:ANNNativeIDOf(element.identifier)
-                 leavingRoot:leavingRoot
-                arrivingRoot:arrivingRoot]) {
+        if (![self viewOf:ANNNativeIDOf(element.identifier) views:views]) {
             return NO;
         }
     }

@@ -7,7 +7,6 @@ import android.os.Build
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
-import com.facebook.react.uimanager.util.ReactFindViewUtil
 import com.facebook.react.views.view.ReactViewGroup
 import dev.apexnative.navigation.options.ElementTransitionOptions
 import dev.apexnative.navigation.options.LayoutAnimation
@@ -23,7 +22,8 @@ import dev.apexnative.navigation.views.element.animators.SharedAnimatorFactory
  * The elements of one transition: the element transitions and the targets of the shared elements found by their
  * `nativeID` (depth first, the first match) in the whole view of the screen each side shows — an element in the screen
  * that goes first, then in the one that comes; a pair's `fromId` in the screen that goes, its `toId` in the one that
- * comes. What isn't found, what is in another transition's layer and an image that isn't loaded is skipped; so is an element whose start fails ([elementStep]):
+ * comes; each screen is walked once for all of them ([TransitionViews]). What isn't found, what is in another
+ * transition's layer and an image that isn't loaded is skipped; so is an element whose start fails ([elementStep]):
  * it goes back at once and the rest plays. Each view found moves into a [TransitionLayer] at its place on the screen,
  * in the order its hierarchy draws it, and an [ElementStub] takes its index in its parent. A pair's `from` stays where
  * it is, hidden while its copy flies. [finish] puts every view back at its index with its layout, its pivot and the
@@ -231,20 +231,23 @@ internal class ElementTransition private constructor(private val layer: Transiti
         ): ElementTransition? {
             val fromView = from?.let { AppearanceDispatcher.visibleNode(it).peekView() }
             val toView = AppearanceDispatcher.visibleNode(to).peekView()
+            val transitions = animation.elementTransitions.transitions
+            val shared = animation.sharedElements.get()
+            val views = TransitionViews(shared, transitions, fromView, toView)
             val taken = HashSet<View>()
             val elements = ArrayList<Pair<ElementTransitionOptions, View>>()
-            for (element in animation.elementTransitions.transitions) {
+            for (element in transitions) {
                 if (element.id.isEmpty()) continue
-                val view = find(fromView, element.id) ?: find(toView, element.id) ?: continue
+                val view = found(views.leaving(element.id)) ?: found(views.arriving(element.id)) ?: continue
                 if (TransitionLayer.holds(view) || !taken.add(view)) continue
                 elements += element to view
             }
             val pairs = ArrayList<Triple<SharedElementTransitionOptions, View, View>>()
-            for (pair in animation.sharedElements.get()) {
+            for (pair in shared) {
                 val fromId = pair.fromId.get(null) ?: continue
                 val toId = pair.toId.get(null) ?: continue
-                val source = find(fromView, fromId) ?: continue
-                val target = find(toView, toId) ?: continue
+                val source = found(views.leaving(fromId)) ?: continue
+                val target = found(views.arriving(toId)) ?: continue
                 if (source === target || TransitionLayer.holds(source) || TransitionLayer.holds(target)) continue
                 if (target in taken || source in taken) continue
                 if (!loaded(source, fromId) || !loaded(target, toId)) continue
@@ -282,8 +285,7 @@ internal class ElementTransition private constructor(private val layer: Transiti
             null
         }
 
-        private fun find(root: View?, nativeId: String): View? =
-            root?.let { ReactFindViewUtil.findView(it, nativeId) }?.takeUnless { it is ElementStub }
+        private fun found(view: View?): View? = view?.takeUnless { it is ElementStub }
 
         // An image not loaded drops out of the transition; its wait logged it already, else it is logged now.
         private fun loaded(view: View, id: String): Boolean {

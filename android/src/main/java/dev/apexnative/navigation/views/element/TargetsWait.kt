@@ -3,7 +3,6 @@ package dev.apexnative.navigation.views.element
 import android.util.Log
 import android.view.Choreographer
 import android.view.View
-import com.facebook.react.uimanager.util.ReactFindViewUtil
 import dev.apexnative.navigation.options.LayoutAnimation
 import dev.apexnative.navigation.react.events.AppearanceDispatcher
 import dev.apexnative.navigation.utils.DevelopmentLog
@@ -72,12 +71,14 @@ internal object TargetsWait {
     ): () -> Unit {
         val fromView = from?.let { AppearanceDispatcher.visibleNode(it).peekView() }
         val toView = AppearanceDispatcher.visibleNode(to).peekView()
+        val pairs = animation.sharedElements.get()
+        val views = TransitionViews(pairs, emptyList(), fromView, toView)
         val images = ArrayList<ImageWait.Image?>()
-        for (pair in animation.sharedElements.get()) {
+        for (pair in pairs) {
             val fromId = pair.fromId.get(null) ?: continue
             val toId = pair.toId.get(null) ?: continue
-            val source = fromView?.let { ReactFindViewUtil.findView(it, fromId) } ?: continue
-            val target = toView?.let { ReactFindViewUtil.findView(it, toId) } ?: continue
+            val source = views.leaving(fromId) ?: continue
+            val target = views.arriving(toId) ?: continue
             images += imageOf(source, fromId)
             images += imageOf(target, toId)
         }

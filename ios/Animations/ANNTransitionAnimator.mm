@@ -133,19 +133,16 @@ static void ANNUpdateRootLayoutOf(UIViewController *node) {
     _began = YES;
     _wait = nil;
     UIView *container = _context.containerView;
-    UIView *leavingRoot = [ANNElementFinder searchRootOf:_plan.fromNode];
-    UIView *arrivingRoot = [ANNElementFinder searchRootOf:_plan.toNode];
+    ANNTransitionViews *views = [[ANNTransitionViews alloc] initWithPairs:_plan.sharedElements
+                                                                 elements:_plan.elements
+                                                                 fromNode:_plan.fromNode
+                                                                   toNode:_plan.toNode];
     NSMutableArray<id<ANNFrameClient>> *clients = [NSMutableArray new];
     // The shared pairs first: their geometry and pictures are taken while the screens are still at rest.
     NSArray<ANNSharedElementFlight *> *flights =
-        [ANNSharedElementFlight flightsOf:_plan.sharedElements
-                              leavingRoot:leavingRoot
-                             arrivingRoot:arrivingRoot
-                                container:container];
+        [ANNSharedElementFlight flightsOf:_plan.sharedElements views:views container:container];
     NSArray<ANNElementTransition *> *elements =
-        [ANNElementTransition transitionsOf:_plan.elements
-                                leavingRoot:leavingRoot
-                               arrivingRoot:arrivingRoot];
+        [ANNElementTransition transitionsOf:_plan.elements views:views];
     ANNViewTracks *arrivingTracks = nil;
     ANNViewTracks *leavingTracks = nil;
     if (_plan.enter && _arriving) {

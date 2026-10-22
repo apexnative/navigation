@@ -2,6 +2,7 @@
 #import <UIKit/UIKit.h>
 
 @class ANNSharedElementTransitionOptions;
+@class ANNTransitionViews;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -24,14 +25,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// skipped too, with a line in the log. The pictures are taken now, then the React views hide and the copies go into
 /// `container` by the `zIndex` of their `to` views, ascending (no `layer.zPosition`).
 + (NSArray<ANNSharedElementFlight *> *)
-       flightsOf:(nullable NSArray<ANNSharedElementTransitionOptions *> *)pairs
-     leavingRoot:(nullable UIView *)leavingRoot
-    arrivingRoot:(nullable UIView *)arrivingRoot
-       container:(UIView *)container;
+    flightsOf:(nullable NSArray<ANNSharedElementTransitionOptions *> *)pairs
+        views:(ANNTransitionViews *)views
+    container:(UIView *)container;
 
 /// Every pair's `toId` is found in the arriving screen (the wait's test).
 + (BOOL)allTargetsFound:(nullable NSArray<ANNSharedElementTransitionOptions *> *)pairs
-           arrivingRoot:(nullable UIView *)arrivingRoot;
+                  views:(ANNTransitionViews *)views;
 
 - (instancetype)init NS_UNAVAILABLE;
 + (instancetype)new NS_UNAVAILABLE;

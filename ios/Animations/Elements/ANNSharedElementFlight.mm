@@ -160,9 +160,9 @@ static UIImage *ANNPictureOf(UIView *view) {
 }
 
 + (BOOL)allTargetsFound:(NSArray<ANNSharedElementTransitionOptions *> *)pairs
-           arrivingRoot:(UIView *)arrivingRoot {
+                  views:(ANNTransitionViews *)views {
     for (ANNSharedElementTransitionOptions *pair in pairs) {
-        if (![ANNElementFinder viewWithNativeID:ANNNativeIDOf(pair.toId) inView:arrivingRoot]) {
+        if (![views arrivingViewWithNativeID:ANNNativeIDOf(pair.toId)]) {
             return NO;
         }
     }
@@ -170,17 +170,16 @@ static UIImage *ANNPictureOf(UIView *view) {
 }
 
 + (NSArray<ANNSharedElementFlight *> *)
-       flightsOf:(NSArray<ANNSharedElementTransitionOptions *> *)pairs
-     leavingRoot:(UIView *)leavingRoot
-    arrivingRoot:(UIView *)arrivingRoot
-       container:(UIView *)container {
+    flightsOf:(NSArray<ANNSharedElementTransitionOptions *> *)pairs
+        views:(ANNTransitionViews *)views
+    container:(UIView *)container {
     NSMutableArray<ANNSharedElementFlight *> *flights = [NSMutableArray new];
     NSHashTable<UIView *> *taken = [NSHashTable weakObjectsHashTable];
     for (ANNSharedElementTransitionOptions *pair in pairs) {
         NSString *fromId = ANNNativeIDOf(pair.fromId);
         NSString *toId = ANNNativeIDOf(pair.toId);
-        UIView *from = [ANNElementFinder viewWithNativeID:fromId inView:leavingRoot];
-        UIView *to = [ANNElementFinder viewWithNativeID:toId inView:arrivingRoot];
+        UIView *from = [views leavingViewWithNativeID:fromId];
+        UIView *to = [views arrivingViewWithNativeID:toId];
         if (!from || !to || from == to || [taken containsObject:from] ||
             [taken containsObject:to]) {
             continue;
@@ -191,8 +190,8 @@ static UIImage *ANNPictureOf(UIView *view) {
           flight = [[self alloc] initWithPair:pair
                                          from:from
                                            to:to
-                                  leavingRoot:leavingRoot
-                                 arrivingRoot:arrivingRoot
+                                  leavingRoot:views.leavingRoot
+                                 arrivingRoot:views.arrivingRoot
                                     container:container
                                          name:name];
         });

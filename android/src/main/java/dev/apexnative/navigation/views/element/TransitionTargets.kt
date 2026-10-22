@@ -2,7 +2,6 @@ package dev.apexnative.navigation.views.element
 
 import android.os.SystemClock
 import android.view.ViewGroup
-import com.facebook.react.uimanager.util.ReactFindViewUtil
 import dev.apexnative.navigation.options.LayoutAnimation
 import dev.apexnative.navigation.utils.DRAW_WAIT_LIMIT
 import dev.apexnative.navigation.viewcontrollers.component.ContentReadiness
@@ -38,12 +37,16 @@ private fun areReady(animation: LayoutAnimation, from: ViewController<*>, to: Vi
     val screen = to.shownScreen()
     val content = screen.view as? ViewGroup
     if (content != null && !ContentReadiness.isReady(screen)) return false
-    val sharedFound = animation.sharedElements.get().all { isIn(to, it.toId.get("")) }
-    return sharedFound && animation.elementTransitions.transitions.all { isIn(to, it.id) || isIn(from, it.id) }
+    // Each screen walked once for all the ids ([TransitionViews.findViews]); an element is looked for in the screen
+    // that goes only when the one that comes doesn't have it.
+    val targets = animation.sharedElements.get().map { it.toId.get("") }.filter { it.isNotEmpty() }
+    val elements = animation.elementTransitions.transitions.map { it.id }.filter { it.isNotEmpty() }
+    if (targets.isEmpty() && elements.isEmpty()) return true
+    val inTo = TransitionViews.findViews(to.view, (targets + elements).toSet())
+    if (!targets.all { it in inTo }) return false
+    val missing = elements.filterNot { it in inTo }.toSet()
+    return missing.isEmpty() || TransitionViews.findViews(from.view, missing).size == missing.size
 }
-
-private fun isIn(screen: ViewController<*>, nativeId: String) =
-    nativeId.isEmpty() || ReactFindViewUtil.findView(screen.view, nativeId) != null
 
 // The screen a layout shows: a modal of a stack shows the screen on its top.
 private fun ViewController<*>.shownScreen(): ViewController<*> {
