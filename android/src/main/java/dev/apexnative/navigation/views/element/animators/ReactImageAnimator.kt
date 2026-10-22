@@ -1,8 +1,6 @@
 package dev.apexnative.navigation.views.element.animators
 
 import android.animation.Animator
-import androidx.core.animation.doOnEnd
-import androidx.core.animation.doOnStart
 import com.facebook.drawee.drawable.ScalingUtils
 import com.facebook.react.views.image.ReactImageView
 import dev.apexnative.navigation.views.animations.ValueInterpolation
@@ -45,14 +43,14 @@ internal class ReactImageAnimator(
                 to.rotation = ValueInterpolation.number(fromRotation, toRotation, f, time)
                 to.invalidate()
             }
-            doOnStart {
+            onStart {
                 savedFade = to.hierarchy.fadeDuration
                 to.hierarchy.fadeDuration = 0
                 to.hierarchy.setActualImageScaleType(scale)
                 frame(0f)
             }
-            addUpdateListener { frame(it.animatedFraction) }
-            doOnEnd {
+            onFrame { frame(it) }
+            onEnd {
                 to.hierarchy.setActualImageScaleType(toType)
                 to.hierarchy.fadeDuration = savedFade
                 to.translationX = 0f

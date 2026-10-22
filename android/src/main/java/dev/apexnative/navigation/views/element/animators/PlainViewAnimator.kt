@@ -3,8 +3,6 @@ package dev.apexnative.navigation.views.element.animators
 import android.animation.Animator
 import android.view.View
 import android.view.ViewOutlineProvider
-import androidx.core.animation.doOnEnd
-import androidx.core.animation.doOnStart
 import com.facebook.react.uimanager.BackgroundStyleApplicator
 import com.facebook.react.uimanager.style.BorderRadiusProp
 import dev.apexnative.navigation.utils.borderRadius
@@ -57,7 +55,7 @@ internal class PlainViewAnimator(
                 }
                 to.rotation = ValueInterpolation.number(fromRotation, toRotation, f, time)
             }
-            doOnStart {
+            onStart {
                 savedProvider = to.outlineProvider
                 savedClip = to.clipToOutline
                 if (ownRadius != null) BackgroundStyleApplicator.setBorderRadius(to, RADIUS, null)
@@ -66,9 +64,9 @@ internal class PlainViewAnimator(
                 layer.place(to, toRect.left.toInt(), toRect.top.toInt(), width, height)
                 frame(0f)
             }
-            addUpdateListener { frame(it.animatedFraction) }
+            onFrame { frame(it) }
             // A cancelled flight ends too: the view goes back whole.
-            doOnEnd {
+            onEnd {
                 to.translationX = 0f
                 to.translationY = 0f
                 to.rotation = toRotation

@@ -12,8 +12,6 @@ import android.graphics.RectF
 import android.graphics.drawable.Drawable
 import android.view.View
 import android.view.ViewGroup
-import androidx.core.animation.doOnEnd
-import androidx.core.animation.doOnStart
 import com.facebook.react.views.view.ReactViewGroup
 import dev.apexnative.navigation.options.SharedElementTransitionOptions
 import dev.apexnative.navigation.utils.ViewUtils
@@ -38,16 +36,16 @@ class ViewChangeAnimator(from: View, to: View) : PropertyAnimatorCreator<ReactVi
         val drawable = ViewMorphDrawable(start, end)
         // Everything changes between the start and the end of the animation: a cancelled one ends too.
         return MoveAnimator().apply {
-            doOnStart {
+            onStart {
                 drawable.setBounds(0, 0, layer.width, layer.height)
                 layer.overlay.add(drawable)
                 to.alpha = 0f
             }
-            addUpdateListener {
-                drawable.progress = curve.getInterpolation(it.animatedFraction)
+            onFrame {
+                drawable.progress = curve.getInterpolation(it)
                 layer.invalidate()
             }
-            doOnEnd {
+            onEnd {
                 layer.overlay.remove(drawable)
                 layer.invalidate()
                 to.alpha = end.alpha

@@ -48,13 +48,12 @@ static const NSTimeInterval ANNReadyCheckDelay = 0.1;
 }
 
 - (BOOL)targetsAreFound {
-    UIView *leavingRoot = [ANNElementFinder searchRootOf:_plan.fromNode];
-    UIView *arrivingRoot = [ANNElementFinder searchRootOf:_plan.toNode];
-    return [ANNSharedElementFlight allTargetsFound:_plan.sharedElements
-                                      arrivingRoot:arrivingRoot] &&
-           [ANNElementTransition allFound:_plan.elements
-                              leavingRoot:leavingRoot
-                             arrivingRoot:arrivingRoot];
+    ANNTransitionViews *views = [[ANNTransitionViews alloc] initWithPairs:_plan.sharedElements
+                                                                 elements:_plan.elements
+                                                                 fromNode:_plan.fromNode
+                                                                   toNode:_plan.toNode];
+    return [ANNSharedElementFlight allTargetsFound:_plan.sharedElements views:views] &&
+           [ANNElementTransition allFound:_plan.elements views:views];
 }
 
 - (BOOL)isReady {

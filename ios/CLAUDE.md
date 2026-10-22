@@ -125,6 +125,10 @@ Top-level files: `Package.swift` (SwiftPM; `headerFolders` lists every folder wh
   (the root, a modal, an overlay: their record is listed and parked by then), and the modal's end steps inside UIKit's
   completions and delegate calls (`protectEndOf:showing:step:`, `protectBatch:step:`); the overlay's guard is
   `protectWaitOf:step:`.
+- Each step of a transition's element (a pair's start and take-off, an element's start, every frame and restore
+  through `ANNIsolatedElement`) runs in `ANNElementStep`: an exception skips that element only. A new step of an
+  element goes there too, or one bad element stops the transition (a frame's exception ends the app). The elements of
+  a transition are found in one walk per screen (`ANNTransitionViews`).
 - An `ANNCommandAnswer` that goes away unanswered rejects (`notAnswered:`), but only once nothing holds it: a record,
   list or queue that keeps an answer still answers it on every exit, or the promise waits as long as the record lives.
 - On iOS 26 UIKit draws a screen's large title, for a whole pop or swipe back, inside the scroll view the bar follows

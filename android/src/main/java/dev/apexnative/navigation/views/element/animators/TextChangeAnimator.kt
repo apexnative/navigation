@@ -11,8 +11,6 @@ import android.text.Layout
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
-import androidx.core.animation.doOnEnd
-import androidx.core.animation.doOnStart
 import com.facebook.react.views.text.ReactTextView
 import dev.apexnative.navigation.options.SharedElementTransitionOptions
 import dev.apexnative.navigation.utils.TextViewUtils
@@ -42,16 +40,16 @@ class TextChangeAnimator(from: View, to: View) : PropertyAnimatorCreator<ReactTe
         val drawable = TextMorphDrawable(start, end)
         // Everything changes between the start and the end of the animation: a cancelled one ends too.
         return MoveAnimator().apply {
-            doOnStart {
+            onStart {
                 drawable.setBounds(0, 0, layer.width, layer.height)
                 layer.overlay.add(drawable)
                 to.alpha = 0f
             }
-            addUpdateListener {
-                drawable.update(it.animatedFraction, curve.getInterpolation(it.animatedFraction))
+            onFrame {
+                drawable.update(it, curve.getInterpolation(it))
                 layer.invalidate()
             }
-            doOnEnd {
+            onEnd {
                 layer.overlay.remove(drawable)
                 layer.invalidate()
                 to.alpha = end.alpha
