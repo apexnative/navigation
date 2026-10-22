@@ -463,8 +463,16 @@ internal class QueueHost(private val log: MutableList<String>) : StackQueue.Host
     /** How the bar would show or hide with each change: `at once`, `animated`, or `side` with a side of its own. */
     val barVisibilities = mutableListOf<String>()
 
-    override fun barTransition(motion: StackDisplay.BarMotion?, visibility: StackDisplay.BarVisibility) {
+    /** How the bar went with the screens of an animation of its own: `Forward`, `Back` or `none`. */
+    val barTravels = mutableListOf<String>()
+
+    override fun barTransition(
+        motion: StackDisplay.BarMotion?,
+        visibility: StackDisplay.BarVisibility,
+        travel: StackDisplay.BarTravel?,
+    ) {
         barMotions += motion?.name ?: "none"
+        barTravels += travel?.name ?: "none"
         val side = visibility.side?.takeIf { it.enter.hasValue() || it.exit.hasValue() }
         barVisibilities += when {
             !visibility.animated -> "at once"

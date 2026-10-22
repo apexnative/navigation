@@ -361,15 +361,18 @@ export interface StackAnimationOptions {
   /**
    * The animation of the screens: `enter` for the screen that comes (on a pop, the one that was below), `exit` for the
    * one that goes. A property with a `from` or a `to` makes it an animation of its own, which replaces the platform's
-   * transition; the side left out stays still. (Android) With one of its own, the title and buttons of the bar and the
-   * tab bar don't travel with the screens. (Android) When the transition has elements, a push plays only `enter` and a
+   * transition; the side left out stays still. With one of its own, (Android) the top bar goes with its screen: the
+   * bar of the screen that goes leaves with it, and the bar of the screen that comes moves, scales and fades with it;
+   * (iOS) UIKit keeps the bar in place and changes its title and buttons at once. (Android) The tab bar doesn't travel
+   * with the screens. (Android) When the transition has elements, a push plays only `enter` and a
    * pop only `exit`, and only when that side is a single `alpha`; any other side is not played, and the screen fades in
    * or out in 300 ms around the elements instead. iOS plays the sides as they are set.
    */
   content?: EnterExitAnimationOptions;
   /**
    * (Android) The animation of the top bar when it shows or hides because the screens differ in `topBar.visible`.
-   * Without it, the bar slides up by its height and back in 300 ms. iOS animates the bar with UIKit.
+   * Without it, the bar slides up by its height and back in 300 ms; with a `content` of its own it shows or hides
+   * with its screen. iOS animates the bar with UIKit.
    */
   topBar?: EnterExitAnimationOptions<TopBarAnimationOptions>;
   /**

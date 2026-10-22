@@ -188,6 +188,7 @@ class StackBarTest {
         h.display.finishAll()
         h.setStackRoot(h.screen("D"), asPush = true)
         assertEquals(listOf("Push", "Pop", "FadeThrough", "Push"), h.host.barMotions)
+        assertEquals(listOf("none", "none", "none", "none"), h.host.barTravels)
     }
 
     @Test
@@ -199,6 +200,19 @@ class StackBarTest {
         }), from = "B")
         h.setStackRoot(h.screen("D"), animated = false)
         assertEquals(listOf("none", "none", "none"), h.host.barMotions)
+        // Only the animation of its own takes the bar with the screens.
+        assertEquals(listOf("none", "Forward", "none"), h.host.barTravels)
+    }
+
+    // A pop of its own turned off (`enabled: false`) changes the bar at once: nothing travels.
+    @Test
+    fun aPopOfItsOwnTurnedOffDoesntTakeTheBar() {
+        h.start(h.screen("A"), h.screen("B", options = h.options {
+            animations.pop.content.exit.alpha.to = Fraction(0.0)
+            animations.pop.enabled = Bool(false)
+        }))
+        h.pop()
+        assertEquals(listOf("none"), h.host.barTravels)
     }
 
     @Test
