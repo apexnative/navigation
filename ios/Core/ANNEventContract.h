@@ -77,6 +77,11 @@ FOUNDATION_EXPORT const struct ANNEventContractTable {
         __unsafe_unretained NSString *componentName;
         __unsafe_unretained NSString *componentType;
     } ComponentWillAppear;
+    /// `ANN.DeepLinkDispatched` (iOS).
+    struct {
+        __unsafe_unretained NSString *event;
+        __unsafe_unretained NSString *url;
+    } DeepLinkDispatched;
     /// `ANN.HingeChanged`.
     struct {
         __unsafe_unretained NSString *event;

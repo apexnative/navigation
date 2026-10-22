@@ -1,9 +1,10 @@
 #import "ANNSceneDelegate.h"
+#import "ANNDeepLinkQueue.h"
 #import "ApexNavigation.h"
-#import <React/RCTLinkingManager.h>
 
 // On the scene life cycle UIKit stops calling the app delegate's URL, user activity and foreground/background
-// methods. The scene forwards them, so AppDelegate overrides (and the deep links of ANNDeepLinkQueue) keep working.
+// methods. The scene forwards them, so AppDelegate overrides (and the deep links of ANNDeepLinkQueue) keep working; the
+// links keep their scene, through which React Native 0.88 and newer take them.
 @implementation ANNSceneDelegate
 
 - (void)scene:(UIScene *)scene
@@ -15,21 +16,21 @@
     self.window = [ApexNavigation attachToWindowScene:(UIWindowScene *)scene];
 
     for (UIOpenURLContext *context in connectionOptions.URLContexts) {
-        [self ann_openURLContext:context];
+        [self ann_openURLContext:context ofScene:scene];
     }
     for (NSUserActivity *activity in connectionOptions.userActivities) {
-        [self ann_continueUserActivity:activity];
+        [self ann_continueUserActivity:activity ofScene:scene];
     }
 }
 
 - (void)scene:(UIScene *)scene openURLContexts:(NSSet<UIOpenURLContext *> *)URLContexts {
     for (UIOpenURLContext *context in URLContexts) {
-        [self ann_openURLContext:context];
+        [self ann_openURLContext:context ofScene:scene];
     }
 }
 
 - (void)scene:(UIScene *)scene continueUserActivity:(NSUserActivity *)userActivity {
-    [self ann_continueUserActivity:userActivity];
+    [self ann_continueUserActivity:userActivity ofScene:scene];
 }
 
 - (void)sceneDidBecomeActive:(UIScene *)scene {
@@ -62,7 +63,7 @@
 
 #pragma mark - private
 
-- (void)ann_openURLContext:(UIOpenURLContext *)context {
+- (void)ann_openURLContext:(UIOpenURLContext *)context ofScene:(UIScene *)scene {
     UIApplication *application = UIApplication.sharedApplication;
     id<UIApplicationDelegate> appDelegate = application.delegate;
     if ([appDelegate respondsToSelector:@selector(application:openURL:options:)]) {
@@ -70,22 +71,31 @@
         options[UIApplicationOpenURLOptionsSourceApplicationKey] = context.options.sourceApplication;
         options[UIApplicationOpenURLOptionsAnnotationKey] = context.options.annotation;
         options[UIApplicationOpenURLOptionsOpenInPlaceKey] = @(context.options.openInPlace);
-        [appDelegate application:application openURL:context.URL options:options];
+        [ANNDeepLinkQueue forwardURLContext:context
+                                    ofScene:scene
+                                    through:^{
+                                      [appDelegate application:application openURL:context.URL options:options];
+                                    }];
     } else {
-        [RCTLinkingManager application:application openURL:context.URL options:@{}];
+        [ANNDeepLinkQueue openURLContext:context ofScene:scene];
     }
 }
 
-- (void)ann_continueUserActivity:(NSUserActivity *)activity {
+- (void)ann_continueUserActivity:(NSUserActivity *)activity ofScene:(UIScene *)scene {
     UIApplication *application = UIApplication.sharedApplication;
     id<UIApplicationDelegate> appDelegate = application.delegate;
     if ([appDelegate respondsToSelector:@selector(application:continueUserActivity:restorationHandler:)]) {
-        [appDelegate application:application
-             continueUserActivity:activity
-               restorationHandler:^(NSArray<id<UIUserActivityRestoring>> *restorableObjects){
-               }];
+        [ANNDeepLinkQueue forwardUserActivity:activity
+                                      ofScene:scene
+                                      through:^{
+                                        [appDelegate application:application
+                                             continueUserActivity:activity
+                                               restorationHandler:^(
+                                                   NSArray<id<UIUserActivityRestoring>> *restorableObjects){
+                                               }];
+                                      }];
     } else if ([activity.activityType isEqualToString:NSUserActivityTypeBrowsingWeb]) {
-        [RCTLinkingManager application:application openURL:activity.webpageURL options:@{}];
+        [ANNDeepLinkQueue openUserActivity:activity ofScene:scene];
     }
 }
 
