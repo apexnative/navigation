@@ -82,6 +82,8 @@ navigation.showModal('Compose', { style: 'fullScreen' });
 
 Without `style`, a modal is a sheet on <Os name="iOS" /> and covers the whole screen on <Os name="Android" />.
 
+`'pageSheet'` and `'formSheet'` are sheets on both platforms: on <Os name="Android" /> the Material bottom sheet over the dimmed screen, at the full height under the status bar and at most 640 dp wide. `'fullScreen'` and `'overFullScreen'` come up from the bottom over the whole screen; on Android with the system's motion of a window opening over another, without a fade.
+
 `'overFullScreen'` keeps the screen under the modal in place, so it shows through wherever the modal draws nothing: a dialog of your own, a card over a dimmed app. Give the modal's screen `backgroundColor('transparent')` in its options, so its own background doesn't hide the screen under it.
 
 ### A form on iPad {#form}
@@ -95,7 +97,7 @@ navigation.showModal('EditProfile', {
 });
 ```
 
-On iPhone a form sheet is a sheet, and `contentSize` does nothing.
+On iPhone and on Android a form sheet is a sheet, and `contentSize` does nothing.
 
 ### A popover {#popover}
 
@@ -107,7 +109,7 @@ navigation.showModal('Filters', {
 });
 ```
 
-On iPhone it becomes a sheet, unless `adaptive: false` keeps it a popover. <Os name="Android" /> has no popovers: the modal covers the whole screen, as without `style`.
+On iPhone it becomes a sheet, unless `adaptive: false` keeps it a popover. <Os name="Android" /> has no popovers: the modal is the bottom sheet of `'pageSheet'`.
 
 <DeviceVideo name="modal-popover" devices={['ipad', 'ios']} />
 

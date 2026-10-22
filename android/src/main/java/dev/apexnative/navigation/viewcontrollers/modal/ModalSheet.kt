@@ -29,11 +29,12 @@ import dev.apexnative.navigation.utils.dp
 import kotlin.math.roundToInt
 
 /**
- * A modal shown as a Material bottom sheet (`modal.sheet`): the modal's view in a container with a
- * [BottomSheetBehavior], in the modals' CoordinatorLayout, over a scrim. It stops at the detents of its options —
- * `medium` at half the height, `large` at the full height under the status bar, a number at that height in dp — and the
- * user drags it between them. A drag down past the smallest one closes it, unless `swipeToDismiss` is false: then the
- * sheet stays, and the try is told. The screen under it stays in place.
+ * A modal shown as a Material bottom sheet (`pageSheet`, `formSheet`, `popover`, or `modal.sheet` without a style): the
+ * modal's view in a container with a [BottomSheetBehavior], in the modals' CoordinatorLayout, over a scrim. It stops at
+ * the detents of its options — `medium` at half the height, `large` at the full height under the status bar, a number
+ * at that height in dp — and the user drags it between them. In a window wider than [MAX_WIDTH_DP] it stands in the
+ * middle at that width. A drag down past the smallest one closes it, unless `swipeToDismiss` is false: then the sheet
+ * stays, and the try is told. The screen under it stays in place.
  */
 internal class ModalSheet(
     private val layout: CoordinatorLayout,
@@ -96,11 +97,19 @@ internal class ModalSheet(
                 outline.setRoundRect(0, 0, view.width, view.height + radius.roundToInt(), radius)
             }
         }
-        // The sheet is under the status bar: its screens leave no room for it at their top.
+        // The sheet is under the status bar: its screens leave no room for it at their top. In the middle of a wide
+        // window it reaches no side, and keeps room only for the part of a side bar that is over it.
         ViewCompat.setOnApplyWindowInsetsListener(container) { _, insets ->
             val types = WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
             val bars = insets.getInsets(types)
-            WindowInsetsCompat.Builder(insets).setInsets(types, Insets.of(bars.left, 0, bars.right, bars.bottom)).build()
+            val laidOut = container.width > 0
+            val left = if (laidOut) (bars.left - container.left).coerceAtLeast(0) else bars.left
+            val right = if (laidOut) (bars.right - (layout.width - container.right)).coerceAtLeast(0) else bars.right
+            WindowInsetsCompat.Builder(insets).setInsets(types, Insets.of(left, 0, right, bars.bottom)).build()
+        }
+        // Its sides move with the window's width (a rotation, a resize): the room for the side bars follows.
+        container.addOnLayoutChangeListener { _, left, _, right, _, oldLeft, _, oldRight, _ ->
+            if (left != oldLeft || right != oldRight) container.post { ViewCompat.requestApplyInsets(container) }
         }
         container.addView(content, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         container.addView(grabber, FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.TOP or Gravity.CENTER_HORIZONTAL))
@@ -120,7 +129,12 @@ internal class ModalSheet(
         layout.addView(scrim, CoordinatorLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         // As tall as its largest detent (maxHeight), not moved down by a margin: the behavior counts its states from
         // where the sheet is laid out.
-        layout.addView(container, CoordinatorLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT).also { it.behavior = behavior })
+        // In a wide window it stands in the middle, as wide as a Material modal sheet at most.
+        behavior.maxWidth = MAX_WIDTH_DP.dp
+        val params = CoordinatorLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT)
+        params.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+        params.behavior = behavior
+        layout.addView(container, params)
         shown = onShown
         update(sheetOptions, swipeToDismiss, merge = null)
         selected = sheetOptions.selectedDetent?.takeIf { it in detents }
@@ -334,10 +348,13 @@ internal class ModalSheet(
         }
     }
 
-    private companion object {
+    companion object {
+        /** The widest a sheet is, in dp: the Material modal bottom sheet's `maxWidth`. */
+        const val MAX_WIDTH_DP = 640
+
         /** The dim of a Material modal bottom sheet's scrim. */
-        const val SCRIM_ALPHA = 0.32f
-        const val GRAB_AREA_DP = 48
-        const val ATTEMPT_DISTANCE_DP = 48
+        private const val SCRIM_ALPHA = 0.32f
+        private const val GRAB_AREA_DP = 48
+        private const val ATTEMPT_DISTANCE_DP = 48
     }
 }

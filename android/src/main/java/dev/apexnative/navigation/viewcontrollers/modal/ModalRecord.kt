@@ -17,7 +17,10 @@ import dev.apexnative.navigation.viewcontrollers.viewcontroller.ViewController
 internal class ModalRecord(
     /** The top node of the modal's layout. */
     val root: ViewController<*>,
-    /** The modal shows as a Material sheet (`modal.sheet`), decided before its root's view is made. */
+    /**
+     * The modal shows as a Material sheet (`pageSheet`, `formSheet`, `popover`, or `modal.sheet` without a style),
+     * decided before its root's view is made.
+     */
     val isSheet: Boolean,
 ) : WaitingLayer {
     /** Where the modal is. */
@@ -160,14 +163,20 @@ internal class ModalRecord(
         /** `modalPresentationStyle` values that keep the layer under in place. */
         private val OVER_STYLES = setOf("overFullScreen", "overCurrentContext")
 
-        /** The styles a sheet shows with: unset, `pageSheet`, `formSheet`. */
-        private val SHEET_STYLES = setOf(null, "pageSheet", "formSheet")
+        /**
+         * The styles that always show as a sheet: the sheets of iOS, and the popover, which an iPhone shows as a sheet
+         * too.
+         */
+        private val SHEET_STYLES = setOf("pageSheet", "formSheet", "popover")
 
         /**
-         * Whether a modal with [options] (resolved, with the defaults) shows as a sheet: any `modal.sheet` field set,
-         * and the style unset, `pageSheet` or `formSheet`.
+         * Whether a modal with [options] (resolved, with the defaults) shows as a sheet: its style is `pageSheet`,
+         * `formSheet` or `popover`, or it has none and any `modal.sheet` field is set.
          */
-        fun isSheet(options: Options): Boolean = options.modal.sheet.hasValue && styleOf(options) in SHEET_STYLES
+        fun isSheet(options: Options): Boolean {
+            val style = styleOf(options)
+            return style in SHEET_STYLES || (style == null && options.modal.sheet.hasValue)
+        }
 
         /**
          * Whether a modal covers the layer under it at the end of its show: full screen, unless it is a sheet or

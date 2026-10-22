@@ -3,21 +3,25 @@
  * `'overCurrentContext'`, `'currentContext'` or `'popover'`. It is read once, when the modal shows, from the modal's
  * final options; `mergeOptions` afterwards doesn't change it, and neither does a change of theme or a rotation. Without
  * it the platform decides: on iOS the automatic style of UIKit (a sheet on iPhone, a card on iPad), on Android the
- * whole screen. An unknown string shows a full-screen modal on iOS and counts as not set on Android.
+ * whole screen, or the Material bottom sheet when `modal.sheet` is set. An unknown string shows a full-screen modal on
+ * iOS and counts as not set on Android.
  *
- * - `'pageSheet'`: (iOS) a sheet that leaves the screen below visible and pushed back; on iPad a wide card. Android
- *   shows the whole screen, or the Material bottom sheet when `modal.sheet` is set.
- * - `'formSheet'`: (iOS) a sheet on iPhone, a card in the middle on iPad whose size is `modal.contentSize`. Android
- *   shows the whole screen, or the bottom sheet when `modal.sheet` is set.
- * - `'fullScreen'`, `'currentContext'`: the whole screen; the screen below is taken off. Both platforms treat the two
- *   alike.
- * - `'overFullScreen'`, `'overCurrentContext'`: the whole screen with the screen below kept in place. It shows
- *   through only where the modal screen is transparent (`layout.backgroundColor` and `layout.componentBackgroundColor`
- *   both `'transparent'`); the style does not make anything transparent by itself.
+ * - `'pageSheet'`: a sheet that leaves the screen below visible. On iOS the screen below is pushed back, and on iPad
+ *   the sheet is a wide card. On Android it is the Material modal bottom sheet over a dimmed screen, at the full height
+ *   under the status bar (`modal.sheet` changes its stops), at most 640 dp wide and in the middle of a wider window.
+ * - `'formSheet'`: on iOS a sheet on iPhone, a card in the middle on iPad whose size is `modal.contentSize`. On Android
+ *   the same bottom sheet as `'pageSheet'`; `modal.contentSize` does nothing there.
+ * - `'fullScreen'`, `'currentContext'`: the whole screen; the screen below is taken off once the modal has come in.
+ *   Both platforms treat the two alike. The modal comes up from the bottom: on Android with the system's motion of a
+ *   window over another (300 ms up, 250 ms down), without a fade.
+ * - `'overFullScreen'`, `'overCurrentContext'`: the same, with the screen below kept in place under the modal. It
+ *   shows through only where the modal screen is transparent (`layout.backgroundColor` and
+ *   `layout.componentBackgroundColor` both `'transparent'`); the style does not make anything transparent by itself.
  * - `'popover'`: (iOS) a popover with an arrow on iPad, a sheet on iPhone unless `modal.popover.adaptive` is `false`.
- *   Android has no popovers and shows the whole screen.
+ *   Android has no popovers and shows the bottom sheet of `'pageSheet'`.
  *
- * The options of the sheet (`modal.sheet`) apply with `'pageSheet'`, `'formSheet'` and without a style.
+ * The options of the sheet (`modal.sheet`) apply with `'pageSheet'`, `'formSheet'` and without a style, and on
+ * Android with `'popover'` too.
  */
 export type OptionsModalPresentationStyle =
   | 'pageSheet'
@@ -55,7 +59,8 @@ export type OptionsModalSheetDetent = 'medium' | 'large' | 'content' | number;
 /**
  * The settings of a sheet: a modal that comes from below and rests on one of several heights, its stops (detents). On
  * iOS they configure the system sheet of a modal presented as `'pageSheet'`, `'formSheet'` or without a style. On
- * Android any one of them turns the modal into a Material bottom sheet, again for those styles only. They are read when
+ * Android they configure the Material bottom sheet of `'pageSheet'`, `'formSheet'` and `'popover'`, and without a style
+ * any one of them turns the modal into that sheet. They are read when
  * the modal shows, and a `mergeOptions` on any screen of the modal changes them while it is shown, with an animation.
  * Objects merge key by key; `detents` is replaced as a whole.
  */

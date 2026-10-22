@@ -420,8 +420,10 @@ export interface SetStackRootAnimationOptions extends StackAnimationOptions {
  * screen under it. The screen under a modal takes part (iOS) only under a modal that covers the full screen.
  *
  * A sheet keeps the system's sheet motion on both platforms: (iOS) a modal shown as `'pageSheet'`, `'formSheet'` or
- * without a style, (Android) a Material bottom sheet. The sides `enter` and `exit` and the lists of elements set here
- * don't apply to it.
+ * without a style, (Android) the Material bottom sheet of `'pageSheet'`, `'formSheet'`, `'popover'`, or of
+ * `modal.sheet` without a style. The sides `enter` and `exit` and the lists of elements set here don't apply to it.
+ * Without them a modal over the whole screen comes up from the bottom: on iOS by UIKit's `modalTransitionStyle`, on
+ * Android with the system's motion of a window over another, 300 ms up and 250 ms down, without a fade.
  *
  * (Android) When the modal has elements, `enter` of a show and `exit` of a dismiss play only when that side is a single
  * `alpha`; any other side is not played, and the modal fades in or out in 300 ms around the elements instead.
