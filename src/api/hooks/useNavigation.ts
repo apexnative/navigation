@@ -177,14 +177,19 @@ function stackCommands(id: string): StackCommands {
   };
 }
 
-/** The commands of the center for a menu screen: the menu closes once the center has changed. */
+/**
+ * The commands of the center for a menu screen: the menu closes as the center changes, and the command resolves once
+ * both are done.
+ */
 function fromCenter(center: string, menuScreen: string): StackCommands {
   const centerCommands = stackCommands(center);
+  // As in the system's apps, the menu starts to close at the pick and the center changes as it goes, so a push is seen
+  // sliding in. The command settles after both, so the next one acts from the center; either one's error rejects it.
   const closing =
     <Args extends unknown[], Result>(run: (...args: Args) => Promise<Result>) =>
     async (...args: Args) => {
-      const result = await run(...args);
-      await closeMenu(menuScreen);
+      const closed = closeMenu(menuScreen);
+      const [result] = await Promise.all([run(...args), closed]);
       return result;
     };
   return {
