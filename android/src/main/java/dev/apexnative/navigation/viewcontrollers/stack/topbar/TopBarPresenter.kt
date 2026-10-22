@@ -381,6 +381,9 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
         )
     }
 
+    /** Whether the bar shows [entry]: its parts are applied, so its place in the layout is [entry]'s. */
+    fun shows(entry: ViewController<*>): Boolean = entry === shownEntry
+
     /** The height of the search under the row of [entry] when it is the screen the bar shows; 0 otherwise. */
     fun searchHeightOf(entry: ViewController<*>): Int =
         if (entry === shownEntry) bar?.searchAreaHeight ?: 0 else 0
