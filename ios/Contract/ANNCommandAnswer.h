@@ -3,7 +3,8 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /// The one answer of a command with a promise: the first `resolve:` or `reject:` answers, any later one does nothing,
-/// and nothing answers once the JavaScript that sent the command went. `ANNCommandRunner` makes it. Main queue.
+/// and nothing answers once the JavaScript that sent the command went. One that goes away unanswered while its
+/// JavaScript runs rejects `[ANNErrorTexts notAnswered:]`. `ANNCommandRunner` makes it. Main queue.
 @interface ANNCommandAnswer : NSObject
 
 - (instancetype)initWithCommandName:(NSString *)commandName

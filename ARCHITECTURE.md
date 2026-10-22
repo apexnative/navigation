@@ -322,7 +322,9 @@ Before step 5 the state goes once more if it changed since step 3, so JS `await`
 **Errors.** A command that fails on the native side rejects its promise with a text from the error table; JS adds
 `[navigation] <command>:`. The check rejects before a node exists; a failure in the body rejects with `could not
 <what>: <reason>`; a failure in a step that runs later (a ready handler, a timer, the end of a transition) is caught by
-the owner's guard and rejects the command too. A command without a promise writes one line to the log. An exception
+the owner's guard and rejects the command too. On iOS an answer that goes away unanswered while its JavaScript runs
+rejects `could not run '<command>': the native core let it go without an answer`, so a path that forgets to answer
+never leaves the promise waiting. A command without a promise writes one line to the log. An exception
 never ends the app. The texts are the same on both platforms: `ANNErrorTexts` and `ErrorTexts` carry the same words.
 
 ## 6. Where the platforms differ on purpose
@@ -362,6 +364,8 @@ themselves.
   applied.
 - **Bars.** iOS uses UIKit's navigation bar, large title and tab bar. Android draws them (`TopBar`, `LargeTitleView`,
   `BottomTabs`) and follows the scroll of the content (`ScrollEventListener`).
+- **Unanswered commands.** iOS rejects a command whose answer goes away unanswered (`ANNCommandAnswer` `dealloc`).
+  Android can't see an answer go (the garbage collector decides when), so there every path answers by itself.
 - **Tests.** Android has JUnit 4 unit tests on the JVM (`android/src/test/java/dev/apexnative/navigation/`), one package
   per main package; coordinators and rules run with fakes. iOS has no unit-test target; the Showcase scenarios check it.
 

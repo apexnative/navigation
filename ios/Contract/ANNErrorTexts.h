@@ -77,6 +77,8 @@ FOUNDATION_EXPORT NSExceptionName const ANNCommandRejectionException;
 + (NSString *)couldNot:(NSString *)what reason:(NSString *)reason;
 /// A command whose part of the native core is not written yet.
 + (NSString *)notDoneYet:(NSString *)method;
+/// A command that nothing in the native core answered: what took it let it go, or nothing took it.
++ (NSString *)notAnswered:(NSString *)method;
 
 /// An `ANNCommandRejectionException` with `text` as its reason: the command that runs rejects with `text` as it is.
 + (NSException *)rejection:(NSString *)text;
