@@ -19,47 +19,51 @@ class ModalAnimationsTest {
     fun theDistanceIsTheWindowsHeightOrTheDisplaysWithoutOne() {
         assertEquals(1200f, ModalAnimations.distance(1200, 2400), delta)
         assertEquals(2400f, ModalAnimations.distance(0, 2400), delta)
-        assertEquals(300L, ModalAnimations.DURATION)
     }
 
     @Test
-    fun theShowComesUpAndFadesInDecelerating() {
-        assertEquals(ModalAnimations.Frame(1000f, 0f), ModalAnimations.show(0f, 1000f))
-        assertEquals(ModalAnimations.Frame(0f, 1f), ModalAnimations.show(1f, 1000f))
-        val half = ModalAnimations.show(0.5f, 1000f)
-        assertEquals(250f, half.translationY, delta)
-        assertEquals(0.75f, half.alpha, delta)
+    fun theShowIsTheSystemsSlideOverTheWindowBelow() {
+        // `activity_translucent_open_enter`: 300 ms, `linear_out_slow_in` (0, 0, 0.2, 1).
+        assertEquals(300L, ModalAnimations.SHOW_DURATION)
+        assertEquals(1000f, ModalAnimations.show(0f, 1000f), delta)
+        assertEquals(0f, ModalAnimations.show(1f, 1000f), delta)
+        // The curve at x = 0.5: t solves 0.6·t²(1 − t) + t³ = 0.5, and y = 3t²(1 − t) + t³.
+        val half = ModalAnimations.linearOutSlowIn(0.5f)
+        assertEquals(0.8392f, half, delta)
+        assertEquals(1000f * (1 - half), ModalAnimations.show(0.5f, 1000f), delta)
     }
 
     @Test
-    fun theDismissalGoesDownAndFadesOutAcceleratingThenDecelerating() {
-        assertEquals(0f, ModalAnimations.dismiss(0f, 1000f).translationY, delta)
-        assertEquals(1f, ModalAnimations.dismiss(0f, 1000f).alpha, delta)
-        assertEquals(1000f, ModalAnimations.dismiss(1f, 1000f).translationY, delta)
-        val half = ModalAnimations.dismiss(0.5f, 1000f)
-        assertEquals(500f, half.translationY, delta)
-        assertEquals(0.5f, half.alpha, delta)
-        assertTrue(ModalAnimations.accelerateDecelerate(0.25f) < 0.25f)
+    fun theDismissalGoesDownSpeedingUp() {
+        // `activity_translucent_close_exit`: 250 ms, `accelerate_quad`.
+        assertEquals(250L, ModalAnimations.DISMISS_DURATION)
+        assertEquals(0f, ModalAnimations.dismiss(0f, 1000f), delta)
+        assertEquals(1000f, ModalAnimations.dismiss(1f, 1000f), delta)
+        assertEquals(250f, ModalAnimations.dismiss(0.5f, 1000f), delta)
     }
 
     @Test
-    fun aSheetNeedsASheetFieldAndASheetStyle() {
+    fun theSheetStylesShowASheetAndWithoutAStyleASheetFieldDoes() {
         val sheet = Options().apply { modal.sheet.grabber = Bool(true) }
         assertTrue(ModalRecord.isSheet(sheet))
-        assertTrue(ModalRecord.isSheet(sheet.copy().apply { modalPresentationStyle = Text("pageSheet") }))
-        assertTrue(ModalRecord.isSheet(sheet.copy().apply { modalPresentationStyle = Text("formSheet") }))
-        assertFalse(ModalRecord.isSheet(sheet.copy().apply { modalPresentationStyle = Text("fullScreen") }))
-        assertFalse(ModalRecord.isSheet(sheet.copy().apply { modalPresentationStyle = Text("overCurrentContext") }))
         assertFalse(ModalRecord.isSheet(Options()))
+        for (style in listOf("pageSheet", "formSheet", "popover")) {
+            assertTrue(style, ModalRecord.isSheet(Options().apply { modalPresentationStyle = Text(style) }))
+            assertTrue(style, ModalRecord.isSheet(sheet.copy().apply { modalPresentationStyle = Text(style) }))
+        }
+        for (style in listOf("fullScreen", "currentContext", "overFullScreen", "overCurrentContext")) {
+            assertFalse(style, ModalRecord.isSheet(sheet.copy().apply { modalPresentationStyle = Text(style) }))
+        }
         // An unknown string reads as unset.
         assertTrue(ModalRecord.isSheet(sheet.copy().apply { modalPresentationStyle = Text("none") }))
+        assertFalse(ModalRecord.isSheet(Options().apply { modalPresentationStyle = Text("none") }))
         assertTrue(ModalRecord.coversUnder(false, Options().apply { modalPresentationStyle = Text("none") }))
     }
 
     @Test
     fun onlyAFullScreenModalCoversTheLayerUnder() {
         assertTrue(ModalRecord.coversUnder(false, Options()))
-        assertTrue(ModalRecord.coversUnder(false, Options().apply { modalPresentationStyle = Text("popover") }))
+        assertTrue(ModalRecord.coversUnder(false, Options().apply { modalPresentationStyle = Text("currentContext") }))
         assertFalse(ModalRecord.coversUnder(true, Options()))
         assertFalse(ModalRecord.coversUnder(false, Options().apply { modalPresentationStyle = Text("overFullScreen") }))
         val context = Options().apply { modalPresentationStyle = Text("overCurrentContext") }

@@ -176,6 +176,9 @@ class ModalCoordinatorTest {
     fun theLayerUnderLeavesOnlyUnderAFullScreenModal() {
         home()
         shown("Sheet", sheet())
+        // A sheet style is a sheet without `modal.sheet` too.
+        shown("Page", style("pageSheet"))
+        shown("Popover", style("popover"))
         shown("Over", style("overFullScreen"))
         shown("Context", style("overCurrentContext"))
         assertTrue(views.log.none { it.startsWith("takeOut") })

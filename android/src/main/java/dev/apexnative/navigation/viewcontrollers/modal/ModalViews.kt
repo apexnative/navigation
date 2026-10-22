@@ -4,9 +4,9 @@ import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
-import android.animation.PropertyValuesHolder
 import android.animation.TimeInterpolator
 import android.content.Context
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.LinearInterpolator
@@ -17,6 +17,7 @@ import androidx.core.view.WindowInsetsCompat
 import dev.apexnative.navigation.options.ModalAnimationOptions
 import dev.apexnative.navigation.options.Options
 import dev.apexnative.navigation.utils.TestIds
+import dev.apexnative.navigation.utils.dp
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.ViewController
 import dev.apexnative.navigation.views.animations.AnimationRules
 import dev.apexnative.navigation.views.animations.SideAnimator
@@ -62,9 +63,15 @@ internal class ModalViews(
         try {
             val view = record.root.view
             (view.parent as? ViewGroup)?.removeView(view)
-            // A sheet's content waits at the sheet's full height, under the status bar.
+            // A sheet's content waits at the sheet's full height, under the status bar, and at its width.
             val params = CoordinatorLayout.LayoutParams(MATCH, MATCH)
-            if (record.isSheet) params.topMargin = statusBarTop()
+            if (record.isSheet) {
+                params.topMargin = statusBarTop()
+                params.gravity = Gravity.CENTER_HORIZONTAL
+                // The modals layer is hidden while it has no modal: the window's content gives the width.
+                val maxWidth = ModalSheet.MAX_WIDTH_DP.dp
+                if (((modalsLayer.parent as? View)?.width ?: 0) > maxWidth) params.width = maxWidth
+            }
             container.addView(view, params)
             modalsLayer.addView(container, FrameLayout.LayoutParams(MATCH, MATCH))
         } catch (e: Throwable) {
@@ -100,14 +107,13 @@ internal class ModalViews(
             container.translationY = 0f
             return playOwn(record, parts, motion, showing = true, onEnd)
         }
+        // The system's slide over the window below: the modal comes up whole, without a fade.
         val distance = distanceOf(container)
-        val animator = ObjectAnimator.ofPropertyValuesHolder(
-            container,
-            PropertyValuesHolder.ofFloat(View.TRANSLATION_Y, distance, 0f),
-            PropertyValuesHolder.ofFloat(View.ALPHA, 0f, 1f),
-        )
-        animator.interpolator = TimeInterpolator { ModalAnimations.decelerate(it) }
-        return play(parts, animator, onEnd)
+        container.alpha = 1f
+        container.translationY = distance
+        val animator = ObjectAnimator.ofFloat(container, View.TRANSLATION_Y, distance, 0f)
+        animator.interpolator = TimeInterpolator { ModalAnimations.linearOutSlowIn(it) }
+        return play(parts, animator, ModalAnimations.SHOW_DURATION, onEnd)
     }
 
     // The root's view leaves the container and goes into the sheet's, in one turn; the sheet slides to its first
@@ -163,13 +169,11 @@ internal class ModalViews(
         if (!animated || !seen) return none(onEnd)
         if (motion != null) return playOwn(record, parts, motion, showing = false, onEnd)
         val container = parts.container
-        val animator = ObjectAnimator.ofPropertyValuesHolder(
-            container,
-            PropertyValuesHolder.ofFloat(View.TRANSLATION_Y, container.translationY, distanceOf(container)),
-            PropertyValuesHolder.ofFloat(View.ALPHA, container.alpha, 0f),
+        val animator = ObjectAnimator.ofFloat(
+            container, View.TRANSLATION_Y, container.translationY, distanceOf(container),
         )
-        animator.interpolator = TimeInterpolator { ModalAnimations.accelerateDecelerate(it) }
-        return play(parts, animator, onEnd)
+        animator.interpolator = TimeInterpolator { ModalAnimations.accelerate(it) }
+        return play(parts, animator, ModalAnimations.DISMISS_DURATION, onEnd)
     }
 
     override fun awaitTargets(
@@ -355,8 +359,8 @@ internal class ModalViews(
     private fun viewOf(node: ViewController<*>): View? =
         parts.entries.firstOrNull { it.key.root === node }?.value?.container ?: node.peekView()
 
-    private fun play(parts: Parts, animator: Animator, onEnd: () -> Unit): () -> Unit {
-        animator.duration = ModalAnimations.DURATION
+    private fun play(parts: Parts, animator: Animator, duration: Long, onEnd: () -> Unit): () -> Unit {
+        animator.duration = duration
         animator.addListener(object : AnimatorListenerAdapter() {
             override fun onAnimationEnd(animation: Animator) {
                 if (parts.animator === animation) parts.animator = null
