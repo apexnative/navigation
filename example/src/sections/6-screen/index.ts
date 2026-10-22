@@ -9,13 +9,14 @@ import androidSystemBars from './6.7-android-system-bars';
 import direction from './6.8-direction';
 import reservedRegions from './6.9-reserved-regions';
 import hinge from './6.10-hinge';
+import plainPush from './6.11-plain-push';
 
 /** Section 6: the screen itself — its safe area, the status bar, orientation, gestures, keys and background. */
 export const screenSection: Section = {
   id: 6,
   title: 'Screen',
   intro:
-    'What a screen sets for itself: where its content goes (safe area), the status bar, the orientations it allows, the home indicator and system gestures, keyboard shortcuts, its background, the system bars of Android, and the direction of the app.',
+    'What a screen sets for itself: where its content goes (safe area), the status bar, the orientations it allows, the home indicator and system gestures, keyboard shortcuts, its background, the system bars of Android, the direction of the app, and the first push of an app as it is written.',
   scenarios: [
     safeArea,
     statusBar,
@@ -27,5 +28,6 @@ export const screenSection: Section = {
     direction,
     reservedRegions,
     hinge,
+    plainPush,
   ],
 };

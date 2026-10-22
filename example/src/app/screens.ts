@@ -27,6 +27,8 @@ import { BrokenScreen } from '../demo/BrokenScreen';
 import { SlowScreen } from '../demo/SlowScreen';
 import { LateContentScreen } from '../demo/LateContentScreen';
 import { ContextDemoScreen } from '../demo/ContextDemoScreen';
+import { PlainDetailsScreen } from '../demo/PlainDetailsScreen';
+import { PlainHomeScreen } from '../demo/PlainHomeScreen';
 import { ThemeDemoScreen } from '../demo/ThemeDemoScreen';
 import { SharedStateScreen } from '../demo/SharedStateScreen';
 import { GalleryItemScreen } from '../demo/GalleryItemScreen';
@@ -73,6 +75,9 @@ export const screens = {
   // The screens the scenarios show.
   Details: DetailsScreen,
   PlainList: PlainListScreen,
+  // The screens of 6.11, an app's first push as it is written: no backgrounds, no theme.
+  PlainHome: PlainHomeScreen,
+  PlainDetails: PlainDetailsScreen,
   // The overlays of section 8.
   ToastOverlay,
   DialogOverlay,

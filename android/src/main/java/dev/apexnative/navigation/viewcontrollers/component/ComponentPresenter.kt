@@ -6,6 +6,7 @@ import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.LayerDrawable
 import android.view.View
+import com.google.android.material.color.MaterialColors
 import dev.apexnative.navigation.options.DefaultOptions
 import dev.apexnative.navigation.options.Options
 import dev.apexnative.navigation.options.params.ThemeColour
@@ -15,9 +16,9 @@ import dev.apexnative.navigation.viewcontrollers.viewcontroller.Presenter
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.ViewController
 
 /**
- * The presenter of a screen, React or native: its background — the screen's view takes `layout.backgroundColor`, kept
- * out of the status bar's height where the status bar shows over it, and the React content takes
- * `layout.componentBackgroundColor` over it —, its room for the bars, and its safe area again on `mergeOptions`
+ * The presenter of a screen, React or native: its background — the screen's view takes `layout.backgroundColor` (a
+ * React screen without it the theme's background), kept out of the status bar's height where the status bar shows over
+ * it, and the React content takes `layout.componentBackgroundColor` over it —, its room for the bars, and its safe area again on `mergeOptions`
  * (`mergeOptions` step 4). It applies as the screen appears, on `mergeOptions` of what it covers, and again with new
  * default options or after a light/dark switch from the resolved options it is given, which it never writes. Each
  * appearance tells the activity's system UI owner, which follows the screen on top. Main thread only.
@@ -49,8 +50,8 @@ open class ComponentPresenter(activity: Activity) : Presenter(activity, DefaultO
         applyBackground(controller, options)
 
     /**
-     * The colors of [screen] from its resolved [options]: `layout.backgroundColor` on the screen's view, none without
-     * it (the window shows); `layout.componentBackgroundColor` on its React content.
+     * The colors of [screen] from its resolved [options]: `layout.backgroundColor` on the screen's view, without it the
+     * theme's background for a React screen ([defaultColorOf]); `layout.componentBackgroundColor` on its React content.
      */
     fun applyBackground(screen: ViewController<*>, options: Options) {
         val view = screen.peekView() ?: return
@@ -59,7 +60,7 @@ open class ComponentPresenter(activity: Activity) : Presenter(activity, DefaultO
     }
 
     private fun screenBackground(screen: ViewController<*>, options: Options): Drawable? {
-        val color = colorOf(options.layout.backgroundColor) ?: return null
+        val color = colorOf(options.layout.backgroundColor) ?: defaultColorOf(screen) ?: return null
         val frame = frameOf(screen) ?: return ColorDrawable(color)
         val band = ScreenSafeArea.backgroundBand(
             statusBarHeight = frame.statusBarHeight,
@@ -79,6 +80,15 @@ open class ComponentPresenter(activity: Activity) : Presenter(activity, DefaultO
     private fun colorOf(colour: ThemeColour): Int? =
         if (colour.hasValue()) colour.get(activity, Color.TRANSPARENT) ?: Color.TRANSPARENT else null
 
+    // A React screen is opaque without a color of its own, as iOS gives it the system background: the screen under it
+    // never shows through, also while a push slides it aside. The app theme's `android:colorBackground`, read now, so a
+    // light/dark switch takes the new mode's. A screen of a sheet shows the sheet's surface; a native screen paints its
+    // own view.
+    private fun defaultColorOf(screen: ViewController<*>): Int? {
+        if (screen !is ComponentViewController || screen.isInSheet) return null
+        return themeBackgroundOf(activity)
+    }
+
     private fun frameOf(screen: ViewController<*>): ScreenFrame? = when (screen) {
         is ComponentViewController -> screen.frame
         is ExternalComponentViewController -> screen.frame
@@ -87,4 +97,15 @@ open class ComponentPresenter(activity: Activity) : Presenter(activity, DefaultO
 
     // The view under the React content: the React root, or the container of a slot screen. A native screen has none.
     private fun contentOf(screen: ViewController<*>): View? = (screen as? ComponentViewController)?.content?.asView()
+
+    internal companion object {
+        /**
+         * The background of a React screen without `layout.backgroundColor`: `android:colorBackground` of [activity]'s
+         * theme now. None for an activity without a theme (the unit tests' fakes).
+         */
+        fun themeBackgroundOf(activity: Activity): Int? {
+            if (activity.theme == null) return null
+            return MaterialColors.getColor(activity, android.R.attr.colorBackground, Color.WHITE)
+        }
+    }
 }

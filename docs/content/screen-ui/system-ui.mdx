@@ -270,7 +270,7 @@ iPhone Duo decides by itself too: folded, the outer display shows the app in por
 
 ## Backgrounds {#backgrounds}
 
-`backgroundColor` colors the screen, behind its React content. Without it, the screen has the background of the [theme](../architecture/theme-and-context).
+`backgroundColor` colors the screen, behind its React content. Without it, the screen has the background of the [theme](../architecture/theme-and-context), or the system's when the theme has none: `systemBackground` on <Os name="iOS" />, `android:colorBackground` of the app's theme on <Os name="Android" /> (a screen in a sheet shows the sheet's surface; a native screen paints its own view). So a React screen is never see-through by accident; `'transparent'` makes it so on purpose, as overlays are.
 
 ```ts
 s.backgroundColor('#F3E9D2');
