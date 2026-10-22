@@ -41,6 +41,11 @@ internal class BackPreview(
     /** The gesture started at the left edge: the screen moves right; from the right edge it stays centered. */
     private val fromLeft: Boolean,
     private val startY: Float,
+    /**
+     * The room the tabs take at the bottom of the top screen: the card is the stack above them, rounded on all four
+     * corners, while the tab bar stays, as Gmail shows it.
+     */
+    private val bottomRoom: Int,
     /** The picture is there: the stack shows the screen under the top, with its bar, before the preview draws. */
     private val onReveal: () -> Unit,
 ) {
@@ -69,7 +74,7 @@ internal class BackPreview(
      */
     fun start(window: Window) {
         val width = layout.width
-        val height = layout.height
+        val height = areaHeight
         if (width <= 0 || height <= 0) return
         val picture = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         try {
@@ -192,6 +197,7 @@ internal class BackPreview(
         scrim.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         layout.addOverAll(scrim, fill())
         val radius = CORNER_DP * density
+        val area = CoordinatorLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, areaHeight)
         card = ImageView(layout.context).apply {
             setImageBitmap(picture)
             scaleType = ImageView.ScaleType.FIT_XY
@@ -201,7 +207,7 @@ internal class BackPreview(
                     outline.setRoundRect(0, 0, view.width, view.height, radius)
             }
             clipToOutline = true
-            layout.addOverAll(this, fill())
+            layout.addOverAll(this, area)
         }
         // Transparent, not invisible: a surface in it (a video, a map) stays, and so does the focus.
         topAlpha = top.alpha
@@ -213,7 +219,7 @@ internal class BackPreview(
     private fun drawGesture(q: Float) {
         val card = card ?: return
         val width = layout.width.toFloat()
-        val height = layout.height.toFloat()
+        val height = areaHeight.toFloat()
         val margin = MARGIN_DP * density
         val scale = scaleAt(q)
         card.scaleX = scale
@@ -233,12 +239,16 @@ internal class BackPreview(
     private fun entering(scale: Float, x: Float) {
         for (view in listOf(target, bar)) {
             view.pivotX = layout.width / 2f - view.left
-            view.pivotY = layout.height / 2f - view.top
+            view.pivotY = areaHeight / 2f - view.top
             view.scaleX = scale
             view.scaleY = scale
             view.translationX = x
         }
     }
+
+    // The stack above the tabs' room: what the card shows and what the screens shrink around.
+    private val areaHeight: Int
+        get() = (layout.height - bottomRoom).coerceAtLeast(0)
 
     private fun scaleAt(q: Float): Float = 1f - (1f - minScale()) * q
 

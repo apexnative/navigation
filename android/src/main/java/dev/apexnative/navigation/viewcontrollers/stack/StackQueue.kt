@@ -594,7 +594,7 @@ internal class StackQueue(
         val elements = own && AnimationRules.hasElements(pop)
         // A back gesture's preview shows the target and its bar already: the bar stays as it is.
         val gesture = op.gesture && animated && !own && leaving.size == 1 && display.hasBackPreview(top, target)
-        tellBars(animated && !gesture, own, elements, pop, TabBarMotion.Move.WithPop, BarMotion.Pop)
+        tellBars(animated, own, elements, pop, TabBarMotion.Move.WithPop, BarMotion.Pop, barAtOnce = gesture)
         host.currentChildChanged()
         finishTakenOver(ended)
         if (display.hasView) target.onViewBroughtToFront()
@@ -1115,6 +1115,8 @@ internal class StackQueue(
         animation: StackAnimationOptions,
         system: TabBarMotion.Move,
         row: BarMotion,
+        // The top bar shows the new top already (a back gesture's preview): it changes at once, the tab bar still moves.
+        barAtOnce: Boolean = false,
     ) {
         val tabs = animation.bottomTabs
         val tabsSide = AnimationRules.barSideGiven(tabs.enter) || AnimationRules.barSideGiven(tabs.exit)
@@ -1124,7 +1126,8 @@ internal class StackQueue(
             else -> system
         }
         host.tabBarTransition(move, tabs.takeIf { move == TabBarMotion.Move.Slide })
-        host.barTransition(if (animated && !own) row else null, barVisibility(animated && !elements, animation.topBar))
+        val barMoves = animated && !barAtOnce
+        host.barTransition(if (barMoves && !own) row else null, barVisibility(barMoves && !elements, animation.topBar))
     }
 
     private fun barVisibility(animated: Boolean, side: TopBarEnterExitAnimationOptions): BarVisibility =

@@ -205,12 +205,13 @@ internal class StackViews(private val stack: StackController) : StackDisplay {
         touchY: Float,
         onReveal: () -> Unit,
     ): BackPreview? {
+        val bottomRoom = top.getBottomInset()
         endPreview()
         val layout = layout ?: return null
         val window = stack.activity.window ?: return null
         val topView = top.peekView() ?: return null
         val targetView = target.peekView() ?: return null
-        val started = BackPreview(layout, topView, targetView, fromLeft, touchY, onReveal)
+        val started = BackPreview(layout, topView, targetView, fromLeft, touchY, bottomRoom, onReveal)
         preview = started
         previewScreens = top to target
         started.start(window)
