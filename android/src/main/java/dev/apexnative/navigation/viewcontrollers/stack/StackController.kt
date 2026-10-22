@@ -460,8 +460,9 @@ class StackController(
 
     /**
      * The bar's bottom in the window while [child] is under it and it shows, from the stack's place in the window: for
-     * the screen on top where the bar is laid out (a move of the bar doesn't count); for another child (a prepared one)
-     * as its own options set the bar.
+     * the screen on top that the bar shows, where the bar is laid out (a move of the bar doesn't count); for another
+     * child (a prepared one) and for a top the bar hasn't shown yet (in a tab not selected yet, which measures though
+     * invisible) as its own options set the bar, so its content doesn't move as the bar takes them.
      */
     override fun headerBottomOf(child: ViewController<*>): Int? {
         if (!isUnderBar(child)) return super.headerBottomOf(child)
@@ -471,7 +472,7 @@ class StackController(
         val layout = peekView() ?: return null
         // The stack's place at rest, as the screen's own: a modal sliding in or a sheet dragged doesn't move it.
         val top = RestPlace.topInWindow(layout)
-        if (entry === queue.currentChild) return topBar.barBottomInStack()?.let { top + it }
+        if (entry === queue.currentChild && topBar.shows(entry)) return topBar.barBottomInStack()?.let { top + it }
         val bar = topBar.barOf(entry, options)
         val large = if (largeTitleShown(child)) UiUtils.dpToPx(activity, LargeTitleView.HEIGHT).toInt() else 0
         return top + bar.margin + bar.strip + bar.height + large
