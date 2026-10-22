@@ -31,6 +31,7 @@ import dev.apexnative.navigation.viewcontrollers.component.ContentReadiness
 import dev.apexnative.navigation.viewcontrollers.component.ScreenReadiness
 import dev.apexnative.navigation.viewcontrollers.externalcomponent.ExternalComponentViewController
 import dev.apexnative.navigation.viewcontrollers.modal.ModalCoordinator
+import dev.apexnative.navigation.viewcontrollers.modal.ModalRecord
 import dev.apexnative.navigation.viewcontrollers.modal.ModalViews
 import dev.apexnative.navigation.viewcontrollers.overlay.OverlayCoordinator
 import dev.apexnative.navigation.viewcontrollers.overlay.OverlayRecord
@@ -274,15 +275,42 @@ class Navigator(
         if (!made) return answer.reject(ErrorTexts.notDoneYet("setRoot"))
         val steps = layout.modals.mapIndexed { index, node ->
             val last = index == layout.modals.lastIndex
-            RootCoordinator.LayerStep { done ->
-                modals.showInChain(node.id, { makeLayer(node, isOverlay = false) }, last, done)
-            }
+            ModalLayerStep(node, last)
         } + layout.overlays.map { node ->
             RootCoordinator.LayerStep { done ->
                 overlays.showInChain(node.id, { makeLayer(node, isOverlay = true) }, done)
             }
         }
         roots.setRoot({ factory.create(layout.root) }, answer, steps)
+    }
+
+    // A modal of a `setRoot`'s layout: made with the root and held until its turn, so it renders while the root waits
+    // and comes in; made in its turn instead while an id of it still shows (a modal of the old root with that id goes
+    // with the old root). A modal that couldn't be made is skipped in its turn.
+    private inner class ModalLayerStep(private val node: LayoutNode, private val animated: Boolean) :
+        RootCoordinator.LayerStep {
+        private var prepared = false
+        private var held: ModalRecord? = null
+
+        override fun prepare() {
+            if (LayoutChecks.firstShownId(listOf(node), ::isShownNow) { false } != null) return
+            prepared = true
+            held = modals.hold(node.id, { factory.create(node) }, animated)
+        }
+
+        override fun discard() {
+            held?.let(modals::drop)
+            held = null
+        }
+
+        override fun show(done: () -> Unit): () -> Unit {
+            val record = held
+            held = null
+            if (record != null) return modals.release(record, done)
+            if (!prepared) return modals.showInChain(node.id, { makeLayer(node, isOverlay = false) }, animated, done)
+            done()
+            return {}
+        }
     }
 
     // A modal or an overlay of a `setRoot`'s layout, made as its turn comes: an id that shows by then fails it.

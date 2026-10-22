@@ -81,6 +81,12 @@ internal class ModalRecord(
     /** Its wait ended: it shows once every older waiting modal showed or went (N1). */
     var isReady = false
 
+    /**
+     * A modal of a `setRoot`'s layout made with the root, before its turn: it renders unseen while the root waits and
+     * comes in, and neither shows nor counts for commands or back until its step of the chain lets it go.
+     */
+    var held = false
+
     /** The wait for its screens while it waits. */
     var wait: RenderWait? = null
 

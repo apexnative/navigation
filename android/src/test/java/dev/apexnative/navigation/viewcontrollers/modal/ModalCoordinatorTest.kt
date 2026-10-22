@@ -711,6 +711,70 @@ class ModalCoordinatorTest {
         assertTrue(entries.none { it.startsWith("modalDismissed") })
     }
 
+    // A modal of a `setRoot`'s layout made with the root (hold): it renders unseen, stays when the old root goes, and
+    // shows only in its turn.
+
+    @Test
+    fun aHeldModalRendersUnseenStaysOverTheNewRootAndShowsInItsTurn() {
+        val home = home()
+        shown("Old")
+        modals.rootAccepted()
+        val held = modals.hold("Details", { screen("Details", ready = false) }, animated = true) ?: error("not held")
+        assertEquals(listOf("place:Details"), views.log)
+        readiness.mount("Details")
+        assertEquals(State.Waiting, record("Details").state)
+        assertTrue(entries.none { it.startsWith("will:") })
+        modals.rootReplaced(home)
+        assertTrue("carry:Old" in views.log)
+        assertTrue("carry:Details" !in views.log)
+        modals.replacedRootGone()
+        assertEquals(State.Waiting, record("Details").state)
+        entries.clear()
+        var done = 0
+        modals.release(held) { done++ }
+        assertEquals("will:Details", entries.first())
+        views.endShow("Details")
+        assertEquals(1, done)
+        assertEquals(State.Shown, record("Details").state)
+        assertTrue(entries.none { it.startsWith("resolve:") })
+    }
+
+    @Test
+    fun aHeldModalCountsForNeitherBackNorCommandsBeforeItsTurn() {
+        home()
+        modals.hold("Details", { screen("Details") }, animated = true)
+        assertNull(modals.handleBack(CommandListenerAdapter()))
+        dismiss("Details")
+        assertTrue(entries.toString(), "reject:${ErrorTexts.screenNotShown("Details")}" in entries)
+        modals.dismissAll(null, null, answer("dismissAllModals"))
+        assertEquals(State.Waiting, record("Details").state)
+        assertTrue(views.log.none { it.startsWith("present:") })
+    }
+
+    @Test
+    fun aDroppedHeldModalGoesWithoutAWordAndItsTurnEndsAtOnce() {
+        home()
+        val held = modals.hold("Details", { screen("Details") }, animated = true) ?: error("not held")
+        modals.drop(held)
+        assertTrue(modals.modals.isEmpty())
+        assertNull(registry.find("Details"))
+        assertTrue(entries.none { it.startsWith("modalDismissed") })
+        var done = 0
+        modals.release(held) { done++ }
+        assertEquals(1, done)
+    }
+
+    @Test
+    fun aModalThatCantBeHeldIsLogged() {
+        home()
+        assertNull(modals.hold("Details", { throw IllegalStateException("no view") }, animated = true))
+        assertEquals(
+            listOf("[ApexNavigation] setRoot: ${ErrorTexts.couldNot("show the screen 'Details'", "no view")}"),
+            host.logged,
+        )
+        assertTrue(modals.modals.isEmpty())
+    }
+
     // A dismissal on its way finishes on its own, with its event and its answer.
     @Test
     fun aDismissalOnItsWayWhenASetRootIsAcceptedFinishesOnItsOwn() {

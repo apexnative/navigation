@@ -36,7 +36,8 @@ import dev.apexnative.navigation.views.animations.AnimationRules
  * The modals over the old root ([ModalsOverRoot]): taken as the `setRoot` is accepted (commands don't find them), given
  * back when it ends without replacing the root, carried with the old root into its transition and destroyed with it,
  * without `ANN.ModalDismissed`. The modals and the overlays of the layout ([LayerStep]) show after the root, one by
- * one, before the answer: a newer `setRoot` stops them.
+ * one, before the answer: a newer `setRoot` stops them. Its modals are made with the root ([LayerStep.prepare]) and
+ * render unseen while it waits and comes in, so each shows in its turn without a wait of its own.
  *
  * The steps that come later (the wait's timers and readiness signals, the end of the transition, the end of a layer,
  * a stack of the waiting root that changed its top) run under no runner: each goes through one guard, and a failure
@@ -128,11 +129,20 @@ internal class RootCoordinator(
     }
 
     /**
-     * A modal or an overlay of the layout of a `setRoot`, shown after its root: [show] makes it and shows it, and calls
-     * its argument once it showed or went (a failure is logged and skipped); what it returns stops it while it waits —
-     * a newer `setRoot`: it goes without a word.
+     * A modal or an overlay of the layout of a `setRoot`, shown after its root: [show] shows it (made then, unless
+     * [prepare] made it), and calls its argument once it showed or went (a failure is logged and skipped); what it
+     * returns stops it while it waits — a newer `setRoot`: it goes without a word.
      */
     fun interface LayerStep {
+        /**
+         * Right after the root is placed, before its wait: a step may make its layer now, so that it renders unseen
+         * while the root waits and comes in, and shows without a wait of its own in its turn.
+         */
+        fun prepare() = Unit
+
+        /** The `setRoot` ended before this step's turn: what [prepare] made goes without a word. */
+        fun discard() = Unit
+
         fun show(done: () -> Unit): () -> Unit
     }
 
@@ -221,6 +231,7 @@ internal class RootCoordinator(
             modals.rootAccepted()
             val waitForRender = animationsOf(root).enter.waitForRender
             this.pending = pending
+            layers.forEach { it.prepare() }
             firstRoot.rootSet(waitForRender)
             await(pending, waitForRender)
         }
@@ -367,6 +378,14 @@ internal class RootCoordinator(
         if (!done) pending.stopLayer = stop
     }
 
+    // The layers of [pending] not shown yet go: what they made ahead goes unseen, the others aren't made. Each on its
+    // own: one that fails doesn't keep the others.
+    private fun discardLayers(pending: Pending) {
+        val rest = pending.layers.drop(pending.nextLayer)
+        pending.nextLayer = pending.layers.size
+        rest.forEach { attempt { it.discard() } }
+    }
+
     // A new `setRoot` came while this one was on its way.
     private fun supersede() {
         val pending = pending ?: return
@@ -389,14 +408,15 @@ internal class RootCoordinator(
                 pending.replaced = null
                 modals.replacedRootGone()
             }
-            // Its root is the current root: the modal or the overlay that waits now goes without a word, the others
-            // aren't made; those shown stay over its root, and go with it when the new root replaces it.
+            // Its root is the current root: the modal or the overlay that waits now goes without a word, the others go
+            // unseen or aren't made; those shown stay over its root, and go with it when the new root replaces it.
             Phase.Layers -> {
                 pending.stopLayer?.invoke()
                 pending.stopLayer = null
                 releaseState(pending)
             }
         }
+        discardLayers(pending)
         pending.answer.reject(ErrorTexts.setRootReplaced(pending.root.id))
     }
 
@@ -426,6 +446,7 @@ internal class RootCoordinator(
         pending.wait = null
         when (pending.phase) {
             Phase.Waiting -> {
+                discardLayers(pending)
                 attempt { takeAway(pending.root) }
                 attempt { modals.rootKept() }
                 attempt { firstRoot.rootDestroyed() }
@@ -451,6 +472,7 @@ internal class RootCoordinator(
                 pending.stopLayer = null
             }
         }
+        discardLayers(pending)
         // A root that is up takes the splash away, as at its show.
         if (pending.phase != Phase.Waiting) attempt { onRootShown() }
         attempt { releaseState(pending) }
@@ -482,6 +504,7 @@ internal class RootCoordinator(
     // The root was destroyed while it waited, by something other than a newer `setRoot` or the activity going.
     private fun rootGone(pending: Pending) {
         this.pending = null
+        discardLayers(pending)
         releaseState(pending)
         layer.remove(pending.root)
         modals.rootKept()

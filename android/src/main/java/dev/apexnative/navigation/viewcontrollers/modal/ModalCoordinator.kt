@@ -262,6 +262,54 @@ internal class ModalCoordinator(
     }
 
     /**
+     * A modal of a `setRoot`'s layout made with the root, before its turn: it joins the modals layer and renders
+     * unseen while the root waits and comes in, held — it doesn't show, and commands and back don't count it — until
+     * [release]; [animated] as in [showInChain]. A failure is logged, and nothing is made (null).
+     */
+    fun hold(id: String, make: () -> ViewController<*>, animated: Boolean): ModalRecord? = try {
+        start(make, null, ModalRecord.Chain(animated) {}, held = true)
+    } catch (e: Throwable) {
+        val reason = ErrorTexts.reasonOf(e)
+        host.log("[ApexNavigation] setRoot: ${ErrorTexts.couldNot("show the screen '$id'", reason)}")
+        null
+    }
+
+    /**
+     * The turn of a [hold]'s modal in its `setRoot`'s chain: it shows as soon as it rendered, as [showInChain]'s
+     * would, with [done] once it showed or went; at once when it went meanwhile. The function returned stops it while
+     * it waits.
+     */
+    fun release(record: ModalRecord, done: () -> Unit): () -> Unit {
+        if (!record.held || record.state != State.Waiting) {
+            done()
+            return {}
+        }
+        record.chain = ModalRecord.Chain(record.chain?.animated ?: true, done)
+        record.held = false
+        guarded(record) {
+            host.backChanged()
+            // Rendered while held: the targets of its elements are in the layer under it only now.
+            if (record.isReady && !record.targetsAwaited && awaitsTargets(record)) {
+                record.isReady = false
+                awaitTargets(record)
+            } else {
+                presentReady()
+            }
+        }
+        return {
+            record.chain = null
+            if (record.state == State.Waiting) cancel(record, null, reports = false)
+        }
+    }
+
+    /** A [hold]'s modal whose `setRoot` ended before its turn: it goes without a word. */
+    fun drop(record: ModalRecord) {
+        if (!record.held) return
+        record.chain = null
+        if (record.state == State.Waiting) cancel(record, null, reports = false)
+    }
+
+    /**
      * `dismissModal` after its shared steps: the record of [componentId], Android's rule of the last modal without a
      * root, [options] merged into the modal's visible screen, the animation of the command's screen with its parents
      * and the defaults, then the record's move (row 4).
@@ -279,6 +327,7 @@ internal class ModalCoordinator(
             State.ClosedBelow -> return answer.resolve(record.rootId)
             else -> Unit
         }
+        if (record.held) return answer.reject(ErrorTexts.screenNotShown(componentId))
         if (isLastWithoutRoot(record)) return answer.reject(ErrorTexts.modalWithoutRoot(componentId))
         options?.let { mergeInto(record, it) }
         val from = node?.takeUnless { it.isDestroyed } ?: record.root
@@ -293,7 +342,7 @@ internal class ModalCoordinator(
      * before anything changes, with the id of the top modal's visible screen.
      */
     fun dismissAll(options: Options?, unreadablePath: String?, answer: CommandAnswer) {
-        val members = records.filter { it.batch == null && it.state in BATCHED }
+        val members = records.filter { it.batch == null && !it.held && it.state in BATCHED }
         if (members.isEmpty()) {
             // Nothing else to take: the second one answers with the running batch (N6), else at once.
             val running = batches.lastOrNull()
@@ -428,6 +477,8 @@ internal class ModalCoordinator(
         }
         batches.clear()
         for (record in records.toList()) {
+            // A modal of the new root's layout, made with it, stays: it shows over the new root in its turn.
+            if (record.held) continue
             if (record.state == State.Waiting) {
                 cancel(record, null, reports = false)
                 continue
@@ -438,7 +489,7 @@ internal class ModalCoordinator(
             views.carry(record, old)
             carried += record
         }
-        records.clear()
+        records.retainAll { it.held }
         host.backChanged()
     }
 
@@ -488,7 +539,12 @@ internal class ModalCoordinator(
 
     // The show (3, 4).
 
-    private fun start(make: () -> ViewController<*>, answer: CommandAnswer?, chain: ModalRecord.Chain?): ModalRecord {
+    private fun start(
+        make: () -> ViewController<*>,
+        answer: CommandAnswer?,
+        chain: ModalRecord.Chain?,
+        held: Boolean = false,
+    ): ModalRecord {
         val root = make()
         val record: ModalRecord
         val options: Options
@@ -498,6 +554,7 @@ internal class ModalCoordinator(
             val sheet = ModalRecord.isSheet(options)
             root.shownAsSheet = sheet
             record = ModalRecord(root, sheet)
+            record.held = held
         } catch (e: Throwable) {
             root.destroy()
             throw e
@@ -561,7 +618,7 @@ internal class ModalCoordinator(
     private fun ready(record: ModalRecord) {
         if (record.state != State.Waiting) return
         record.wait = null
-        if (!record.targetsAwaited && awaitsTargets(record)) return awaitTargets(record)
+        if (!record.targetsAwaited && !record.held && awaitsTargets(record)) return awaitTargets(record)
         record.cancelLimit()
         record.isReady = true
         presentReady()
@@ -613,7 +670,7 @@ internal class ModalCoordinator(
         if (taking) return
         for (record in records.toList()) {
             if (record.state != State.Waiting) continue
-            if (!record.isReady) return
+            if (record.held || !record.isReady) return
             present(record)
         }
     }
@@ -1162,13 +1219,16 @@ internal class ModalCoordinator(
 
     // A record is the top when no record above it waits, comes in or shows; one that leaves doesn't count.
     private fun isTop(record: ModalRecord): Boolean =
-        records.drop(records.indexOf(record) + 1).none { it.effective in TOP_STATES }
+        records.drop(records.indexOf(record) + 1).none(::countsAsTop)
 
     // The top record, as the commands see it; none.
-    private fun topRecord(): ModalRecord? = records.lastOrNull { it.effective in TOP_STATES }
+    private fun topRecord(): ModalRecord? = records.lastOrNull(::countsAsTop)
 
     // Back goes to the top modal that waits, comes in or shows.
-    private fun backTarget(): ModalRecord? = records.lastOrNull { it.effective in TOP_STATES }
+    private fun backTarget(): ModalRecord? = records.lastOrNull(::countsAsTop)
+
+    // A record that waits, comes in or shows; a held one doesn't count before its turn.
+    private fun countsAsTop(record: ModalRecord): Boolean = !record.held && record.effective in TOP_STATES
 
     // `hardwareBackButton.dismissModalOnPress: false` of the modal's options now.
     private fun holdsBack(record: ModalRecord): Boolean =

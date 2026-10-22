@@ -78,6 +78,8 @@ class RootCoordinatorTest {
     )
     private var seen = true
     private var commands = 0
+    // The layers made ahead and let go (LayerStep.prepare, LayerStep.discard), apart from the events.
+    private val prepared = mutableListOf<String>()
 
     private fun screen(id: String, ready: Boolean = true, native: Boolean = false, options: Options = Options()) =
         RootScreen(activity, registry, id, options, native).also { if (ready) readiness.ready += id }
@@ -106,6 +108,14 @@ class RootCoordinatorTest {
     ) : RootCoordinator.LayerStep {
         private var done: (() -> Unit)? = null
 
+        override fun prepare() {
+            prepared += "prepare:$id"
+        }
+
+        override fun discard() {
+            prepared += "discard:$id"
+        }
+
         override fun show(done: () -> Unit): () -> Unit {
             entries += "layer:$id"
             if (throws) error("no layer")
@@ -132,6 +142,49 @@ class RootCoordinatorTest {
         layer.endAnimation()
         entries.clear()
         layer.log.clear()
+    }
+
+    // The layers made ahead (prepare): with the root, before its wait; they show only after it.
+
+    @Test
+    fun theLayersArePreparedWithTheRootAndShowAfterIt() {
+        shown(screen("Home"))
+        setRoot(screen("Profile", ready = false), Step("Details"), Step("Login"))
+        assertEquals(listOf("prepare:Details", "prepare:Login"), prepared)
+        assertTrue(entries.none { it.startsWith("layer:") })
+        readiness.mount("Profile")
+        layer.endAnimation()
+        assertEquals(listOf("layer:Details"), entries.filter { it.startsWith("layer:") })
+        assertEquals(listOf("prepare:Details", "prepare:Login"), prepared)
+    }
+
+    @Test
+    fun aNewerSetRootWhileTheRootWaitsDiscardsEveryPreparedLayer() {
+        shown(screen("Home"))
+        setRoot(screen("Profile", ready = false), Step("Details"), Step("Login"))
+        setRoot(screen("Settings"))
+        assertEquals(listOf("prepare:Details", "prepare:Login", "discard:Details", "discard:Login"), prepared)
+        assertTrue(entries.none { it.startsWith("layer:") })
+    }
+
+    @Test
+    fun aNewerSetRootWhileTheLayersShowStopsTheOneThatShowsAndDiscardsTheRest() {
+        shown(screen("Home"))
+        setRoot(screen("Profile"), Step("Details"), Step("Login"))
+        layer.endAnimation()
+        setRoot(screen("Settings"))
+        assertTrue(entries.toString(), "stop:Details" in entries)
+        assertEquals(listOf("prepare:Details", "prepare:Login", "discard:Login"), prepared)
+    }
+
+    @Test
+    fun aRootDestroyedWhileItWaitsDiscardsItsPreparedLayers() {
+        shown(screen("Home"))
+        val profile = screen("Profile", ready = false)
+        setRoot(profile, Step("Details"))
+        profile.destroy()
+        coordinator.rootScreensChanged()
+        assertEquals(listOf("prepare:Details", "discard:Details"), prepared)
     }
 
     private fun replaced(id: String) = "reject:${ErrorTexts.setRootReplaced(id)}"
