@@ -59,11 +59,12 @@ export type OptionsModalSheetDetent = 'medium' | 'large' | 'content' | number;
  */
 export interface OptionsModalSheet {
   /**
-   * The stops the sheet can rest on, and the user drags it between. On Android they are sorted by height and repeats
-   * dropped; the Material sheet has three resting places at most: the lowest stop of the list, the highest, and
-   * `'medium'` between them when the list has both `'medium'` and `'large'`. A stop without a place is dropped. On iOS
-   * the stops are handed to UIKit in the order given, which wants them from the lowest to the highest; a list left
-   * empty by unsupported values gives `['large']`.
+   * The stops the sheet can rest on, and the user drags it between, in any order: on both platforms they are sorted by
+   * height and repeats dropped. On iOS `'medium'` counts as half of `'large'` there, and `'content'` takes its place by
+   * the height of the content, again whenever that changes; a list left empty by unsupported values gives
+   * `['large']`. On Android the Material sheet has three resting places at most: the lowest stop of the list, the
+   * highest, and `'medium'` between them when the list has both `'medium'` and `'large'`. A stop without a place is
+   * dropped.
    * @default ['large']
    */
   detents?: OptionsModalSheetDetent[];

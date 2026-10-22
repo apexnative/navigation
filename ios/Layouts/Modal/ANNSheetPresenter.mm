@@ -1,6 +1,7 @@
 #import "ANNSheetPresenter.h"
 #import "ANNModalSizePresenter.h"
 #import "ANNReactView.h"
+#import "ANNUtils.h"
 #import "UIViewController+LayoutProtocol.h"
 #import <React/RCTLog.h>
 #import <objc/runtime.h>
@@ -53,7 +54,7 @@ static NSString *const ANNContentDetent = @"content";
 + (void)applyOptions:(ANNSheetOptions *)options toSheet:(UISheetPresentationController *)sheet {
     if (options.detents) {
         NSMutableArray<UISheetPresentationControllerDetent *> *detents = [NSMutableArray new];
-        for (id value in options.detents) {
+        for (id value in [self sortedDetents:options.detents ofSheet:sheet]) {
             UISheetPresentationControllerDetent *detent = [self detentFor:value ofSheet:sheet];
             if (detent) {
                 [detents addObject:detent];
@@ -79,6 +80,85 @@ static NSString *const ANNContentDetent = @"content";
     if (options.cornerRadius.hasValue) {
         sheet.preferredCornerRadius = options.cornerRadius.get;
     }
+}
+
+// UIKit wants the detents once each, from the lowest to the highest: it takes the last for the largest and closes the
+// sheet on a drag down from the first. The options may give them in any order and more than once; the first of a
+// repeat stays, and detents of the same height keep their order.
++ (NSArray *)sortedDetents:(NSArray *)values ofSheet:(UISheetPresentationController *)sheet {
+    NSMutableArray *detents = [NSMutableArray new];
+    NSMutableSet<NSString *> *identifiers = [NSMutableSet new];
+    for (id value in values) {
+        NSString *identifier = [self identifierFor:value];
+        if (identifier && ![identifiers containsObject:identifier]) {
+            [identifiers addObject:identifier];
+            [detents addObject:value];
+        }
+    }
+    CGFloat maximum = [self maximumDetentHeightOf:sheet];
+    return [detents sortedArrayWithOptions:NSSortStable
+                           usingComparator:^NSComparisonResult(id a, id b) {
+                             return [self compareHeightOf:a
+                                                     with:b
+                                                  maximum:maximum
+                                                  ofSheet:sheet];
+                           }];
+}
+
+// The content of a sheet sized to it changed its height, and with it maybe its place among the other detents.
++ (void)sortDetentsOfSheet:(UISheetPresentationController *)sheet API_AVAILABLE(ios(16.0)) {
+    CGFloat maximum = [self maximumDetentHeightOf:sheet];
+    NSArray<UISheetPresentationControllerDetent *> *detents = sheet.detents;
+    NSArray<UISheetPresentationControllerDetent *> *sorted = [detents
+        sortedArrayWithOptions:NSSortStable
+               usingComparator:^NSComparisonResult(UISheetPresentationControllerDetent *a,
+                                                   UISheetPresentationControllerDetent *b) {
+                 return [self compareHeightOf:[self detentForIdentifier:a.identifier]
+                                         with:[self detentForIdentifier:b.identifier]
+                                      maximum:maximum
+                                      ofSheet:sheet];
+               }];
+    if (![sorted isEqualToArray:detents]) {
+        sheet.detents = sorted;
+    }
+}
+
++ (NSComparisonResult)compareHeightOf:(id)a
+                                 with:(id)b
+                              maximum:(CGFloat)maximum
+                              ofSheet:(UISheetPresentationController *)sheet {
+    CGFloat heightA = [self heightOf:a maximum:maximum ofSheet:sheet];
+    CGFloat heightB = [self heightOf:b maximum:maximum ofSheet:sheet];
+    return heightA < heightB ? NSOrderedAscending
+                             : heightA > heightB ? NSOrderedDescending : NSOrderedSame;
+}
+
+// The height a detent of the options stands at, to sort them, as its resolver gives it: 'medium' half of the largest
+// height (UIKit's is about half), 'large' all of it, a height capped at it, 'content' the content's height now, all of
+// it while the content isn't measured.
++ (CGFloat)heightOf:(id)value
+            maximum:(CGFloat)maximum
+            ofSheet:(UISheetPresentationController *)sheet {
+    if ([value isEqual:@"medium"]) {
+        return maximum / 2;
+    }
+    if ([value isKindOfClass:NSNumber.class]) {
+        return MIN([value doubleValue], maximum);
+    }
+    if ([value isEqual:ANNContentDetent]) {
+        CGFloat height = [self contentHeightOf:sheet.presentedViewController];
+        return height > 0 ? MIN(height, maximum) : maximum;
+    }
+    return maximum;
+}
+
+// About the largest height of a sheet: its container, or the window before it is shown, below the top safe area.
++ (CGFloat)maximumDetentHeightOf:(UISheetPresentationController *)sheet {
+    UIView *view = sheet.containerView ?: ANNUtils.mainWindow;
+    if (!view) {
+        return ANNUtils.mainScreen.bounds.size.height;
+    }
+    return view.bounds.size.height - view.safeAreaInsets.top;
 }
 
 + (UISheetPresentationControllerDetent *)detentFor:(id)value
@@ -180,6 +260,7 @@ static NSString *const ANNContentDetent = @"content";
               }
               height = newHeight;
               [strongSheet animateChanges:^{
+                [self sortDetentsOfSheet:strongSheet];
                 [strongSheet invalidateDetents];
               }];
             }
@@ -201,6 +282,7 @@ static NSString *const ANNContentDetent = @"content";
             // The new screen's content mounts may come later: its mounts resolve the detents again too.
             [self followContentOfSheet:sheet when:YES];
             [sheet animateChanges:^{
+              [self sortDetentsOfSheet:sheet];
               [sheet invalidateDetents];
             }];
         }

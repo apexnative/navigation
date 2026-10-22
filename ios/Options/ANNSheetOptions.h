@@ -7,7 +7,10 @@
  */
 @interface ANNSheetOptions : ANNOptions
 
-/** The detents as the options give them: NSString ('medium', 'large', 'content') or NSNumber. */
+/**
+ * The detents as the options give them, in any order and with repeats: NSString ('medium', 'large', 'content') or
+ * NSNumber. ANNSheetPresenter sorts them and drops the repeats.
+ */
 @property(nonatomic, strong) NSArray *detents;
 @property(nonatomic, strong) Param *selectedDetent;
 /** The largest detent the screen below stays undimmed and touchable at. */
