@@ -48,6 +48,9 @@ internal object StackTransitions {
         }
     }
 
+    /** Whether [motion] animates the screen's alpha: it draws through a hardware layer meanwhile. */
+    fun fades(motion: Motion): Boolean = motion != Motion.PushCover && motion != Motion.PopReveal
+
     /**
      * The fade of a screen around elements: in from 0 to 1, out from where it is to 0, linearly in
      * [AnimationRules.SCREEN_FADE]; none for [Fade.None].

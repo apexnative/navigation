@@ -111,15 +111,29 @@ internal class StackViews(private val stack: StackController) : StackDisplay {
         stop(screen)
         val view = screen.peekView() ?: return done()
         val animator = StackTransitions.animator(view, motion, fromCurrent)
+        cleanups[screen] = dress(view, motion)
         animator.addListener(object : AnimatorListenerAdapter() {
             // Ended or cancelled by anything else than [stop]: the screen's part is done.
             override fun onAnimationEnd(animation: Animator) {
-                if (animators[screen] === animator) animators.remove(screen)
+                if (animators[screen] === animator) {
+                    animators.remove(screen)
+                    cleanups.remove(screen)?.invoke()
+                }
                 done()
             }
         })
         animators[screen] = animator
         animator.start()
+    }
+
+    // For the default transition [view] fades through a hardware layer, so the whole screen isn't drawn again at every
+    // frame of its fade. What undoes it.
+    private fun dress(view: View, motion: Motion): () -> Unit {
+        val layered = StackTransitions.fades(motion) && view.layerType == View.LAYER_TYPE_NONE
+        if (layered) view.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+        return {
+            if (layered && view.layerType == View.LAYER_TYPE_HARDWARE) view.setLayerType(View.LAYER_TYPE_NONE, null)
+        }
     }
 
     // The elements go into a layer over the screens, and back as the screen's animator ends or stops. A shared element
