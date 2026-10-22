@@ -169,14 +169,16 @@ class StackLayout(context: Context) : CoordinatorLayout(context) {
         return super.drawChild(canvas, child, drawingTime)
     }
 
+    // At the child's place to the fraction of a pixel, as its own translation draws it, and one pixel under it: no seam
+    // of the screen below shows between them.
     private fun drawEdge(canvas: Canvas, child: View, edge: Edge) {
         if (child.visibility != VISIBLE || child.alpha <= 0f) return
-        val x = child.translationX
-        val top = (child.top + child.translationY).toInt()
-        val bottom = (child.bottom + child.translationY).toInt()
-        val left = if (edge.atStart) (child.left + x).toInt() - edge.width else (child.right + x).toInt()
-        edge.picture.setBounds(left, top, left + edge.width, bottom)
+        val x = if (edge.atStart) child.left + child.translationX - edge.width else child.right + child.translationX - 1f
+        val saved = canvas.save()
+        canvas.translate(x, child.top + child.translationY)
+        edge.picture.setBounds(0, 0, edge.width + 1, child.height)
         edge.picture.alpha = (child.alpha * 255).toInt()
         edge.picture.draw(canvas)
+        canvas.restoreToCount(saved)
     }
 }
