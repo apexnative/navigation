@@ -91,7 +91,9 @@ The events go from the main thread, synchronously, through `EventEmitter.current
   current root in the root layer, transparent (`RootLayerViews.place`), so its React roots start while the old root keeps
   the touches. It waits (`RenderWait`, by `animations.setRoot.enter.waitForRender`), then fades through or plays its own
   animation, the old root is destroyed with its `ComponentDidDisappear`, `NativeScreenReleased` and `SlotDestroyed`, and
-  the end steps and answer are the same. The layout's modals and overlays show after it, one by one, before the answer.
+  the end steps and answer are the same. The layout's modals and overlays show after it, one by one, before the answer;
+  its modals are made with the root and render unseen in the modals layer, held (`ModalCoordinator.hold`), so each
+  shows in its turn without a wait of its own.
   The last `setRoot` wins: an older one is rejected (`ErrorTexts.setRootReplaced`) or finished at once.
 - **`showModal`** (`Navigator.showModal`, `ModalCoordinator.show`). One `ModalRecord` per modal; it joins the modals
   layer unseen (`ModalViews`), waits with its own `RenderWait`, then slides in (or opens as a `ModalSheet`). It shows
