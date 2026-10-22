@@ -18,7 +18,9 @@ paths:
   adds the minor's later versions to it as comments; the issue closes when the repository moves to that minor. The
   work on the new version starts from that issue.
 - `release.yml` runs on every push to `main`: release-please keeps the release pull request open (the `release` skill),
-  and after it is merged publishes to npm through the `npm` environment (trusted publishing, no token).
+  and after it is merged publishes to npm through the `npm` environment (trusted publishing, no token). By hand with a
+  `tag` it publishes that existing tag, when the push run failed after tagging; the file name stays `release.yml`,
+  which npm trusted publishing is bound to.
   `docs.yml` builds the docs site on a pull request that changes `docs/`, `src/` or `package.json`, and on `main`
   publishes it to GitHub Pages (navigation.apexnative.dev). `pr-title.yml` checks that a pull request's title is a
   conventional commit; in a merge queue it passes with no steps.
