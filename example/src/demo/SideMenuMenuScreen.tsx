@@ -17,9 +17,10 @@ const SIZES: { title: string; size: { width?: number; height?: number }; android
  * A menu of the side menu demo. A menu has no stack: a pick acts on the center, and the menu closes once the center
  * changed — Home starts the center over (`replace`), the others push Details over it. The size buttons change the
  * menu's `width` and `height` while it is open. Its WillAppear goes to the Journal, before the DidAppear every screen
- * logs. On glass (`sideMenu.*.glass`) it has no background of its own, so the glass shows.
+ * logs. Its color is the screen's `layout.backgroundColor` (`openSideMenuDemo`), which fills the whole panel, behind
+ * the status and navigation bars; this view stays in the safe area.
  */
-function SideMenuMenu({ side, glass }: { side: 'left' | 'right'; glass?: boolean }) {
+function SideMenuMenu({ side }: { side: 'left' | 'right' }) {
   const t = useTheme();
   const nav = useNavigation();
   useScreenEvent('screenWillAppear', ({ screen }) =>
@@ -31,7 +32,7 @@ function SideMenuMenu({ side, glass }: { side: 'left' | 'right'; glass?: boolean
     else nav.push('Details');
   };
   return (
-    <View style={[styles.menu, !glass && { backgroundColor: t.card }]}>
+    <View style={styles.menu}>
       <Text style={[styles.header, { color: t.textMuted }]}>
         {side === 'left' ? 'Left menu' : 'Right menu'}
       </Text>
