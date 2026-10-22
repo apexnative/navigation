@@ -10,6 +10,7 @@ const { planInfoPlist } = require('../steps/infoPlist');
 const { planMainActivity } = require('../steps/mainActivity');
 const { planMainApplication } = require('../steps/mainApplication');
 const { planManifest } = require('../steps/manifest');
+const { planSceneDelegate } = require('../steps/sceneDelegate');
 const { planStyles } = require('../steps/styles');
 
 const fixtures = path.join(__dirname, '..', '__fixtures__');
@@ -36,6 +37,53 @@ describe.each(['template-0.85', 'template-0.87'])('the React Native template (%s
 
   it.each(STEPS)('leaves %s alone once it is set up', (name, plan) => {
     expect(plan(read('setup-done', name)).status).toBe('done');
+  });
+});
+
+// React Native 0.88 starts React Native in a scene delegate, which its Info.plist names; the other files are as before.
+describe('the React Native template (template-0.88)', () => {
+  const STEPS_0_88 = /** @type {const} */ ([...STEPS, ['SceneDelegate.swift', planSceneDelegate]]);
+  const done = (/** @type {string} */ name) =>
+    fs.existsSync(path.join(fixtures, 'setup-done-0.88', name))
+      ? read('setup-done-0.88', name)
+      : read('setup-done', name);
+
+  it.each(STEPS_0_88)('sets up %s', (name, plan) => {
+    const result = plan(read('template-0.88', name));
+    expect(result.status).toBe('change');
+    expect(result.status === 'change' && result.next).toBe(done(name));
+  });
+
+  it.each(STEPS_0_88)('leaves %s alone once it is set up', (name, plan) => {
+    expect(plan(done(name)).status).toBe('done');
+  });
+
+  it('keeps the code of its own in the launch', () => {
+    const text = read('template-0.88', 'AppDelegate.swift').replace(
+      '    true\n',
+      '    FirebaseApp.configure()\n    return true\n'
+    );
+    const result = planAppDelegate(text);
+    expect(result.status).toBe('change');
+    expect(result.status === 'change' && result.next).toContain(
+      '    FirebaseApp.configure()\n    self.reactNativeDelegate = ReactNativeDelegate()\n    return super.application('
+    );
+  });
+
+  it("can't tell how to move code of the app's own in the scene delegate", () => {
+    const text = read('template-0.88', 'SceneDelegate.swift').replace(
+      '    window = UIWindow(windowScene: windowScene)\n',
+      '    window = UIWindow(windowScene: windowScene)\n    window?.tintColor = .systemRed\n'
+    );
+    expect(planSceneDelegate(text).status).toBe('manual');
+  });
+
+  it('sees a scene delegate of its own that moves the window into its scene', () => {
+    const text =
+      'class SceneDelegate: UIResponder, UIWindowSceneDelegate {\n' +
+      '  func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options: UIScene.ConnectionOptions) {\n' +
+      '    window = ApexNavigation.attach(to: scene as! UIWindowScene)\n  }\n}\n';
+    expect(planSceneDelegate(text).status).toBe('done');
   });
 });
 

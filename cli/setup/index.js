@@ -16,6 +16,7 @@ const { planEntry, navigationFile, HOW_TO: ENTRY_HOW_TO } = require('./steps/ent
 const { planEnv, targetOf } = require('./steps/env');
 const { planInfoPlist } = require('./steps/infoPlist');
 const { planMainActivity } = require('./steps/mainActivity');
+const { planSceneDelegate } = require('./steps/sceneDelegate');
 const { planMainApplication } = require('./steps/mainApplication');
 const { planManifest } = require('./steps/manifest');
 const { planStyles } = require('./steps/styles');
@@ -83,6 +84,18 @@ function planProject(project) {
       planAppDelegate,
       notFound('AppDelegate.swift')
     ),
+    // React Native 0.88's template starts React Native in its scene delegate; the earlier templates have none.
+    ...(project.sceneDelegate
+      ? [
+          planFile(
+            'SceneDelegate.swift',
+            'ios',
+            project.sceneDelegate,
+            planSceneDelegate,
+            notFound('SceneDelegate.swift')
+          ),
+        ]
+      : []),
     planFile('Info.plist', 'ios', project.infoPlist, planInfoPlist, notFound('Info.plist')),
     planFile('index.js', 'js', project.entry, planEntry, ENTRY_HOW_TO),
   ];

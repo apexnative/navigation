@@ -201,6 +201,7 @@ In an app as the React Native template makes it, the window shows <Mark>one Reac
 | File | What setup does | Why |
 | --- | --- | --- |
 | `AppDelegate.swift` | Extends `ANNAppDelegate`. | It creates the window, puts the root of the navigation in it and starts React Native. Deep links that come before JS is ready wait for it. |
+| `SceneDelegate.swift` | Extends `ANNSceneDelegate`. React Native 0.88 and newer only: the earlier templates have no scene delegate. | The template's scene delegate would start React Native a second time. `ANNSceneDelegate` moves the navigation's window into the app's scene and passes the scene's links to the app delegate. |
 | `Info.plist` | Sets `UIViewControllerBasedStatusBarAppearance` to `true`. | Each screen sets its own status bar from its options; with `false`, only the app as a whole can. |
 
 #### JavaScript files {#js-files}

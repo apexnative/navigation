@@ -8,8 +8,9 @@ const { exec } = require('./exec');
 /**
  * The files of the app the CLI sets up, checks and adds to, where the app has them; `undefined` for one it couldn't
  * find. `styles` is the file of the app's Android theme, `styles.xml` or `themes.xml`; `manifest` its
- * `AndroidManifest.xml`. `xcodeProject` is the app's `project.pbxproj`; `androidPackage` the package of its Kotlin code (the `namespace`
- * of `android/app/build.gradle`), and `androidSources` the folder it is in.
+ * `AndroidManifest.xml`. `sceneDelegate` is the `SceneDelegate.swift` next to `AppDelegate.swift`, which apps made
+ * from React Native 0.88's template have. `xcodeProject` is the app's `project.pbxproj`; `androidPackage` the package
+ * of its Kotlin code (the `namespace` of `android/app/build.gradle`), and `androidSources` the folder it is in.
  * @typedef {{
  *   root: string;
  *   mainApplication?: string;
@@ -17,6 +18,7 @@ const { exec } = require('./exec');
  *   styles?: string;
  *   manifest?: string;
  *   appDelegate?: string;
+ *   sceneDelegate?: string;
  *   infoPlist?: string;
  *   entry?: string;
  *   app?: string;
@@ -64,6 +66,8 @@ function findProject(root, run = exec) {
       existing(path.join(androidMain, 'res', 'values', 'themes.xml')),
     manifest: existing(path.join(androidMain, 'AndroidManifest.xml')),
     appDelegate,
+    sceneDelegate:
+      appDelegate && existing(path.join(path.dirname(appDelegate), 'SceneDelegate.swift')),
     infoPlist: appDelegate && existing(path.join(path.dirname(appDelegate), 'Info.plist')),
     entry: ['index.js', 'index.ts', 'index.tsx']
       .map((name) => path.join(root, name))
