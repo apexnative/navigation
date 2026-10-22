@@ -20,7 +20,8 @@ import java.util.WeakHashMap
  * moves between its places without leaving it, so it doesn't leave and join the window again; a covered screen that
  * comes back gets the last window insets the stack got before it joins, and nothing asks the window to send them again
  * (CoordinatorLayout asks for insets only as it joins the window itself and only with `fitsSystemWindows`, which this
- * view doesn't set). Main thread only.
+ * view doesn't set). In a transition of the stack's own the bar is drawn with the screen it goes with
+ * ([barTravels]). Main thread only.
  */
 @SuppressLint("ViewConstructor")
 class StackLayout(context: Context) : CoordinatorLayout(context) {
@@ -164,9 +165,97 @@ class StackLayout(context: Context) : CoordinatorLayout(context) {
         if (edges.isNotEmpty()) invalidate()
     }
 
+    // The bar's travel in a transition of the stack's own: the screen the bar goes with, the screen that leaves with the
+    // picture of the bar as it was, and whether that one lies over the bar (a pop).
+    private var barScreen: View? = null
+    private var barLeaving: View? = null
+    private var barPicture: Drawable? = null
+    private var leavingOver = false
+
+    /**
+     * The bar goes with [screen] in a transition of the stack's own: it is drawn as [screen] moves (its translation,
+     * scale and rotation around its pivot, its alpha). [picture], laid where the bar is, goes the same way with
+     * [leaving]: it is drawn right over that screen, outside its bounds too (a screen laid out under the bar). With
+     * [over] the leaving screen and its picture lie over the bar (a pop), else under it. Only the drawing moves: the
+     * bar's views and touches stay in place. [endBarTravel] ends it.
+     */
+    fun barTravels(screen: View, leaving: View?, picture: Drawable?, over: Boolean) {
+        barScreen = screen
+        barLeaving = leaving
+        barPicture = picture
+        leavingOver = over && leaving != null
+        invalidate()
+    }
+
+    /** The bar is drawn in its place again, over the screens; the picture goes. */
+    fun endBarTravel() {
+        if (barScreen == null) return
+        barScreen = null
+        barLeaving = null
+        barPicture = null
+        leavingOver = false
+        invalidate()
+    }
+
+    override fun dispatchDraw(canvas: Canvas) {
+        super.dispatchDraw(canvas)
+        // The screens' animators change only their own properties, which don't draw this view again: each frame of
+        // the bar's travel asks for the next.
+        if (barScreen != null) postInvalidateOnAnimation()
+    }
+
     override fun drawChild(canvas: Canvas, child: View, drawingTime: Long): Boolean {
         edges[child]?.let { drawEdge(canvas, child, it) }
-        return super.drawChild(canvas, child, drawingTime)
+        val screen = barScreen ?: return super.drawChild(canvas, child, drawingTime)
+        // The leaving screen, while it is still here, and its picture; on a pop the bar right under them.
+        val leaving = barLeaving?.takeIf(::holds)
+        val under = leaving.takeIf { leavingOver }
+        if (child === topBar) {
+            if (under != null) return false
+            return drawWith(canvas, screen, topBar.left.toFloat(), topBar.top + topBar.translationY,
+                topBar.right.toFloat(), topBar.bottom + topBar.translationY) {
+                super.drawChild(canvas, topBar, drawingTime)
+            }
+        }
+        if (child === under && topBar.visibility == VISIBLE) {
+            drawWith(canvas, screen, topBar.left.toFloat(), topBar.top + topBar.translationY,
+                topBar.right.toFloat(), topBar.bottom + topBar.translationY) {
+                super.drawChild(canvas, topBar, drawingTime)
+            }
+        }
+        val drawn = super.drawChild(canvas, child, drawingTime)
+        val picture = barPicture
+        if (child === leaving && picture != null) {
+            val bounds = picture.bounds
+            drawWith(canvas, child, bounds.left.toFloat(), bounds.top.toFloat(), bounds.right.toFloat(),
+                bounds.bottom.toFloat()) {
+                picture.draw(canvas)
+                false
+            }
+        }
+        return drawn
+    }
+
+    // Draws with [screen]'s transform and alpha what [draw] draws within the bounds given, in this view's coordinates.
+    private fun drawWith(
+        canvas: Canvas,
+        screen: View,
+        left: Float,
+        top: Float,
+        right: Float,
+        bottom: Float,
+        draw: () -> Boolean,
+    ): Boolean {
+        val alpha = if (screen.visibility == VISIBLE) screen.alpha else 0f
+        if (alpha <= 0f) return false
+        val saved = canvas.save()
+        canvas.translate(screen.left.toFloat(), screen.top.toFloat())
+        canvas.concat(screen.matrix)
+        canvas.translate(-screen.left.toFloat(), -screen.top.toFloat())
+        if (alpha < 1f) canvas.saveLayerAlpha(left, top, right, bottom, (alpha * 255).toInt())
+        val drawn = draw()
+        canvas.restoreToCount(saved)
+        return drawn
     }
 
     // At the child's place to the fraction of a pixel, as its own translation draws it, and one pixel under it: no seam

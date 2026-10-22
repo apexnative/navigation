@@ -55,6 +55,8 @@ navigation.showModal('Player', {
 });
 ```
 
+The top bar of a pushed screen goes with the screen on Android and stays in place on iOS: see [the bar in a transition of your own](#custom-bar).
+
 `presentation` of `createNavigation` gives every push or modal of the app its transition: see [Defaults for the whole app](../fundamentals/moving-between-screens#presentation). New roots have presets of their own: see [How a new root comes in](../fundamentals/switching-roots#transitions).
 
 ## Transitions out of a view {#views}
@@ -158,6 +160,10 @@ navigation.push('Details', {
 Details rises 300 points as it fades in. Each property animates from a value to a value over a time, with a delay and an interpolation if it needs them; the [API](#api) lists every one.
 
 The same goes for `pop`, `showModal`, `dismissModal`, `setStackRoot` and `setRoot`. The swipe back is the exception: <Os name="iOS" /> it always follows the finger with the system's slide, so a custom `pop` plays for the back button and `pop()` only.
+
+### The top bar {#custom-bar}
+
+The top bar goes its platform's way in a preset or an animation of your own. <Os name="Android" /> It goes with its screen, as if it were part of it: with `slideUp` the new screen comes up with its bar over the old one and its bar, and on the way back it goes down with its bar, uncovering the bar below. With `fade` or `scale` the bar fades or grows with its screen. <Os name="iOS" /> UIKit keeps the bar in place and changes its title and buttons as the transition starts; only the screens under it move.
 
 ## Which to pick {#which}
 

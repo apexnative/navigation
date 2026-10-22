@@ -55,6 +55,8 @@ class TopBar(context: Context) : FrameLayout(themed(context)) {
     private var heightChanged = false
     // How far the large title is collapsed, in pixels.
     private var largeTitleShift = 0
+    // `topBar.elevation`, in pixels: the bar's elevation unless it is flat.
+    private var shadow = 0f
 
     /** The toolbar of the right buttons: its menu holds them, the overflow items and the search's magnifier. */
     val rightButtonBar: MaterialToolbar
@@ -187,13 +189,26 @@ class TopBar(context: Context) : FrameLayout(themed(context)) {
      * The shadow of `topBar.elevation`, in pixels: its colors are black (Android 9 and later read them), none at 0.
      */
     fun setShadow(elevation: Float) {
-        if (this.elevation == elevation) return
-        this.elevation = elevation
+        if (shadow == elevation) return
+        shadow = elevation
+        if (!isFlat) this.elevation = elevation
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             outlineAmbientShadowColor = Color.BLACK
             outlineSpotShadowColor = Color.BLACK
         }
     }
+
+    /**
+     * The bar draws without its shadow, at the level of the screens, in a transition that draws it with a screen: a
+     * screen drawn after it covers it, and an alpha layer around it fades it (with an elevation the renderer would draw
+     * the bar over every screen and out of the layer).
+     */
+    var isFlat = false
+        set(value) {
+            if (field == value) return
+            field = value
+            elevation = if (value) 0f else shadow
+        }
 
     /** The line under the bar: [height] pixels of [color]. */
     fun setBorder(color: Int, height: Int) {
@@ -335,8 +350,15 @@ class TopBar(context: Context) : FrameLayout(themed(context)) {
      * A picture of the bar under its row — the background, the large title, the search, the line — and where it starts
      * in the bar, for a push to a screen without a large title; none when the bar can't be drawn in software.
      */
-    fun pictureUnderRow(): Pair<Bitmap, Int>? {
-        val top = content.top + rowArea.bottom
+    fun pictureUnderRow(): Pair<Bitmap, Int>? = pictureFrom(content.top + rowArea.bottom)
+
+    /**
+     * A picture of the whole bar, for the screen it leaves with in a transition of the stack's own; none when the bar
+     * can't be drawn in software.
+     */
+    fun picture(): Bitmap? = pictureFrom(0)?.first
+
+    private fun pictureFrom(top: Int): Pair<Bitmap, Int>? {
         val width = width
         val height = height - top
         if (width <= 0 || height <= 0) return null

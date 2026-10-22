@@ -49,6 +49,7 @@ import dev.apexnative.navigation.viewcontrollers.stack.search.StackSearchPresent
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.IReactView
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.ScrollEventListener
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.ViewController
+import dev.apexnative.navigation.views.animations.AnimationRules
 import dev.apexnative.navigation.views.animations.SideAnimator
 import dev.apexnative.navigation.views.animations.FadeThrough
 import dev.apexnative.navigation.views.animations.SystemTransition
@@ -129,6 +130,9 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
     private var largeTitleOpening: ValueAnimator? = null
     // The picture of the part under the row in a leaving screen's overlay: the screen and the picture.
     private var underRow: Pair<ViewController<*>, Drawable>? = null
+    // The bar goes with the screens of a transition of the stack's own, and the screen that leaves with its picture.
+    private var travelling = false
+    private var travelLeaving: ViewController<*>? = null
 
     private enum class Part { Look, Title, Left, Right, Back, LargeTitle, Visible, TestId }
 
@@ -166,12 +170,14 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
      * without one makes the bar lower at once: the part under the row rides with the leaving screen as a picture in its
      * overlay, and the row's picture holds the row only. So does a pop or a fade through (`setStackRoot`) to a screen
      * without a large title or with its large title collapsed: a picture as tall as the large title would hold the bar
-     * at its height to the end.
+     * at its height to the end. With a transition of the stack's own ([travel]) the bar goes with the screens instead
+     * ([beginTravel]).
      */
     fun beginRowTransition(
         motion: BarMotion?,
         incoming: ViewController<*>?,
         visibility: StackDisplay.BarVisibility = StackDisplay.BarVisibility.AT_ONCE,
+        travel: StackDisplay.BarTravel? = null,
     ) {
         this.motion = motion
         this.visibilityChange = visibility
@@ -184,6 +190,8 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
         rowTarget?.withLargeTitle = !lowers
         if (lowers) pictureUnderRow(bar, leaving)
         rowTransition?.begin(motion)
+        endTravel()
+        if (travel != null && bar != null && incoming != null) beginTravel(bar, leaving, incoming, travel, visibility)
     }
 
     /** The transition that brought the current child ended: the row at rest, the picture under it gone. */
@@ -197,6 +205,53 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
         visibilityChange = StackDisplay.BarVisibility.AT_ONCE
         rowTransition?.end()
         dropPictureUnderRow()
+        endTravel()
+    }
+
+    /**
+     * The bar goes with the screens of a transition of the stack's own, as each screen's bar would: a picture of the
+     * bar as it is goes with [leaving], and the bar, which takes [incoming]'s options next, is drawn flat as [incoming]
+     * moves — under [leaving] on a pop ([StackDisplay.BarTravel.Back]) (`StackLayout.barTravels`). No picture when the
+     * bar doesn't show. Nothing travels when the new top hides the bar by a side of its own
+     * (`animations.*.topBar.exit`), which plays instead, or when the bar can't be drawn in software (a `HARDWARE`
+     * bitmap in it): the bar takes the options in its place.
+     */
+    private fun beginTravel(
+        bar: TopBar,
+        leaving: ViewController<*>?,
+        incoming: ViewController<*>,
+        direction: StackDisplay.BarTravel,
+        visibility: StackDisplay.BarVisibility,
+    ) {
+        val layout = layout ?: return
+        val screen = incoming.peekView()?.takeIf(layout::holds) ?: return
+        val leavingView = leaving?.peekView()?.takeIf(layout::holds)
+        // The new top hides the bar by a side of its own: the side plays on the bar in its place instead.
+        if (host.resolvedOf(incoming).topBar.visible.isFalse && AnimationRules.barSideGiven(visibility.side?.exit)) return
+        val shows = bar.visibility == View.VISIBLE && this.visibility?.isHidden != true
+        val picture = if (shows && leavingView != null) pictureOfBar(bar) ?: return else null
+        travelling = true
+        travelLeaving = leaving.takeIf { picture != null }
+        // Flat: with an elevation the renderer would draw the bar over every screen and out of its alpha layer.
+        bar.isFlat = true
+        layout.barTravels(screen, leavingView, picture, direction == StackDisplay.BarTravel.Back)
+    }
+
+    // The bar's picture where the bar is in the stack, its moves counted.
+    private fun pictureOfBar(bar: TopBar): Drawable? {
+        val bitmap = bar.picture() ?: return null
+        val left = (bar.left + bar.translationX).roundToInt()
+        val top = (bar.top + bar.translationY).roundToInt()
+        return BitmapDrawable(bar.resources, bitmap).apply { setBounds(left, top, left + bitmap.width, top + bitmap.height) }
+    }
+
+    // The bar's travel ends: the picture goes, the bar is drawn in its place again with its shadow.
+    private fun endTravel() {
+        if (!travelling) return
+        travelling = false
+        travelLeaving = null
+        bar?.isFlat = false
+        layout?.endBarTravel()
     }
 
     /**
@@ -215,8 +270,9 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
             keys.clear()
         }
         shownEntry = entry
-        // The screen that left with the picture under the row shows again: the picture goes.
+        // The screen that left with the picture under the row, or of the bar, shows again: the picture goes.
         if (underRow?.first === entry) dropPictureUnderRow()
+        if (travelLeaving === entry) endTravel()
         val options = host.resolvedOf(entry)
         applyAll(bar, entry, screen, options, merge = false)
     }
@@ -344,6 +400,7 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
     /** The stack is destroyed: every component stops. */
     fun destroy() {
         rowTransition?.end()
+        endTravel()
         largeTitleFollower.stop()
         stopLargeTitleOpening()
         collapse?.disableCollapse()
@@ -753,7 +810,10 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
         if (keys[Part.Visible] == key) return
         keys[Part.Visible] = key
         val change = visibilityChange
-        val animated = !options.topBar.animate.isFalse && (merge || change.animated)
+        // While the bar goes with the screens it shows or hides at once, unless its side of its own plays.
+        val travels = !merge && travelling &&
+            !AnimationRules.barSideGiven(if (visible) change.side?.enter else change.side?.exit)
+        val animated = !options.topBar.animate.isFalse && (merge || change.animated) && !travels
         visibility?.apply(visible, animated, if (merge) null else change.side)
     }
 

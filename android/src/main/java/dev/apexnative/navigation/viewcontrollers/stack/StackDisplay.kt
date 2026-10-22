@@ -39,6 +39,12 @@ internal interface StackDisplay {
     enum class BarMotion { Push, Pop, FadeThrough }
 
     /**
+     * How the bar goes with a transition of the stack's own (`content`): with its screens. [Forward]: the screen that
+     * comes lies over the one that goes (a push, `setStackRoot`); [Back]: the one that goes lies over it (a pop).
+     */
+    enum class BarTravel { Forward, Back }
+
+    /**
      * How the bar shows or hides when the new top's `topBar.visible` differs: at once (no animation, or a transition
      * with elements), or [animated] by the transition's [side] (`animations.push.topBar`, the leaving screen's
      * `animations.pop.topBar`, the new top's `animations.setStackRoot.topBar`): its `exit` hides, its `enter` shows,

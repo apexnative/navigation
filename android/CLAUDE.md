@@ -185,6 +185,9 @@ top-level folder. Main thread only, unless a line says otherwise.
 - The bar measures to its children: a picture laid into it for a transition that is taller than the bar the incoming
   screen gives holds the bar at that height to the end (the row's picture of a pop from a large title). What doesn't
   stay in the bar rides with the leaving screen (`TopBarPresenter.pictureUnderRow`).
+- A screen's overlay is clipped to the screen, and a screen without a large title is laid out under the bar (its `top`
+  is the bar's height): a picture of the bar in its overlay doesn't show. The bar's picture in a transition of the
+  stack's own is drawn by the stack's view with the screen's transform (`StackLayout.barTravels`).
 - A React screen without `layout.backgroundColor` is opaque with the theme's `android:colorBackground`
   (`ComponentPresenter`): a push keeps the covered screen under the new one until it ends, and a transparent screen
   shows it. Only an explicit `'transparent'` / `null` (overlays, see-through modals) lets it through.

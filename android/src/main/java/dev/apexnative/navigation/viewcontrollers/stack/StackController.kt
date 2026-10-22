@@ -696,9 +696,13 @@ class StackController(
             navigator?.shownScreensChanged(this@StackController)
         }
 
-        // Before the bar takes the new top's options: the row's picture, and how it shows or hides.
-        override fun barTransition(motion: StackDisplay.BarMotion?, visibility: StackDisplay.BarVisibility) {
-            if (peekView() != null) topBar.beginRowTransition(motion, queue.currentChild, visibility)
+        // Before the bar takes the new top's options: the row's picture or the bar's travel, and how it shows or hides.
+        override fun barTransition(
+            motion: StackDisplay.BarMotion?,
+            visibility: StackDisplay.BarVisibility,
+            travel: StackDisplay.BarTravel?,
+        ) {
+            if (peekView() != null) topBar.beginRowTransition(motion, queue.currentChild, visibility, travel)
         }
 
         // The tab bar of the tabs around goes with the transition; a takeover doesn't bring it to rest.
