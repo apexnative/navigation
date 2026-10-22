@@ -103,6 +103,25 @@ static ANNFlightEnd ANNFlightEndOf(UIView *view, UIView *screenRoot, UIView *con
     return end;
 }
 
+static BOOL ANNIsFiniteRect(CGRect rect) {
+    return isfinite(rect.origin.x) && isfinite(rect.origin.y) && isfinite(rect.size.width) &&
+           isfinite(rect.size.height);
+}
+
+static BOOL ANNFlightEndIsFinite(ANNFlightEnd end) {
+    const CATransform3D t = end.transform;
+    const CGFloat values[] = {t.m11, t.m12, t.m13, t.m14, t.m21, t.m22, t.m23, t.m24,
+                              t.m31, t.m32, t.m33, t.m34, t.m41, t.m42, t.m43, t.m44};
+    for (CGFloat value : values) {
+        if (!isfinite(value)) {
+            return NO;
+        }
+    }
+    return isfinite(end.center.x) && isfinite(end.center.y) && isfinite(end.size.width) &&
+           isfinite(end.size.height) && isfinite(end.cornerRadius) && isfinite(end.visibleRadius) &&
+           ANNIsFiniteRect(end.visible);
+}
+
 // The picture of the view's layer and its sublayers at the screen's scale, in the layer's own coordinates.
 static UIImage *ANNPictureOf(UIView *view) {
     CGSize size = view.bounds.size;
@@ -140,15 +159,10 @@ static UIImage *ANNPictureOf(UIView *view) {
     BOOL _restored;
 }
 
-+ (NSString *)textOf:(Text *)value {
-    NSString *text = [value withDefault:nil];
-    return [text isKindOfClass:NSString.class] && text.length > 0 ? text : nil;
-}
-
 + (BOOL)allTargetsFound:(NSArray<ANNSharedElementTransitionOptions *> *)pairs
            arrivingRoot:(UIView *)arrivingRoot {
     for (ANNSharedElementTransitionOptions *pair in pairs) {
-        if (![ANNElementFinder viewWithNativeID:[self textOf:pair.toId] inView:arrivingRoot]) {
+        if (![ANNElementFinder viewWithNativeID:ANNNativeIDOf(pair.toId) inView:arrivingRoot]) {
             return NO;
         }
     }
@@ -163,20 +177,25 @@ static UIImage *ANNPictureOf(UIView *view) {
     NSMutableArray<ANNSharedElementFlight *> *flights = [NSMutableArray new];
     NSHashTable<UIView *> *taken = [NSHashTable weakObjectsHashTable];
     for (ANNSharedElementTransitionOptions *pair in pairs) {
-        UIView *from = [ANNElementFinder viewWithNativeID:[self textOf:pair.fromId]
-                                                   inView:leavingRoot];
-        UIView *to = [ANNElementFinder viewWithNativeID:[self textOf:pair.toId]
-                                                 inView:arrivingRoot];
+        NSString *fromId = ANNNativeIDOf(pair.fromId);
+        NSString *toId = ANNNativeIDOf(pair.toId);
+        UIView *from = [ANNElementFinder viewWithNativeID:fromId inView:leavingRoot];
+        UIView *to = [ANNElementFinder viewWithNativeID:toId inView:arrivingRoot];
         if (!from || !to || from == to || [taken containsObject:from] ||
             [taken containsObject:to]) {
             continue;
         }
-        ANNSharedElementFlight *flight = [[self alloc] initWithPair:pair
-                                                               from:from
-                                                                 to:to
-                                                        leavingRoot:leavingRoot
-                                                       arrivingRoot:arrivingRoot
-                                                          container:container];
+        NSString *name = [NSString stringWithFormat:@"'%@' -> '%@'", fromId, toId];
+        __block ANNSharedElementFlight *flight = nil;
+        ANNElementStep(name, ^{
+          flight = [[self alloc] initWithPair:pair
+                                         from:from
+                                           to:to
+                                  leavingRoot:leavingRoot
+                                 arrivingRoot:arrivingRoot
+                                    container:container
+                                         name:name];
+        });
         if (flight) {
             [taken addObject:from];
             [taken addObject:to];
@@ -193,10 +212,18 @@ static UIImage *ANNPictureOf(UIView *view) {
                           }
                           return a->_zIndex < b->_zIndex ? NSOrderedAscending : NSOrderedDescending;
                         }];
+    // A copy that can't take off goes away, and its pair's views show as they were.
+    NSMutableArray<ANNSharedElementFlight *> *flying = [NSMutableArray new];
     for (ANNSharedElementFlight *flight in ordered) {
-        [flight takeOffIn:container];
+        if (ANNElementStep(flight.name, ^{
+              [flight takeOffIn:container];
+            })) {
+            [flying addObject:flight];
+        } else {
+            [flight restore];
+        }
     }
-    return ordered;
+    return flying;
 }
 
 - (instancetype)initWithPair:(ANNSharedElementTransitionOptions *)pair
@@ -204,19 +231,27 @@ static UIImage *ANNPictureOf(UIView *view) {
                           to:(UIView *)to
                  leavingRoot:(UIView *)leavingRoot
                 arrivingRoot:(UIView *)arrivingRoot
-                   container:(UIView *)container {
+                   container:(UIView *)container
+                        name:(NSString *)name {
     // A view of no size gives no picture: the pair is skipped and both views stay as they are.
     if (from.bounds.size.width <= 0 || from.bounds.size.height <= 0 || to.bounds.size.width <= 0 ||
         to.bounds.size.height <= 0) {
+        ANNElementSkipped(name, @"a view of the pair has no size, it isn't laid out");
         return nil;
     }
     if (!(self = [super init])) {
         return nil;
     }
+    _name = [name copy];
     _fromView = from;
     _toView = to;
     _from = ANNFlightEndOf(from, leavingRoot, container);
     _to = ANNFlightEndOf(to, arrivingRoot, container);
+    // A place that isn't a number would stop the copy's layer with an exception at its first frame.
+    if (!ANNFlightEndIsFinite(_from) || !ANNFlightEndIsFinite(_to)) {
+        ANNElementSkipped(name, @"the place of a view of the pair can't be worked out");
+        return nil;
+    }
     _text = ANNIsText(from) || ANNIsText(to);
     _grows = _to.size.height >= _from.size.height;
     _rightToLeft =
@@ -231,6 +266,7 @@ static UIImage *ANNPictureOf(UIView *view) {
     UIImage *fromImage = ANNPictureOf(from);
     UIImage *toImage = ANNPictureOf(to);
     if (!fromImage || !toImage) {
+        ANNElementSkipped(name, @"no picture of a view of the pair can be taken");
         return nil;
     }
     _copy = [UIView new];

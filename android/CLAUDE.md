@@ -145,6 +145,9 @@ top-level folder. Main thread only, unless a line says otherwise.
 
 - Native code never touches React Native's views (their children, their layout): Fabric owns and recycles them. Move
   content through `SlotContainers` and `SlotView`, and find views by `nativeID` only through React Native's own search.
+- Each step of a transition's element (its move into the layer, its animator, a flight's start and frames in
+  `MoveAnimator`) runs in `elementStep`: an exception skips that element only. A new step of an element goes there
+  too, or one bad element takes the whole transition down.
 - Every change of a stack's children goes through its `StackQueue`; a direct change of `shown` or of the container
   skips the table that decides interrupts and answers.
 - Every event of an appearance goes through `AppearanceDispatcher`. A container with its own loop of

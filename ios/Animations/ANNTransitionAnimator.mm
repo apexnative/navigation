@@ -200,8 +200,13 @@ static void ANNUpdateRootLayoutOf(UIViewController *node) {
     if (leavingTracks.hasTracks) {
         [clients addObject:leavingTracks];
     }
-    [clients addObjectsFromArray:elements];
-    [clients addObjectsFromArray:flights];
+    // Each element plays on its own: one whose frame fails goes back and stops, the others and the screens go on.
+    for (ANNElementTransition *element in elements) {
+        [clients addObject:[[ANNIsolatedElement alloc] initWithClient:element name:element.name]];
+    }
+    for (ANNSharedElementFlight *flight in flights) {
+        [clients addObject:[[ANNIsolatedElement alloc] initWithClient:flight name:flight.name]];
+    }
     _clients = clients;
     if ([self tilts]) {
         [self orderInDepthIn:container flights:flights];

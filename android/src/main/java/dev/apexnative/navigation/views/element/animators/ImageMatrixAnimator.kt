@@ -5,8 +5,6 @@ import android.graphics.Matrix
 import android.view.View
 import android.view.ViewOutlineProvider
 import android.widget.ImageView
-import androidx.core.animation.doOnEnd
-import androidx.core.animation.doOnStart
 import com.facebook.react.views.view.ReactViewGroup
 import dev.apexnative.navigation.utils.borderRadius
 import dev.apexnative.navigation.views.animations.ValueInterpolation
@@ -78,7 +76,7 @@ internal class ImageMatrixAnimator(
                     to.imageMatrix = matrix
                 }
             }
-            doOnStart {
+            onStart {
                 savedProvider = to.outlineProvider
                 savedClip = to.clipToOutline
                 to.outlineProvider = outline
@@ -86,8 +84,8 @@ internal class ImageMatrixAnimator(
                 if (fits) to.scaleType = ImageView.ScaleType.MATRIX
                 frame(0f)
             }
-            addUpdateListener { frame(it.animatedFraction) }
-            doOnEnd {
+            onFrame { frame(it) }
+            onEnd {
                 if (fits) {
                     to.scaleType = toFit
                     to.imageMatrix = savedMatrix

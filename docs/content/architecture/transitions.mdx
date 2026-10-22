@@ -91,7 +91,7 @@ navigation.push('Person', {
 });
 ```
 
-The avatar of the row moves and grows into the photo of the profile, and the name into its larger title. The views can differ in size and style. `type` and `duration` next to `shared` change how the rest of the screen comes, `'fade'` by default.
+The avatar of the row moves and grows into the photo of the profile, and the name into its larger title. The views can differ in size and style. A pair that isn't found is skipped (the transition waits for it first); one that fails on the way is skipped with a warning in the log. Either way its views show with their screens, and the other pairs move. `type` and `duration` next to `shared` change how the rest of the screen comes, `'fade'` by default.
 
 Both platforms. <Os name="Android" /> The next screen waits until it is drawn, so its views are there to move into; a `type` other than a fade gives way to a fade.
 

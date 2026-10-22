@@ -254,13 +254,14 @@ export type ElementAnimation = AppearingElementAnimation | DisappearingElementAn
 /**
  * An animation of one view of a screen that moves together with the transition, with or without a counterpart on the
  * other screen. The view is found by its `nativeID`, first on the screen that goes, then on the one that comes; one
- * that is not found is skipped while the rest plays. The transition waits until it is found. Without an animation of
- * the screens of its own, the screen that comes fades in (or the one that goes fades out) in 300 ms around the
- * elements. When the transition ends or is cancelled, the element gets its own values back. `x` and `y` are the
- * position in the parent of the element on both platforms. As on a side of a screen, don't set `x` with `translationX`
- * or `y` with `translationY` on one element: the translation plays and the position doesn't. (Android) A view whose
- * parent is a React view with `removeClippedSubviews` turned on, such as a child of a clipping list, is not moved: it
- * counts as not found.
+ * that is not found is skipped while the rest plays. The transition waits until it is found. An element that fails on
+ * the way (an error in its animation) is skipped too, with a warning in the log: it shows and hides with its screen,
+ * and the transition and its command go on. Without an animation of the screens of its own, the screen that comes fades
+ * in (or the one that goes fades out) in 300 ms around the elements. When the transition ends or is cancelled, the
+ * element gets its own values back. `x` and `y` are the position in the parent of the element on both platforms. As on
+ * a side of a screen, don't set `x` with `translationX` or `y` with `translationY` on one element: the translation
+ * plays and the position doesn't. (Android) A view whose parent is a React view with `removeClippedSubviews` turned on,
+ * such as a child of a clipping list, is not moved: it counts as not found.
  */
 export interface ElementTransition {
   /** The `nativeID` of the view to animate. */
@@ -288,12 +289,15 @@ export interface ElementTransition {
 }
 
 /**
- * A view that flies from the screen that goes to the screen that comes, changing its place, size, corners and look
- * on the way. A pair whose view is not found on either screen is skipped while the rest plays, and the transition
- * waits until the views are found. Without an animation of the screens of its own, the screen that comes fades in (or
- * the one that goes fades out) in 300 ms around the pair. Text keeps its proportions and changes its picture within a
- * quarter of the flight. (Android) A picture that doesn't load within a second drops out of the transition, and so does
- * a pair with a view whose parent is a React view with `removeClippedSubviews` turned on: it counts as not found.
+ * A view that flies from the screen that goes to the screen that comes, changing its place, size, corners and look on
+ * the way. A pair whose view is not found on either screen is skipped while the rest plays, and the transition waits
+ * until the views are found. A pair that fails on the way (an error in its start or its flight) is skipped too, with a
+ * warning in the log: its views show and hide with their screens, and the transition and its command go on. (iOS) So is
+ * a pair with a view without a size, or one whose picture can't be taken. Without an animation of the screens of its
+ * own, the screen that comes fades in (or the one that goes fades out) in 300 ms around the pair. Text keeps its
+ * proportions and changes its picture within a quarter of the flight. (Android) A picture that doesn't load within a
+ * second drops out of the transition, and so does a pair with a view whose parent is a React view with
+ * `removeClippedSubviews` turned on: it counts as not found.
  */
 export interface SharedElementTransition {
   /** The `nativeID` of the view on the screen that goes. */

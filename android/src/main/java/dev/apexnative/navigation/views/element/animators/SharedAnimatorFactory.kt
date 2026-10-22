@@ -10,6 +10,7 @@ import dev.apexnative.navigation.options.SharedElementTransitionOptions
 import dev.apexnative.navigation.views.animations.AnimationRules
 import dev.apexnative.navigation.views.animations.Curves
 import dev.apexnative.navigation.views.element.TransitionLayer
+import dev.apexnative.navigation.views.element.pairName
 
 /**
  * The animator of a shared element by the kinds of its two views, chosen by explicit classes, never by reflection:
@@ -55,6 +56,7 @@ internal object SharedAnimatorFactory {
             else -> moves(PlainViewAnimator(from, to, layer).create())
         } ?: return null
         val animator = flight.animator
+        (animator as? MoveAnimator)?.element = pairName(options.fromId.get(""), options.toId.get(""))
         val duration = AnimationRules.durationOf(options.duration.get(null), fallbackDuration)
         animator.duration = duration
         animator.startDelay = AnimationRules.delayOf(options.startDelay.get(null))

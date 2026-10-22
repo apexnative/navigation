@@ -23,12 +23,12 @@ import dev.apexnative.navigation.views.element.animators.SharedAnimatorFactory
  * The elements of one transition: the element transitions and the targets of the shared elements found by their
  * `nativeID` (depth first, the first match) in the whole view of the screen each side shows — an element in the screen
  * that goes first, then in the one that comes; a pair's `fromId` in the screen that goes, its `toId` in the one that
- * comes. What isn't found, what is in another transition's layer and an image that isn't loaded is skipped; the rest
- * plays. Each view found moves into a [TransitionLayer] at its place on the screen, in the order its hierarchy draws
- * it, and an [ElementStub] takes its index in its parent. A pair's `from` stays where it is, hidden while its copy
- * flies. [finish] puts every view back at its index with its layout, its pivot and the values of its properties read
- * before — unless React removed its stub meanwhile: then it is gone for good —, shows the `from`s again and takes the
- * layer away. Main thread only.
+ * comes. What isn't found, what is in another transition's layer and an image that isn't loaded is skipped; so is an element whose start fails ([elementStep]):
+ * it goes back at once and the rest plays. Each view found moves into a [TransitionLayer] at its place on the screen,
+ * in the order its hierarchy draws it, and an [ElementStub] takes its index in its parent. A pair's `from` stays where
+ * it is, hidden while its copy flies. [finish] puts every view back at its index with its layout, its pivot and the
+ * values of its properties read before — unless React removed its stub meanwhile: then it is gone for good —, shows
+ * the `from`s again and takes the layer away. Main thread only.
  */
 internal class ElementTransition private constructor(private val layer: TransitionLayer) {
     // A view in the layer: where it came from and what it was.
@@ -89,16 +89,39 @@ internal class ElementTransition private constructor(private val layer: Transiti
             view.rotationX, view.rotationY, view.pivotX, view.pivotY,
         )
         val stub = ElementStub(view.context, view)
-        parent.removeViewAt(index)
-        parent.addView(stub, index, params)
-        stub.layout(frame.left, frame.top, frame.right, frame.bottom)
-        val left = originX + frame.left
-        val top = originY + frame.top
-        layer.put(view, left, top, frame.width(), frame.height())
+        try {
+            parent.removeViewAt(index)
+            parent.addView(stub, index, params)
+            stub.layout(frame.left, frame.top, frame.right, frame.bottom)
+            val left = originX + frame.left
+            val top = originY + frame.top
+            layer.put(view, left, top, frame.width(), frame.height())
+        } catch (e: RuntimeException) {
+            putBack(view, stub, parent, index, params, frame)
+            throw e
+        }
         // Scale and rotations turn about the center.
         view.pivotX = frame.width() / 2f
         view.pivotY = frame.height() / 2f
         return Moved(view, stub, params, frame, values, pivotSet, originX, originY).also { moved += it }
+    }
+
+    // A move that failed half way undone: the view back at its index in its parent, the stub gone.
+    private fun putBack(
+        view: View,
+        stub: ElementStub,
+        parent: ViewGroup,
+        index: Int,
+        params: ViewGroup.LayoutParams,
+        frame: Rect,
+    ) {
+        if (view.parent === layer) layer.removeView(view)
+        val stubIndex = parent.indexOfChild(stub)
+        if (stubIndex >= 0) parent.removeViewAt(stubIndex)
+        if (view.parent == null) {
+            parent.addView(view, index.coerceAtMost(parent.childCount), params)
+            view.layout(frame.left, frame.top, frame.right, frame.bottom)
+        }
     }
 
     private fun giveBack(item: Moved) {
@@ -156,11 +179,24 @@ internal class ElementTransition private constructor(private val layer: Transiti
             from, to, toParent, layer, options, fallbackDuration, DevelopmentLog::warn,
         ) ?: return false
         val alpha = item.values[ALPHA]
+        val fromAlpha = from.alpha
         to.alpha = 0f
-        hidden += from to from.alpha
+        hidden += from to fromAlpha
         flight.animator.addListener(object : AnimatorListenerAdapter() {
+            private var stopped = false
+
             override fun onAnimationStart(animation: Animator) {
+                if (stopped) return
                 from.alpha = 0f
+                if (!flight.drawsPictures) to.alpha = alpha
+            }
+
+            // A flight whose start or frame failed stops (`MoveAnimator`), maybe inside its own start: `from` shows
+            // again in its screen, and a `to` that moves itself in its place, as at any stop (a flight of pictures
+            // shows its `to` at its end).
+            override fun onAnimationCancel(animation: Animator) {
+                stopped = true
+                from.alpha = fromAlpha
                 if (!flight.drawsPictures) to.alpha = alpha
             }
         })
@@ -258,24 +294,44 @@ internal class ElementTransition private constructor(private val layer: Transiti
     }
 
     // The views into the layer in the order they are drawn, then their animators; a pair that doesn't fly goes back at
-    // once.
+    // once. Each element's steps run on their own ([elementStep]): one that fails goes back, the others play.
     private fun fill(
         host: ViewGroup,
         elements: List<Pair<ElementTransitionOptions, View>>,
         pairs: List<Triple<SharedElementTransitionOptions, View, View>>,
         fallbackDuration: Long,
     ) {
+        val names = HashMap<View, String>()
+        for ((options, view) in elements) names[view] = elementName(options.id)
+        for ((options, _, target) in pairs) names[target] = pairName(options.fromId.get(""), options.toId.get(""))
         val views = elements.map { it.second } + pairs.map { it.third }
         val parents = views.associateWith { it.parent as? View }
         val placed = HashMap<View, Moved>()
-        for (view in DrawOrder.sorted(views, host) { it }) moveIntoLayer(view)?.let { placed[view] = it }
-        for ((options, view) in elements) placed[view]?.let { addElement(options, it) }
+        for (view in DrawOrder.sorted(views, host) { it }) {
+            var item: Moved? = null
+            if (elementStep(names.getValue(view)) { item = moveIntoLayer(view) }) item?.let { placed[view] = it }
+        }
+        for ((options, view) in elements) {
+            val item = placed[view] ?: continue
+            if (!elementStep(names.getValue(view)) { addElement(options, item) }) goBack(item)
+        }
         for ((options, source, target) in pairs) {
             val item = placed[target] ?: continue
-            if (!addPair(options, source, item, parents[target], fallbackDuration)) {
-                moved -= item
-                giveBack(item)
+            var flies = false
+            elementStep(names.getValue(target)) {
+                flies = addPair(options, source, item, parents[target], fallbackDuration)
             }
+            if (!flies) goBack(item)
+        }
+    }
+
+    // An element that doesn't play leaves the layer now; one that can't go back is logged, the others go on.
+    private fun goBack(item: Moved) {
+        moved -= item
+        try {
+            giveBack(item)
+        } catch (e: RuntimeException) {
+            Log.w(NavigationLog.TAG, "[ApexNavigation] An element of a transition couldn't go back", e)
         }
     }
 }

@@ -11,7 +11,7 @@ NS_ASSUME_NONNULL_BEGIN
 @interface ANNElementTransition : NSObject <ANNFrameClient>
 
 /// The items found: each `id` first in the leaving screen's React view, then in the arriving one; an item not found or
-/// without an animating property is left out.
+/// without an animating property is left out, and so is one whose start fails (`ANNElementStep`).
 + (NSArray<ANNElementTransition *> *)
     transitionsOf:(nullable NSArray<ANNElementTransitionOptions *> *)elements
       leavingRoot:(nullable UIView *)leavingRoot
@@ -24,6 +24,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (instancetype)init NS_UNAVAILABLE;
 + (instancetype)new NS_UNAVAILABLE;
+
+/// The item's `id`, in quotes: its name in the log.
+@property(nonatomic, copy, readonly) NSString *name;
 
 @end
 
