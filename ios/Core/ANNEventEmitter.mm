@@ -187,6 +187,11 @@ static NSUInteger ANNAppLaunchedBundle;
     [self sendEvent:keys.event body:@{keys.componentId : componentId ?: @""}];
 }
 
+- (void)sendDeepLinkDispatched:(NSURL *)url {
+    const auto &keys = ANNEventContract.DeepLinkDispatched;
+    [self sendEvent:keys.event body:@{keys.url : url.absoluteString ?: @""}];
+}
+
 - (void)sendTitleRenamed:(NSString *)componentId text:(NSString *)text {
     const auto &keys = ANNEventContract.TitleRenamed;
     [self sendEvent:keys.event

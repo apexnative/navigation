@@ -86,6 +86,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)sendSlotDestroyed:(NSString *)componentId;
 
+/// `ANN.DeepLinkDispatched { url }` (iOS only): a link React Native's `Linking` didn't take, for JavaScript to hand it.
+- (void)sendDeepLinkDispatched:(NSURL *)url;
+
 /// `ANN.TitleRenamed { componentId, text }` (EVT-TitleRenamed).
 - (void)sendTitleRenamed:(NSString *)componentId text:(NSString *)text;
 

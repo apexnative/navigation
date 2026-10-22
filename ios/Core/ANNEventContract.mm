@@ -68,6 +68,7 @@ const struct ANNEventContractTable ANNEventContract = {
             .componentName = @"componentName",
             .componentType = @"componentType",
         },
+    .DeepLinkDispatched = {.event = @"ANN.DeepLinkDispatched", .url = @"url"},
     .HingeChanged = {.event = @"ANN.HingeChanged", .state = @"state", .angle = @"angle"},
     .KeyCommandPressed =
         {
@@ -198,6 +199,7 @@ NSArray<NSString *> *ANNEventContractNames(void) {
         ANNEventContract.ComponentDidAppear.event,
         ANNEventContract.ComponentDidDisappear.event,
         ANNEventContract.ComponentWillAppear.event,
+        ANNEventContract.DeepLinkDispatched.event,
         ANNEventContract.HingeChanged.event,
         ANNEventContract.KeyCommandPressed.event,
         ANNEventContract.ModalAttemptedToDismiss.event,

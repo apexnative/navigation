@@ -1,7 +1,8 @@
 #import "ANNDeepLinkQueue.h"
 #import "ANNAssert.h"
+#import "ANNEventEmitter.h"
+#import "ApexNavigation+Internal.h"
 #import <React/RCTLinkingManager.h>
-#import <React/RCTLog.h>
 #import <React/RCTRootView.h>
 #import <UIKit/UIKit.h>
 
@@ -220,10 +221,10 @@ static ANNLaunchLinkCompletion ANNWaitingLaunchLinkCompletion;
             return;
         }
     }
+    // A link of the app's own (`dispatchDeepLinkURL`) has no scene: on React Native 0.88 and newer, with a scene
+    // delegate in Info.plist, `Linking` doesn't take it from here. JavaScript hands it to `Linking` itself.
     if (![RCTLinkingManager application:UIApplication.sharedApplication openURL:link.url options:@{}]) {
-        RCTLogWarn(@"[ApexNavigation] React Native didn't take the link %@: with a scene delegate in Info.plist, "
-                   @"React Native 0.88 and newer take only the links a scene opened.",
-                   link.url);
+        [ApexNavigation.eventEmitter sendDeepLinkDispatched:link.url];
     }
 }
 

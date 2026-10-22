@@ -572,6 +572,8 @@ class SceneDelegate: ANNSceneDelegate {
 
 A scene delegate that extends another class calls `ApexNavigation.attach(to:)` (`attachToWindowScene:` in Objective-C) in `scene(_:willConnectTo:options:)` and passes the URLs to `dispatchDeepLinkURL(_:)` of the app delegate.
 
+A link the app dispatches itself with `dispatchDeepLinkURL(_:)`, such as the link of a push notification, comes with no scene. Where React Native's `Linking` doesn't take it from the native side (React Native 0.88 and newer, in an app with a scene delegate), the navigation hands it to `Linking` from JavaScript, as a `url` event like any other.
+
 ## Testing {#testing}
 
 A link takes a different way when it launches the app and when the app runs, so test both:

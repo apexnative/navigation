@@ -43,6 +43,7 @@ import {
 import { launchState } from '../../engine/launchState';
 import { watchBackListeners } from '../../engine/backListeners';
 import { resolveRoot, type RootsMap, type RootTarget, type UsesOfRootValue } from './roots';
+import { listenToDispatchedLinks } from '../linking/dispatchedLinks';
 import {
   launchLink,
   launchRoot,
@@ -501,6 +502,7 @@ export function createNavigation<
       if (config.context !== undefined) setAppContext(config.context);
       if (config.appProvider) enableSlots(config.appProvider);
       listenToNavigationState();
+      listenToDispatchedLinks();
       watchSideMenus();
       listenToNativeScreens();
       listenToSplitViews();

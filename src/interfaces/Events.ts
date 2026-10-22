@@ -106,6 +106,16 @@ export interface SplitViewColumnsStackedEvent {
 }
 
 /**
+ * (iOS) A link the app dispatched (`dispatchDeepLinkURL`) that React Native's `Linking` doesn't take from the native
+ * side: on React Native 0.88 and newer, in an app whose Info.plist names a scene delegate, it takes only the links a
+ * scene opened. JavaScript hands it to `Linking` as a `url` event.
+ */
+export interface DeepLinkDispatchedEvent {
+  /** The link. */
+  url: string;
+}
+
+/**
  * A screen of the single React tree was destroyed and the slot still belongs to it: JavaScript removes the slot from
  * its tree. It is not sent for a prepared screen that was never pushed, nor when JavaScript reloads.
  */

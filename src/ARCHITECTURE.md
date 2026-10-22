@@ -63,7 +63,8 @@ form of `src/api/events/navigationEvents.ts`. Everything in `src/engine` is inte
   `LinkParams`, `PendingLink`, …). `linkPaths.ts`: a URL into its path and query (`parseLink`), the patterns ordered
   (`compileRoutes`) and matched (`matchLink`). `linking.ts`: the links of the app — the launch link, the `url` events
   of React Native's `Linking`, the routes run, the pending link opened after `setContext`. `pendingLinks.ts`: the one
-  waiting link and its listeners, which `navigation` and `usePendingLink` read.
+  waiting link and its listeners, which `navigation` and `usePendingLink` read. `dispatchedLinks.ts` (iOS): hands
+  `Linking` the links of `ANN.DeepLinkDispatched`.
 - `events/` — `navigationEvents.ts`: the events by name, the native event behind each, `onNavigationEvent`,
   `listeners`. `screenLifecycle.ts`: what goes when a screen unmounts, `whenScreenUnmounts`. `tabPresses.ts`: the
   handlers of `useTabPress`.
@@ -268,7 +269,9 @@ its push, which the hook ignores.
   given once; JS asks only with `linking`) and `getStartInfo` (synchronous: `coldStart`, true for the whole life of
   the first JavaScript runtime of the process, and `splashLogo`, the size of the native splash's logo the CLI wrote,
   or null; `arrangements`, whether it shows pairs). The links that come while the app runs reach JS through React Native's
-  `Linking`, not through `ANN.*` events.
+  `Linking`, not through `ANN.*` events. One exception, iOS only: a link the app dispatched (`dispatchDeepLinkURL`) that
+  `Linking` doesn't take from the native side (React Native 0.88 and newer, with a scene delegate) comes as
+  `ANN.DeepLinkDispatched`, and `src/api/linking/dispatchedLinks.ts` hands it to `Linking` as a `url` event.
 - Events: `ANN.AppLaunched`, `ANN.ComponentWillAppear`, `ANN.ComponentDidAppear`, `ANN.ComponentDidDisappear`,
   `ANN.NavigationButtonPressed`, `ANN.BottomTabSelected`, `ANN.BottomTabPressed`, `ANN.BottomTabLongPressed`,
   `ANN.ModalDismissed`, `ANN.ModalAttemptedToDismiss`, `ANN.ScreenPopped`, `ANN.SearchBarUpdated`,
@@ -276,8 +279,8 @@ its push, which the hook ignores.
   `ANN.NavigationStateChanged`, `ANN.SlotDestroyed`, `ANN.ScreenInsetsChanged`, `ANN.TitleRenamed`,
   `ANN.BottomAccessoryPlacementChanged`, `ANN.SheetDetentChanged`, `ANN.SplitViewDisplayModeChanged`,
   `ANN.KeyCommandPressed`, `ANN.NativeScreenCall`, `ANN.NativeScreenReleased`, `ANN.ScreenRegionsChanged`,
-  `ANN.ArrangementChanged`, `ANN.HingeChanged`, `ANN.SplitViewColumnsStacked`. Their payloads are typed in
-  `src/interfaces/ComponentEvents.ts` and `Events.ts`. Both platforms also send `ANN.CommandCompleted`
+  `ANN.ArrangementChanged`, `ANN.HingeChanged`, `ANN.SplitViewColumnsStacked`, `ANN.DeepLinkDispatched` (iOS). Their
+  payloads are typed in `src/interfaces/ComponentEvents.ts` and `Events.ts`. Both platforms also send `ANN.CommandCompleted`
   (`CommandCompletedEvent`), which nothing in JS listens to.
 - Native components: `ANNSlot` (`src/api/slots`) and `ANNSafeAreaView` (`src/api/safeArea`), with C++ of their own in
   `ios/cpp`, which Android builds too (their states hold a size and a padding; the first one comes from the props
