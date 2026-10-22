@@ -1,16 +1,19 @@
 import { navigation, Screen, SideMenu, Stack } from '@apexnative/navigation';
 import type { ControlValues } from '../../sections/controls';
 import { sectionControls, type Section } from '../../sections/scenario';
+import { dynamic } from '../../ui/theme';
 import { buildOptions } from './optionsCode';
 
-/** A menu screen of the demo; on glass it has no background, so the glass shows through. */
+/**
+ * A menu screen of the demo. Its color is its `layout.backgroundColor`: it fills the whole panel, behind the status and
+ * navigation bars, while the menu's content keeps to the safe area. On glass it has no background, so the glass shows.
+ */
 function menu(side: 'left' | 'right', glass: boolean) {
-  const screen = Screen('SideMenuMenu', { side, glass });
-  return glass
-    ? screen.options({
-        layout: { backgroundColor: 'transparent', componentBackgroundColor: 'transparent' },
-      })
-    : screen;
+  return Screen('SideMenuMenu', { side }).options({
+    layout: glass
+      ? { backgroundColor: 'transparent', componentBackgroundColor: 'transparent' }
+      : { backgroundColor: dynamic.card },
+  });
 }
 
 /**
