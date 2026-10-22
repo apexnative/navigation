@@ -407,7 +407,7 @@ static void ANNCollectIds(UIViewController *node, NSMutableSet<NSString *> *ids)
         ANNNavigationOptions *resolved = [root resolveOptionsWithDefault];
         ANNModalPresentation *presentation =
             [[ANNModalPresentation alloc] initWithOptions:resolved animated:modal.animatedOverride];
-        NSString *problem = [presentation problemPresentingFrom:presenting windowRoot:windowRoot];
+        NSString *problem = [presentation fitToPresenting:presenting windowRoot:windowRoot];
         if (problem) {
             [self failShowOf:modal reason:problem];
             done();

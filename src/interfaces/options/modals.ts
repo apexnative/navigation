@@ -32,9 +32,11 @@ export type OptionsModalPresentationStyle =
  * (iOS) The system transition a modal comes and goes with: `'coverVertical'` (from below), `'crossDissolve'` (a fade),
  * `'flipHorizontal'` (a flip) or `'partialCurl'`. It is read when the modal shows and doesn't change afterwards;
  * `animations.showModal` with values of its own, and the zoom of iOS 18, go over it. UIKit flips only a modal over the
- * whole screen (`'fullScreen'`, `'overFullScreen'`): a sheet comes in as usual and flips only on its way out, and
- * `'partialCurl'` is accepted by UIKit only for a full-screen modal. An unknown string means `'coverVertical'`. Android
- * doesn't read it.
+ * whole screen (`'fullScreen'`, `'overFullScreen'`): a sheet comes in as usual and flips only on its way out. UIKit
+ * curls only a `'fullScreen'` modal over a screen that fills the window, so `'partialCurl'` with any other
+ * `modalPresentationStyle` (or without one), or over a modal that doesn't fill the screen, shows as `'coverVertical'`.
+ * A modal shown with `'partialCurl'` can't show another modal over it: that `showModal` rejects. An unknown string
+ * means `'coverVertical'`. Android doesn't read it.
  */
 export type OptionsModalTransitionStyle =
   'coverVertical' | 'crossDissolve' | 'flipHorizontal' | 'partialCurl';

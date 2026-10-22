@@ -118,21 +118,21 @@ static NSDictionary<NSString *, NSNumber *> *ANNTransitionStyles(void) {
     return nil;
 }
 
-// UIKit takes `partialCurl` only for a full-screen modal over a controller that fills the screen, and a controller
-// shown with `partialCurl` presents nothing more: the command rejects before it asks UIKit.
-- (NSString *)problemPresentingFrom:(UIViewController *)presenting
-                         windowRoot:(UIViewController *)windowRoot {
+// UIKit curls only a full-screen modal over a controller that fills the screen: elsewhere `partialCurl` is
+// `coverVertical`, so the modal still shows. A controller shown with `partialCurl` presents nothing more: the command
+// rejects before it asks UIKit.
+- (NSString *)fitToPresenting:(UIViewController *)presenting
+                   windowRoot:(UIViewController *)windowRoot {
     if (presenting.presentingViewController &&
         presenting.modalTransitionStyle == UIModalTransitionStylePartialCurl) {
-        return @"partialCurl needs a full screen modal";
+        return @"a modal shown with partialCurl can't show another modal";
     }
-    if (_transitionStyle != UIModalTransitionStylePartialCurl) {
-        return nil;
-    }
-    BOOL presentingFills = presenting == windowRoot ||
-                           presenting.modalPresentationStyle == UIModalPresentationFullScreen;
-    if (_style != UIModalPresentationFullScreen || !presentingFills) {
-        return @"partialCurl needs a full screen modal";
+    if (_transitionStyle == UIModalTransitionStylePartialCurl) {
+        BOOL presentingFills = presenting == windowRoot ||
+                               presenting.modalPresentationStyle == UIModalPresentationFullScreen;
+        if (_style != UIModalPresentationFullScreen || !presentingFills) {
+            _transitionStyle = UIModalTransitionStyleCoverVertical;
+        }
     }
     return nil;
 }
