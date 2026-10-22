@@ -37,7 +37,7 @@ static NSString *ANNRejectionOf(NSException *exception, NSString *what) {
             error = ANNRejectionOf(exception, what);
         }
         if (error) {
-            [ANNErrorHandler reject:reject text:error];
+            [ANNErrorHandler reject:reject of:name text:error];
             return;
         }
     }

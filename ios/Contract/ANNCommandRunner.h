@@ -22,8 +22,8 @@ typedef void (^ANNCommandBody)(id _Nullable layout, ANNCommandAnswer *answer);
 + (void)run:(NSString *)name
     commandId:(nullable NSString *)commandId
          what:(NSString *)what
-      resolve:(RCTPromiseResolveBlock)resolve
-       reject:(RCTPromiseRejectBlock)reject
+      resolve:(nullable RCTPromiseResolveBlock)resolve
+       reject:(nullable RCTPromiseRejectBlock)reject
         check:(nullable ANNCommandCheck)check
          body:(ANNCommandBody)body;
 
