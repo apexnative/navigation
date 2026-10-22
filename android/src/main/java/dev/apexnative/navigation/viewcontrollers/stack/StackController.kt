@@ -2,6 +2,7 @@ package dev.apexnative.navigation.viewcontrollers.stack
 
 import android.app.Activity
 import android.util.Log
+import android.view.View
 import dev.apexnative.navigation.NavigationActivity
 import dev.apexnative.navigation.options.AnimationsOptions
 import dev.apexnative.navigation.options.BottomTabsEnterExitAnimationOptions
@@ -35,6 +36,7 @@ import dev.apexnative.navigation.viewcontrollers.stack.topbar.TopBarPresenter
 import dev.apexnative.navigation.viewcontrollers.stack.topbar.TopBarRoom
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.Presenter
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.ViewController
+import dev.apexnative.navigation.views.animations.AnimationRules
 import dev.apexnative.navigation.views.component.ComponentLayout
 import dev.apexnative.navigation.views.stack.StackLayout
 import dev.apexnative.navigation.views.stack.topbar.LargeTitleView
@@ -256,6 +258,136 @@ class StackController(
      * screen counts).
      */
     override fun canHandleBack(): Boolean = topBar.isSearchOpen() || queue.entries.size >= 2
+
+    /**
+     * The default pop of the top is what back does now and it can be previewed: two entries or more, nothing running
+     * or waiting, no open search, the top doesn't hold back and pops with the default transition, the screen under it
+     * has its view, and the stack shows.
+     */
+    override fun stackPoppedByBack(): StackController? {
+        if (topBar.isSearchOpen() || !queue.isAtRest) return null
+        val entries = queue.entries
+        val top = queue.currentChild ?: return null
+        val target = entries.getOrNull(entries.size - 2) ?: return null
+        if (top !== entries.last() || target !in queue.shown || target.peekView() == null) return null
+        if (!queue.isRendered(target) || backGesture != null) return null
+        val options = resolvedOf(top)
+        val pop = options.animations.pop
+        if (options.hardwareBackButton.popStackOnPress.isFalse || pop.enabled.isFalse || AnimationRules.stackIsOwn(pop)) {
+            return null
+        }
+        val display = queue.display
+        return this.takeIf { display.isOnScreen && display.canAnimate }
+    }
+
+    /**
+     * Starts the preview of the pop a back gesture would make ([stackPoppedByBack] said yes): the top shrinks toward
+     * the gesture's side ([fromLeft]) and follows the finger from [touchY]; the screen under it shows with its bar.
+     * None when it can't be shown.
+     */
+    internal fun startBackGesture(fromLeft: Boolean, touchY: Float): BackGesture? {
+        val views = queue.display as? StackViews ?: return null
+        val top = queue.currentChild ?: return null
+        val target = queue.entries.getOrNull(queue.entries.size - 2) ?: return null
+        val gesture = BackGesture(views, top, target)
+        val preview = views.startBackPreview(top, target, fromLeft, touchY, gesture::reveal) ?: return null
+        gesture.preview = preview
+        backGesture = gesture
+        return gesture
+    }
+
+    // The back gesture over this stack whose preview hasn't ended yet; none.
+    private var backGesture: BackGesture? = null
+
+    /**
+     * A back gesture over the top of this stack ([startBackGesture]): its progress, its cancel, and its release, which
+     * pops the top through the queue with the preview's end. A command accepted meanwhile, or the stack's destroy,
+     * ends the preview at once ([abort]).
+     */
+    internal inner class BackGesture(
+        private val views: StackViews,
+        private val top: ViewController<*>,
+        private val target: ViewController<*>,
+    ) {
+        lateinit var preview: BackPreview
+        // How the screen under the top was before the preview showed it: in the container and seen, its alpha and
+        // accessibility.
+        private var targetWasPlaced = false
+        private var targetAlpha = 1f
+        private var targetAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
+        private var revealed = false
+        private var aborted = false
+
+        /** The gesture moved: [progress] 0 … 1, the finger at [touchY]. */
+        fun progress(progress: Float, touchY: Float) {
+            if (!aborted) preview.progress(progress, touchY)
+        }
+
+        /** Cancelled: the preview springs back, then the screen under the top and the bar are as they were. */
+        fun cancel() {
+            if (!aborted) preview.cancel(::restore)
+        }
+
+        /**
+         * Released: the top pops, the preview playing its end; the default pop when its picture isn't there yet. False
+         * when the stack changed since the gesture started (a command ran, the stack went): back goes the usual way.
+         */
+        fun commit(): Boolean {
+            if (aborted || isDestroyed) return false
+            if (!preview.isReady) {
+                abort()
+                queue.cut(target, null, id, "go back in the stack '$id'", null)
+                return true
+            }
+            if (backGesture === this) backGesture = null
+            queue.cut(target, null, id, "go back in the stack '$id'", null, gesture = true)
+            return true
+        }
+
+        /** The stack changed or goes: the preview ends at once and the stack is as it was. */
+        fun abort() {
+            if (aborted) return
+            aborted = true
+            preview.endAtOnce()
+            restore()
+        }
+
+        // The preview's picture is there: the screen under the top shows under it, and the bar shows that screen.
+        internal fun reveal() {
+            val view = target.peekView() ?: return
+            targetWasPlaced = view.parent === peekView() && view.visibility == View.VISIBLE
+            targetAlpha = view.alpha
+            targetAccessibility = view.importantForAccessibility
+            revealed = true
+            views.reveal(target, top)
+            view.alpha = 1f
+            topBar.apply(target)
+        }
+
+        private fun restore() {
+            views.previewEnded(preview)
+            if (backGesture === this) backGesture = null
+            if (!revealed || isDestroyed) return
+            revealed = false
+            if (target in queue.shown && target !== queue.currentChild) {
+                val view = target.peekView()
+                if (targetWasPlaced && view != null) {
+                    view.alpha = targetAlpha
+                    view.importantForAccessibility = targetAccessibility
+                } else {
+                    views.detach(target)
+                }
+            }
+            // The bar shows the top again, its components appeared again.
+            val shown = queue.currentChild
+            topBar.apply(shown)
+            shown?.let {
+                topBar.screenWillAppear(optionsScreen(it))
+                topBar.screenDidAppear(optionsScreen(it))
+            }
+            BackCallbackState.update()
+        }
+    }
 
     /**
      * The back arrow of the bar was pressed: the screen the user sees holds it (`topBar.backButton.popStackOnPress:
@@ -506,6 +638,7 @@ class StackController(
 
     override fun destroy() {
         if (isDestroyed) return
+        backGesture?.abort()
         queue.destroy()
         preparedPushes()?.discardFor(this)
         fab.destroy()
@@ -552,6 +685,10 @@ class StackController(
         (node as? OptionsScreen)?.optionsScreen ?: node
 
     private inner class QueueHost : StackQueue.Host {
+        override fun operationAccepted() {
+            backGesture?.abort()
+        }
+
         // The bar takes the options of the new top at once, also without appearance events.
         override fun currentChildChanged() {
             updateBar()

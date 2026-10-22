@@ -9,6 +9,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import dev.apexnative.navigation.options.LayoutAnimation
+import dev.apexnative.navigation.utils.UiThread
 import dev.apexnative.navigation.utils.whenContentMounted
 import dev.apexnative.navigation.viewcontrollers.component.ComponentViewController
 import dev.apexnative.navigation.viewcontrollers.externalcomponent.ExternalComponentViewController
@@ -30,6 +31,11 @@ import dev.apexnative.navigation.views.stack.StackLayout
  */
 internal class StackViews(private val stack: StackController) : StackDisplay {
     private val animators = HashMap<ViewController<*>, Animator>()
+    // The preview of the back gesture that runs or ends now, and its two screens.
+    private var preview: BackPreview? = null
+    private var previewScreens: Pair<ViewController<*>, ViewController<*>>? = null
+    // The ends of the two screens of a released gesture whose preview plays its end.
+    private var committing: Pair<() -> Unit, () -> Unit>? = null
     // What goes back when a screen's animator ends or stops: the elements its transition carries.
     private val cleanups = HashMap<ViewController<*>, () -> Unit>()
 
@@ -188,7 +194,82 @@ internal class StackViews(private val stack: StackController) : StackDisplay {
         done: () -> Unit,
     ): () -> Unit = TargetsWait.start(animation, from, to, waiting, done)
 
+    /**
+     * Starts the preview of a back gesture over [top], [target] under it (`BackPreview`): none without the stack's view
+     * or a window. [onReveal] shows [target] and its bar as the preview's picture is there.
+     */
+    fun startBackPreview(
+        top: ViewController<*>,
+        target: ViewController<*>,
+        fromLeft: Boolean,
+        touchY: Float,
+        onReveal: () -> Unit,
+    ): BackPreview? {
+        endPreview()
+        val layout = layout ?: return null
+        val window = stack.activity.window ?: return null
+        val topView = top.peekView() ?: return null
+        val targetView = target.peekView() ?: return null
+        val started = BackPreview(layout, topView, targetView, fromLeft, touchY, onReveal)
+        preview = started
+        previewScreens = top to target
+        started.start(window)
+        return started
+    }
+
+    /** The preview of the back gesture went: cancelled and put back, or never shown. */
+    fun previewEnded(ended: BackPreview) {
+        if (preview !== ended) return
+        preview = null
+        previewScreens = null
+    }
+
+    override fun hasBackPreview(top: ViewController<*>, target: ViewController<*>): Boolean =
+        preview?.isReady == true && previewScreens == top to target
+
+    override fun finishBackGesture(
+        top: ViewController<*>,
+        target: ViewController<*>,
+        topDone: () -> Unit,
+        targetDone: () -> Unit,
+    ) {
+        val running = preview?.takeIf { hasBackPreview(top, target) } ?: run {
+            topDone()
+            targetDone()
+            return
+        }
+        committing = topDone to targetDone
+        running.commit {
+            committing = null
+            previewEnded(running)
+            topDone()
+            targetDone()
+        }
+    }
+
+    private fun endPreview() {
+        val ended = preview ?: return
+        preview = null
+        previewScreens = null
+        committing = null
+        ended.endAtOnce()
+    }
+
+    // A later transition takes one screen of a released gesture's preview: the preview ends where it is, the popped
+    // screen stays out of sight until the pop takes it away, and the other screen's part ends on the next turn.
+    private fun stopPreview(screen: ViewController<*>) {
+        val (top, target) = previewScreens ?: return
+        if (screen !== top && screen !== target) return
+        val dones = committing
+        endPreview()
+        if (dones == null) return
+        top.peekView()?.alpha = 0f
+        val other = if (screen === top) dones.second else dones.first
+        UiThread.post { other() }
+    }
+
     override fun stop(screen: ViewController<*>) {
+        stopPreview(screen)
         val animator = animators.remove(screen)
         if (animator != null) {
             animator.removeAllListeners()

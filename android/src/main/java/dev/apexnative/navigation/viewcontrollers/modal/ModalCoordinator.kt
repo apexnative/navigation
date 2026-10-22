@@ -347,6 +347,12 @@ internal class ModalCoordinator(
         return true
     }
 
+    /**
+     * The root of the modal that back goes to first; none without one. A back gesture previews only a pop in it: its
+     * dismissal has a preview of its own nowhere yet.
+     */
+    fun backTargetRoot(): ViewController<*>? = backTarget()?.root
+
     /** The mirror of [handleBack], without acting; null without a modal to ask. */
     fun canHandleBack(): Boolean? {
         val record = backTarget() ?: return null

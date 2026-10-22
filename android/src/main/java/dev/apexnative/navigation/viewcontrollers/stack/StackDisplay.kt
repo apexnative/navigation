@@ -156,6 +156,24 @@ internal interface StackDisplay {
         done: () -> Unit,
     ): () -> Unit
 
+    /** The preview of a back gesture over [top], [target] under it, shows ([finishBackGesture] can end it). */
+    fun hasBackPreview(top: ViewController<*>, target: ViewController<*>): Boolean = false
+
+    /**
+     * The pop of a back gesture whose preview shows ([hasBackPreview]), released: the preview plays the end of [top]
+     * going and [target] coming. [topDone] and [targetDone] once each, as [animate]'s; [stop] of one screen ends the
+     * preview where it is and its other screen's part.
+     */
+    fun finishBackGesture(
+        top: ViewController<*>,
+        target: ViewController<*>,
+        topDone: () -> Unit,
+        targetDone: () -> Unit,
+    ) {
+        topDone()
+        targetDone()
+    }
+
     /** Stops the animator of [screen] where it is, without its end: a later transition takes the screen over. */
     fun stop(screen: ViewController<*>)
 

@@ -73,8 +73,10 @@ top-level folder. Main thread only, unless a line says otherwise.
   `ScreenFrame.kt` (bars' room, window insets, keyboard), `ScreenSafeArea.kt`, `ComponentPresenter.kt` (background),
   `ScreenContentFactory.kt`, `ScreenFocus.kt`; `react/ReactView.kt`; `views/component/ComponentLayout.kt`.
 - Stack (queue, commands, back): `viewcontrollers/stack/StackQueue.kt`, `StackCommands.kt`, `StackController.kt`,
-  `StackViews.kt`, `StackTransitions.kt`, `PreparedPushes.kt`; `views/stack/StackLayout.kt`; back:
-  `NavigationActivity.kt`, `viewcontrollers/navigator/BackCallbackState.kt`.
+  `StackViews.kt`, `StackTransitions.kt`, `PreparedPushes.kt`; `views/stack/StackLayout.kt`, `ScreenEdge.kt` (the edge
+  a moving screen extends); back: `NavigationActivity.kt`, `viewcontrollers/navigator/BackCallbackState.kt`; the
+  preview of a pop during the back gesture (Android 14+): `StackController.BackGesture`, `BackPreview.kt`,
+  `stackPoppedByBack` of the layouts.
 - Stack FAB: `viewcontrollers/stack/fab/FabPresenter.kt`, `FabPlan.kt`, `FabPlacement.kt`; `views/stack/fab/`.
 - Top bar (title, buttons, menus, large title): `viewcontrollers/stack/topbar/TopBarPresenter.kt`, `TopBarRoom.kt`,
   `TopBarVisibility.kt`, `BarComponents.kt`, `ButtonPlaces.kt`, `LargeTitleCollapse.kt`, `BarRowTransition.kt`;
@@ -183,6 +185,9 @@ top-level folder. Main thread only, unless a line says otherwise.
 - A React screen without `layout.backgroundColor` is opaque with the theme's `android:colorBackground`
   (`ComponentPresenter`): a push keeps the covered screen under the new one until it ends, and a transparent screen
   shows it. Only an explicit `'transparent'` / `null` (overlays, see-through modals) lets it through.
+- The back gesture's preview shows the screen under the top outside any operation of the queue: it may only reveal
+  it and put it back, and its release goes through `StackQueue.cut(gesture = true)`. A command that comes meanwhile
+  stops it through `StackDisplay.stop`, like any transition it takes over.
 - Without edge to edge the window resizes for the keyboard by the manifest's soft input mode, so
   `layout.adjustResize: false` goes through the system UI owner's keyboard group (`SystemUiWindow.setKeyboardCovers`),
   not through the screen's padding.

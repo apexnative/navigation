@@ -71,6 +71,9 @@ internal class StackQueue(
         /** The current child (the top of [shown]) changed: a transition started, or an operation ran at once. */
         fun currentChildChanged()
 
+        /** An operation was accepted: a back gesture's preview that shows ends, the stack as it was. */
+        fun operationAccepted() = Unit
+
         /**
          * The current child is about to change, right before [currentChildChanged]: [motion] is the default transition
          * the bar's row goes with, none when the change comes at once or with an animation of its own; [visibility] is
@@ -140,6 +143,9 @@ internal class StackQueue(
     private var takenOver = false
     private var destroyed = false
 
+    /** [node]'s content is made and nothing waits for it to render as a lower screen. */
+    fun isRendered(node: Node): Boolean = node !in unrendered && node !in lowerWaits
+
     /** The stack as JavaScript sees it, bottom to top. */
     val entries: List<Node>
         get() = entryList
@@ -199,7 +205,9 @@ internal class StackQueue(
 
     /**
      * A cut to [target], an entry that becomes the top: every entry above it leaves. [answer] gets [value]; a back of
-     * the user has none. [silent]: no animation and no appearance events (`popToRootOnBlur`).
+     * the user has none. [silent]: no animation and no appearance events (`popToRootOnBlur`). [gesture]: the release of
+     * a back gesture whose preview shows the pop already (`StackDisplay.finishBackGesture` ends it, the bar shows the
+     * target at once).
      */
     fun cut(
         target: Node,
@@ -208,6 +216,7 @@ internal class StackQueue(
         what: String,
         value: String?,
         silent: Boolean = false,
+        gesture: Boolean = false,
     ) {
         val index = entryList.indexOf(target)
         if (destroyed || index < 0) return refuse(answer, null, componentId, emptyList())
@@ -219,7 +228,7 @@ internal class StackQueue(
         (waiting as? ReplaceOp)?.let(::completeAtOnce)
         val showsAbove = target in shownList && shownList.last() !== target
         val op = if (showsAbove) {
-            CutOp(seq, answer, componentId, what, target, value, silent)
+            CutOp(seq, answer, componentId, what, target, value, silent, gesture)
         } else {
             // A cut that moves nothing more: its answer at its turn.
             NoneOp(seq, answer, null, componentId, what, value, null)
@@ -341,6 +350,8 @@ internal class StackQueue(
     // The table.
 
     private fun enqueue(op: Op) {
+        // Anything but the release of a back gesture ends its preview first.
+        if (!(op is CutOp && op.gesture)) host.operationAccepted()
         queued.addLast(op)
         drain()
     }
@@ -581,7 +592,9 @@ internal class StackQueue(
         val animated = !atOnce && !op.silent && display.canAnimate && !pop.enabled.isFalse
         val own = animated && AnimationRules.stackIsOwn(pop)
         val elements = own && AnimationRules.hasElements(pop)
-        tellBars(animated, own, elements, pop, TabBarMotion.Move.WithPop, BarMotion.Pop)
+        // A back gesture's preview shows the target and its bar already: the bar stays as it is.
+        val gesture = op.gesture && animated && !own && leaving.size == 1 && display.hasBackPreview(top, target)
+        tellBars(animated && !gesture, own, elements, pop, TabBarMotion.Move.WithPop, BarMotion.Pop)
         host.currentChildChanged()
         finishTakenOver(ended)
         if (display.hasView) target.onViewBroughtToFront()
@@ -592,6 +605,17 @@ internal class StackQueue(
         // The screens between the top and the target leave without animation.
         leaving.drop(1).forEach(display::hide)
         if (!animated) return finishCut(op)
+        if (gesture) {
+            op.animating += top
+            op.animating += target
+            display.finishBackGesture(
+                top,
+                target,
+                { step(op) { screenDone(op, top) } },
+                { step(op) { screenDone(op, target) } },
+            )
+            return
+        }
         // Its own: no wait on a pop; the leaving screen starts from where it is.
         if (own) return animate(op, backMoves(top, target, pop, elements, moving))
         animate(op, listOf(Move(top, Motion.PopOut, true), Move(target, Motion.PopReveal, moving)))
@@ -1209,6 +1233,7 @@ internal class StackQueue(
         val target: Node,
         val value: String?,
         val silent: Boolean,
+        val gesture: Boolean,
     ) : Op(seq, answer, null, componentId, what) {
         var leaving: List<Node> = emptyList()
     }

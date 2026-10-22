@@ -38,6 +38,7 @@ import dev.apexnative.navigation.viewcontrollers.overlay.OverlayViews
 import dev.apexnative.navigation.viewcontrollers.parent.ParentController
 import dev.apexnative.navigation.viewcontrollers.stack.PreparedPushes
 import dev.apexnative.navigation.viewcontrollers.stack.StackCommands
+import dev.apexnative.navigation.viewcontrollers.stack.StackController
 import dev.apexnative.navigation.viewcontrollers.stack.topbar.BarComponents
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.ViewController
 import dev.apexnative.navigation.views.animations.FadeThrough
@@ -152,6 +153,15 @@ class Navigator(
      */
     fun handleBack(listener: CommandListener): Boolean =
         modals.handleBack(listener) ?: (root?.handleBack(listener) == true)
+
+    /**
+     * The stack whose top [handleBack] would take away with the default pop: in the top modal, else in the root; none
+     * when back would do anything else.
+     */
+    internal fun stackPoppedByBack(): StackController? {
+        val modalRoot = modals.backTargetRoot()
+        return if (modalRoot != null) modalRoot.stackPoppedByBack() else root?.stackPoppedByBack()
+    }
 
     /**
      * [layer] may wait to show from now on ([WaitingLayer]): the nodes in it ask it through [isInWaitingLayer] and

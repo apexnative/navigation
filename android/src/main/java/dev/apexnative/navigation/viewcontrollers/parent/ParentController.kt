@@ -8,6 +8,7 @@ import dev.apexnative.navigation.react.CommandListener
 import dev.apexnative.navigation.viewcontrollers.bottomtabs.TabBarMotion
 import dev.apexnative.navigation.viewcontrollers.child.ChildController
 import dev.apexnative.navigation.viewcontrollers.child.ChildControllersRegistry
+import dev.apexnative.navigation.viewcontrollers.stack.StackController
 import dev.apexnative.navigation.viewcontrollers.stack.fab.FabPlacement
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.Presenter
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.ViewController
@@ -209,6 +210,8 @@ abstract class ParentController<V : ViewGroup>(
     override fun handleBack(listener: CommandListener): Boolean = getCurrentChild()?.handleBack(listener) == true
 
     override fun canHandleBack(): Boolean = getCurrentChild()?.canHandleBack() == true
+
+    override fun stackPoppedByBack(): StackController? = getCurrentChild()?.stackPoppedByBack()
 
     override fun destroy() {
         if (isDestroyed) return

@@ -22,7 +22,7 @@ export default defineScenario({
   id: '3.6',
   title: 'Hardware back',
   check:
-    'The system back of Android (button or gesture). A draft with text keeps the user (`usePreventLeave`): back asks first, pushed or in a modal. `bottomTabsOnPress` (`Tabs().backBehavior`) is what back does on the first screen of a tab: the runs show demo tabs with it. `exit` leaves the app, `first` goes to the first tab (on the first tab it leaves), `previous` goes to the tab before (with none before it leaves): open Inbox, then Profile, and press back.',
+    'The system back of Android (button or gesture). On Android 14+ a slow swipe from the edge on a pushed screen previews the pop: the screen shrinks toward the swipe with rounded corners, the screen under it shows dimmed with its bar; letting go pops, swiping back cancels. A draft with text keeps the user (`usePreventLeave`): back asks first, pushed or in a modal. `bottomTabsOnPress` (`Tabs().backBehavior`) is what back does on the first screen of a tab: the runs show demo tabs with it. `exit` leaves the app, `first` goes to the first tab (on the first tab it leaves), `previous` goes to the tab before (with none before it leaves): open Inbox, then Profile, and press back.',
   platform: 'android',
   runs: {
     'Push a draft': () => navigation.push('Draft'),
@@ -31,5 +31,11 @@ export default defineScenario({
     'Tabs: back to the first tab': () => tabsWithBack('first'),
     'Tabs: back to the tab before': () => tabsWithBack('previous'),
   },
-  keywords: ['hardwareBackButton', 'usePreventLeave', 'bottomTabsOnPress', 'backBehavior'],
+  keywords: [
+    'hardwareBackButton',
+    'usePreventLeave',
+    'bottomTabsOnPress',
+    'backBehavior',
+    'predictive back',
+  ],
 });
