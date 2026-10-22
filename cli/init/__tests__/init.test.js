@@ -7,7 +7,7 @@ const path = require('node:path');
 const { init, resolveVersion } = require('..');
 const { createUI } = require('../../ui');
 
-const TEMPLATE = path.join(__dirname, '..', '..', 'setup', '__fixtures__', 'template-0.87');
+const TEMPLATE = path.join(__dirname, '..', '..', 'setup', '__fixtures__', 'template-0.88');
 const VERSION = JSON.parse(
   fs.readFileSync(path.join(__dirname, '..', '..', '..', 'package.json'), 'utf8')
 ).version;
@@ -25,6 +25,7 @@ function makeTemplate(root) {
   copy('MainActivity.kt', 'android/app/src/main/java/com/myapp/MainActivity.kt');
   copy('styles.xml', 'android/app/src/main/res/values/styles.xml');
   copy('AppDelegate.swift', 'ios/MyApp/AppDelegate.swift');
+  copy('SceneDelegate.swift', 'ios/MyApp/SceneDelegate.swift');
   copy('Info.plist', 'ios/MyApp/Info.plist');
   copy('index.js', 'index.js');
   copy('App.tsx', 'App.tsx');
@@ -38,7 +39,7 @@ function makeTemplate(root) {
   fs.writeFileSync(
     path.join(root, 'package.json'),
     JSON.stringify(
-      { name: 'MyApp', dependencies: { react: '19.2.0', 'react-native': '0.87.10' } },
+      { name: 'MyApp', dependencies: { react: '19.3.0', 'react-native': '0.88.10' } },
       null,
       2
     ) + '\n'
@@ -63,7 +64,7 @@ function machine({ fail } = {}) {
       // A range has several versions, a version itself.
       const spec = args[1].slice('react-native@'.length);
       const stdout = spec.startsWith('~')
-        ? '["0.87.0", "0.87.10", "0.87.2"]'
+        ? '["0.88.0", "0.88.10", "0.88.2"]'
         : JSON.stringify(spec);
       return { ok: true, stdout, stderr: '' };
     }
@@ -110,12 +111,12 @@ describe('init', () => {
     const root = path.join(on.cwd, 'MyApp');
     expect(code).toBe(0);
     expect(result).toMatchObject({ command: 'init', ok: true, applied: true, errors: [] });
-    expect(result).toMatchObject({ reactNative: '0.87.10', packageManager: 'npm' });
+    expect(result).toMatchObject({ reactNative: '0.88.10', packageManager: 'npm' });
 
     expect(on.calls.map(({ command }) => command)).toEqual(
       expect.arrayContaining([
-        'npm view react-native@~0.87.0 version --json',
-        'npx --yes --package=@react-native-community/cli@latest -- rnc-cli init MyApp --version 0.87.10 --pm npm --skip-install --install-pods false',
+        'npm view react-native@~0.88.0 version --json',
+        'npx --yes --package=@react-native-community/cli@latest -- rnc-cli init MyApp --version 0.88.10 --pm npm --skip-install --install-pods false',
         'npm install',
         'bundle install',
         'bundle exec pod install',
@@ -129,8 +130,8 @@ describe('init', () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
     expect(Object.entries(pkg.dependencies)).toEqual([
       ['@apexnative/navigation', `^${VERSION}`],
-      ['react', '19.2.0'],
-      ['react-native', '0.87.10'],
+      ['react', '19.3.0'],
+      ['react-native', '0.88.10'],
     ]);
     expect(fs.readFileSync(path.join(root, 'index.js'), 'utf8')).toContain(
       "import { Navigation } from './Navigation';"
@@ -159,6 +160,7 @@ describe('init', () => {
       ['MainActivity.kt', 'change'],
       ['styles.xml', 'change'],
       ['AppDelegate.swift', 'change'],
+      ['SceneDelegate.swift', 'change'],
       ['Info.plist', 'change'],
       ['index.js', 'change'],
       ['navigation-env.d.ts', 'create'],
@@ -222,9 +224,9 @@ describe('init', () => {
 
   it('warns of a React Native newer than the one the navigation was checked with', async () => {
     const on = machine();
-    const { result } = await initJson(on, { version: '0.88.0' });
+    const { result } = await initJson(on, { version: '0.89.0' });
     expect(result.warnings).toEqual([
-      'React Native 0.88.0 is newer than 0.87, the one the navigation was checked with: setup may leave files to change by hand.',
+      'React Native 0.89.0 is newer than 0.88, the one the navigation was checked with: setup may leave files to change by hand.',
     ]);
   });
 
@@ -253,11 +255,11 @@ describe('init', () => {
 describe('the version of React Native', () => {
   it('is the newest one npm has of the range, by its numbers', () => {
     const on = machine();
-    expect(resolveVersion(on.run, '~0.87.0')).toBe('0.87.10');
+    expect(resolveVersion(on.run, '~0.88.0')).toBe('0.88.10');
   });
 
   it("is unknown when npm can't say", () => {
     const on = machine({ fail: 'npm view' });
-    expect(resolveVersion(on.run, '~0.87.0')).toBeUndefined();
+    expect(resolveVersion(on.run, '~0.88.0')).toBeUndefined();
   });
 });
