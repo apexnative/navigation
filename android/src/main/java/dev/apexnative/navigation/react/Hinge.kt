@@ -12,6 +12,7 @@ import androidx.lifecycle.LifecycleOwner
 import com.facebook.react.ReactApplication
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.WritableMap
+import dev.apexnative.navigation.react.events.EventContract
 import dev.apexnative.navigation.react.events.EventEmitter
 import dev.apexnative.navigation.utils.WindowFolds
 import java.lang.ref.WeakReference
@@ -148,7 +149,7 @@ internal object Hinge {
 
     private fun toMap(value: Value?): WritableMap = Arguments.createMap().apply {
         if (value == null) return@apply
-        putString("state", value.state)
-        value.angle?.let { putDouble("angle", it.toDouble()) }
+        putString(EventContract.HingeChanged.STATE, value.state)
+        value.angle?.let { putDouble(EventContract.HingeChanged.ANGLE, it.toDouble()) }
     }
 }

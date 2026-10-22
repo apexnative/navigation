@@ -12,147 +12,159 @@ import org.json.JSONArray
 /**
  * Sends the events `ANN.<Name>` to the JavaScript of [reactContext] through React Native's device event emitter, in
  * the order they are sent: sent from the main thread only. Without a context, or when its React instance is gone, an
- * event is dropped with one line in the log. The names and the fields are the contract. The core sends through
- * [current]; modules keep making their own.
+ * event is dropped with one line in the log. The names and the keys come from [EventContract], made from the types of
+ * `src/interfaces/`. The core sends through [current]; modules keep making their own.
  */
 class EventEmitter(private val reactContext: ReactContext?) {
     /** Whether an event sent now reaches JavaScript. */
     val canSend: Boolean
         get() = reactContext?.hasActiveReactInstance() == true
 
-    fun emitAppLaunched() = emit(APP_LAUNCHED, Arguments.createMap())
+    fun emitAppLaunched() = emit(EventContract.AppLaunched.EVENT, Arguments.createMap())
 
     fun emitCommandCompleted(commandName: String, commandId: String, completionTime: Long) =
-        emit(COMMAND_COMPLETED, Arguments.createMap().apply {
-            putString("commandName", commandName)
-            putString("commandId", commandId)
-            putDouble("completionTime", completionTime.toDouble())
+        emit(EventContract.CommandCompleted.EVENT, Arguments.createMap().apply {
+            putString(EventContract.CommandCompleted.COMMAND_NAME, commandName)
+            putString(EventContract.CommandCompleted.COMMAND_ID, commandId)
+            putDouble(EventContract.CommandCompleted.COMPLETION_TIME, completionTime.toDouble())
         })
 
     fun emitComponentWillAppear(componentId: String, componentName: String, type: ComponentType) =
-        emit(COMPONENT_WILL_APPEAR, component(componentId, componentName, type))
+        emit(EventContract.ComponentWillAppear.EVENT, component(componentId, componentName, type))
 
     fun emitComponentDidAppear(componentId: String, componentName: String, type: ComponentType) =
-        emit(COMPONENT_DID_APPEAR, component(componentId, componentName, type))
+        emit(EventContract.ComponentDidAppear.EVENT, component(componentId, componentName, type))
 
     fun emitComponentDidDisappear(componentId: String, componentName: String, type: ComponentType) =
-        emit(COMPONENT_DID_DISAPPEAR, component(componentId, componentName, type))
+        emit(EventContract.ComponentDidDisappear.EVENT, component(componentId, componentName, type))
 
     /** The screen the user sees (`null` for none) and the selected tab of the tabs it is in (`null` out of tabs). */
     fun emitNavigationStateChanged(screenId: String?, screenName: String?, tab: Int?) =
-        emit(NAVIGATION_STATE_CHANGED, Arguments.createMap().apply {
+        emit(EventContract.NavigationStateChanged.EVENT, Arguments.createMap().apply {
+            val keys = EventContract.NavigationStateChanged
             if (screenId == null) {
-                putNull("screen")
+                putNull(keys.SCREEN)
             } else {
-                putMap("screen", Arguments.createMap().apply {
-                    putString("id", screenId)
-                    putString("name", screenName)
+                putMap(keys.SCREEN, Arguments.createMap().apply {
+                    putString(EventContract.NavigationStateChangedScreen.ID, screenId)
+                    putString(EventContract.NavigationStateChangedScreen.NAME, screenName)
                 })
             }
-            if (tab == null) putNull("tab") else putInt("tab", tab)
+            if (tab == null) putNull(keys.TAB) else putInt(keys.TAB, tab)
         })
 
-    fun emitScreenPopped(componentId: String) = emit(SCREEN_POPPED, withId(componentId))
+    fun emitScreenPopped(componentId: String) = emit(EventContract.ScreenPopped.EVENT, withId(componentId))
 
     fun emitNavigationButtonPressed(componentId: String, buttonId: String) =
-        emit(NAVIGATION_BUTTON_PRESSED, withId(componentId).apply { putString("buttonId", buttonId) })
+        emit(EventContract.NavigationButtonPressed.EVENT, withId(componentId).apply {
+            putString(EventContract.NavigationButtonPressed.BUTTON_ID, buttonId)
+        })
 
     fun emitBottomTabSelected(selectedTabIndex: Int, unselectedTabIndex: Int, bottomTabsId: String) =
-        emit(BOTTOM_TAB_SELECTED, Arguments.createMap().apply {
-            putInt("selectedTabIndex", selectedTabIndex)
-            putInt("unselectedTabIndex", unselectedTabIndex)
-            putString("bottomTabsId", bottomTabsId)
+        emit(EventContract.BottomTabSelected.EVENT, Arguments.createMap().apply {
+            putInt(EventContract.BottomTabSelected.SELECTED_TAB_INDEX, selectedTabIndex)
+            putInt(EventContract.BottomTabSelected.UNSELECTED_TAB_INDEX, unselectedTabIndex)
+            putString(EventContract.BottomTabSelected.BOTTOM_TABS_ID, bottomTabsId)
         })
 
     fun emitBottomTabPressed(tabIndex: Int, bottomTabsId: String, screenId: String?, wasSelected: Boolean) =
-        emit(BOTTOM_TAB_PRESSED, Arguments.createMap().apply {
-            putInt("tabIndex", tabIndex)
-            putString("bottomTabsId", bottomTabsId)
-            screenId?.let { putString("screenId", it) }
-            putBoolean("wasSelected", wasSelected)
+        emit(EventContract.BottomTabPressed.EVENT, Arguments.createMap().apply {
+            putInt(EventContract.BottomTabPressed.TAB_INDEX, tabIndex)
+            putString(EventContract.BottomTabPressed.BOTTOM_TABS_ID, bottomTabsId)
+            screenId?.let { putString(EventContract.BottomTabPressed.SCREEN_ID, it) }
+            putBoolean(EventContract.BottomTabPressed.WAS_SELECTED, wasSelected)
         })
 
     fun emitBottomTabLongPressed(selectedTabIndex: Int, bottomTabsId: String) =
-        emit(BOTTOM_TAB_LONG_PRESSED, Arguments.createMap().apply {
-            putInt("selectedTabIndex", selectedTabIndex)
-            putString("bottomTabsId", bottomTabsId)
+        emit(EventContract.BottomTabLongPressed.EVENT, Arguments.createMap().apply {
+            putInt(EventContract.BottomTabLongPressed.SELECTED_TAB_INDEX, selectedTabIndex)
+            putString(EventContract.BottomTabLongPressed.BOTTOM_TABS_ID, bottomTabsId)
         })
 
     /** The id and the name (without `slot:`) of the screen the modal showed, and how many modals went. */
     fun emitModalDismissed(componentId: String, componentName: String, modalsDismissed: Int) =
-        emit(MODAL_DISMISSED, withId(componentId).apply {
-            putString("componentName", componentName)
-            putInt("modalsDismissed", modalsDismissed)
+        emit(EventContract.ModalDismissed.EVENT, withId(componentId).apply {
+            putString(EventContract.ModalDismissed.COMPONENT_NAME, componentName)
+            putInt(EventContract.ModalDismissed.MODALS_DISMISSED, modalsDismissed)
         })
 
-    fun emitModalAttemptedToDismiss(componentId: String) = emit(MODAL_ATTEMPTED_TO_DISMISS, withId(componentId))
+    fun emitModalAttemptedToDismiss(componentId: String) =
+        emit(EventContract.ModalAttemptedToDismiss.EVENT, withId(componentId))
 
     /** [detent]: `medium`, `large`, or a height in dp. */
     fun emitSheetDetentChanged(componentId: String, detent: Any) =
-        emit(SHEET_DETENT_CHANGED, withId(componentId).apply {
+        emit(EventContract.SheetDetentChanged.EVENT, withId(componentId).apply {
             when (detent) {
-                is Number -> putDouble("detent", detent.toDouble())
-                else -> putString("detent", detent.toString())
+                is Number -> putDouble(EventContract.SheetDetentChanged.DETENT, detent.toDouble())
+                else -> putString(EventContract.SheetDetentChanged.DETENT, detent.toString())
             }
         })
 
     fun emitSearchBarUpdated(componentId: String, text: String, isFocused: Boolean, scope: String?) =
-        emit(SEARCH_BAR_UPDATED, withId(componentId).apply {
-            putString("text", text)
-            putBoolean("isFocused", isFocused)
-            scope?.let { putString("scope", it) }
+        emit(EventContract.SearchBarUpdated.EVENT, withId(componentId).apply {
+            putString(EventContract.SearchBarUpdated.TEXT, text)
+            putBoolean(EventContract.SearchBarUpdated.IS_FOCUSED, isFocused)
+            scope?.let { putString(EventContract.SearchBarUpdated.SCOPE, it) }
         })
 
     fun emitSearchBarSubmitted(componentId: String, text: String, scope: String?) =
-        emit(SEARCH_BAR_SUBMITTED, withId(componentId).apply {
-            putString("text", text)
-            scope?.let { putString("scope", it) }
+        emit(EventContract.SearchBarSubmitted.EVENT, withId(componentId).apply {
+            putString(EventContract.SearchBarSubmitted.TEXT, text)
+            scope?.let { putString(EventContract.SearchBarSubmitted.SCOPE, it) }
         })
 
-    fun emitSearchBarCancelPressed(componentId: String) = emit(SEARCH_BAR_CANCEL_PRESSED, withId(componentId))
+    fun emitSearchBarCancelPressed(componentId: String) =
+        emit(EventContract.SearchBarCancelPressed.EVENT, withId(componentId))
 
     fun emitSearchSuggestionPicked(componentId: String, suggestionId: String) =
-        emit(SEARCH_SUGGESTION_PICKED, withId(componentId).apply { putString("suggestionId", suggestionId) })
+        emit(EventContract.SearchSuggestionPicked.EVENT, withId(componentId).apply {
+            putString(EventContract.SearchSuggestionPicked.SUGGESTION_ID, suggestionId)
+        })
 
     fun emitSplitViewColumnsStacked(componentId: String, stacked: Boolean) =
-        emit(SPLIT_VIEW_COLUMNS_STACKED, withId(componentId).apply { putBoolean("stacked", stacked) })
+        emit(EventContract.SplitViewColumnsStacked.EVENT, withId(componentId).apply {
+            putBoolean(EventContract.SplitViewColumnsStacked.STACKED, stacked)
+        })
 
-    fun emitSlotDestroyed(componentId: String) = emit(SLOT_DESTROYED, withId(componentId))
+    fun emitSlotDestroyed(componentId: String) = emit(EventContract.SlotDestroyed.EVENT, withId(componentId))
 
     /** [insets]: `{ top, right, bottom, left }`. */
     fun emitScreenInsetsChanged(componentId: String, insets: WritableMap) =
-        emit(SCREEN_INSETS_CHANGED, withId(componentId).apply { merge(insets) })
+        emit(EventContract.ScreenInsetsChanged.EVENT, withId(componentId).apply { merge(insets) })
 
     /** [regions]: `{ division, occlusion }`. */
     fun emitScreenRegionsChanged(componentId: String, regions: WritableMap) =
-        emit(SCREEN_REGIONS_CHANGED, withId(componentId).apply { merge(regions) })
+        emit(EventContract.ScreenRegionsChanged.EVENT, withId(componentId).apply { merge(regions) })
 
     /** [state]: `{ placement, layout, front, hidden }`. */
     fun emitArrangementChanged(componentId: String, state: WritableMap) =
-        emit(ARRANGEMENT_CHANGED, withId(componentId).apply { merge(state) })
+        emit(EventContract.ArrangementChanged.EVENT, withId(componentId).apply { merge(state) })
 
     /** [value]: `{ state, angle? }`, or `{}` without a hinge. */
-    fun emitHingeChanged(value: WritableMap) = emit(HINGE_CHANGED, value)
+    fun emitHingeChanged(value: WritableMap) = emit(EventContract.HingeChanged.EVENT, value)
 
     /** [kind]: `function` or `command`; [arguments] as JSON, which JavaScript gets as `args`. */
     fun emitNativeScreenCall(componentId: String, callId: String, kind: String, name: String, arguments: JSONArray) =
-        emit(NATIVE_SCREEN_CALL, withId(componentId).apply {
-            putString("callId", callId)
-            putString("kind", kind)
-            putString("name", name)
-            putArray("args", NativeScreenCalls.toArguments(arguments))
+        emit(EventContract.NativeScreenCall.EVENT, withId(componentId).apply {
+            putString(EventContract.NativeScreenCall.CALL_ID, callId)
+            putString(EventContract.NativeScreenCall.KIND, kind)
+            putString(EventContract.NativeScreenCall.NAME, name)
+            putArray(EventContract.NativeScreenCall.ARGS, NativeScreenCalls.toArguments(arguments))
         })
 
-    fun emitNativeScreenReleased(componentId: String) = emit(NATIVE_SCREEN_RELEASED, withId(componentId))
+    fun emitNativeScreenReleased(componentId: String) =
+        emit(EventContract.NativeScreenReleased.EVENT, withId(componentId))
 
+    // The three appearance events have the same keys.
     private fun component(componentId: String, componentName: String, type: ComponentType): WritableMap =
         withId(componentId).apply {
-            putString("componentName", componentName)
-            putString("componentType", type.jsName)
+            putString(EventContract.ComponentDidAppear.COMPONENT_NAME, componentName)
+            putString(EventContract.ComponentDidAppear.COMPONENT_TYPE, type.jsName)
         }
 
+    // The events of a screen carry its id under the same key.
     private fun withId(componentId: String): WritableMap =
-        Arguments.createMap().apply { putString("componentId", componentId) }
+        Arguments.createMap().apply { putString(EventContract.ScreenPopped.COMPONENT_ID, componentId) }
 
     private fun emit(name: String, data: WritableMap) {
         val context = reactContext
@@ -169,31 +181,33 @@ class EventEmitter(private val reactContext: ReactContext?) {
         fun current(): EventEmitter =
             EventEmitter(NavigationApplication.instanceOrNull?.reactGatewayOrNull?.currentReactContext)
 
-        const val APP_LAUNCHED = "ANN.AppLaunched"
-        const val COMMAND_COMPLETED = "ANN.CommandCompleted"
-        const val COMPONENT_WILL_APPEAR = "ANN.ComponentWillAppear"
-        const val COMPONENT_DID_APPEAR = "ANN.ComponentDidAppear"
-        const val COMPONENT_DID_DISAPPEAR = "ANN.ComponentDidDisappear"
-        const val NAVIGATION_STATE_CHANGED = "ANN.NavigationStateChanged"
-        const val SCREEN_POPPED = "ANN.ScreenPopped"
-        const val NAVIGATION_BUTTON_PRESSED = "ANN.NavigationButtonPressed"
-        const val BOTTOM_TAB_SELECTED = "ANN.BottomTabSelected"
-        const val BOTTOM_TAB_PRESSED = "ANN.BottomTabPressed"
-        const val BOTTOM_TAB_LONG_PRESSED = "ANN.BottomTabLongPressed"
-        const val MODAL_DISMISSED = "ANN.ModalDismissed"
-        const val MODAL_ATTEMPTED_TO_DISMISS = "ANN.ModalAttemptedToDismiss"
-        const val SHEET_DETENT_CHANGED = "ANN.SheetDetentChanged"
-        const val SEARCH_BAR_UPDATED = "ANN.SearchBarUpdated"
-        const val SEARCH_BAR_SUBMITTED = "ANN.SearchBarSubmitted"
-        const val SEARCH_BAR_CANCEL_PRESSED = "ANN.SearchBarCancelPressed"
-        const val SEARCH_SUGGESTION_PICKED = "ANN.SearchSuggestionPicked"
-        const val SPLIT_VIEW_COLUMNS_STACKED = "ANN.SplitViewColumnsStacked"
-        const val SLOT_DESTROYED = "ANN.SlotDestroyed"
-        const val SCREEN_INSETS_CHANGED = "ANN.ScreenInsetsChanged"
-        const val SCREEN_REGIONS_CHANGED = "ANN.ScreenRegionsChanged"
-        const val ARRANGEMENT_CHANGED = "ANN.ArrangementChanged"
-        const val HINGE_CHANGED = "ANN.HingeChanged"
-        const val NATIVE_SCREEN_CALL = "ANN.NativeScreenCall"
-        const val NATIVE_SCREEN_RELEASED = "ANN.NativeScreenReleased"
+        // The names of the events, for modules outside the library; inside it, [EventContract] has them with their
+        // keys.
+        const val APP_LAUNCHED = EventContract.AppLaunched.EVENT
+        const val COMMAND_COMPLETED = EventContract.CommandCompleted.EVENT
+        const val COMPONENT_WILL_APPEAR = EventContract.ComponentWillAppear.EVENT
+        const val COMPONENT_DID_APPEAR = EventContract.ComponentDidAppear.EVENT
+        const val COMPONENT_DID_DISAPPEAR = EventContract.ComponentDidDisappear.EVENT
+        const val NAVIGATION_STATE_CHANGED = EventContract.NavigationStateChanged.EVENT
+        const val SCREEN_POPPED = EventContract.ScreenPopped.EVENT
+        const val NAVIGATION_BUTTON_PRESSED = EventContract.NavigationButtonPressed.EVENT
+        const val BOTTOM_TAB_SELECTED = EventContract.BottomTabSelected.EVENT
+        const val BOTTOM_TAB_PRESSED = EventContract.BottomTabPressed.EVENT
+        const val BOTTOM_TAB_LONG_PRESSED = EventContract.BottomTabLongPressed.EVENT
+        const val MODAL_DISMISSED = EventContract.ModalDismissed.EVENT
+        const val MODAL_ATTEMPTED_TO_DISMISS = EventContract.ModalAttemptedToDismiss.EVENT
+        const val SHEET_DETENT_CHANGED = EventContract.SheetDetentChanged.EVENT
+        const val SEARCH_BAR_UPDATED = EventContract.SearchBarUpdated.EVENT
+        const val SEARCH_BAR_SUBMITTED = EventContract.SearchBarSubmitted.EVENT
+        const val SEARCH_BAR_CANCEL_PRESSED = EventContract.SearchBarCancelPressed.EVENT
+        const val SEARCH_SUGGESTION_PICKED = EventContract.SearchSuggestionPicked.EVENT
+        const val SPLIT_VIEW_COLUMNS_STACKED = EventContract.SplitViewColumnsStacked.EVENT
+        const val SLOT_DESTROYED = EventContract.SlotDestroyed.EVENT
+        const val SCREEN_INSETS_CHANGED = EventContract.ScreenInsetsChanged.EVENT
+        const val SCREEN_REGIONS_CHANGED = EventContract.ScreenRegionsChanged.EVENT
+        const val ARRANGEMENT_CHANGED = EventContract.ArrangementChanged.EVENT
+        const val HINGE_CHANGED = EventContract.HingeChanged.EVENT
+        const val NATIVE_SCREEN_CALL = EventContract.NativeScreenCall.EVENT
+        const val NATIVE_SCREEN_RELEASED = EventContract.NativeScreenReleased.EVENT
     }
 }

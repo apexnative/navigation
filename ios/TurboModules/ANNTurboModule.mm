@@ -6,6 +6,7 @@
 #import "ANNDeepLinkQueue.h"
 #import "ANNDefaultOptions.h"
 #import "ANNErrorTexts.h"
+#import "ANNEventContract.h"
 #import "ANNExternalViewController.h"
 #import "ANNHinge.h"
 #import "ANNLayoutReader.h"
@@ -511,7 +512,8 @@ RCT_EXPORT_MODULE(ANNTurboModule)
 
 - (NSDictionary *)getScreenRegions:(NSString *)componentId {
     NSDictionary *regions = [ANNScreenRegions regionsForScreenId:componentId];
-    return regions ?: @{@"division" : @[], @"occlusion" : @[]};
+    const auto &keys = ANNEventContract.ScreenRegionsChanged;
+    return regions ?: @{keys.division : @[], keys.occlusion : @[]};
 }
 
 // `setHingeUpdates`: JavaScript counts its `useHinge` hooks; the events go with the emitter of the JavaScript that runs

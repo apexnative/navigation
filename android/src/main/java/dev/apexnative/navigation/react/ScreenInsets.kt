@@ -4,6 +4,7 @@ import android.content.Context
 import com.facebook.react.ReactApplication
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.WritableMap
+import dev.apexnative.navigation.react.events.EventContract
 import dev.apexnative.navigation.react.events.EventEmitter
 import java.util.concurrent.ConcurrentHashMap
 
@@ -61,9 +62,9 @@ object ScreenInsets {
     }
 
     private fun toMap(value: Insets): WritableMap = Arguments.createMap().apply {
-        putDouble("top", value.top)
-        putDouble("right", value.right)
-        putDouble("bottom", value.bottom)
-        putDouble("left", value.left)
+        putDouble(EventContract.ScreenInsetsChanged.TOP, value.top)
+        putDouble(EventContract.ScreenInsetsChanged.RIGHT, value.right)
+        putDouble(EventContract.ScreenInsetsChanged.BOTTOM, value.bottom)
+        putDouble(EventContract.ScreenInsetsChanged.LEFT, value.left)
     }
 }

@@ -1,4 +1,5 @@
 #import "ANNScreenInsets.h"
+#import "ANNEventContract.h"
 
 NSNotificationName const ANNScreenSafeAreaPaddingDidChangeNotification = @"ANNScreenSafeAreaPaddingDidChange";
 
@@ -26,11 +27,12 @@ static NSMutableDictionary<NSString *, NSValue *> *ANNScreenPaddingById;
                                                           object:screenId];
     }
     // JavaScript gets what still covers the content: the edges the safe area view keeps it off are 0.
+    const auto &keys = ANNEventContract.ScreenInsetsChanged;
     NSDictionary<NSString *, NSNumber *> *value = @{
-        @"top" : @(MAX(insets.top - padding.top, 0)),
-        @"right" : @(MAX(insets.right - padding.right, 0)),
-        @"bottom" : @(MAX(insets.bottom - padding.bottom, 0)),
-        @"left" : @(MAX(insets.left - padding.left, 0)),
+        keys.top : @(MAX(insets.top - padding.top, 0)),
+        keys.right : @(MAX(insets.right - padding.right, 0)),
+        keys.bottom : @(MAX(insets.bottom - padding.bottom, 0)),
+        keys.left : @(MAX(insets.left - padding.left, 0)),
     };
     @synchronized(ANNScreenInsetsById) {
         if ([ANNScreenInsetsById[screenId] isEqualToDictionary:value]) {

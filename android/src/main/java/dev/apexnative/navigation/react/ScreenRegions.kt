@@ -7,6 +7,7 @@ import com.facebook.react.ReactApplication
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.WritableArray
 import com.facebook.react.bridge.WritableMap
+import dev.apexnative.navigation.react.events.EventContract
 import dev.apexnative.navigation.react.events.EventEmitter
 import dev.apexnative.navigation.utils.WindowFolds
 import java.util.concurrent.ConcurrentHashMap
@@ -70,17 +71,17 @@ internal object ScreenRegions {
     }
 
     private fun toMap(value: Regions): WritableMap = Arguments.createMap().apply {
-        putArray("division", toArray(value.division))
-        putArray("occlusion", toArray(value.occlusion))
+        putArray(EventContract.ScreenRegionsChanged.DIVISION, toArray(value.division))
+        putArray(EventContract.ScreenRegionsChanged.OCCLUSION, toArray(value.occlusion))
     }
 
     private fun toArray(regions: List<Region>): WritableArray = Arguments.createArray().apply {
         for (region in regions) {
             pushMap(Arguments.createMap().apply {
-                putDouble("x", region.x)
-                putDouble("y", region.y)
-                putDouble("width", region.width)
-                putDouble("height", region.height)
+                putDouble(EventContract.ScreenRegionRect.X, region.x)
+                putDouble(EventContract.ScreenRegionRect.Y, region.y)
+                putDouble(EventContract.ScreenRegionRect.WIDTH, region.width)
+                putDouble(EventContract.ScreenRegionRect.HEIGHT, region.height)
             })
         }
     }

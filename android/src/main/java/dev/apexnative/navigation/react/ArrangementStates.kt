@@ -4,6 +4,7 @@ import android.content.Context
 import com.facebook.react.ReactApplication
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.WritableMap
+import dev.apexnative.navigation.react.events.EventContract
 import dev.apexnative.navigation.react.events.EventEmitter
 import java.util.concurrent.ConcurrentHashMap
 
@@ -33,9 +34,9 @@ internal object ArrangementStates {
     }
 
     private fun toMap(state: State): WritableMap = Arguments.createMap().apply {
-        putString("placement", state.placement)
-        putString("layout", state.layout)
-        putBoolean("front", state.front)
-        putBoolean("hidden", state.hidden)
+        putString(EventContract.ArrangementChanged.PLACEMENT, state.placement)
+        putString(EventContract.ArrangementChanged.LAYOUT, state.layout)
+        putBoolean(EventContract.ArrangementChanged.FRONT, state.front)
+        putBoolean(EventContract.ArrangementChanged.HIDDEN, state.hidden)
     }
 }

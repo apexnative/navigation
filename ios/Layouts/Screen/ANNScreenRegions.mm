@@ -1,4 +1,5 @@
 #import "ANNScreenRegions.h"
+#import "ANNEventContract.h"
 
 static NSMutableDictionary<NSString *, NSDictionary<NSString *, NSArray *> *> *ANNScreenRegionsById;
 
@@ -36,11 +37,12 @@ ANNRegionRects(NSArray<UIViewReservedRegion *> *regions, UIView *view, UIView *c
         if (CGRectIsNull(frame)) {
             continue;
         }
+        const auto &keys = ANNEventContract.ScreenRegionRect;
         [rects addObject:@{
-            @"x" : @(frame.origin.x),
-            @"y" : @(frame.origin.y),
-            @"width" : @(frame.size.width),
-            @"height" : @(frame.size.height),
+            keys.x : @(frame.origin.x),
+            keys.y : @(frame.origin.y),
+            keys.width : @(frame.size.width),
+            keys.height : @(frame.size.height),
         }];
     }
     return rects;
@@ -63,9 +65,10 @@ ANNRegionRects(NSArray<UIViewReservedRegion *> *regions, UIView *view, UIView *c
             [view reservedRegionsOfKind:[UIViewReservedRegionKind divisionRegionKind]];
         NSArray<UIViewReservedRegion *> *occlusion =
             [view reservedRegionsOfKind:[UIViewReservedRegionKind occlusionRegionKind]];
+        const auto &keys = ANNEventContract.ScreenRegionsChanged;
         return @{
-            @"division" : ANNRegionRects(division, view, coordinateView),
-            @"occlusion" : ANNRegionRects(occlusion, view, coordinateView),
+            keys.division : ANNRegionRects(division, view, coordinateView),
+            keys.occlusion : ANNRegionRects(occlusion, view, coordinateView),
         };
     }
 #endif

@@ -1,5 +1,6 @@
 #import "ANNSplitViewController.h"
 #import "ANNErrorHandler.h"
+#import "ANNErrorTexts.h"
 #import "ANNShownScreens.h"
 #import "UISplitViewController+ANNOptions.h"
 #import "UIViewController+LayoutProtocol.h"
@@ -213,19 +214,15 @@ static UISplitViewControllerColumn ANNSplitViewColumn(NSString *name) {
             completion:(ANNTransitionCompletionBlock)completion
              rejection:(ANNTransitionRejectionBlock)rejection {
     UIViewController *previous = _columns[column];
+    NSString *fromId = fromViewController.layoutInfo.componentId;
     if (!previous) {
-        rejection([NSString stringWithFormat:@"the split view of the screen '%@' has no '%@' column",
-                                             fromViewController.layoutInfo.componentId, column],
-                  nil);
+        rejection([ANNErrorTexts noSuchColumn:fromId column:column], nil);
         return;
     }
     if ([previous isKindOfClass:UINavigationController.class]) {
         // UIKit does not take a navigation controller among the screens of another.
         if ([screen isKindOfClass:UINavigationController.class]) {
-            rejection([NSString stringWithFormat:@"the '%@' column of the split view of the screen '%@' is a "
-                                                 @"stack: it takes a screen, not a stack",
-                                                 column, fromViewController.layoutInfo.componentId],
-                      nil);
+            rejection([ANNErrorTexts columnIsStack:fromId column:column], nil);
             return;
         }
         // In place, as a column of UIKit apps changes; UIKit animates a column it brings on top.

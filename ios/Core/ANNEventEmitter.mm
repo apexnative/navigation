@@ -1,5 +1,6 @@
 #import "ANNEventEmitter.h"
 #import "ANNAssert.h"
+#import "ANNEventContract.h"
 #import "ANNReloadCoordinator.h"
 #import "ANNTurboEventEmitter.h"
 #import <React/RCTUtils.h>
@@ -24,8 +25,6 @@ static NSString *ANNComponentTypeName(ANNReactComponentType componentType) {
 static BOOL ANNAppLaunchedPending;
 static NSUInteger ANNAppLaunchedBundle;
 
-static NSString *const ANNAppLaunchedEvent = @"ANN.AppLaunched";
-
 @implementation ANNEventEmitter
 
 - (instancetype)init {
@@ -42,12 +41,11 @@ static NSString *const ANNAppLaunchedEvent = @"ANN.AppLaunched";
 // The generation is checked where the event goes out, on the main queue: an event sent from another queue just
 // before a reload is dropped too.
 - (void)sendEvent:(NSString *)name body:(NSDictionary<NSString *, id> *)body {
-    NSString *eventName = [@"ANN." stringByAppendingString:name];
     RCTExecuteOnMainQueue(^{
       if (!self.isCurrent) {
           return;
       }
-      [ANNTurboEventEmitter.current sendIfListened:eventName body:body];
+      [ANNTurboEventEmitter.current sendIfListened:name body:body];
     });
 }
 
@@ -62,7 +60,7 @@ static NSString *const ANNAppLaunchedEvent = @"ANN.AppLaunched";
         return;
     }
     ANNAppLaunchedPending = NO;
-    [eventEmitter sendIfListened:ANNAppLaunchedEvent body:nil];
+    [eventEmitter sendIfListened:ANNEventContract.AppLaunched.event body:nil];
 }
 
 + (void)eventEmitterListensToAppLaunched:(ANNTurboEventEmitter *)eventEmitter {
@@ -71,7 +69,7 @@ static NSString *const ANNAppLaunchedEvent = @"ANN.AppLaunched";
         return;
     }
     ANNAppLaunchedPending = NO;
-    [eventEmitter sendIfListened:ANNAppLaunchedEvent body:nil];
+    [eventEmitter sendIfListened:ANNEventContract.AppLaunched.event body:nil];
 }
 
 // Only an `AppLaunched` of the module's own JavaScript or an older one: the module is made while its bundle runs,
@@ -87,11 +85,12 @@ static NSString *const ANNAppLaunchedEvent = @"ANN.AppLaunched";
 - (void)sendCommandCompleted:(NSString *)commandName
                    commandId:(NSString *)commandId
               completionTime:(double)completionTime {
-    [self sendEvent:@"CommandCompleted"
+    const auto &keys = ANNEventContract.CommandCompleted;
+    [self sendEvent:keys.event
                body:@{
-                   @"commandName" : commandName,
-                   @"commandId" : commandId,
-                   @"completionTime" : @(completionTime),
+                   keys.commandName : commandName,
+                   keys.commandId : commandId,
+                   keys.completionTime : @(completionTime),
                }];
 }
 
@@ -100,7 +99,7 @@ static NSString *const ANNAppLaunchedEvent = @"ANN.AppLaunched";
 - (void)sendComponentWillAppear:(NSString *)componentId
                   componentName:(NSString *)componentName
                   componentType:(ANNReactComponentType)componentType {
-    [self sendComponentEvent:@"ComponentWillAppear"
+    [self sendComponentEvent:ANNEventContract.ComponentWillAppear.event
                  componentId:componentId
                componentName:componentName
                componentType:componentType];
@@ -109,7 +108,7 @@ static NSString *const ANNAppLaunchedEvent = @"ANN.AppLaunched";
 - (void)sendComponentDidAppear:(NSString *)componentId
                  componentName:(NSString *)componentName
                  componentType:(ANNReactComponentType)componentType {
-    [self sendComponentEvent:@"ComponentDidAppear"
+    [self sendComponentEvent:ANNEventContract.ComponentDidAppear.event
                  componentId:componentId
                componentName:componentName
                componentType:componentType];
@@ -118,21 +117,23 @@ static NSString *const ANNAppLaunchedEvent = @"ANN.AppLaunched";
 - (void)sendComponentDidDisappear:(NSString *)componentId
                     componentName:(NSString *)componentName
                     componentType:(ANNReactComponentType)componentType {
-    [self sendComponentEvent:@"ComponentDidDisappear"
+    [self sendComponentEvent:ANNEventContract.ComponentDidDisappear.event
                  componentId:componentId
                componentName:componentName
                componentType:componentType];
 }
 
+// The three appearance events have the same keys.
 - (void)sendComponentEvent:(NSString *)name
                componentId:(NSString *)componentId
              componentName:(NSString *)componentName
              componentType:(ANNReactComponentType)componentType {
+    const auto &keys = ANNEventContract.ComponentDidAppear;
     [self sendEvent:name
                body:@{
-                   @"componentId" : componentId ?: @"",
-                   @"componentName" : componentName ?: @"",
-                   @"componentType" : ANNComponentTypeName(componentType),
+                   keys.componentId : componentId ?: @"",
+                   keys.componentName : componentName ?: @"",
+                   keys.componentType : ANNComponentTypeName(componentType),
                }];
 }
 
@@ -143,58 +144,71 @@ static NSString *const ANNAppLaunchedEvent = @"ANN.AppLaunched";
 - (void)sendOnNavigationButtonPressed:(NSString *)componentId
                              buttonId:(NSString *)buttonId
                              selected:(NSNumber *)selected {
+    const auto &keys = ANNEventContract.NavigationButtonPressed;
     NSMutableDictionary *body =
-        [@{@"componentId" : componentId ?: @"", @"buttonId" : buttonId ?: @""} mutableCopy];
+        [@{keys.componentId : componentId ?: @"", keys.buttonId : buttonId ?: @""} mutableCopy];
     if (selected) {
-        body[@"selected"] = @(selected.boolValue);
+        body[keys.selected] = @(selected.boolValue);
     }
-    [self sendEvent:@"NavigationButtonPressed" body:body];
+    [self sendEvent:keys.event body:body];
 }
 
 - (void)sendScreenPopped:(NSString *)componentId {
-    [self sendEvent:@"ScreenPopped" body:@{@"componentId" : componentId ?: @""}];
+    const auto &keys = ANNEventContract.ScreenPopped;
+    [self sendEvent:keys.event body:@{keys.componentId : componentId ?: @""}];
 }
 
 - (void)sendNavigationStateChanged:(NSString *)screenId name:(NSString *)name tab:(NSNumber *)tab {
-    id screen = screenId ? @{@"id" : screenId, @"name" : name ?: @""} : (id)NSNull.null;
-    [self sendEvent:@"NavigationStateChanged"
-               body:@{@"screen" : screen, @"tab" : tab ?: (id)NSNull.null}];
+    const auto &keys = ANNEventContract.NavigationStateChanged;
+    const auto &screenKeys = ANNEventContract.NavigationStateChangedScreen;
+    id screen = screenId ? @{screenKeys.id : screenId, screenKeys.name : name ?: @""}
+                         : (id)NSNull.null;
+    [self sendEvent:keys.event body:@{keys.screen : screen, keys.tab : tab ?: (id)NSNull.null}];
 }
 
 - (void)sendScreenInsetsChanged:(NSString *)componentId
                          insets:(NSDictionary<NSString *, NSNumber *> *)insets {
+    const auto &keys = ANNEventContract.ScreenInsetsChanged;
     NSMutableDictionary *body = [insets mutableCopy] ?: [NSMutableDictionary new];
-    body[@"componentId"] = componentId;
-    [self sendEvent:@"ScreenInsetsChanged" body:body];
+    body[keys.componentId] = componentId;
+    [self sendEvent:keys.event body:body];
 }
 
 - (void)sendScreenRegionsChanged:(NSString *)componentId
                          regions:(NSDictionary<NSString *, NSArray *> *)regions {
+    const auto &keys = ANNEventContract.ScreenRegionsChanged;
     NSMutableDictionary *body = [regions mutableCopy] ?: [NSMutableDictionary new];
-    body[@"componentId"] = componentId;
-    [self sendEvent:@"ScreenRegionsChanged" body:body];
+    body[keys.componentId] = componentId;
+    [self sendEvent:keys.event body:body];
 }
 
 - (void)sendSlotDestroyed:(NSString *)componentId {
-    [self sendEvent:@"SlotDestroyed" body:@{@"componentId" : componentId ?: @""}];
+    const auto &keys = ANNEventContract.SlotDestroyed;
+    [self sendEvent:keys.event body:@{keys.componentId : componentId ?: @""}];
 }
 
 - (void)sendTitleRenamed:(NSString *)componentId text:(NSString *)text {
-    [self sendEvent:@"TitleRenamed"
-               body:@{@"componentId" : componentId ?: @"", @"text" : text ?: @""}];
+    const auto &keys = ANNEventContract.TitleRenamed;
+    [self sendEvent:keys.event
+               body:@{keys.componentId : componentId ?: @"", keys.text : text ?: @""}];
 }
 
 - (void)sendKeyCommandPressed:(NSString *)componentId keyCommandId:(NSString *)keyCommandId {
-    [self sendEvent:@"KeyCommandPressed"
-               body:@{@"componentId" : componentId ?: @"", @"keyCommandId" : keyCommandId ?: @""}];
+    const auto &keys = ANNEventContract.KeyCommandPressed;
+    [self sendEvent:keys.event
+               body:@{
+                   keys.componentId : componentId ?: @"",
+                   keys.keyCommandId : keyCommandId ?: @"",
+               }];
 }
 
 - (void)sendPreviewCompleted:(NSString *)componentId
           previewComponentId:(NSString *)previewComponentId {
-    [self sendEvent:@"PreviewCompleted"
+    const auto &keys = ANNEventContract.PreviewCompleted;
+    [self sendEvent:keys.event
                body:@{
-                   @"componentId" : componentId ?: @"",
-                   @"previewComponentId" : previewComponentId ?: @"",
+                   keys.componentId : componentId ?: @"",
+                   keys.previewComponentId : previewComponentId ?: @"",
                }];
 }
 
@@ -203,21 +217,24 @@ static NSString *const ANNAppLaunchedEvent = @"ANN.AppLaunched";
 - (void)sendModalDismissed:(NSString *)componentId
              componentName:(NSString *)componentName
            modalsDismissed:(NSUInteger)modalsDismissed {
-    [self sendEvent:@"ModalDismissed"
+    const auto &keys = ANNEventContract.ModalDismissed;
+    [self sendEvent:keys.event
                body:@{
-                   @"componentId" : componentId ?: @"",
-                   @"componentName" : componentName ?: @"",
-                   @"modalsDismissed" : @(modalsDismissed),
+                   keys.componentId : componentId ?: @"",
+                   keys.componentName : componentName ?: @"",
+                   keys.modalsDismissed : @(modalsDismissed),
                }];
 }
 
 - (void)sendModalAttemptedToDismiss:(NSString *)componentId {
-    [self sendEvent:@"ModalAttemptedToDismiss" body:@{@"componentId" : componentId ?: @""}];
+    const auto &keys = ANNEventContract.ModalAttemptedToDismiss;
+    [self sendEvent:keys.event body:@{keys.componentId : componentId ?: @""}];
 }
 
 - (void)sendSheetDetentChanged:(NSString *)componentId detent:(id)detent {
-    [self sendEvent:@"SheetDetentChanged"
-               body:@{@"componentId" : componentId ?: @"", @"detent" : detent ?: @""}];
+    const auto &keys = ANNEventContract.SheetDetentChanged;
+    [self sendEvent:keys.event
+               body:@{keys.componentId : componentId ?: @"", keys.detent : detent ?: @""}];
 }
 
 #pragma mark - Search
@@ -227,82 +244,94 @@ static NSString *const ANNAppLaunchedEvent = @"ANN.AppLaunched";
                      isFocused:(BOOL)isFocused
                          scope:(NSString *)scope
                         tokens:(NSArray<NSString *> *)tokens {
+    const auto &keys = ANNEventContract.SearchBarUpdated;
     NSMutableDictionary *body = [@{
-        @"componentId" : componentId ?: @"",
-        @"text" : text ?: @"",
-        @"isFocused" : @(isFocused),
+        keys.componentId : componentId ?: @"",
+        keys.text : text ?: @"",
+        keys.isFocused : @(isFocused),
     } mutableCopy];
-    body[@"scope"] = scope;
-    body[@"tokens"] = tokens;
-    [self sendEvent:@"SearchBarUpdated" body:body];
+    body[keys.scope] = scope;
+    body[keys.tokens] = tokens;
+    [self sendEvent:keys.event body:body];
 }
 
 - (void)sendOnSearchBarSubmitted:(NSString *)componentId
                             text:(NSString *)text
                            scope:(NSString *)scope
                           tokens:(NSArray<NSString *> *)tokens {
+    const auto &keys = ANNEventContract.SearchBarSubmitted;
     NSMutableDictionary *body =
-        [@{@"componentId" : componentId ?: @"", @"text" : text ?: @""} mutableCopy];
-    body[@"scope"] = scope;
-    body[@"tokens"] = tokens;
-    [self sendEvent:@"SearchBarSubmitted" body:body];
+        [@{keys.componentId : componentId ?: @"", keys.text : text ?: @""} mutableCopy];
+    body[keys.scope] = scope;
+    body[keys.tokens] = tokens;
+    [self sendEvent:keys.event body:body];
 }
 
 - (void)sendOnSearchBarCancelPressed:(NSString *)componentId {
-    [self sendEvent:@"SearchBarCancelPressed" body:@{@"componentId" : componentId ?: @""}];
+    const auto &keys = ANNEventContract.SearchBarCancelPressed;
+    [self sendEvent:keys.event body:@{keys.componentId : componentId ?: @""}];
 }
 
 - (void)sendOnSearchSuggestionPicked:(NSString *)componentId suggestionId:(NSString *)suggestionId {
-    [self sendEvent:@"SearchSuggestionPicked"
-               body:@{@"componentId" : componentId ?: @"", @"suggestionId" : suggestionId ?: @""}];
+    const auto &keys = ANNEventContract.SearchSuggestionPicked;
+    [self sendEvent:keys.event
+               body:@{
+                   keys.componentId : componentId ?: @"",
+                   keys.suggestionId : suggestionId ?: @"",
+               }];
 }
 
 #pragma mark - Split view, pair, hinge
 
 - (void)sendSplitViewColumnsStacked:(NSString *)componentId stacked:(BOOL)stacked {
-    [self sendEvent:@"SplitViewColumnsStacked"
-               body:@{@"componentId" : componentId ?: @"", @"stacked" : @(stacked)}];
+    const auto &keys = ANNEventContract.SplitViewColumnsStacked;
+    [self sendEvent:keys.event
+               body:@{keys.componentId : componentId ?: @"", keys.stacked : @(stacked)}];
 }
 
 - (void)sendSplitViewDisplayModeChanged:(NSString *)componentId
                             displayMode:(NSString *)displayMode
                        inspectorVisible:(NSNumber *)inspectorVisible {
+    const auto &keys = ANNEventContract.SplitViewDisplayModeChanged;
     NSMutableDictionary *body = [@{
-        @"componentId" : componentId ?: @"",
-        @"displayMode" : displayMode ?: @"automatic",
+        keys.componentId : componentId ?: @"",
+        keys.displayMode : displayMode ?: @"automatic",
     } mutableCopy];
-    body[@"inspectorVisible"] = inspectorVisible;
-    [self sendEvent:@"SplitViewDisplayModeChanged" body:body];
+    body[keys.inspectorVisible] = inspectorVisible;
+    [self sendEvent:keys.event body:body];
 }
 
 - (void)sendArrangementChanged:(NSString *)componentId state:(NSDictionary<NSString *, id> *)state {
+    const auto &keys = ANNEventContract.ArrangementChanged;
     NSMutableDictionary *body = [state mutableCopy] ?: [NSMutableDictionary new];
-    body[@"componentId"] = componentId;
-    [self sendEvent:@"ArrangementChanged" body:body];
+    body[keys.componentId] = componentId;
+    [self sendEvent:keys.event body:body];
 }
 
 - (void)sendHingeChanged:(NSDictionary<NSString *, id> *)value {
-    [self sendEvent:@"HingeChanged" body:value ?: @{}];
+    [self sendEvent:ANNEventContract.HingeChanged.event body:value ?: @{}];
 }
 
 #pragma mark - Native screens, tabs
 
 - (void)sendNativeScreenCall:(NSDictionary<NSString *, id> *)call {
-    [self sendEvent:@"NativeScreenCall" body:call];
+    [self sendEvent:ANNEventContract.NativeScreenCall.event body:call];
 }
 
 - (void)sendNativeScreenReleased:(NSString *)componentId {
-    [self sendEvent:@"NativeScreenReleased" body:@{@"componentId" : componentId ?: @""}];
+    const auto &keys = ANNEventContract.NativeScreenReleased;
+    [self sendEvent:keys.event body:@{keys.componentId : componentId ?: @""}];
 }
 
 - (void)sendBottomTabSelected:(NSUInteger)selectedTabIndex
            unselectedTabIndex:(NSUInteger)unselectedTabIndex
                  bottomTabsId:(NSString *)bottomTabsId {
-    [self sendEvent:@"BottomTabSelected"
+    const auto &keys = ANNEventContract.BottomTabSelected;
+    [self sendEvent:keys.event
                body:@{
-                   @"selectedTabIndex" : @(selectedTabIndex),
-                   @"unselectedTabIndex" : @(unselectedTabIndex),
-                   @"bottomTabsId" : bottomTabsId ?: @"",
+                   keys.selectedTabIndex : @(selectedTabIndex),
+                   keys.unselectedTabIndex : @(unselectedTabIndex),
+                   keys.bottomTabsId : bottomTabsId ?: @"",
                }];
 }
 
@@ -310,28 +339,31 @@ static NSString *const ANNAppLaunchedEvent = @"ANN.AppLaunched";
                 bottomTabsId:(NSString *)bottomTabsId
                     screenId:(NSString *)screenId
                  wasSelected:(BOOL)wasSelected {
+    const auto &keys = ANNEventContract.BottomTabPressed;
     NSMutableDictionary *body = [@{
-        @"tabIndex" : @(tabIndex),
-        @"bottomTabsId" : bottomTabsId ?: @"",
-        @"wasSelected" : @(wasSelected),
+        keys.tabIndex : @(tabIndex),
+        keys.bottomTabsId : bottomTabsId ?: @"",
+        keys.wasSelected : @(wasSelected),
     } mutableCopy];
-    body[@"screenId"] = screenId;
-    [self sendEvent:@"BottomTabPressed" body:body];
+    body[keys.screenId] = screenId;
+    [self sendEvent:keys.event body:body];
 }
 
 - (void)sendBottomTabLongPressed:(NSUInteger)selectedTabIndex
                     bottomTabsId:(NSString *)bottomTabsId {
-    [self sendEvent:@"BottomTabLongPressed"
+    const auto &keys = ANNEventContract.BottomTabLongPressed;
+    [self sendEvent:keys.event
                body:@{
-                   @"selectedTabIndex" : @(selectedTabIndex),
-                   @"bottomTabsId" : bottomTabsId ?: @"",
+                   keys.selectedTabIndex : @(selectedTabIndex),
+                   keys.bottomTabsId : bottomTabsId ?: @"",
                }];
 }
 
 - (void)sendBottomAccessoryPlacementChanged:(NSString *)componentId
                                   placement:(NSString *)placement {
-    [self sendEvent:@"BottomAccessoryPlacementChanged"
-               body:@{@"componentId" : componentId ?: @"", @"placement" : placement ?: @""}];
+    const auto &keys = ANNEventContract.BottomAccessoryPlacementChanged;
+    [self sendEvent:keys.event
+               body:@{keys.componentId : componentId ?: @"", keys.placement : placement ?: @""}];
 }
 
 @end

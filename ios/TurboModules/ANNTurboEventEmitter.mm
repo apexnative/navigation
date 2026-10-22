@@ -1,5 +1,6 @@
 #import "ANNTurboEventEmitter.h"
 #import "ANNAssert.h"
+#import "ANNEventContract.h"
 #import "ANNEventEmitter.h"
 #import "ANNReloadCoordinator.h"
 #import <React/RCTUtils.h>
@@ -40,41 +41,9 @@ RCT_EXPORT_MODULE(ANNTurboEventEmitter)
     return self;
 }
 
-// Every event of the navigation and of the modules.
+// Every event of the navigation and of the modules, as the types of `src/interfaces/` name them.
 - (NSArray<NSString *> *)supportedEvents {
-    return @[
-        @"ANN.AppLaunched",
-        @"ANN.ArrangementChanged",
-        @"ANN.BottomAccessoryPlacementChanged",
-        @"ANN.BottomTabLongPressed",
-        @"ANN.BottomTabPressed",
-        @"ANN.BottomTabSelected",
-        @"ANN.CommandCompleted",
-        @"ANN.ComponentDidAppear",
-        @"ANN.ComponentDidDisappear",
-        @"ANN.ComponentWillAppear",
-        @"ANN.HingeChanged",
-        @"ANN.KeyCommandPressed",
-        @"ANN.ModalAttemptedToDismiss",
-        @"ANN.ModalDismissed",
-        @"ANN.NativeScreenCall",
-        @"ANN.NativeScreenReleased",
-        @"ANN.NavigationButtonPressed",
-        @"ANN.NavigationStateChanged",
-        @"ANN.PreviewCompleted",
-        @"ANN.ScreenInsetsChanged",
-        @"ANN.ScreenPopped",
-        @"ANN.ScreenRegionsChanged",
-        @"ANN.SearchBarCancelPressed",
-        @"ANN.SearchBarSubmitted",
-        @"ANN.SearchBarUpdated",
-        @"ANN.SearchSuggestionPicked",
-        @"ANN.SheetDetentChanged",
-        @"ANN.SlotDestroyed",
-        @"ANN.SplitViewColumnsStacked",
-        @"ANN.SplitViewDisplayModeChanged",
-        @"ANN.TitleRenamed",
-    ];
+    return ANNEventContractNames();
 }
 
 #pragma mark - Listeners
@@ -99,7 +68,7 @@ RCT_EXPORT_MODULE(ANNTurboEventEmitter)
 
 - (void)addListener:(NSString *)eventName {
     [super addListener:eventName];
-    if ([eventName isEqualToString:@"ANN.AppLaunched"] && !_listensToAppLaunched) {
+    if ([eventName isEqualToString:ANNEventContract.AppLaunched.event] && !_listensToAppLaunched) {
         _listensToAppLaunched = YES;
         [ANNEventEmitter eventEmitterListensToAppLaunched:self];
     }
