@@ -92,6 +92,123 @@ class BottomTabsControllerTest {
 
     private fun events(): List<String> = journal.toList().also { journal.clear() }
 
+    // The ends of the fades that run, in order; each ends its fade once.
+    private val fades = mutableListOf<() -> Unit>()
+
+    // [shown] with tab views that fade on screen until the test ends the fade.
+    private fun fading(): BottomTabsController {
+        val tabs = shown()
+        tabs.tabViews = object : BottomTabsController.TabViews {
+            override fun holds(tab: ViewController<*>): Boolean = true
+
+            override fun attach(tab: ViewController<*>, visible: Boolean) = Unit
+
+            override fun switch(
+                shown: ViewController<*>,
+                hidden: ViewController<*>,
+                animated: Boolean,
+                onEnd: () -> Unit,
+            ): () -> Unit {
+                if (!animated) {
+                    onEnd()
+                    return {}
+                }
+                var ended = false
+                val end = {
+                    if (!ended) {
+                        ended = true
+                        onEnd()
+                    }
+                }
+                fades += end
+                return end
+            }
+        }
+        return tabs
+    }
+
+    // A switch on screen fades.
+
+    @Test
+    fun aSwitchOnScreenSendsItsAppearanceAndSelectionAtTheEndOfTheFade() {
+        val tabs = fading()
+        tabs.onTabPressed(1)
+        assertEquals(listOf("tabPressed:$TABS:1:B1:false", "will:B1"), events())
+        assertEquals(1, tabs.selectedIndex)
+        fades.single()()
+        assertEquals(
+            listOf("didDisappear:A1", "didAppear:B1", "stateNeeded", "tabSelected:$TABS:1:0", "stateNeeded"),
+            events(),
+        )
+    }
+
+    @Test
+    fun aPressDuringAFadeEndsItFirst() {
+        val tabs = fading()
+        tabs.onTabPressed(1)
+        events()
+        tabs.onTabPressed(2)
+        assertEquals(
+            listOf(
+                "didDisappear:A1",
+                "didAppear:B1",
+                "stateNeeded",
+                "tabSelected:$TABS:1:0",
+                "stateNeeded",
+                "tabPressed:$TABS:2:C1:false",
+                "will:C1",
+            ),
+            events(),
+        )
+        fades.last()()
+        assertEquals(
+            listOf("didDisappear:B1", "didAppear:C1", "stateNeeded", "tabSelected:$TABS:2:1", "stateNeeded"),
+            events(),
+        )
+    }
+
+    @Test
+    fun aChoiceFromCodeDuringAFadeEndsItFirst() {
+        val tabs = fading()
+        tabs.onTabPressed(1)
+        events()
+        tabs.mergeOptions(options { bottomTabs.currentTabIndex = Fraction(2.0) })
+        val sent = events()
+        assertEquals(listOf("didDisappear:A1", "didAppear:B1"), sent.take(2))
+        assertTrue("tabSelected:$TABS:1:0" in sent)
+        assertEquals("will:C1", sent.last())
+        assertEquals(2, tabs.selectedIndex)
+    }
+
+    @Test
+    fun tabsCoveredDuringAFadeShowTheNewTabOnlyWhenTheyShowAgain() {
+        val tabs = fading()
+        tabs.onTabPressed(1)
+        events()
+        // A modal over the tabs: they and the tabs' screens disappear.
+        tabs.onViewDisappear()
+        tabs.shows = { false }
+        events()
+        fades.single()()
+        // No DidAppear under the modal; the selection is told, as for a screen that disappeared before it appeared.
+        assertEquals(listOf("tabSelected:$TABS:1:0", "stateNeeded"), events())
+        tabs.shows = { true }
+        tabs.onViewWillAppear()
+        tabs.onViewDidAppear()
+        assertEquals(listOf("will:B1", "didAppear:B1"), events().filter { !it.startsWith("state") })
+    }
+
+    @Test
+    fun destroyingTheTabsDuringAFadeSendsNothingOfIt() {
+        val tabs = fading()
+        tabs.onTabPressed(1)
+        events()
+        tabs.destroy()
+        events()
+        fades.single()()
+        assertEquals(emptyList<String>(), events())
+    }
+
     private fun options(change: Options.() -> Unit) = Options().apply(change)
 
     // A press.
@@ -549,7 +666,15 @@ class BottomTabsControllerTest {
                 held[tab.id] = visible
             }
 
-            override fun switch(shown: ViewController<*>, hidden: ViewController<*>) = Unit
+            override fun switch(
+                shown: ViewController<*>,
+                hidden: ViewController<*>,
+                animated: Boolean,
+                onEnd: () -> Unit,
+            ): () -> Unit {
+                onEnd()
+                return {}
+            }
         }
         tabs.attachAtCreation()
         return tabs

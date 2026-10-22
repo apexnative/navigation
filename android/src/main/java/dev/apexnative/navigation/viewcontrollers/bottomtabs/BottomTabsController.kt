@@ -1,5 +1,8 @@
 package dev.apexnative.navigation.viewcontrollers.bottomtabs
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.AnimatorSet
 import android.app.Activity
 import android.graphics.Color
 import android.util.Log
@@ -33,6 +36,7 @@ import dev.apexnative.navigation.viewcontrollers.stack.fab.FabPlacement
 import dev.apexnative.navigation.viewcontrollers.stack.topbar.BarComponents
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.Presenter
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.ViewController
+import dev.apexnative.navigation.views.animations.FadeThrough
 import dev.apexnative.navigation.views.bottomtabs.BottomTabItem
 import dev.apexnative.navigation.views.bottomtabs.BottomTabsLayout
 import dev.apexnative.navigation.views.bottomtabs.CustomBottomTabItemView
@@ -68,6 +72,8 @@ class BottomTabsController(
     private var cells: List<CustomBottomTabItemView> = emptyList()
     // `ANN.BottomTabSelected` of a press that waits for the new tab's screen to appear.
     private var pendingSelected: (() -> Unit)? = null
+    // Ends the fade through of a switch still running, with its events.
+    private var endSwitch: (() -> Unit)? = null
     // The bar goes with a stack's transition: the options of the new top don't move it themselves.
     private var riding = false
     private var restAttached = false
@@ -150,8 +156,11 @@ class BottomTabsController(
         /** The view of [tab] joins, or is there already: [visible], or invisible but laid out. */
         fun attach(tab: ViewController<*>, visible: Boolean)
 
-        /** The view of [shown] becomes visible and that of [hidden] invisible: the switch, at once. */
-        fun switch(shown: ViewController<*>, hidden: ViewController<*>)
+        /**
+         * The view of [shown] becomes visible and that of [hidden] invisible: at once, or with Material's fade through
+         * when [animated]; then [onEnd]. The function returned ends a switch still running at once, [onEnd] included.
+         */
+        fun switch(shown: ViewController<*>, hidden: ViewController<*>, animated: Boolean, onEnd: () -> Unit): () -> Unit
     }
 
     /** The views of the tabs; none before the tabs' view is made. */
@@ -166,9 +175,43 @@ class BottomTabsController(
             tab.view.visibility = if (visible) View.VISIBLE else View.INVISIBLE
         }
 
-        override fun switch(shown: ViewController<*>, hidden: ViewController<*>) {
-            shown.view.visibility = View.VISIBLE
-            hidden.peekView()?.visibility = View.INVISIBLE
+        override fun switch(
+            shown: ViewController<*>,
+            hidden: ViewController<*>,
+            animated: Boolean,
+            onEnd: () -> Unit,
+        ): () -> Unit {
+            val coming = shown.view
+            coming.visibility = View.VISIBLE
+            val going = hidden.peekView()
+            if (!animated || going == null) {
+                going?.visibility = View.INVISIBLE
+                onEnd()
+                return {}
+            }
+            val exit = FadeThrough.exit(going)
+            // Faded out, the tab that goes takes no more touches and no accessibility focus.
+            exit.addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    going.visibility = View.INVISIBLE
+                }
+            })
+            val set = AnimatorSet()
+            set.playTogether(exit, FadeThrough.enter(coming))
+            set.addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    set.removeAllListeners()
+                    // The tab that went keeps its look for its next selection; only its visibility hides it.
+                    going.visibility = View.INVISIBLE
+                    going.alpha = 1f
+                    coming.alpha = 1f
+                    coming.scaleX = 1f
+                    coming.scaleY = 1f
+                    onEnd()
+                }
+            })
+            set.start()
+            return set::end
         }
     }
 
@@ -302,10 +345,9 @@ class BottomTabsController(
     }
 
     /**
-     * Selects the tab at [index]: what it shows appears, the tab it left disappears — at once, one container invisible
-     * and the other visible —, then for a press `ANN.BottomTabSelected` right after the new screen's DidAppear and the
-     * left tab's `popToRootOnBlur`, with the state as one update after them; from code and by back, `popToRootOnBlur`
-     * and the state at once. The history of back follows.
+     * Selects the tab at [index]: the bar shows it at once; on screen the tab it left fades through to it (Material's
+     * fade through), off screen one container becomes invisible and the other visible at once; then [switched]. The
+     * history of back follows.
      */
     private fun select(index: Int, how: How) {
         if (index == selectedIndex || index !in tabs.indices || isDestroyed) return
@@ -328,10 +370,27 @@ class BottomTabsController(
         // A layer that waits for the tabs waits for the tab they show now.
         navigator?.shownScreensChanged(this)
         if (onScreen) AppearanceDispatcher.beginTransition(listOf(shown))
-        views?.switch(shown, left)
+        if (views == null) return switched(index, previous, how, onScreen, hasViews = false)
+        endSwitch = views.switch(shown, left, animated = onScreen) {
+            endSwitch = null
+            if (!isDestroyed) switched(index, previous, how, onScreen, hasViews = true)
+        }
+    }
+
+    /**
+     * The switch to the tab at [index] from [previous] ended: what went disappears, what came appears — unless the tabs
+     * stopped showing during the fade (a modal over them): it appears when they show again; then for a press
+     * `ANN.BottomTabSelected` right after the new screen's DidAppear and the left tab's `popToRootOnBlur`, with the state
+     * as one update after them; from code and by back, `popToRootOnBlur` and the state at once. [onScreen]: the switch
+     * started on screen.
+     */
+    private fun switched(index: Int, previous: Int, how: How, onScreen: Boolean, hasViews: Boolean) {
+        val left = tabs[previous]
+        val shown = tabs[index]
         if (onScreen) {
-            AppearanceDispatcher.endTransition(listOf(left), listOf(shown), null, null, null, reportsState = false)
-        } else if (views != null) {
+            val showing = if (isOnScreen) listOf(shown) else emptyList()
+            AppearanceDispatcher.endTransition(listOf(left), showing, null, null, null, reportsState = false)
+        } else if (hasViews) {
             // Not on screen: the bar takes the new tab's options as they are, without appearance events.
             val options = resolveShownOptions(DefaultOptions.current)
             bar.applyBar(options.bottomTabs, directionOf(options))
@@ -358,8 +417,10 @@ class BottomTabsController(
         if (screen == null) finish() else AppearanceDispatcher.afterDidAppear(screen, finish)
     }
 
-    // A press's `ANN.BottomTabSelected` still waiting goes before anything newer on these tabs.
+    // A switch still running ends at once and a press's `ANN.BottomTabSelected` still waiting goes, before anything
+    // newer on these tabs.
     private fun flushPendingSelected() {
+        endSwitch?.invoke()
         pendingSelected?.invoke()
     }
 
@@ -621,6 +682,8 @@ class BottomTabsController(
         if (isDestroyed) return
         pendingSelected = null
         super.destroy()
+        // A switch still running ends with its views at rest, without events: the tabs are gone.
+        endSwitch?.invoke()
         peekView()?.let { layout ->
             layout.bar.destroyCustomItemViews()
             layout.row?.let(CustomTabRowPlacer::forget)
