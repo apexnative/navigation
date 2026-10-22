@@ -62,7 +62,8 @@ thread fills, so JS gets its answer during a screen's first render without waiti
 no navigation logic: it turns a method into a call of the command runner.
 
 - iOS: `ANNTurboModule` in `ios/TurboModules/`. Events leave through `ANNEventEmitter` and the module
-  `ANNTurboEventEmitter`, which lists the supported event names and keeps `ANN.AppLaunched` until JS listens.
+  `ANNTurboEventEmitter`, which lists the supported event names (`ANNEventContractNames`) and keeps `ANN.AppLaunched`
+  until JS listens.
 - Android: `NavigationTurboModule` in `react/`, registered by `NavigationPackage`. Events leave through `EventEmitter`
   and React Native's device event emitter of the current React context.
 
@@ -181,7 +182,8 @@ Each rule has one owner. A feature that needs the rule calls the owner; it does 
 | Way in                      | `ANNTurboModule`; every async method through `ANNCommandRunner`                   | `NavigationTurboModule`; every async method through `CommandRunner`                       |
 | Layout check                | `ANNLayoutReader` on the module queue                                             | `LayoutReader` on the module thread; `LayoutChecks` on main                               |
 | Answer                      | `ANNCommandAnswer`: state, promise, `CommandCompleted`; once                      | `CommandAnswer`: the same, through `AnswerEvents`                                         |
-| Error texts                 | `ANNErrorTexts`                                                                   | `ErrorTexts`, the same words                                                              |
+| Error texts                 | `ANNErrorTexts`, made from `src/interfaces/contract/errors.json`                  | `ErrorTexts`, made from the same file                                                     |
+| Event names and keys        | `ANNEventContract`, made from the event types of `src/interfaces/`                | `EventContract`, made from the same types                                                 |
 | Registry                    | `ANNNodeRegistry`, one for the process, weak                                      | `ChildControllersRegistry`, one per `Navigator`; `Navigators` holds the activities weakly |
 | Factory                     | `ANNLayoutFactory`; `ANNSideMenuPresenter` is the one other file naming a module  | `LayoutFactory`                                                                           |
 | Options cache               | `ANNOptionsCache`, moved by the setter of `ANNNodeHelper.options` and by defaults | `OptionsCache`, moved by the `ViewController.options` setter and by `DefaultOptions.set`  |
@@ -319,13 +321,19 @@ Before step 5 the state goes once more if it changed since step 3, so JS `await`
 `getState()`. The answer is sent once; nothing is sent for a JavaScript that went. A command without a promise
 (`mergeOptions`) sends no state and no `CommandCompleted`.
 
+**The table.** Both platforms answer from one table: the error texts of `src/interfaces/contract/errors.json` and the
+event names and payload keys of the types in `src/interfaces/` (`Events.ts`, `ComponentEvents.ts`).
+`scripts/contract.mjs` makes `ANNErrorTexts` and `ANNEventContract` (iOS) and `ErrorTexts` and `EventContract`
+(Android) from them; the files are committed, and `scripts/check.sh` fails when one differs from its source. A new
+text or key goes into the source, never into the made files. Which text a case gives and what a command resolves with
+are behavior, kept the same by each platform's code.
+
 **Errors.** A command that fails on the native side rejects its promise with a text from the error table; JS adds
 `[navigation] <command>:`. The check rejects before a node exists; a failure in the body rejects with `could not
 <what>: <reason>`; a failure in a step that runs later (a ready handler, a timer, the end of a transition) is caught by
 the owner's guard and rejects the command too. On iOS an answer that goes away unanswered while its JavaScript runs
 rejects `could not run '<command>': the native core let it go without an answer`, so a path that forgets to answer
-never leaves the promise waiting. A command without a promise writes one line to the log. An exception
-never ends the app. The texts are the same on both platforms: `ANNErrorTexts` and `ErrorTexts` carry the same words.
+never leaves the promise waiting. A command without a promise writes one line to the log. An exception never ends the app.
 
 ## 6. Where the platforms differ on purpose
 

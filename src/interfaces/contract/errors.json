@@ -1,0 +1,275 @@
+{
+  "description": "Every text the native side rejects a command with, or logs for a command without a promise: one sentence per case, the values in single quotes, {name} for a parameter. scripts/contract.mjs makes ios/Contract/ANNErrorTexts.{h,mm} and android/.../react/ErrorTexts.kt from it; `platforms` limits a text to one platform.",
+  "groups": [
+    {
+      "title": "Where the screen is",
+      "texts": [
+        {
+          "name": "screenNotShown",
+          "params": ["componentId"],
+          "text": "the screen '{componentId}' is not shown"
+        },
+        {
+          "name": "notInStack",
+          "params": ["componentId"],
+          "text": "the screen '{componentId}' is not in a stack"
+        },
+        {
+          "name": "firstScreenOfStack",
+          "params": ["componentId"],
+          "text": "the screen '{componentId}' is the first screen of its stack"
+        },
+        {
+          "name": "notInThisStack",
+          "params": ["componentId"],
+          "text": "the screen '{componentId}' is not in this stack"
+        },
+        {
+          "name": "notInModal",
+          "params": ["componentId"],
+          "text": "the screen '{componentId}' is not in a modal"
+        },
+        {
+          "name": "notInOverlay",
+          "params": ["componentId"],
+          "text": "the screen '{componentId}' is not in an overlay"
+        },
+        {
+          "name": "notInSplitView",
+          "params": ["componentId"],
+          "text": "the screen '{componentId}' is not in a split view"
+        },
+        {
+          "name": "neitherSplitViewNorStack",
+          "params": ["componentId"],
+          "text": "the screen '{componentId}' is neither in a split view nor in a stack"
+        },
+        {
+          "name": "noSuchColumn",
+          "params": ["componentId", "column"],
+          "text": "the split view of the screen '{componentId}' has no '{column}' column"
+        },
+        {
+          "name": "columnIsStack",
+          "params": ["componentId", "column"],
+          "text": "the '{column}' column of the split view of the screen '{componentId}' is a stack: it takes a screen, not a stack"
+        },
+        {
+          "name": "columnNotStack",
+          "params": ["componentId", "column"],
+          "text": "the '{column}' column of the split view of the screen '{componentId}' is not a stack"
+        },
+        {
+          "name": "noScreensForStack",
+          "params": ["componentId"],
+          "text": "there are no screens to put in the stack of the screen '{componentId}'"
+        },
+        {
+          "name": "alreadyShown",
+          "params": ["componentId"],
+          "text": "the screen '{componentId}' shows already: an id goes to one screen"
+        }
+      ]
+    },
+    {
+      "title": "Root, modals, the app",
+      "texts": [
+        {
+          "name": "setRootReplaced",
+          "params": ["rootId"],
+          "text": "setRoot was replaced by a newer setRoot before the root '{rootId}' finished showing"
+        },
+        {
+          "name": "rootDestroyed",
+          "params": ["rootId"],
+          "text": "the root '{rootId}' was destroyed before it showed"
+        },
+        {
+          "name": "modalWithoutRoot",
+          "params": ["componentId"],
+          "text": "the modal '{componentId}' can't be dismissed: there is no root under it"
+        },
+        {
+          "name": "nowhereToShow",
+          "params": [],
+          "text": "the navigation has nowhere to show screens: the app has no activity or window"
+        }
+      ]
+    },
+    {
+      "title": "Native screens",
+      "texts": [
+        {
+          "name": "nativeScreenNotRegistered",
+          "params": ["name"],
+          "text": "no native screen is registered as '{name}'"
+        },
+        {
+          "name": "nativeScreenNotCreated",
+          "params": ["name"],
+          "text": "the native screen '{name}' could not be created: its creator returned nothing"
+        },
+        {
+          "name": "nativeCallReloaded",
+          "params": ["name", "componentId"],
+          "text": "JavaScript reloaded before the call '{name}' of the screen '{componentId}' was answered",
+          "doc": "The error of a call of a native screen whose JavaScript reloaded before it answered."
+        },
+        {
+          "name": "nativeCallNotRunning",
+          "params": ["name", "componentId"],
+          "text": "the navigation is not running: the call '{name}' of the screen '{componentId}' can't be answered",
+          "doc": "The error of a call of a native screen while no JavaScript can answer it."
+        }
+      ]
+    },
+    {
+      "title": "The layout",
+      "texts": [
+        {
+          "name": "unknownNodeType",
+          "params": ["type"],
+          "text": "the layout has a node of unknown type '{type}'"
+        },
+        {
+          "name": "nodeWithoutId",
+          "params": ["type"],
+          "text": "the layout has a node of type '{type}' without an id"
+        },
+        {
+          "name": "sideMenuChild",
+          "params": ["menuId", "type"],
+          "text": "the side menu '{menuId}' has a child of type '{type}': it takes SideMenuLeft, SideMenuCenter and SideMenuRight"
+        },
+        {
+          "name": "stackTakesScreens",
+          "params": ["stackId", "type"],
+          "text": "the stack '{stackId}' takes screens, not a '{type}'"
+        },
+        {
+          "name": "emptyStack",
+          "params": ["stackId"],
+          "text": "the stack '{stackId}' has no screens"
+        },
+        {
+          "name": "emptyTabs",
+          "params": ["tabsId"],
+          "text": "the tabs '{tabsId}' have no tabs"
+        },
+        {
+          "name": "tooManyTabs",
+          "params": [
+            "tabsId",
+            {
+              "name": "count",
+              "type": "int"
+            }
+          ],
+          "text": "the tabs '{tabsId}' have {count} tabs: Android shows at most 5",
+          "doc": "Only Android checks it: its tab bar shows at most 5 tabs."
+        },
+        {
+          "name": "splitViewColumns",
+          "params": ["splitViewId"],
+          "text": "the split view '{splitViewId}' needs its primary and its secondary column"
+        },
+        {
+          "name": "pairUnsupported",
+          "params": ["pairId"],
+          "text": "the pair '{pairId}' needs iOS 27.1 and an app built with its SDK",
+          "doc": "Only iOS checks it: Android has pairs on every version."
+        },
+        {
+          "name": "pairNeedsTwoScreens",
+          "params": ["pairId"],
+          "text": "the pair '{pairId}' needs two screens: its primary and its secondary"
+        },
+        {
+          "name": "nodeWithoutName",
+          "params": ["type", "nodeId"],
+          "text": "the layout has a node '{nodeId}' of type '{type}' without a name"
+        },
+        {
+          "name": "rootMissing",
+          "params": [],
+          "text": "the layout of setRoot has no root"
+        },
+        {
+          "name": "tabsInTabs",
+          "params": ["tabsId"],
+          "text": "the tabs '{tabsId}' have a tab of type 'BottomTabs': tabs don't go inside tabs"
+        },
+        {
+          "name": "sideMenuSides",
+          "params": ["menuId"],
+          "text": "the side menu '{menuId}' takes one SideMenuCenter and at most one SideMenuLeft and one SideMenuRight"
+        },
+        {
+          "name": "sideChildCount",
+          "params": ["sideId", "menuId"],
+          "text": "the side '{sideId}' of the side menu '{menuId}' needs exactly one child"
+        },
+        {
+          "name": "sideMenuInSide",
+          "params": ["menuId"],
+          "text": "the side menu '{menuId}' has a side menu in a side: a side menu doesn't go inside a side menu"
+        },
+        {
+          "name": "sideOutsideMenu",
+          "params": ["nodeId", "type"],
+          "text": "the layout has a node '{nodeId}' of type '{type}' outside a side menu"
+        },
+        {
+          "name": "splitViewInColumn",
+          "params": ["splitViewId"],
+          "text": "the split view '{splitViewId}' has a column of type 'SplitView': a split view doesn't go inside a split view"
+        },
+        {
+          "name": "idGivenTwice",
+          "params": ["nodeId"],
+          "text": "the layout gives the id '{nodeId}' to two nodes"
+        }
+      ]
+    },
+    {
+      "title": "Options, previews, any other failure",
+      "texts": [
+        {
+          "name": "unreadableOption",
+          "params": ["path", "componentId"],
+          "text": "the option '{path}' of the screen '{componentId}' has a value the navigation can't read"
+        },
+        {
+          "name": "unreadableDefaultOption",
+          "params": ["path"],
+          "text": "the option '{path}' of the default options has a value the navigation can't read",
+          "doc": "An unreadable value of `setDefaultOptions`: the default options belong to no screen."
+        },
+        {
+          "name": "previewGone",
+          "params": ["previewId"],
+          "text": "the preview '{previewId}' went without being opened"
+        },
+        {
+          "name": "couldNot",
+          "params": ["what", "reason"],
+          "text": "could not {what}: {reason}",
+          "doc": "Any other failure: what could not be done and why, `could not <what>: <reason>`."
+        },
+        {
+          "name": "notDoneYet",
+          "params": ["method"],
+          "text": "could not run '{method}': the native core doesn't do it yet",
+          "doc": "A command whose part of the native core is not written yet."
+        },
+        {
+          "name": "notAnswered",
+          "params": ["method"],
+          "text": "could not run '{method}': the native core let it go without an answer",
+          "doc": "A command that nothing in the native core answered: what took it let it go, or nothing took it.",
+          "platforms": ["ios"]
+        }
+      ]
+    }
+  ]
+}

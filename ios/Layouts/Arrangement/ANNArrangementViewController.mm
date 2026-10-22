@@ -4,6 +4,7 @@
 
 #import "ANNArrangementState.h"
 #import "ANNComponentViewController.h"
+#import "ANNEventContract.h"
 #import "ANNExternalViewController.h"
 #import "ANNShownScreens.h"
 #import "ANNUtils.h"
@@ -130,11 +131,12 @@ static BOOL ANNKeepsState(UIViewController *screen) {
 
 static NSDictionary<NSString *, id> *ANNStateOf(NSString *placement, NSString *layout, BOOL front,
                                                 BOOL hidden) {
+    const auto &keys = ANNEventContract.ArrangementChanged;
     return @{
-        @"placement" : placement,
-        @"layout" : layout,
-        @"front" : @(front),
-        @"hidden" : @(hidden),
+        keys.placement : placement,
+        keys.layout : layout,
+        keys.front : @(front),
+        keys.hidden : @(hidden),
     };
 }
 

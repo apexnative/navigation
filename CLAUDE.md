@@ -72,7 +72,8 @@ the full log in `.logs/`. A hook blocks the raw commands (`xcodebuild`, `gradlew
 `eslint`); a command no script covers runs with `APEX_RAW=1` in front.
 
 ```sh
-scripts/check.sh                      # the quick checks: types, lint, Jest, headers, docs API
+scripts/check.sh                      # the quick checks: types, lint, Jest, headers, the contract, docs API
+node scripts/contract.mjs             # the error texts and event keys of both platforms, after a change of their source
 scripts/typecheck.sh                  # TypeScript: the library and the Showcase
 scripts/lint.sh [files...]            # ESLint + Prettier
 scripts/test-js.sh [jest args...]     # Jest (the CLI)

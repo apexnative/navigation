@@ -165,7 +165,10 @@ Each rule has one owner. Change the owner, not a caller; if a new feature needs 
   `invokeDefaultOnBackPressed` → `Navigator.handleBack` → `ModalCoordinator.handleBack` → the root's
   `ParentController.handleBack` → `StackController.handleBack` → `StackQueue.cut`. `BackCallbackState` keeps the
   system callback enabled only while back has something to do.
-- **Error texts.** `ErrorTexts`: one function per text, the same words as iOS. JavaScript adds `[navigation] <command>:`.
+- **Error texts.** `ErrorTexts`: one function per text, the same words as iOS, made with iOS's from
+  `src/interfaces/contract/errors.json` (`scripts/contract.mjs`). JavaScript adds `[navigation] <command>:`.
+- **Event names and keys.** `EventContract`, made from the event types of `src/interfaces/`; `EventEmitter` and the
+  builders of payloads use it, never a string.
 - **Room for the bars.** A screen's room at the top and bottom is `ScreenFrame` with `ScreenSafeArea` and the
   `ParentController` room hooks (`getTopInset`, `keepsStatusBarRoomOf`, …). A screen in a pair forwards its room to
   the pair (`ScreenFrame.applyRoom`), and the pair's `getTopInset` uses the screens' rule (`ScreenFrame.topRoomOf`)

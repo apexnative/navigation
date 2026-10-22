@@ -29,11 +29,12 @@ The steps for adding an option and for adding a command to the Android core; rea
 3. The body goes to the owner of the area: `Navigator` (root, modals, overlays), `StackCommands` (stacks), a
    coordinator. A stack operation is a `StackQueue` operation.
 4. New layout fields are read and checked in `LayoutReader`; checks against what shows are in `LayoutChecks` or in the
-   command, before any node is made. Every rejection text is a function in `ErrorTexts` (same words as iOS).
+   command, before any node is made. Every rejection text is a function in `ErrorTexts` (same words as iOS),
+   made by `node scripts/contract.mjs` from `src/interfaces/contract/errors.json`: a new text goes there.
 5. The answer goes through `CommandAnswer`: add the name to `COMPLETED_COMMANDS` when the command changes what shows
    (then the state, the promise and `CommandCompleted` follow in that order). A transition ends through
    `AppearanceDispatcher.endTransition`.
 6. Tests: `CommandRunnerTest`, `CommandAnswerTest`, `ErrorTextsTest`, `LayoutReaderTest`; a stack operation also needs a
    case in the queue tests (`StackQueueHarness`).
-7. A new event: `EventEmitter` (`emit…`), the payload type in `src/interfaces`, and for an appearance event the
-   `AppearanceDispatcher.Sender`.
+7. A new event: the payload type in `src/interfaces`, then `node scripts/contract.mjs` for its name and keys in
+   `EventContract`; `EventEmitter` (`emit…`) with those, and for an appearance event the `AppearanceDispatcher.Sender`.

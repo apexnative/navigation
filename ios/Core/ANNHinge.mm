@@ -1,5 +1,6 @@
 #import "ANNHinge.h"
 #import "ANNAssert.h"
+#import "ANNEventContract.h"
 #import "ANNUtils.h"
 
 NSNotificationName const ANNHingeDidChangeNotification = @"ANNHingeDidChange";
@@ -34,11 +35,12 @@ static NSDictionary<NSString *, id> *ANNHingeValue(UIHinge *hinge) API_AVAILABLE
     if (!hinge) {
         return @{};
     }
+    const auto &keys = ANNEventContract.HingeChanged;
     NSString *state = ANNHingeStateName(hinge.status);
     if (hinge.status == UIHingeStatusUnknown) {
-        return @{@"state" : state};
+        return @{keys.state : state};
     }
-    return @{@"state" : state, @"angle" : @(round(hinge.angle * 1800 / M_PI) / 10)};
+    return @{keys.state : state, keys.angle : @(round(hinge.angle * 1800 / M_PI) / 10)};
 }
 #endif
 
@@ -94,13 +96,13 @@ static NSDictionary<NSString *, id> *ANNHingeValue(UIHinge *hinge) API_AVAILABLE
         if ([ANNLastHinge isEqualToDictionary:value]) {
             return;
         }
-        previousState = ANNLastHinge[@"state"];
+        previousState = ANNLastHinge[ANNEventContract.HingeChanged.state];
         ANNLastHinge = value;
     }
     if (ANNHingeUpdatesEnabled) {
         [ANNHingeEventEmitter sendHingeChanged:value];
     }
-    id state = value[@"state"];
+    id state = value[ANNEventContract.HingeChanged.state];
     if (previousState != state && ![previousState isEqual:state]) {
         [NSNotificationCenter.defaultCenter postNotificationName:ANNHingeDidChangeNotification
                                                           object:nil];

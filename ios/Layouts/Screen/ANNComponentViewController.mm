@@ -3,6 +3,7 @@
 #import "ANNArrangementState.h"
 #import "ANNBottomTabsController.h"
 #import "ANNComponentPresenter.h"
+#import "ANNEventContract.h"
 #import "ANNHinge.h"
 #import "ANNKeyCommands.h"
 #import "ANNNodeRegistry.h"
@@ -455,7 +456,8 @@
     if (!regions) {
         return;
     }
-    BOOL empty = [regions[@"division"] count] == 0 && [regions[@"occlusion"] count] == 0;
+    const auto &keys = ANNEventContract.ScreenRegionsChanged;
+    BOOL empty = [regions[keys.division] count] == 0 && [regions[keys.occlusion] count] == 0;
     if (empty && ![ANNScreenRegions regionsForScreenId:componentId]) {
         return;
     }

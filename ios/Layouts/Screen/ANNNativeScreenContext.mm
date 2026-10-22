@@ -1,5 +1,6 @@
 #import "ANNNativeScreenContext+Internal.h"
 #import "ANNErrorTexts.h"
+#import "ANNEventContract.h"
 #import "ANNEventEmitter.h"
 #import "ANNNativeScreenCalls.h"
 #import <React/RCTUtils.h>
@@ -71,12 +72,13 @@
                                                                  componentId:self->_componentId]];
           return;
       }
+      const auto &keys = ANNEventContract.NativeScreenCall;
       [eventEmitter sendNativeScreenCall:@{
-          @"componentId" : self->_componentId,
-          @"callId" : callId,
-          @"kind" : kind,
-          @"name" : name,
-          @"args" : arguments ?: @[],
+          keys.componentId : self->_componentId,
+          keys.callId : callId,
+          keys.kind : kind,
+          keys.name : name,
+          keys.args : arguments ?: @[],
       }];
     });
 }

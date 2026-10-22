@@ -22,7 +22,8 @@ NS_ASSUME_NONNULL_BEGIN
 /// Whether the JavaScript of this emitter still runs: its events go only then. Any thread.
 @property(nonatomic, readonly) BOOL isCurrent;
 
-/// Sends `ANN.<name>` with the payload as it is. From another queue it moves to the main queue first.
+/// Sends the event `name` (`ANNEventContract.<Event>.event`, `ANN.<Event>`) with the payload as it is, its keys from
+/// `ANNEventContract` too. From another queue it moves to the main queue first.
 - (void)sendEvent:(NSString *)name body:(nullable NSDictionary<NSString *, id> *)body;
 
 #pragma mark - The contract

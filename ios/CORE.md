@@ -50,7 +50,8 @@ dispatcher.
 - **Appearance dispatcher** (`ANNAppearanceDispatcher`): the only sender of the appearance events; it also ends a
   transition in the fixed order and resolves the command's answer.
 - **Event emitter** (`ANNEventEmitter`, `ANNTurboEventEmitter`): sends `ANN.<Name>` to JS on the main queue, and drops
-  events of a JavaScript that went.
+  events of a JavaScript that went. The names and keys come from `ANNEventContract`, made from the event types of
+  `src/interfaces/` (`scripts/contract.mjs`).
 
 ## How a command flows
 
