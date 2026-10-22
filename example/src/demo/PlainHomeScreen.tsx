@@ -7,7 +7,7 @@ import { showcaseTheme } from '../app/theme';
  * The first screen of an app as it is written at first: a red `View`, a `Text` and a `Button` that pushes Details.
  * 6.11 shows it under a theme without a background; the Showcase theme comes back as it goes.
  */
-function PlainHome() {
+function PlainHome({ largeTitle }: { largeTitle?: boolean }) {
   const nav = useNavigation();
   useEffect(() => () => navigation.setTheme(showcaseTheme), []);
   return (
@@ -15,7 +15,7 @@ function PlainHome() {
       <Text style={styles.title}>Home</Text>
       <Button
         title="Open Details"
-        onPress={() => nav.push('PlainDetails', { props: { title: 'Details' } })}
+        onPress={() => nav.push('PlainDetails', { props: { title: 'Details', largeTitle } })}
       />
     </View>
   );

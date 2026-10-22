@@ -50,6 +50,7 @@ import dev.apexnative.navigation.viewcontrollers.viewcontroller.IReactView
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.ScrollEventListener
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.ViewController
 import dev.apexnative.navigation.views.animations.SideAnimator
+import dev.apexnative.navigation.views.animations.FadeThrough
 import dev.apexnative.navigation.views.animations.SystemTransition
 import dev.apexnative.navigation.views.component.ComponentLayout
 import dev.apexnative.navigation.views.stack.StackLayout
@@ -124,6 +125,8 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
     private var largeTitleShown = false
     private var followed: ScrollEventListener? = null
     private var rowTarget: RowTarget? = null
+    // The large title opening with a push from a screen without one; none at rest.
+    private var largeTitleOpening: ValueAnimator? = null
     // The picture of the part under the row in a leaving screen's overlay: the screen and the picture.
     private var underRow: Pair<ViewController<*>, Drawable>? = null
 
@@ -161,7 +164,9 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
      * The stack's current child changes to [incoming] ([motion]: the default transition that brings it, none at once):
      * the row's picture is taken before the bar takes the new screen's options. A push from a large title to a screen
      * without one makes the bar lower at once: the part under the row rides with the leaving screen as a picture in its
-     * overlay, and the row's picture holds the row only. So does a pop back to a screen whose large title is collapsed.
+     * overlay, and the row's picture holds the row only. So does a pop or a fade through (`setStackRoot`) to a screen
+     * without a large title or with its large title collapsed: a picture as tall as the large title would hold the bar
+     * at its height to the end.
      */
     fun beginRowTransition(
         motion: BarMotion?,
@@ -183,6 +188,11 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
 
     /** The transition that brought the current child ended: the row at rest, the picture under it gone. */
     fun endRowTransition() {
+        // A large title still opening is open now.
+        largeTitleOpening?.let {
+            largeTitleOpening = null
+            it.end()
+        }
         motion = null
         visibilityChange = StackDisplay.BarVisibility.AT_ONCE
         rowTransition?.end()
@@ -335,6 +345,7 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
     fun destroy() {
         rowTransition?.end()
         largeTitleFollower.stop()
+        stopLargeTitleOpening()
         collapse?.disableCollapse()
         components.destroyAll()
         cells.clear()
@@ -633,11 +644,13 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
     }
 
     // Whether [incoming] shows less of the bar under the row than the large title now: a push to a screen without a
-    // large title, or a pop back to one whose large title is collapsed. The lower bar would cut the row's picture.
+    // large title, or a pop or a fade through to one without a large title or with its large title collapsed. The lower
+    // bar would cut the row's picture.
     private fun lowersBar(motion: BarMotion?, incoming: ViewController<*>, options: Options): Boolean = when (motion) {
         BarMotion.Push -> !largeTitleShownFor(incoming, options)
-        BarMotion.Pop -> largeTitleShownFor(incoming, options) && collapseOf(incoming, options) > 0f
-        else -> false
+        BarMotion.Pop, BarMotion.FadeThrough ->
+            !largeTitleShownFor(incoming, options) || collapseOf(incoming, options) > 0f
+        null -> false
     }
 
     // How far [entry]'s large title is collapsed as it shows: by the offset its list had last, unless it doesn't follow
@@ -675,6 +688,11 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
             large.fontSize.get(null), fontKey(large.font), large.collapseOnScroll.get(null), testId).joinToString()
         if (keys[Part.LargeTitle] == key) return
         keys[Part.LargeTitle] = key
+        // The default push or fade through from a screen without a large title opens it with the screens, on a bar that
+        // shows at rest: the bar's show and its hide on scroll move the same translation.
+        val opening = motion.takeIf { it == BarMotion.Push || it == BarMotion.FadeThrough }
+        val opens = shown && !largeTitleShown && bar.visibility == View.VISIBLE && bar.translationY == 0f
+        stopLargeTitleOpening()
         largeTitleShown = shown
         bar.setLargeTitleShown(shown)
         largeTitleFollower.stop()
@@ -692,7 +710,37 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
         // same frame: back to the screen, after light or dark changed, after a merge.
         if (large.collapseOnScroll.isFalse) scrollOf(entry)?.forgetOffset()
         largeTitleFollower.collapse(collapseOf(entry, options))
+        if (opens) opening?.let { openLargeTitle(bar, collapseOf(entry, options), it) }
         if (!large.collapseOnScroll.isFalse) scrollOf(entry)?.let(largeTitleFollower::follow)
+    }
+
+    // The bar grows with the screens' [motion], on its curve and in its time, from the row's height to the large title
+    // as the screen's list left it: the large title comes out from under the row as it does when the list scrolls
+    // back. No frame shows the tall bar before the screens move.
+    private fun openLargeTitle(bar: TopBar, offset: Float, motion: BarMotion) {
+        val range = UiUtils.dpToPx(bar.context, LargeTitleView.HEIGHT)
+        val to = LargeTitleCollapse.shift(offset, range)
+        if (to >= range) return
+        bar.setLargeTitleCollapse(range.toInt())
+        largeTitleOpening = ValueAnimator.ofFloat(range, to).apply {
+            duration = if (motion == BarMotion.FadeThrough) FadeThrough.DURATION else SystemTransition.DURATION
+            interpolator = if (motion == BarMotion.FadeThrough) FadeThrough.CURVE else SystemTransition.CURVE
+            addUpdateListener { bar.setLargeTitleCollapse((it.animatedValue as Float).toInt()) }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    if (largeTitleOpening === animation) largeTitleOpening = null
+                }
+            })
+            start()
+        }
+    }
+
+    // Stopped where it is: what applies next sets the large title.
+    private fun stopLargeTitleOpening() {
+        val opening = largeTitleOpening ?: return
+        largeTitleOpening = null
+        opening.removeAllUpdateListeners()
+        opening.cancel()
     }
 
     // Shown or hidden: with the transition by its side, or by `animate` in a merge.
@@ -960,8 +1008,11 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
                 if (large) View.IMPORTANT_FOR_ACCESSIBILITY_NO else View.IMPORTANT_FOR_ACCESSIBILITY_YES
         }
 
+        // The list scrolled while the large title opens: it follows the list from there.
         override fun onScrollOffset(offsetY: Float) {
-            if (largeTitleShown) collapse(offsetY)
+            if (!largeTitleShown) return
+            stopLargeTitleOpening()
+            collapse(offsetY)
         }
 
         override fun onScrollUp(nextTranslation: Float) = Unit

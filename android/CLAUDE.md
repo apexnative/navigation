@@ -177,6 +177,9 @@ top-level folder. Main thread only, unless a line says otherwise.
   offset that `ScrollEventListener.lastOffset` keeps, never to 0, or it comes back expanded over a scrolled list.
 - A view's place in the window while a modal slides or a sheet is dragged comes from layout (`RestPlace`), never from
   `getLocationInWindow`, which counts the translations of the animation.
+- The bar measures to its children: a picture laid into it for a transition that is taller than the bar the incoming
+  screen gives holds the bar at that height to the end (the row's picture of a pop from a large title). What doesn't
+  stay in the bar rides with the leaving screen (`TopBarPresenter.pictureUnderRow`).
 - A React screen without `layout.backgroundColor` is opaque with the theme's `android:colorBackground`
   (`ComponentPresenter`): a push keeps the covered screen under the new one until it ends, and a transparent screen
   shows it. Only an explicit `'transparent'` / `null` (overlays, see-through modals) lets it through.
