@@ -40,12 +40,16 @@ compact? }, children }`, built by `toNativeLayout` (`src/engine/layout.ts`). Typ
 
 A command that can't be made rejects with `[navigation] <command>: <reason>`, the same text on iOS and Android. What
 JS knows itself (the screen is gone, not in a stack, nothing to go back to) it tells before the native side is asked.
-The native reasons are listed in `ANNErrorTexts` (iOS) and `ErrorTexts.kt` (Android).
+The native reasons are one table, `src/interfaces/contract/errors.json`: a new text goes there, and
+`node scripts/contract.mjs` makes `ANNErrorTexts` (iOS) and `ErrorTexts.kt` (Android) from it. Never edit the made
+files; `scripts/check.sh` fails when they differ from the table.
 
 ## Adding an event
 
-1. The native side on both platforms (on iOS the name is also in the event emitter's supported events).
-2. The payload type in `src/interfaces/ComponentEvents.ts` or `Events.ts`.
+1. The payload type `<Name>Event` in `src/interfaces/ComponentEvents.ts` or `Events.ts`; a JSDoc that starts with
+   `(iOS…)` makes it iOS only. Then `node scripts/contract.mjs`: it makes the name and the keys of the payload for both
+   platforms (`ANNEventContract`, `EventContract`) and the list of events the iOS emitter supports.
+2. The native side on both platforms, its name and keys from those files, never a string.
 3. The name in `NATIVE_EVENTS` (`src/api/events/navigationEvents.ts`) and the public event type there; screen
    events reach the app with the screen as `{ id, name }` (`src/engine/events.ts`).
 4. The hook or listener that reads it (`src/api/hooks/screenHooks.ts`).

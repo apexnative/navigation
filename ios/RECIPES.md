@@ -34,7 +34,8 @@ you do exactly that; the map is `ios/CLAUDE.md`.
 4. **The layout check:** a new node type goes into `ANNLayoutType` and `ANNLayoutReader` (its place, its children), and
    gets a maker in `ANNLayoutFactory`.
 5. **Error texts** come from `ANNErrorTexts`, one sentence per case, the same as Android; a text deep in a maker is
-   thrown with `+[ANNErrorTexts rejection:]`.
+   thrown with `+[ANNErrorTexts rejection:]`. A new text goes into `src/interfaces/contract/errors.json`, and
+   `node scripts/contract.mjs` makes `ANNErrorTexts` (and Android's `ErrorTexts`) from it; never edit them by hand.
 6. **The answer:** end through `ANNAppearanceDispatcher` (`endTransitionHiding:…answer:value:`) or call
    `-[ANNCommandAnswer resolve:]`; the state and `ANN.CommandCompleted` follow by themselves for the names in
    `ANNCompletedCommandNames`. Add the name there when the command shows or dismisses.

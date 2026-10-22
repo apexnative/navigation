@@ -23,8 +23,8 @@ top-level folder. Main thread only, unless a line says otherwise.
 - `react/`: the way in and out: `NavigationTurboModule`, `CommandRunner`, `CommandAnswer`, `ErrorTexts`,
   `OptionsCommands`, `ReloadCoordinator`, `ReactGateway`, `ReactView` (a React root), the stores (`ScreenInsets`,
   `ScreenRegions`, `ArrangementStates`, `Hinge`, `StartInfo`), `LaunchLink`, `ScrollEvents`.
-- `react/events/`: `AppearanceDispatcher`, `ScreenAppearance`, `EventEmitter`, `NavigationStateReporter`,
-  `ComponentType`.
+- `react/events/`: `AppearanceDispatcher`, `ScreenAppearance`, `EventEmitter`, `EventContract` (made by
+  `scripts/contract.mjs`), `NavigationStateReporter`, `ComponentType`.
 - `viewcontrollers/viewcontroller/`: `ViewController` (the base of every node), `Presenter`, `IReactView` (what a
   screen shows), `ScrollEventListener`.
 - `viewcontrollers/child/`, `parent/`: `ChildController` and the registry; `ParentController` (the base of layouts),
@@ -104,7 +104,7 @@ top-level folder. Main thread only, unless a line says otherwise.
   `NavigationStateReporter.kt`; `react/CommandAnswer.kt`.
 - Options (parsing, merging): `options/Options.kt`, `OptionsReader.kt`, `OptionsCache.kt`, `DefaultOptions.kt`,
   `params/`, `parsers/`; `viewcontrollers/viewcontroller/ViewController.kt` (resolution).
-- Error texts: `react/ErrorTexts.kt`.
+- Error texts: `react/ErrorTexts.kt`, made by `scripts/contract.mjs` from `src/interfaces/contract/errors.json`.
 - Links: `react/LaunchLink.kt`, `NavigationActivity.kt` (`onNewIntent`); `react/StartInfo.kt`.
 - Hinge and regions: `react/Hinge.kt`, `react/ScreenRegions.kt`, `react/ScreenInsets.kt`, `utils/WindowFolds.kt`.
 - Native screens: `nativescreen/NativeScreenContext.kt`, `NativeScreenCalls.kt`, `NativeScreenCreator.kt`;

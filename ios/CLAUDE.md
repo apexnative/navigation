@@ -58,9 +58,9 @@ Top-level files: `Package.swift` (SwiftPM; `headerFolders` lists every folder wh
 - Preview — `Layouts/Stack/`: `ANNPreviewPush`; `Layouts/Screen/`: `ANNPreviewInteraction`
 - Animations, transitions — `Animations/` (plan and animator at the top; `Elements/` for shared elements and zoom; `Interpolators/` for curves and tracks)
 - System bars, orientation, direction — `Core/`: `ANNSystemUI`, `ANNSystemUIRules`, `ANNAppDirection`, `ANNNodePresenter` (the answers to UIKit)
-- Events and state — `Core/`: `ANNEventEmitter`, `ANNAppearanceDispatcher`, `ANNScreenAppearance`, `ANNNavigationState`; `TurboModules/`: `ANNTurboEventEmitter`
+- Events and state — `Core/`: `ANNEventEmitter`, `ANNEventContract` (names and keys, made by `scripts/contract.mjs`), `ANNAppearanceDispatcher`, `ANNScreenAppearance`, `ANNNavigationState`; `TurboModules/`: `ANNTurboEventEmitter`
 - Options: parsing, merging, defaults — `Options/`: `ANNOptions`, `ANNOptionField`, `ANNOptionsReader`, `ANNDefaultOptions`, `ANNOptionsCache`; `Core/`: `ANNOptionsRepaint`
-- Error texts — `Contract/`: `ANNErrorTexts`; `Core/`: `ANNErrorHandler`
+- Error texts — `Contract/`: `ANNErrorTexts` (made from `src/interfaces/contract/errors.json` by `scripts/contract.mjs`); `Core/`: `ANNErrorHandler`
 - Links — `Core/`: `ANNDeepLinkQueue`; the `getLaunchLink` method of `ANNTurboModule`
 - Key commands — `Core/`: `ANNKeyCommands`; `Layouts/Screen/`: `ANNComponentViewController`
 - Hinge, regions — `Core/`: `ANNHinge`; `Layouts/Screen/`: `ANNScreenRegions`; `Layouts/Arrangement/`: `ANNArrangementState`
