@@ -73,7 +73,7 @@ internal class OptionsCommands(
         prepare = { OptionsReader.read(options, context()) },
     ) { read ->
         if (!runner.hasActivity()) {
-            runner.logFailure(MERGE_OPTIONS, ErrorTexts.mergeOptionsNoActivity())
+            runner.logFailure(MERGE_OPTIONS, ErrorTexts.nowhereToShow())
             return@runVoid
         }
         val node = findNode(componentId) ?: return@runVoid

@@ -161,7 +161,7 @@ class CommandRunnerTest {
         // As the module's mergeOptions: without an activity it has nothing to merge into.
         runner.runVoid("mergeOptions", "merge the options of the screen 'Home'") {
             ran += "mergeOptions"
-            if (!runner.hasActivity()) runner.logFailure("mergeOptions", ErrorTexts.mergeOptionsNoActivity())
+            if (!runner.hasActivity()) runner.logFailure("mergeOptions", ErrorTexts.nowhereToShow())
         }
         runMain()
         assertEquals(listOf("setDefaultOptions", "setBackListeners", "resolveNativeScreenCall", "mergeOptions"), ran)
@@ -177,7 +177,7 @@ class CommandRunnerTest {
     @Test
     fun voidCommandsWithAnActivityDontLog() {
         runner.runVoid("mergeOptions", "merge the options of the screen 'Home'") {
-            if (!runner.hasActivity()) runner.logFailure("mergeOptions", ErrorTexts.mergeOptionsNoActivity())
+            if (!runner.hasActivity()) runner.logFailure("mergeOptions", ErrorTexts.nowhereToShow())
         }
         runMain()
         assertTrue(logged.isEmpty())

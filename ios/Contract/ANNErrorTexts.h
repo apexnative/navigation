@@ -1,3 +1,5 @@
+// Made by scripts/contract.mjs from src/interfaces/contract/errors.json: change that file and run the script again.
+
 #import <Foundation/Foundation.h>
 
 NS_ASSUME_NONNULL_BEGIN
@@ -51,12 +53,12 @@ FOUNDATION_EXPORT NSExceptionName const ANNCommandRejectionException;
 + (NSString *)stackTakesScreens:(NSString *)stackId type:(NSString *)type;
 + (NSString *)emptyStack:(NSString *)stackId;
 + (NSString *)emptyTabs:(NSString *)tabsId;
+/// Only Android checks it: its tab bar shows at most 5 tabs.
 + (NSString *)tooManyTabs:(NSString *)tabsId count:(NSUInteger)count;
 + (NSString *)splitViewColumns:(NSString *)splitViewId;
+/// Only iOS checks it: Android has pairs on every version.
 + (NSString *)pairUnsupported:(NSString *)pairId;
 + (NSString *)pairNeedsTwoScreens:(NSString *)pairId;
-
-/// The other cases of the layout check: the texts both platforms use meanwhile.
 + (NSString *)nodeWithoutName:(NSString *)type nodeId:(NSString *)nodeId;
 + (NSString *)rootMissing;
 + (NSString *)tabsInTabs:(NSString *)tabsId;

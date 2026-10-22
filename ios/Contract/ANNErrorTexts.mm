@@ -1,3 +1,5 @@
+// Made by scripts/contract.mjs from src/interfaces/contract/errors.json: change that file and run the script again.
+
 #import "ANNErrorTexts.h"
 
 NSExceptionName const ANNCommandRejectionException = @"ANNCommandRejectionException";
@@ -59,8 +61,8 @@ static NSString *ANNText(NSString *format, ...) {
 }
 
 + (NSString *)columnNotStack:(NSString *)componentId column:(NSString *)column {
-    return ANNText(@"the '%@' column of the split view of the screen '%@' is not a stack", column,
-                   componentId);
+    return ANNText(@"the '%@' column of the split view of the screen '%@' is not a stack",
+                   column, componentId);
 }
 
 + (NSString *)noScreensForStack:(NSString *)componentId {
@@ -74,7 +76,8 @@ static NSString *ANNText(NSString *format, ...) {
 #pragma mark - Root, modals, the app
 
 + (NSString *)setRootReplaced:(NSString *)rootId {
-    return ANNText(@"setRoot was replaced by a newer setRoot before the root '%@' finished showing",
+    return ANNText(@"setRoot was replaced by a newer setRoot before the root '%@' finished "
+                   @"showing",
                    rootId);
 }
 
@@ -141,8 +144,8 @@ static NSString *ANNText(NSString *format, ...) {
 }
 
 + (NSString *)tooManyTabs:(NSString *)tabsId count:(NSUInteger)count {
-    return ANNText(@"the tabs '%@' have %lu tabs: Android shows at most 5", tabsId,
-                   (unsigned long)count);
+    return ANNText(@"the tabs '%@' have %lu tabs: Android shows at most 5",
+                   tabsId, (unsigned long)count);
 }
 
 + (NSString *)splitViewColumns:(NSString *)splitViewId {
@@ -181,8 +184,8 @@ static NSString *ANNText(NSString *format, ...) {
 }
 
 + (NSString *)sideMenuInSide:(NSString *)menuId {
-    return ANNText(@"the side menu '%@' has a side menu in a side: a side menu doesn't go inside a "
-                   @"side menu",
+    return ANNText(@"the side menu '%@' has a side menu in a side: a side menu doesn't go inside "
+                   @"a side menu",
                    menuId);
 }
 
@@ -191,8 +194,8 @@ static NSString *ANNText(NSString *format, ...) {
 }
 
 + (NSString *)splitViewInColumn:(NSString *)splitViewId {
-    return ANNText(@"the split view '%@' has a column of type 'SplitView': a split view doesn't go "
-                   @"inside a split view",
+    return ANNText(@"the split view '%@' has a column of type 'SplitView': a split view doesn't "
+                   @"go inside a split view",
                    splitViewId);
 }
 
@@ -208,7 +211,8 @@ static NSString *ANNText(NSString *format, ...) {
 }
 
 + (NSString *)unreadableDefaultOption:(NSString *)path {
-    return ANNText(@"the option '%@' of the default options has a value the navigation can't read", path);
+    return ANNText(@"the option '%@' of the default options has a value the navigation can't read",
+                   path);
 }
 
 + (NSString *)previewGone:(NSString *)previewId {

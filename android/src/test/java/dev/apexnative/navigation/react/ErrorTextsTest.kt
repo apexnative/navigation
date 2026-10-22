@@ -59,10 +59,6 @@ class ErrorTextsTest {
             "the navigation has nowhere to show screens: the app has no activity or window",
             ErrorTexts.nowhereToShow(),
         )
-        assertEquals(
-            "the navigation has nowhere to show screens: the app has no activity or window",
-            ErrorTexts.mergeOptionsNoActivity(),
-        )
         assertEquals("the preview 'Preview3' went without being opened", ErrorTexts.previewGone("Preview3"))
         assertEquals(
             "could not push the screen 'Details': it broke",
