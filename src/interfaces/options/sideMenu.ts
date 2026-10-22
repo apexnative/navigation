@@ -18,8 +18,8 @@ export interface SideMenuSide {
   visible?: boolean;
   /**
    * Whether the opening or closing that `visible` asks for is animated. With `false` it happens at once and the
-   * screens of the menu get the same appearance events in the same order, except that on Android a menu that opens at
-   * once sends its screens DidAppear without WillAppear. It acts only together with `visible` in the same merge.
+   * screens of the menu get the same appearance events in the same order: WillAppear, then DidAppear. It acts only
+   * together with `visible` in the same merge.
    * @default true
    */
   animate?: boolean;
@@ -32,15 +32,16 @@ export interface SideMenuSide {
   enabled?: boolean;
   /**
    * The width of the menu, in points on iOS and dp on Android. It is capped at the width of the side menu (iOS) and at
-   * that width less 64 dp (Android). On iOS a change applies at once, also to an open menu. On Android it applies the
-   * next time a screen in the side menu appears, the center's or a menu's.
+   * that width less 64 dp (Android). A change in `mergeOptions` applies at once, also to an open menu. A width set by
+   * a screen of the center acts while that screen shows.
    * Without it, 280 points on iOS and the width of the side menu less 64 dp on Android (the least gap the Material
    * drawer leaves).
    */
   width?: number;
   /**
-   * (Android) The height of the menu in dp; a menu lower than the container is pinned to the top. It is read only when
-   * the side menu is created. Without it, the menu takes the full height under the status bar. iOS doesn't read it.
+   * (Android) The height of the menu in dp; a menu lower than the container is pinned to the top. A change in
+   * `mergeOptions` applies at once, also to an open menu. Without it, the menu takes the full height under the status
+   * bar. iOS doesn't read it.
    */
   height?: number;
   /**

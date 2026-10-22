@@ -69,10 +69,11 @@ class SideMenuMotionTest {
     }
 
     @Test
-    fun anOpenWithoutAnimationGivesDidAppearWithoutWillAppearAndItsCloseDidDisappear() {
+    fun anOpenWithoutAnimationGivesWillAppearThenDidAppearAndItsCloseDidDisappear() {
         motion.command(Side.Left, visible = true, animate = false, shown = true)
         assertEquals(listOf("close:right:false", "lock:left:false", "open:left:false"), commands())
-        assertEquals(listOf("didAppear:Left", "stateNeeded", "state", "back", "shown"), events())
+        // As on iOS: WillAppear first, also when the drawer jumps open.
+        assertEquals(listOf("will:Left", "didAppear:Left", "stateNeeded", "state", "back", "shown"), events())
         assertEquals(Side.Left, motion.openSide)
         motion.command(Side.Left, visible = false, animate = false, shown = true)
         assertEquals(listOf("close:left:false"), commands())
@@ -257,10 +258,10 @@ class SideMenuMotionTest {
     }
 
     @Test
-    fun aDrawerThatDoesntCallBackOpenedWithoutAnimationSendsDidAppearOnly() {
+    fun aDrawerThatDoesntCallBackOpenedWithoutAnimationSendsWillAppearThenDidAppear() {
         drawer.callsBack = false
         motion.command(Side.Left, visible = true, animate = false, shown = true)
-        assertEquals(listOf("didAppear:Left", "stateNeeded", "state", "back", "shown"), events())
+        assertEquals(listOf("will:Left", "didAppear:Left", "stateNeeded", "state", "back", "shown"), events())
     }
 
     @Test
@@ -341,7 +342,7 @@ class SideMenuMotionTest {
         assertEquals(Side.Left, motion.openSide)
         assertEquals(listOf("back", "shown"), events())
         content.mount()
-        assertEquals(listOf("didAppear:Held", "stateNeeded", "state"), events())
+        assertEquals(listOf("will:Held", "didAppear:Held", "stateNeeded", "state"), events())
     }
 
     @Test

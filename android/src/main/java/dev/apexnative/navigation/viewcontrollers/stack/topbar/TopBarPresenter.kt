@@ -60,6 +60,7 @@ import dev.apexnative.navigation.views.stack.topbar.TopBarDefaults
 import dev.apexnative.navigation.views.stack.topbar.titlebar.BarButtonComponentCell
 import dev.apexnative.navigation.views.stack.topbar.titlebar.ButtonBar
 import dev.apexnative.navigation.views.stack.topbar.titlebar.IconBackgroundDrawable
+import kotlin.math.roundToInt
 
 /**
  * What the bar of one stack shows: the options of the screen on top of the stack, resolved (a pair's options screen),
@@ -881,7 +882,7 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
         else -> TitleBar.Alignment.Start
     }
 
-    private fun dp(value: Double): Int = UiUtils.dpToPx(activity, value.toFloat()).toInt()
+    private fun dp(value: Double): Int = UiUtils.dpToPx(activity, value.toFloat()).roundToInt()
 
     // What makes a button's look, as a text: the parts that differ make it apply again.
     private fun buttonKey(context: Context, button: ButtonOptions): String = listOf(

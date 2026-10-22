@@ -98,8 +98,8 @@ class BottomTabs(context: Context) : BottomNavigationView(MaterialTheme.context(
         var iconInactiveColor: Int? = null
         var titleActiveColor: Int? = null
         var titleInactiveColor: Int? = null
-        var iconWidth: Int? = null
-        var iconHeight: Int? = null
+        var iconWidth: Double? = null
+        var iconHeight: Double? = null
         var typeface: Typeface? = null
         var activeTextSize: Float? = null
         var inactiveTextSize: Float? = null
@@ -246,9 +246,9 @@ class BottomTabs(context: Context) : BottomNavigationView(MaterialTheme.context(
 
     fun setTabTestId(index: Int, testId: String?) = updateStyle(index) { it.testId = testId }
 
-    fun setIconWidth(index: Int, width: Int?) = updateStyle(index) { it.iconWidth = width }
+    fun setIconWidth(index: Int, width: Double?) = updateStyle(index) { it.iconWidth = width }
 
-    fun setIconHeight(index: Int, height: Int?) = updateStyle(index) { it.iconHeight = height }
+    fun setIconHeight(index: Int, height: Double?) = updateStyle(index) { it.iconHeight = height }
 
     fun setTitleTypeface(index: Int, typeface: Typeface?) = updateStyle(index) { it.typeface = typeface }
 
@@ -475,7 +475,7 @@ class BottomTabs(context: Context) : BottomNavigationView(MaterialTheme.context(
         view.setIconTintList(tint(style.iconActiveColor, style.iconInactiveColor, itemIconTintList))
         view.setTextColor(tint(style.titleActiveColor, style.titleInactiveColor, itemTextColor))
         val iconSize = style.iconWidth ?: style.iconHeight
-        view.setIconSize(if (iconSize != null) UiUtils.dpToPx(context, iconSize) else itemIconSize)
+        view.setIconSize(if (iconSize != null) UiUtils.dpToPixels(context, iconSize) else itemIconSize)
         view.findViewById<TextView>(MaterialR.id.navigation_bar_item_small_label_view)?.let {
             style.typeface?.let { typeface -> it.typeface = typeface }
             style.inactiveTextSize?.let { size -> it.setTextSize(TypedValue.COMPLEX_UNIT_SP, size) }

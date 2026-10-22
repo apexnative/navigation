@@ -122,31 +122,32 @@ internal class ModalSheet(
         // where the sheet is laid out.
         layout.addView(container, CoordinatorLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT).also { it.behavior = behavior })
         shown = onShown
-        update(sheetOptions, swipeToDismiss, move = false)
+        update(sheetOptions, swipeToDismiss, merge = null)
+        selected = sheetOptions.selectedDetent?.takeIf { it in detents }
         // Laid out hidden first, so it slides up from the bottom.
         container.post { if (closing == null) behavior.state = stateOf(selected ?: detents.first()) }
     }
 
-    /** New options from mergeOptions: the detents, the look, and the selected detent, which the sheet moves to. */
-    fun update(sheetOptions: SheetOptions, swipeToDismiss: Boolean, move: Boolean = true) {
-        val previous = selected
+    /**
+     * New resolved options: the detents and the look. The sheet moves only as [SheetStops] says, after a `mergeOptions`
+     * of [merge]; without one (the shown screen changed, the show) it stays where it is.
+     */
+    fun update(sheetOptions: SheetOptions, swipeToDismiss: Boolean, merge: SheetOptions?) {
         options = sheetOptions
         this.swipeToDismiss = swipeToDismiss
         detents = sheetOptions.detents?.takeIf { it.isNotEmpty() }?.sortedBy { heightOf(it) } ?: listOf(SheetDetent.Large)
-        selected = sheetOptions.selectedDetent?.takeIf { it in detents }
         grabber.visibility = if (sheetOptions.grabber.isTrue) View.VISIBLE else View.GONE
         behavior.dragAnywhere = sheetOptions.expandsOnScroll.get(true)
         container.invalidateOutline()
         configure()
-        if (!move || closing != null) return
+        if (merge == null || closing != null) return
         val settled = detentOf(behavior.state)
         if (settled != null) behavior.isHideable = swipeToDismiss && settled == detents.first()
-        val target = when {
-            selected != null && selected != previous -> selected
-            settled != null && settled !in detents -> selected ?: detents.first()
-            else -> null
+        val target = SheetStops.target(settled, detents, merge.selectedDetent, sheetOptions.selectedDetent)
+        if (target != null) {
+            selected = target
+            behavior.state = stateOf(target)
         }
-        if (target != null) behavior.state = stateOf(target)
         updateScrim()
     }
 

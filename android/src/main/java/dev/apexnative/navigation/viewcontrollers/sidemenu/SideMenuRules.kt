@@ -54,6 +54,13 @@ internal object SideMenuRules {
     fun touchesTestIds(merge: SideMenuOptions): Boolean =
         merge.testID.hasValue() || merge.left.testID.hasValue() || merge.right.testID.hasValue()
 
+    /** A merge names `width` of a side: the menus take their widths again. */
+    fun touchesWidths(merge: SideMenuOptions): Boolean = merge.left.width.hasValue() || merge.right.width.hasValue()
+
+    /** A merge names `height` of a side: the menus take their heights again. */
+    fun touchesHeights(merge: SideMenuOptions): Boolean =
+        merge.left.height.hasValue() || merge.right.height.hasValue()
+
     /** A merge names the background of the side menu (`layout.backgroundColor`). */
     fun touchesBackground(merge: Options): Boolean = merge.layout.backgroundColor.hasValue()
 
@@ -64,7 +71,7 @@ internal object SideMenuRules {
     fun wantedWidth(options: SideMenuSideOptions, toPixels: (Double) -> Int): Int? =
         options.width.get(null)?.let { max(0, toPixels(it)) }
 
-    /** The height of a side, in pixels: `height` (dp) by [toPixels], read at creation only; none: the whole height. */
+    /** The height of a side, in pixels: `height` (dp) by [toPixels]; none: the whole height. */
     fun height(options: SideMenuSideOptions, toPixels: (Double) -> Int): Int? =
         options.height.get(null)?.let { max(0, toPixels(it)) }
 

@@ -210,41 +210,16 @@ internal object AppearanceDispatcher {
     // A transition whose caller sends the state itself ends: the DidDisappears it sends ask for no update.
     private var holdsState = false
 
-    // A side menu's drawer jumps open: the appearances that start in it send no WillAppear.
-    private var skipsWillAppear = false
-
     // The native screens that told JavaScript they went: once per node.
     private val released: MutableSet<ViewController<*>> = Collections.newSetFromMap(WeakHashMap())
 
     // Appearance of a record.
 
-    /**
-     * The record starts to appear: WillAppear, now when it is ready, else held. Only once per appearance; none inside
-     * [withoutWillAppear].
-     */
+    /** The record starts to appear: WillAppear, now when it is ready, else held. Only once per appearance. */
     fun willAppear(record: ScreenAppearance) {
         if (record.phase != Phase.Hidden) return
         record.phase = Phase.Appearing
-        if (skipsWillAppear) {
-            record.skippedWill = true
-            return
-        }
         if (record.isReady) send(record, Event.WillAppear) else hold(record, Event.WillAppear)
-    }
-
-    /**
-     * Runs [block], in which the appearances that start send no WillAppear: their DidAppear is their first event, and
-     * their DidDisappear goes only once that DidAppear went. A side menu's drawer that opens without animation does so
-     * on Android; the screens' options and the components of their bars go as at any appearance.
-     */
-    fun withoutWillAppear(block: () -> Unit) {
-        val outer = skipsWillAppear
-        skipsWillAppear = true
-        try {
-            block()
-        } finally {
-            skipsWillAppear = outer
-        }
     }
 
     /**
@@ -261,19 +236,12 @@ internal object AppearanceDispatcher {
     /**
      * The record has disappeared. Nothing when it didn't appear. When its WillAppear is still held, JavaScript never
      * heard it appear: what is held goes away and nothing is sent. Otherwise a held DidAppear goes away and
-     * DidDisappear is sent: a swipe that was cancelled gives WillAppear, then DidDisappear. An appearance without its
-     * WillAppear ([withoutWillAppear]) appeared once its DidAppear went.
+     * DidDisappear is sent: a swipe that was cancelled gives WillAppear, then DidDisappear.
      */
     fun didDisappear(record: ScreenAppearance) {
         if (record.phase == Phase.Hidden) return
-        val wasShown = record.phase == Phase.Shown
         record.phase = Phase.Hidden
-        val appeared = if (record.skippedWill) {
-            wasShown && Event.DidAppear !in record.held
-        } else {
-            Event.WillAppear !in record.held
-        }
-        record.skippedWill = false
+        val appeared = Event.WillAppear !in record.held
         record.held.clear()
         cancelLimit(record)
         // What waited for its DidAppear goes now: none will be sent for this appearance.

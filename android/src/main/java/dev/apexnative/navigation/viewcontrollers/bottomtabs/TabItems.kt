@@ -36,7 +36,7 @@ internal class TabItems(private val color: (ThemeColour) -> Int?) {
         ) : Call()
 
         /** The icon's size in dp, width over height. */
-        data class IconSize(override val index: Int, val width: Int?, val height: Int?) : Call()
+        data class IconSize(override val index: Int, val width: Double?, val height: Double?) : Call()
 
         data class Font(override val index: Int, val font: FontOptions) : Call()
 
@@ -86,7 +86,7 @@ internal class TabItems(private val color: (ThemeColour) -> Int?) {
         options.icon.get(null)?.let { Call.Icon(index, it) },
         options.selectedIcon.get(null)?.let { Call.SelectedIcon(index, it) },
         colors(index, options),
-        Call.IconSize(index, options.iconWidth.get(null)?.toInt(), options.iconHeight.get(null)?.toInt()),
+        Call.IconSize(index, options.iconWidth.get(null), options.iconHeight.get(null)),
         Call.Font(index, options.font.copy()),
         Call.FontSizes(index, options.selectedFontSize.get(null)?.toFloat(), options.fontSize.get(null)?.toFloat()),
         Call.TestId(index, options.testID.get(null)),
@@ -110,7 +110,7 @@ internal class TabItems(private val color: (ThemeColour) -> Int?) {
             calls += colors(index, resolved)
         }
         if (merge.iconWidth.hasValue() || merge.iconHeight.hasValue()) {
-            calls += Call.IconSize(index, resolved.iconWidth.get(null)?.toInt(), resolved.iconHeight.get(null)?.toInt())
+            calls += Call.IconSize(index, resolved.iconWidth.get(null), resolved.iconHeight.get(null))
         }
         if (merge.font.hasValue()) calls += Call.Font(index, resolved.font.copy())
         if (merge.fontSize.hasValue() || merge.selectedFontSize.hasValue()) {

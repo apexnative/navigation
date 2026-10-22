@@ -255,9 +255,7 @@ internal class SideMenuController(
         }
 
         // The system UI follows the screen the user sees now, at rest: the open menu's, the center's once a close
-        // ends. The owner reads it before the next frame, when a menu that closed is hidden already. An open without
-        // animation runs this inside `AppearanceDispatcher.withoutWillAppear`: what starts to appear from here would
-        // send no WillAppear.
+        // ends. The owner reads it before the next frame, when a menu that closed is hidden already.
         override fun shownChanged() {
             navigator?.shownScreensChanged(this@SideMenuController)
             navigator?.systemUi?.invalidate()

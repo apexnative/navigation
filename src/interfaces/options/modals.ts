@@ -71,9 +71,10 @@ export interface OptionsModalSheet {
    */
   detents?: OptionsModalSheetDetent[];
   /**
-   * The stop the sheet opens on; a new value in `mergeOptions` moves the sheet there with an animation, and doesn't
-   * send `sheetDetentChanged`. A value that isn't among `detents` opens on the lowest stop on iOS and is ignored on
-   * Android.
+   * The stop the sheet opens on; a `mergeOptions` that names it moves the sheet there with an animation, and doesn't
+   * send `sheetDetentChanged`. Nothing else moves the sheet off the stop it stands at, the one the user dragged it to
+   * included: a `mergeOptions` without it, a new layout or new content. A value that isn't among `detents` opens on
+   * the lowest stop on iOS and is ignored on Android.
    * Without it, the lowest stop.
    */
   selectedDetent?: OptionsModalSheetDetent;

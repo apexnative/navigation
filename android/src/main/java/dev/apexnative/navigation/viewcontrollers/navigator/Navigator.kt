@@ -214,7 +214,7 @@ class Navigator(
      * it itself, `ComponentPresenter`); the system UI follows (only what changed is written).
      */
     internal fun optionsMerged(node: ViewController<*>, options: Options = Options()) {
-        modals.optionsMergedInto(node)
+        modals.optionsMergedInto(node, options)
         overlays.optionsMergedInto(node)
         val navigationBar = options.navigationBar
         val padding = navigationBar.drawBehind.hasValue() || navigationBar.backgroundColor.hasValue()

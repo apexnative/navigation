@@ -17,7 +17,7 @@ import dev.apexnative.navigation.views.animations.AnimationRules
  * own adds `:own(…)`, [describe]), `dismiss:<id>:…`, `awaitTargets:<id>:<under>`,
  * `remove:<id>`, `settle:<id>`, `takeOut:<id>`, `putBack:<id>@<at>`, `takeOutRoot:<id>`, `putBackRoot:<id>`,
  * `carry:<id>`,
- * `update:<id>:<move>`); a show or a dismissal ends when the test says so, or at once with [instant].
+ * `update:<id>:<merged>`); a show or a dismissal ends when the test says so, or at once with [instant].
  */
 internal class FakeModalViews : ModalCoordinator.Views {
     val log = mutableListOf<String>()
@@ -123,8 +123,8 @@ internal class FakeModalViews : ModalCoordinator.Views {
         log += "carry:${record.rootId}"
     }
 
-    override fun update(record: ModalRecord, options: Options, move: Boolean) {
-        log += "update:${record.rootId}:$move"
+    override fun update(record: ModalRecord, options: Options, merge: Options?) {
+        log += "update:${record.rootId}:${merge != null}"
     }
 
     private val targets = LinkedHashMap<String, Pair<() -> Boolean, () -> Unit>>()
