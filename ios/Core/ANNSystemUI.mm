@@ -1,5 +1,6 @@
 #import "ANNSystemUI.h"
 #import "ANNAssert.h"
+#import "ANNComponentPresenter.h"
 #import "ANNComponentViewController.h"
 #import "ANNDefaultOptions.h"
 #import "ANNOverlayCoordinator.h"
@@ -280,6 +281,12 @@ static NSArray<UIViewController *> *ANNChainOf(UIWindow *window) {
             ask();
         }
     }
+    // The status bar hidden or shown moves no view where the safe area stays (a device with a notch): the blurs under
+    // it take its frame now, and once more on the next turn of the main queue, in case UIKit settles it after the ask.
+    [ANNComponentPresenter statusBarDidChange];
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [ANNComponentPresenter statusBarDidChange];
+    });
 }
 
 // A controller that is no node of the layout (React Native's `<Modal>`, an alert, the splash) animates as UIKit's

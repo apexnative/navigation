@@ -36,8 +36,9 @@ typedef NS_ENUM(NSInteger, ANNSystemUIQuestion) {
 /// The owner adds the asks UIKit doesn't make — a merge, a side menu at rest, an overlay, a root replaced, the bar of a
 /// stack shown or hidden, the orientation after an appearance — and makes them once per turn of the main queue: a
 /// trigger marks groups, the marks of a turn are coalesced, and at its end UIKit is asked again for each marked group
-/// in the main window and every overlay window. It keeps no values but the last status bar of each window, which only
-/// chooses whether a change of the style animates. Never a wait. Main queue.
+/// in the main window and every overlay window. Each ask of the status bar also lays out the screens' blurs under it
+/// (`statusBar.blur`), then and on the next turn. It keeps no values but the last status bar of each window, which
+/// only chooses whether a change of the style animates. Never a wait. Main queue.
 @interface ANNSystemUI : NSObject
 
 - (instancetype)init NS_UNAVAILABLE;

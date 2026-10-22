@@ -5,6 +5,10 @@
 #import "ANNTopBarPresenter.h"
 #import "ANNUtils.h"
 
+// The presenters whose screen shows `statusBar.blur`: the status bar hidden or shown lays out no view, so they hear of
+// it from the system UI (`statusBarDidChange`).
+static NSHashTable<ANNComponentPresenter *> *ANNBlurringPresenters;
+
 @implementation ANNComponentPresenter {
     // `statusBar.blur` while it is on.
     UIVisualEffectView *_statusBarBlur;
@@ -95,9 +99,7 @@
 
 #pragma mark - The status bar's blur (`statusBar.blur`)
 
-// Over the screen's own view, never over a React view; no touches, nothing for VoiceOver. The frame is the scene's
-// status bar's as it is now, in the view's own coordinates without a conversion: a pushed screen's view may still be
-// out of place while it appears.
+// Over the screen's own view, never over a React view; no touches, nothing for VoiceOver.
 - (void)applyStatusBarBlur:(ANNNavigationOptions *)resolvedOptions {
     ANNComponentViewController *screen = self.screen;
     if (!screen.isViewLoaded) {
@@ -106,6 +108,7 @@
     if (![resolvedOptions.statusBar.blur withDefault:NO]) {
         [_statusBarBlur removeFromSuperview];
         _statusBarBlur = nil;
+        [ANNBlurringPresenters removeObject:self];
         return;
     }
     UIView *view = screen.view;
@@ -115,14 +118,39 @@
         _statusBarBlur.userInteractionEnabled = NO;
         _statusBarBlur.isAccessibilityElement = NO;
         _statusBarBlur.accessibilityElementsHidden = YES;
+        if (!ANNBlurringPresenters) {
+            ANNBlurringPresenters = [NSHashTable weakObjectsHashTable];
+        }
+        [ANNBlurringPresenters addObject:self];
     }
-    CGRect statusBar = ANNUtils.statusBarFrame;
-    _statusBarBlur.frame = CGRectMake(0, CGRectGetMinY(statusBar), CGRectGetWidth(view.bounds),
-                                      CGRectGetHeight(statusBar));
     if (_statusBarBlur.superview != view) {
         [view addSubview:_statusBarBlur];
     } else {
         [view bringSubviewToFront:_statusBarBlur];
+    }
+    [self layOutStatusBarBlur];
+}
+
+// The status bar's frame in the scene of the screen's window (the main window's before the screen is in one), in the
+// view's own coordinates without a conversion: a pushed screen's view may still be out of place while it appears. A
+// hidden status bar has no frame, and the blur no height.
+- (void)layOutStatusBarBlur {
+    UIView *view = _statusBarBlur.superview;
+    if (!view) {
+        return;
+    }
+    UIWindowScene *scene = view.window.windowScene;
+    CGRect statusBar = scene ? scene.statusBarManager.statusBarFrame : ANNUtils.statusBarFrame;
+    CGRect frame = CGRectMake(0, CGRectGetMinY(statusBar), CGRectGetWidth(view.bounds),
+                              CGRectGetHeight(statusBar));
+    if (!CGRectEqualToRect(_statusBarBlur.frame, frame)) {
+        _statusBarBlur.frame = frame;
+    }
+}
+
++ (void)statusBarDidChange {
+    for (ANNComponentPresenter *presenter in ANNBlurringPresenters.allObjects) {
+        [presenter layOutStatusBarBlur];
     }
 }
 

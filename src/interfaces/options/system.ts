@@ -177,9 +177,10 @@ export interface OptionsStatusBar {
    */
   hideWithTopBar?: boolean;
   /**
-   * (iOS) Whether a blur shows under the status bar, drawn over the screen in the frame the status bar has when the
-   * option applies. It applies when the screen appears and through `mergeOptions`; `false` removes it. The blur does
-   * not follow a rotation or a change of window size.
+   * (iOS) Whether a blur shows under the status bar, drawn over the screen in the status bar's frame. It applies when
+   * the screen appears and through `mergeOptions`; `false` removes it. The blur follows the status bar's frame as it
+   * changes: a rotation, a new window size, the status bar hidden or shown. Android has no blur under the status bar,
+   * so it does nothing there.
    * @default false
    */
   blur?: boolean;
