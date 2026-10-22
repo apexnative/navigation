@@ -69,7 +69,10 @@ typedef NS_ENUM(NSInteger, ANNRootShowState) {
 // The nodes whose appearance the transition reports itself (`driveAppearanceOf:`), while `driving`.
 @property(nonatomic, copy) NSArray<UIViewController *> *driven;
 @property(nonatomic) BOOL driving;
+// The snapshot of the window as it was: it dissolves over the new root (`dissolves`), plays its `exit` (`custom`), or
+// only covers the old root's modals while they go, and leaves as the new root is the window's.
 @property(nonatomic, strong, nullable) UIView *snapshot;
+@property(nonatomic) BOOL dissolves;
 // The root is the window's root: the old root's modals went before it (`startTransitionOf:done:`).
 @property(nonatomic) BOOL installed;
 // The root's view waits in the window under the current root (`park:`).
@@ -415,9 +418,14 @@ static __weak ANNRootShow *ANNAnimatingShow;
     BOOL seen = !window.hidden && scene != nil &&
                 scene.activationState != UISceneActivationStateBackground;
     BOOL dissolves = !overSplash && !enterDisabled && !custom && seen;
+    show.dissolves = dissolves;
     show.custom = custom && seen;
-    UIView *snapshot =
-        dissolves || show.custom ? [window snapshotViewAfterScreenUpdates:NO] : nil;
+    // UIKit draws the dismissal of the old root's modals, without animation too (a sheet's dim goes a frame before
+    // its card): with nothing to dissolve, the snapshot covers them until the new root is in place.
+    BOOL covers = seen && old.presentedViewController != nil;
+    UIView *snapshot = dissolves || show.custom || covers
+                           ? [window snapshotViewAfterScreenUpdates:NO]
+                           : nil;
 
     show.state = ANNRootShowStateTransition;
     // It shows from here: a stack in it counts as on screen.
@@ -480,7 +488,8 @@ static __weak ANNRootShow *ANNAnimatingShow;
         [self endTransitionOf:show];
         return;
     }
-    if (!snapshot) {
+    // A snapshot that only covered the old root's modals leaves in this turn, with the new root in place under it.
+    if (!snapshot || !show.dissolves) {
         [self endTransitionOf:show];
         return;
     }
