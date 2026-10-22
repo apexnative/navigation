@@ -153,7 +153,9 @@ export interface OptionsStatusBar {
    * and buttons sits below the bar), and a screen without a top bar starts below the bar. `true` lets a screen without
    * a top bar start at the top of the window, with its safe area keeping content below. `false` starts the top bar
    * below the status bar, which keeps its own color. A sheet modal has no status bar above it, so this does not apply
-   * there. On iOS the screen is always under the status bar and the safe area keeps the content below.
+   * there. An overlay covers the whole window, so its screens go under the status bar without it (a dimmed backdrop
+   * dims the status bar too), and `false`, in its options or in the default options, starts them below. On iOS the
+   * screen is always under the status bar and the safe area keeps the content below.
    */
   drawBehind?: boolean;
   /**

@@ -143,7 +143,7 @@ internal class ScreenFrame(
             val parent = node.parentController
             val statusBar = ScreenSafeArea.statusBarRoom(
                 statusBarHeight = statusBarHeight,
-                hiddenOrDrawBehind = options.statusBar.isHiddenOrDrawBehind,
+                hiddenOrDrawBehind = options.statusBar.isHiddenOrDrawBehind(node.isInOverlay),
                 inSheet = node.isInSheet,
                 inSideMenu = node.isInSideMenu,
                 keptAround = parent?.keepsStatusBarRoomOf(node) == true,

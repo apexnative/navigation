@@ -64,7 +64,7 @@ open class ComponentPresenter(activity: Activity) : Presenter(activity, DefaultO
         val frame = frameOf(screen) ?: return ColorDrawable(color)
         val band = ScreenSafeArea.backgroundBand(
             statusBarHeight = frame.statusBarHeight,
-            hiddenOrDrawBehind = options.statusBar.isHiddenOrDrawBehind,
+            hiddenOrDrawBehind = options.statusBar.isHiddenOrDrawBehind(screen.isInOverlay),
             inSideMenu = screen.isInSideMenu,
             inSheet = screen.isInSheet,
             inPair = frame.isInPair,

@@ -169,6 +169,9 @@ top-level folder. Main thread only, unless a line says otherwise.
   `OverlayCoordinator.guarded`), which rejects the open answer and ends the record, or an exception ends the app and
   the command never answers.
 - A node makes its view in `createView`, never in its constructor.
+- Whether a node keeps the status bar's room (its margin, its background band) goes through
+  `StatusBarOptions.isHiddenOrDrawBehind(node.isInOverlay)`: an overlay covers the whole window, and a rule that reads
+  `drawBehind` alone puts a light band over an overlay's dimmed backdrop.
 - Only `SystemUiWindow` writes to the window. A presenter that changes a bar option calls `SystemUiOwner.invalidate`.
 - The core names a module container only in `LayoutFactory`; elsewhere use a capability or `visibleChildren()`.
 - A hidden stack keeps a `mergeOptions` per entry; applying it for the wrong entry paints the wrong screen's bar.

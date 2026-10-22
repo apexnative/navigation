@@ -31,9 +31,9 @@ internal object ContainerBackground {
         if (!colour.hasValue()) return null
         val color = colour.get(node.activity, Color.TRANSPARENT) ?: Color.TRANSPARENT
         // The screens' band rule (`ScreenSafeArea.backgroundBand`) for a layout, which keeps no room at its top: the
-        // status bar's height, but none when it is hidden or the layout is drawn under it, in a side menu, a sheet or
-        // a pair.
-        val full = options.statusBar.isHiddenOrDrawBehind || node.isInSideMenu || node.isInSheet ||
+        // status bar's height, but none when it is hidden or the layout is drawn under it (in an overlay by default),
+        // in a side menu, a sheet or a pair.
+        val full = options.statusBar.isHiddenOrDrawBehind(node.isInOverlay) || node.isInSideMenu || node.isInSheet ||
             node.parentController is KeepsStatusBarRoom
         val band = if (full) 0 else SystemUiUtils.getStatusBarHeight(node.activity)
         if (band <= 0) return ColorDrawable(color)

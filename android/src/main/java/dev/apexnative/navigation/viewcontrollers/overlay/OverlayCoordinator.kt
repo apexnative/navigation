@@ -185,6 +185,8 @@ internal class OverlayCoordinator(
 
     private fun start(make: () -> ViewController<*>, answer: CommandAnswer?, chainDone: (() -> Unit)?): OverlayRecord {
         val root = make()
+        // Before the root's view is made: its screens are drawn under the status bar from their first layout.
+        root.shownAsOverlay = true
         val record = OverlayRecord(root)
         // A waiting layer before its views join the window: what is in it isn't on screen from its first layout.
         record.screensChanged = { screensChanged(record) }

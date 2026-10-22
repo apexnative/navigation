@@ -95,6 +95,19 @@ abstract class ViewController<V : ViewGroup>(
         get() = shownAsSheet || parent?.isInSheet == true
 
     /**
+     * The node is the root of an overlay: the overlays set it before the node's view is made, so its screens are drawn
+     * under the status bar from their first layout (`StatusBarOptions.isHiddenOrDrawBehind`).
+     */
+    internal var shownAsOverlay = false
+
+    /**
+     * The node is in an overlay: it covers the whole window, and is drawn under the status bar by default. It holds from
+     * the start of the show, while `OverlayCoordinator.isInOverlay` answers only for the overlays it lists.
+     */
+    open val isInOverlay: Boolean
+        get() = shownAsOverlay || parent?.isInOverlay == true
+
+    /**
      * The node is in a side of a side menu (its left or right menu, not its center): the side goes the whole height of
      * the window, and the node keeps no room for the status bar. The layout around answers for it
      * (`ParentController.isInSideMenu(child)`).
