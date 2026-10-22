@@ -83,7 +83,7 @@ A tap on the button opens the menu. A button of the options gets the navigation 
 
 ## A pick in the menu {#pick}
 
-A menu is a screen without a stack, so <Mark>its commands act on the center</Mark>, and the menu closes once the center has changed. A pick usually switches the section, so the center starts over with it:
+A menu is a screen without a stack, so <Mark>its commands act on the center</Mark>, and the menu closes as the center changes: it starts to slide away at the tap, and a push slides in as it goes. The command resolves once both are done. A pick usually switches the section, so the center starts over with it:
 
 ```tsx title="src/screens/Menu.tsx"
 import { Button, View } from 'react-native';
@@ -103,7 +103,7 @@ function Menu() {
 }
 ```
 
-A tap on Settings shows Settings in the center, and the menu closes. Which command to use depends on the way back:
+A tap on Settings closes the menu and shows Settings in the center as it goes. Which command to use depends on the way back:
 
 | From the menu | The center |
 | --- | --- |

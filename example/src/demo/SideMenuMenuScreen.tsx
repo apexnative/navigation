@@ -14,8 +14,8 @@ const SIZES: { title: string; size: { width?: number; height?: number }; android
 ];
 
 /**
- * A menu of the side menu demo. A menu has no stack: a pick acts on the center, and the menu closes once the center
- * changed — Home starts the center over (`replace`), the others push Details over it. The size buttons change the
+ * A menu of the side menu demo. A menu has no stack: a pick acts on the center, and the menu closes as the center
+ * changes — Home starts the center over (`replace`), the others push Details over it. The size buttons change the
  * menu's `width` and `height` while it is open. Its WillAppear goes to the Journal, before the DidAppear every screen
  * logs. On glass (`sideMenu.*.glass`) it has no background of its own, so the glass shows.
  */
