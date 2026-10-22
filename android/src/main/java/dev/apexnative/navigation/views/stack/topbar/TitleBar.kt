@@ -118,6 +118,8 @@ class TitleBar(context: Context) : ViewGroup(context) {
         val height = MeasureSpec.getSize(heightMeasureSpec)
         val inner = max(width - sideInsetsBox[0] - sideInsetsBox[1], 0)
         val exactHeight = MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY)
+        alignButtons(leftButtonBar, height)
+        alignButtons(rightButtonBar, height)
         leftButtonBar.measure(MeasureSpec.makeMeasureSpec(inner, MeasureSpec.AT_MOST), exactHeight)
         val rightRoom = max(inner - leftButtonBar.measuredWidth, 0)
         rightButtonBar.measure(MeasureSpec.makeMeasureSpec(rightRoom, MeasureSpec.AT_MOST), exactHeight)
@@ -192,6 +194,12 @@ class TitleBar(context: Context) : ViewGroup(context) {
         return min(max(middle, startBar), max(inner - endBar - width, startBar))
     }
 
+    // A toolbar stands its back button and its menu at the top of its minimum height, centered in it (`buttonGravity`
+    // is top): with the row's height as that minimum, they stand in the middle of the row, as the title does.
+    private fun alignButtons(toolbar: MaterialToolbar, height: Int) {
+        if (toolbar.minimumHeight != height) toolbar.minimumHeight = height
+    }
+
     // A toolbar that holds only buttons: no insets of its own around them (the row places them).
     private fun plain(toolbar: MaterialToolbar) {
         // Before the toolbar makes its menu, which takes the popup theme once: "⋮" in the current mode.
@@ -200,7 +208,6 @@ class TitleBar(context: Context) : ViewGroup(context) {
         toolbar.contentInsetStartWithNavigation = 0
         toolbar.contentInsetEndWithActions = 0
         toolbar.setPadding(0, 0, 0, 0)
-        toolbar.minimumHeight = 0
     }
 
     private companion object {
