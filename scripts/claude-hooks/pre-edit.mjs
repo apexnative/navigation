@@ -9,6 +9,10 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { relative } from 'node:path';
 
+// A task session works in a worktree under .claude/worktrees/<name>/ while CLAUDE_PROJECT_DIR stays the main
+// checkout, so a file there is measured from its worktree: ios/… and not .claude/worktrees/<name>/ios/….
+const WORKTREE = /^\.claude\/worktrees\/[^/]+\//;
+
 const event = JSON.parse(readFileSync(0, 'utf8'));
 const { tool_name: tool, agent_type: agent, tool_input: input = {} } = event;
 
@@ -50,7 +54,7 @@ if (removed.length > 0) {
 }
 
 const root = process.env.CLAUDE_PROJECT_DIR ?? process.cwd();
-const path = input.file_path ? relative(root, input.file_path) : '';
+const path = input.file_path ? relative(root, input.file_path).replace(WORKTREE, '') : '';
 const inRepository = path !== '' && !path.startsWith('..');
 const SCOPES = {
   'ios-dev': (file) => file.startsWith('ios/') || file.startsWith('example/ios/'),
