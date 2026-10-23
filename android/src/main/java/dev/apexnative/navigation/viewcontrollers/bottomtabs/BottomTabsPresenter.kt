@@ -68,7 +68,7 @@ internal open class BottomTabsPresenter(activity: Activity) : Presenter(activity
     private val typefaces = TypefaceLoader(activity)
     // The icons of the items by item and kind (selected or not): those of the cache at once, the others as below.
     private val icons = ImageRequests<Pair<Int, Boolean>>(OptionImages.source(activity))
-    private val applied = HashMap<Pair<Int, Class<*>>, TabItems.Call>()
+    private val applied = AppliedTabCalls(icons::key)
     private var motion: Animator? = null
     private var anyIcon = false
     private var testId: String? = null
@@ -100,26 +100,24 @@ internal open class BottomTabsPresenter(activity: Activity) : Presenter(activity
 
     /**
      * Runs [calls] on the bar's items; a call equal to the last of its kind for its item is skipped (an icon isn't
-     * loaded and set again as a screen appears). The badge always goes: its default colors are read at each set.
+     * loaded and set again as a screen appears), except the badge and the font, an icon that didn't load and a `file:`
+     * icon whose file changed ([AppliedTabCalls]).
      */
     open fun run(calls: List<TabItems.Call>) {
         val bar = layout?.bar ?: return
         for (call in calls) {
             if (call is TabItems.Call.TestId && !itemTestIds) continue
-            val key = call.index to call.javaClass
-            val before = applied[key]
-            if (call !is TabItems.Call.Badge && call !is TabItems.Call.Font && before == call) continue
-            applied[key] = call
-            run(bar, call, isChange = before != null)
+            val next = applied.next(call) ?: continue
+            run(bar, call, next)
         }
     }
 
-    private fun run(bar: BottomTabs, call: TabItems.Call, isChange: Boolean) {
+    private fun run(bar: BottomTabs, call: TabItems.Call, next: AppliedTabCalls.Next) {
         val index = call.index
         when (call) {
             is TabItems.Call.Title -> bar.setText(index, call.text)
-            is TabItems.Call.Icon -> icon(bar, index, call.uri, false, isChange)
-            is TabItems.Call.SelectedIcon -> icon(bar, index, call.uri, true, isChange)
+            is TabItems.Call.Icon -> icon(bar, call, call.uri, false, next)
+            is TabItems.Call.SelectedIcon -> icon(bar, call, call.uri, true, next)
             is TabItems.Call.Colors -> {
                 bar.setIconActiveColor(index, call.iconActive)
                 bar.setIconInactiveColor(index, call.iconInactive)
@@ -349,8 +347,12 @@ internal open class BottomTabsPresenter(activity: Activity) : Presenter(activity
     // its icon when selected). An item's first icon loads at once, its tab's first frame shows it; a change of it on
     // the bar that shows loads off the main thread when it can, and the item takes it when ready, unless a newer icon
     // of the item came first.
-    private fun icon(bar: BottomTabs, index: Int, uri: String, selected: Boolean, isChange: Boolean) {
-        icons.request(index to selected, uri, mayWait = isChange && bar.isAttachedToWindow) { icon ->
+    // The key of a `file:` icon was built for the comparison: the request takes it, its file read once.
+    private fun icon(bar: BottomTabs, call: TabItems.Call, uri: String, selected: Boolean, next: AppliedTabCalls.Next) {
+        val index = call.index
+        val key = next.image ?: icons.key(uri)
+        icons.request(index to selected, key, mayWait = next.isChange && bar.isAttachedToWindow) { icon ->
+            if (icon == null) applied.failed(call)
             val shown = layout?.bar ?: return@request
             if (selected) shown.setSelectedIcon(index, icon) else shown.setIcon(index, icon)
         }
