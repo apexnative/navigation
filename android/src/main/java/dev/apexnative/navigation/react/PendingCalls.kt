@@ -14,8 +14,10 @@ import dev.apexnative.navigation.utils.UiThread
  * in order, so every call JavaScript made before the mount has applied when the task runs.
  *
  * Without JavaScript (none yet, a reload, a queue that ended) the task is posted to the main thread at once: nothing is
- * on its way. A queue that ends while the task is on it drops it: whoever waits for it keeps a limit of its own. Main
- * thread.
+ * on its way. A queue that ends while the task is on it drops it, and a wait with no limit of its own (a push with
+ * `waitForRender: true` whose content has mounted: the task is its only end) would not end; a queue ends only as the
+ * JavaScript goes (a reload, the host destroyed), and then the layouts go with it (`ReloadCoordinator`), the stack
+ * and its waiting push too. Main thread.
  */
 internal object PendingCalls {
     /** A queue the task goes through: it runs what it takes in order, and says false when it ended and took nothing. */
