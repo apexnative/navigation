@@ -8,12 +8,9 @@ type Wait = 'unset' | 'true' | 'false';
 const WAITS: Wait[] = ['unset', 'true', 'false'];
 const DELAYS = [300, 800, 1500];
 
-// The push's options: its title, a large title or not, and `animations.push.waitForRender`, left out when unset.
-function pushOptions(wait: Wait, title: string, largeTitle = false): Options {
-  return {
-    topBar: { title: { text: title }, ...(largeTitle && { largeTitle: { visible: true } }) },
-    ...(wait !== 'unset' && { animations: { push: { waitForRender: wait === 'true' } } }),
-  };
+// The push's options: only `animations.push.waitForRender`, left out when unset. The title is the screen's own.
+function pushOptions(wait: Wait): Options {
+  return wait === 'unset' ? {} : { animations: { push: { waitForRender: wait === 'true' } } };
 }
 
 /** Pushes a screen whose first render is slow, plain or with a large title, with the `waitForRender` picked here. */
@@ -43,12 +40,12 @@ function WaitForRenderDemo() {
           }))}
         />
         <Muted>
-          The slow screen simulates a heavy first render, not loading: the JavaScript thread is busy
-          building it for the time picked, as a big list built at once. true: the push starts once
-          the content is drawn, and the screen slides in complete. —: the push waits half a second
-          at most, then goes. false: it starts at once; the screen slides in empty and its content
-          comes in later. A screen that loads data renders at once with its own loader and needs no
-          wait.
+          Not loading: the delay stands for a heavy first render, the JavaScript thread busy
+          building the screen's body. The title is static, in the screen's options, and comes with
+          the push. true: the push starts once the body is drawn, the screen slides in complete. —:
+          the push waits half a second at most: 300 ms slides in complete, 800 and 1500 ms slide in
+          without the body, which comes in later. false: the push starts at once, the body always
+          comes in later. A screen that loads data renders at once with its own loader.
         </Muted>
       </Card>
       <Card title="Push">
@@ -56,21 +53,27 @@ function WaitForRenderDemo() {
           title="Push a slow screen"
           variant="primary"
           onPress={() =>
-            nav.push('Heavy', { props: { delay }, options: pushOptions(wait, 'Slow screen') })
+            nav.push('Heavy', {
+              props: { title: 'Slow screen', delay },
+              options: pushOptions(wait),
+            })
           }
         />
         <Button
           title="Push a plain screen"
           onPress={() =>
-            nav.push('Heavy', { props: { delay: 0 }, options: pushOptions(wait, 'Plain screen') })
+            nav.push('Heavy', {
+              props: { title: 'Plain screen', delay: 0 },
+              options: pushOptions(wait),
+            })
           }
         />
         <Button
           title="Push with a large title"
           onPress={() =>
             nav.push('Heavy', {
-              props: { delay },
-              options: pushOptions(wait, 'A large title', true),
+              props: { title: 'A large title', largeTitle: true, delay },
+              options: pushOptions(wait),
             })
           }
         />

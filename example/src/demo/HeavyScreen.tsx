@@ -4,6 +4,8 @@ import { Card, KeyValue, Muted, Screen } from '../ui';
 
 const ROWS = Array.from({ length: 12 }, (_, index) => `Row ${index + 1}`);
 
+type HeavyProps = { title: string; largeTitle?: boolean; delay?: number };
+
 // Holds the JavaScript thread as a heavy first render does: nothing else runs until it ends.
 function holdFor(ms: number): void {
   const end = Date.now() + ms;
@@ -13,10 +15,10 @@ function holdFor(ms: number): void {
 }
 
 /**
- * A screen whose content takes `delay` ms to render the first time; its title comes with the push. How the push waits
- * for the content depends on `animations.push.waitForRender`.
+ * A screen whose body takes `delay` ms to render the first time. Its title is static, in its options: only the body is
+ * slow. How the push waits for the body depends on `animations.push.waitForRender`.
  */
-function Heavy({ delay = 0 }: { delay?: number }) {
+function Heavy({ delay = 0 }: HeavyProps) {
   const [renderedIn] = useState(() => {
     const start = Date.now();
     holdFor(delay);
@@ -24,11 +26,11 @@ function Heavy({ delay = 0 }: { delay?: number }) {
   });
   return (
     <Screen>
-      <Card title="The content">
+      <Card title="The body">
         <Muted>
-          Not loading: this screen stands for a heavy first render, the JavaScript thread busy
-          building it (a big list built at once). All of this exists only once that render ended. A
-          screen that loads data renders at once with a loader of its own and needs no wait.
+          This is not loading. The delay stands for a heavy first render: the JavaScript thread is
+          busy building the screen (a big list built at once), and nothing of the body exists until
+          it ends. A screen that loads data renders at once with its own loader and needs no wait.
         </Muted>
         <KeyValue label="First render" value={`${renderedIn} ms`} />
         {ROWS.map((row) => (
@@ -41,5 +43,9 @@ function Heavy({ delay = 0 }: { delay?: number }) {
 
 export const HeavyScreen = defineScreen({
   component: Heavy,
-  options: (s) => s.hideBottomTabs(),
+  options: (s, props) =>
+    s
+      .title(props.title)
+      .largeTitle(props.largeTitle ?? false)
+      .hideBottomTabs(),
 });
