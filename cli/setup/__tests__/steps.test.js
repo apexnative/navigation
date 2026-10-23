@@ -187,6 +187,18 @@ describe('a file changed by hand', () => {
     );
   });
 
+  it("doesn't count a brace in a string when it adds onCreate", () => {
+    const done = read('setup-done', 'MainApplication.kt');
+    const without = done
+      .replace(/\n\n {2}override fun onCreate\(\) \{[\s\S]*?\n {2}\}/, '')
+      .replace('import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative\n', '')
+      .replace('  override val reactHost', '  val brace = "}"\n\n  override val reactHost');
+    const result = planMainApplication(without);
+    expect(result.status === 'change' && result.next).toBe(
+      done.replace('  override val reactHost', '  val brace = "}"\n\n  override val reactHost')
+    );
+  });
+
   it("can't tell where to load React Native in an onCreate without super.onCreate()", () => {
     const text = read('setup-done', 'MainApplication.kt').replace(
       '    super.onCreate()\n    loadReactNative(this)\n',
