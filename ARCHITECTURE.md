@@ -93,7 +93,8 @@ keeps the choices of the same ids, and a button, item or scope that is gone take
 `mergeOptions`, the same values sent again and `setDefaultOptions` keep a choice; a `mergeOptions` into the node that
 gives the chosen field a value other than the node had before (its own options, or where they don't set it, what its
 parents and the defaults gave) replaces it, as does one after which the button, item or scope is gone. A merge into a
-parent doesn't. The layer goes with its node. The cache has
+parent doesn't. The suggestions the system removed are the exception: any `mergeOptions` that gives suggestions, the
+same list too, shows them again. The layer goes with its node. The cache has
 one invalidation point: a change of a node's own options, of its user layer, or of the defaults. A change of the
 defaults repaints only what shows; a node that is hidden takes them when it shows. The resolved result is read-only;
 code that wants to change it copies it first. Module options groups plug into the same tree.

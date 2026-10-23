@@ -569,9 +569,10 @@ static NSArray<NSString *> *ANNSuggestionKeys(NSArray<ANNSearchSuggestionOptions
     return keys;
 }
 
-// The suggestions UIKit removed, by their keys: they stay out of the app's `suggestions` until a merge gives a list
-// other than the app had there (the own options', else the screen's resolution before the merge); the new ones of such
-// a list show. After a merge the removed ones the screen's resolution no longer has leave the choice.
+// The suggestions UIKit removed, by their keys: they stay out of the app's `suggestions` until the next merge that
+// gives `suggestions`, any list, the same one again too (a fixed list sent on every search-updated event shows each
+// time), as on Android, which shows whatever list a merge gives. After a merge without them the removed ones the
+// screen's resolution no longer has leave the choice.
 static ANNUserChoice *ANNRemovedSuggestionsChoice(NSArray<NSString *> *removed) {
     return [ANNUserChoice choiceWithValue:removed
         apply:^(ANNNavigationOptions *options, id value) {
@@ -590,13 +591,8 @@ static ANNUserChoice *ANNRemovedSuggestionsChoice(NSArray<NSString *> *removed) 
         }
         merged:^id(id value, ANNNavigationOptions *merge, ANNNavigationOptions *own,
                    ANNNavigationOptions *before, ANNNavigationOptions *after) {
-          NSArray<ANNSearchSuggestionOptions *> *given = merge.topBar.searchBar.suggestions;
-          if (given) {
-              NSArray<ANNSearchSuggestionOptions *> *was =
-                  own.topBar.searchBar.suggestions ?: before.topBar.searchBar.suggestions;
-              if (!was || ![ANNSuggestionKeys(given) isEqualToArray:ANNSuggestionKeys(was)]) {
-                  return nil;
-              }
+          if (merge.topBar.searchBar.suggestions) {
+              return nil;
           }
           NSSet<NSString *> *now =
               [NSSet setWithArray:ANNSuggestionKeys(after.topBar.searchBar.suggestions)];
@@ -641,8 +637,8 @@ static ANNUserChoice *ANNRemovedSuggestionsChoice(NSArray<NSString *> *removed) 
     search.searchSuggestions = items.count ? items : nil;
 }
 
-// UIKit has removed the suggestions: the screen's user layer keeps them out, with those it removed before, and the next
-// ones from mergeOptions show.
+// UIKit has removed the suggestions: the screen's user layer keeps them out, with those it removed before, until the
+// next mergeOptions that gives suggestions, which show.
 - (void)syncSuggestions:(UISearchController *)search API_AVAILABLE(ios(16.0)) {
     if (_appliedSuggestions.count && !search.searchSuggestions.count) {
         NSArray<NSString *> *removed = _appliedSuggestions;

@@ -551,8 +551,8 @@ export interface OptionsSearchBar {
   tokens?: OptionsSearchBarToken[];
   /**
    * (iOS 16+, Android) The suggestions shown while searching. Picking one sends a suggestion-picked event with its id
-   * to the screen; the text stays and the list goes. They also go when the user types on, and new ones come with
-   * `mergeOptions`, usually on a search-updated event. An empty list removes them.
+   * to the screen; the text stays and the list goes. They also go when the user types on; the list a `mergeOptions`
+   * gives shows again, the same one too, usually on a search-updated event. An empty list removes them.
    */
   suggestions?: OptionsSearchBarSuggestion[];
   /**
