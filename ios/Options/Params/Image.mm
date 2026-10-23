@@ -9,6 +9,10 @@
 }
 
 - (UIImage *)get {
+    id value = self.value;
+    if ([value isKindOfClass:UIImage.class]) {
+        return value;
+    }
     ANNImageSource *source = self.source;
     return source ? [ANNOptionImages imageOf:source] : nil;
 }
