@@ -206,6 +206,10 @@ top-level folder. Main thread only, unless a line says otherwise.
 - The back gesture's preview shows the screen under the top outside any operation of the queue: it may only reveal
   it and put it back, and its release goes through `StackQueue.cut(gesture = true)`. A command that comes meanwhile
   stops it through `StackDisplay.stop`, like any transition it takes over.
+- What back does (`Navigator.canHandleBack`, `keepsBackFromSystem`) is computed on events, not before each frame: a
+  new path that changes it without a command (a gesture, an animator's end, a layout's switch) calls
+  `BackCallbackState.update`, or the system's back leaves the app where it should go back. Debug builds log a missed
+  one (`BackCallbackCheck`).
 - Without edge to edge the window resizes for the keyboard by the manifest's soft input mode, so
   `layout.adjustResize: false` goes through the system UI owner's keyboard group (`SystemUiWindow.setKeyboardCovers`),
   not through the screen's padding.

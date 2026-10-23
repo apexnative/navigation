@@ -105,7 +105,10 @@ class Navigator(
         readiness = ContentReadiness,
         scheduler = scheduler,
         firstRoot = firstRootDraw,
-        onRootChanged = { root = it },
+        onRootChanged = {
+            root = it
+            BackCallbackState.update(this)
+        },
         onRootShown = {
             onRootShown?.invoke()
             BackCallbackState.update(this)
@@ -142,7 +145,7 @@ class Navigator(
 
     /**
      * Whether back has something to do in the navigation: the mirror of [handleBack], without acting — the top modal
-     * first, then the root. The back callback asks it before each frame (`BackCallbackState`).
+     * first, then the root. The back callback asks it whenever what back does can have changed (`BackCallbackState`).
      */
     fun canHandleBack(): Boolean = modals.canHandleBack() ?: (root?.canHandleBack() == true)
 
@@ -198,12 +201,14 @@ class Navigator(
      * A layout of [node] (a stack, the tabs, a side menu, a split view, a pair) changed the screens it shows: when it
      * is in a layer that still waits, the layer waits for the screens it shows now, and no longer for one that went
      * ([WaitingLayer.shownScreensChanged]); so does the operation of its stack that waits for [node] as its entry (a
-     * pushed pair); a modal's sheet takes the hold of the screen it shows now.
+     * pushed pair); a modal's sheet takes the hold of the screen it shows now; what back does is computed again (the
+     * tab, the pane or the menu back goes to, and the options of the screen it shows).
      */
     internal fun shownScreensChanged(node: ViewController<*>) {
         waitingLayerOf(node)?.shownScreensChanged()
         node.findParentStack()?.queue?.shownScreensChanged(node)
         modals.visibleScreenChanged(node)
+        BackCallbackState.update(this)
     }
 
     // The waiting layer [node] is in, up through the layouts around it; none.
@@ -447,6 +452,8 @@ class Navigator(
         // Nothing the old screens told of their readiness holds for the screens of the new JavaScript.
         ScreenReadiness.reset()
         BarComponents.reset()
+        // Without layers back leaves the app until the new JavaScript sets its root.
+        BackCallbackState.update(this)
     }
 
     /**

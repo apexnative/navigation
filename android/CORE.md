@@ -171,7 +171,8 @@ Each rule has one owner. Change the owner, not a caller; if a new feature needs 
 - **Back.** `NavigationActivity.passBack` → `ReactGateway.onBackPressed` (JavaScript's `BackHandler`) →
   `invokeDefaultOnBackPressed` → `Navigator.handleBack` → `ModalCoordinator.handleBack` → the root's
   `ParentController.handleBack` → `StackController.handleBack` → `StackQueue.cut`. `BackCallbackState` keeps the
-  system callback enabled only while back has something to do.
+  system callback enabled only while back has something to do, computed again on the events that change it (its KDoc
+  lists them), never before each frame; debug builds check it (`BackCallbackCheck`).
 - **Error texts.** `ErrorTexts`: one function per text, the same words as iOS, made with iOS's from
   `src/interfaces/contract/errors.json` (`scripts/contract.mjs`). JavaScript adds `[navigation] <command>:`.
 - **Event names and keys.** `EventContract`, made from the event types of `src/interfaces/`; `EventEmitter` and the

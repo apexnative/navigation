@@ -631,6 +631,18 @@ class ModalCoordinatorTest {
     }
 
     @Test
+    fun aSheetClosedByTheUserComputesBackAgainAsItsDismissalStartsAndEnds() {
+        home()
+        shown("Sheet", sheet())
+        views.instant = true
+        host.backChanges = 0
+        // A drag down or a tap on the scrim: no command whose end would compute it.
+        views.sheets.getValue("Sheet").onClosedByUser()
+        assertEquals(2, host.backChanges)
+        assertNull(modals.canHandleBack())
+    }
+
+    @Test
     fun aSheetClosedByTheUserWhileItComesInAnswersItsShowFirst() {
         home()
         show(screen("Sheet", sheet()))

@@ -153,6 +153,9 @@ class SplitViewController(
 
     private fun onWidthChanged(layout: SplitViewLayout) {
         primary.getView().visibility = if (primaryHidden && layout.isWide == true) View.GONE else View.VISIBLE
+        // Compact, side by side or one over the other decides what back does from this measure on: the callback only
+        // takes its value here, nothing moves; the panes' end below computes it again.
+        BackCallbackState.update()
         // Where a later `compactTopColumn` puts the pane over the other at this switch: true open, false closed.
         val settle = if (measured && isSliding) laterTopColumn?.let { it == SECONDARY } else null
         if (!measured) {

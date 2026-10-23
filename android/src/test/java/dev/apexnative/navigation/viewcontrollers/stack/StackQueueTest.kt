@@ -10,6 +10,7 @@ import dev.apexnative.navigation.viewcontrollers.stack.StackQueueHarness.Compani
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -1148,6 +1149,38 @@ class StackQueueTest {
             real.push(real.screen("C"))
             assertTrue(real.events().any { " reject " in it })
             assertFalse("after a rejection", callback.isEnabled)
+        } finally {
+            BackCallbackState.detach(navigator)
+            real.uninstall()
+        }
+    }
+
+    @Test
+    fun case71bBackIsComputedAsAnOperationIsAcceptedAndAsAWaitingPushBegins() {
+        // Without a frame that computes it: the entries change at the acceptance, and the screen whose options count
+        // (`hardwareBackButton.systemAnimation`) when the push that waited for it begins, after its command.
+        val real = StackQueueHarness(realHost = true)
+        real.install()
+        val navigator = Navigator(real.activity)
+        val callback = object : OnBackPressedCallback(false) {
+            override fun handleOnBackPressed() = Unit
+        }
+        BackCallbackState.attach(navigator, callback)
+        try {
+            real.start(real.screen("A"))
+            val b = real.waiting("B")
+            callback.isEnabled = true
+            real.push(b)
+            assertNotSame(b, real.queue.currentChild)
+            assertFalse("at the acceptance", callback.isEnabled)
+            callback.isEnabled = true
+            b.content.mount()
+            assertSame(b, real.queue.currentChild)
+            assertFalse("as the push begins", callback.isEnabled)
+            callback.isEnabled = true
+            assertTrue(real.back())
+            assertFalse("at the acceptance of back", callback.isEnabled)
+            real.display.finishAll()
         } finally {
             BackCallbackState.detach(navigator)
             real.uninstall()
