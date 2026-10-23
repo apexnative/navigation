@@ -116,7 +116,7 @@ static BOOL ANNUserLayersLeftOut = NO;
 
 // With a user layer, the choices meet the merge as on Android: they see the app's resolution before it and after it
 // (the merge in place for that, uncached), and those the merge changes leave; the setter then moves the cache once for
-// both.
+// both, also when a choice's rule throws: the new own options never stay with a cache of the old ones.
 - (void)mergeOwnOptions:(ANNNavigationOptions *)options {
     ANNAssertMainQueue();
     ANNNavigationOptions *own = _options ?: [ANNNavigationOptions new];
@@ -129,9 +129,12 @@ static BOOL ANNUserLayersLeftOut = NO;
     ANNNavigationOptions *before = [self appResolution];
     ANNNavigationOptions *stored = [merged withoutOneShotOptions];
     _options = stored;
-    ANNNavigationOptions *after = [self appResolution];
-    [self userChoicesMeetMerge:options own:own before:before after:after];
-    self.options = stored;
+    @try {
+        ANNNavigationOptions *after = [self appResolution];
+        [self userChoicesMeetMerge:options own:own before:before after:after];
+    } @finally {
+        self.options = stored;
+    }
 }
 
 - (void)changeOwnOptions:(void (^)(ANNNavigationOptions *options))change {
