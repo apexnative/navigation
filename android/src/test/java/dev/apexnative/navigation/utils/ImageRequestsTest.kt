@@ -9,7 +9,7 @@ import org.junit.Test
 /**
  * The images the places of a view ask for: the cache at once, a file or a drawable of the app later when the place can
  * wait, the rest at once; the last uri a place asked for wins over a load that arrives late; a load that fails gives
- * the place no image.
+ * the place no image; a request builds the key of its image once (a file's version is read once).
  */
 class ImageRequestsTest {
     private val source = FakeSource()
@@ -134,6 +134,28 @@ class ImageRequestsTest {
         assertEquals(listOf("icon" to "file:///home.png"), shown)
     }
 
+    @Test
+    fun aRequestBuildsTheKeyOnceWhenTheImageLoadsAtOnce() {
+        ask("icon", "file:///home.png", mayWait = false)
+        assertEquals(listOf("file:///home.png"), source.keys)
+    }
+
+    @Test
+    fun aRequestBuildsTheKeyOnceWhenTheImageLoadsLater() {
+        ask("icon", "file:///home.png")
+        source.finishAll()
+        assertEquals(listOf("file:///home.png"), source.keys)
+    }
+
+    @Test
+    fun aRequestWithAKeyBuildsNone() {
+        val key = requests.key("file:///home.png")
+        requests.request("icon", key, mayWait = true) { shown += "icon" to ((it as FakeImage?)?.uri ?: NONE) }
+        source.finishAll()
+        assertEquals(listOf("file:///home.png"), source.keys)
+        assertEquals(listOf("icon" to "file:///home.png"), shown)
+    }
+
     private fun ask(place: String, uri: String, mayWait: Boolean = true) {
         requests.request(place, uri, mayWait) { shown += place to ((it as FakeImage?)?.uri ?: NONE) }
     }
@@ -143,18 +165,25 @@ class ImageRequestsTest {
         val broken = mutableSetOf<String>()
         val pending = mutableListOf<Pair<String, (Drawable?) -> Unit>>()
         val loadedNow = mutableListOf<String>()
+        // The uris whose key was built, in order: a file's version is read each time.
+        val keys = mutableListOf<String>()
 
-        override fun cached(uri: String) = if (uri in cache) FakeImage(uri) else null
+        override fun key(uri: String): ImageKey {
+            keys += uri
+            return ImageKey(uri, densityDpi = 420, night = false, rightToLeft = false)
+        }
 
-        override fun now(uri: String): Drawable? {
-            loadedNow += uri
-            return imageOf(uri)
+        override fun cached(key: ImageKey) = if (key.uri in cache) FakeImage(key.uri) else null
+
+        override fun now(key: ImageKey): Drawable? {
+            loadedNow += key.uri
+            return imageOf(key.uri)
         }
 
         override fun loadsLater(uri: String) = uri.startsWith("file:")
 
-        override fun later(uri: String, done: (Drawable?) -> Unit) {
-            pending += uri to done
+        override fun later(key: ImageKey, done: (Drawable?) -> Unit) {
+            pending += key.uri to done
         }
 
         // The loads of [uri] arrive on main, in the order they were asked.

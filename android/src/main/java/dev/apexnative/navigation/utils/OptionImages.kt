@@ -24,8 +24,8 @@ import java.util.concurrent.Executors
 /**
  * The images and icons of the options, every one of them (bar buttons and their menus, the back button, search
  * suggestions, tab icons, the FAB): one cache for the app, by [ImageKey], sized by the bytes of its images and let go
- * whenever the system trims the app's memory; each caller gets its own mutable copy. The images don't depend on the
- * JavaScript, so a reload keeps them.
+ * when the system is low on memory with the app in the background ([clearsOnTrim]), not each time the app's UI hides;
+ * each caller gets its own mutable copy. The images don't depend on the JavaScript, so a reload keeps them.
  *
  * A `file:` address is a file; anything else first a drawable of the app by name (as React Native's images by resource
  * name: release builds' assets, `{ android }` icons). Those two load on the caller's thread ([load]) or on a
@@ -58,24 +58,31 @@ internal object OptionImages {
 
     /** The cache and the loads for [context]: the source of an [ImageRequests]. */
     fun source(context: Context): ImageSource = object : ImageSource {
-        override fun cached(uri: String) = cached(context, uri)
+        override fun key(uri: String) = ImageKey.of(context, uri)
 
-        override fun now(uri: String) = load(context, uri)
+        override fun cached(key: ImageKey) = cached(context, key)
+
+        override fun now(key: ImageKey) = load(context, key)
 
         override fun loadsLater(uri: String) = loadsLater(context, uri)
 
-        override fun later(uri: String, done: (Drawable?) -> Unit) = loadLater(context, uri, done)
+        override fun later(key: ImageKey, done: (Drawable?) -> Unit) = loadLater(context, key, done)
     }
 
-    /** A copy of the image of [uri] when the cache has it. Any thread. */
-    fun cached(context: Context, uri: String): Drawable? = cache.get(ImageKey.of(context, uri))?.copy(context)
+    /** A copy of the image of [key] when the cache has it. Any thread. */
+    fun cached(context: Context, key: ImageKey): Drawable? = cache.get(key)?.copy(context)
 
     /** A copy of the image of [uri], from the cache or loaded on the caller's thread; none on a failure. */
-    fun load(context: Context, uri: String): Drawable? {
+    fun load(context: Context, uri: String): Drawable? = load(context, ImageKey.of(context, uri))
+
+    /**
+     * A copy of the image of [key] (built in the configuration of [context]), from the cache or loaded on the caller's
+     * thread; none on a failure.
+     */
+    fun load(context: Context, key: ImageKey): Drawable? {
         listen(context)
-        val key = ImageKey.of(context, uri)
         cache.get(key)?.let { return it.copy(context) }
-        val loaded = decodeOrWarn(context, uri) ?: return null
+        val loaded = decodeOrWarn(context, key.uri) ?: return null
         return keep(key, loaded)?.copy(context) ?: loaded
     }
 
@@ -84,12 +91,12 @@ internal object OptionImages {
         uri.startsWith(FILE_SCHEME) || ResourceDrawableIdHelper.getResourceDrawableId(context, uri) > 0
 
     /**
-     * Loads [uri] on the background thread and gives [done] a copy of it, or none on a failure, on the main thread;
-     * one load for all who ask for the same image meanwhile. Only for what [loadsLater].
+     * Loads [key] (built in the configuration of [context]) on the background thread and gives [done] a copy of it, or
+     * none on a failure, on the main thread; one load for all who ask for the same image meanwhile. Only for what
+     * [loadsLater].
      */
-    fun loadLater(context: Context, uri: String, done: (Drawable?) -> Unit) {
+    fun loadLater(context: Context, key: ImageKey, done: (Drawable?) -> Unit) {
         listen(context)
-        val key = ImageKey.of(context, uri)
         val waiters = loading[key]
         if (waiters != null) {
             waiters.add(Waiter(context, done))
@@ -97,7 +104,7 @@ internal object OptionImages {
         }
         loading[key] = mutableListOf(Waiter(context, done))
         background.execute {
-            val loaded = decodeOrWarn(context, uri)
+            val loaded = decodeOrWarn(context, key.uri)
             val entry = loaded?.let { keep(key, it) }
             UiThread.post { deliver(key, loaded, entry) }
         }
@@ -108,6 +115,13 @@ internal object OptionImages {
         cache.evictAll()
     }
 
+    /**
+     * Whether the cache lets its images go at a trim of [level]: when the system is low on memory with the app in the
+     * background (`TRIM_MEMORY_BACKGROUND` and above), not at `TRIM_MEMORY_UI_HIDDEN`, which comes each time the app
+     * goes to the background: its icons are there when it comes back.
+     */
+    fun clearsOnTrim(level: Int): Boolean = level >= ComponentCallbacks2.TRIM_MEMORY_BACKGROUND
+
     // Each waiter gets a copy of its own; an image the cache can't keep (no constant state) goes to the first only,
     // the others load it again.
     private fun deliver(key: ImageKey, loaded: Drawable?, entry: Entry?) {
@@ -117,7 +131,7 @@ internal object OptionImages {
                 loaded == null -> null
                 entry != null -> entry.copy(waiter.context)
                 index == 0 -> loaded
-                else -> load(waiter.context, key.uri)
+                else -> load(waiter.context, key)
             }
             waiter.done(image)
         }
@@ -207,7 +221,7 @@ internal object OptionImages {
         }
     }
 
-    // The cache lets its images go whenever the system trims the app's memory: they load again when asked.
+    // The cache lets its images go when the system is low on memory ([clearsOnTrim]): they load again when asked.
     private fun listen(context: Context) {
         if (listening) return
         synchronized(this) {
@@ -215,7 +229,9 @@ internal object OptionImages {
             listening = true
         }
         context.applicationContext.registerComponentCallbacks(object : ComponentCallbacks2 {
-            override fun onTrimMemory(level: Int) = clear()
+            override fun onTrimMemory(level: Int) {
+                if (clearsOnTrim(level)) clear()
+            }
 
             override fun onConfigurationChanged(newConfig: Configuration) = Unit
 

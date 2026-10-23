@@ -4,17 +4,20 @@ import android.graphics.drawable.Drawable
 
 /** Where the images of the options come from, for one context: [OptionImages.source], or a fake in the tests. */
 internal interface ImageSource {
-    /** A copy of the image of [uri] when the cache has it, none otherwise; never loads. */
-    fun cached(uri: String): Drawable?
+    /** The key of [uri] in the context's configuration now; for a `file:` uri it reads the file's version. */
+    fun key(uri: String): ImageKey
 
-    /** A copy of the image of [uri], loaded on the caller's thread when the cache doesn't have it; none on a failure. */
-    fun now(uri: String): Drawable?
+    /** A copy of the image of [key] when the cache has it, none otherwise; never loads. */
+    fun cached(key: ImageKey): Drawable?
+
+    /** A copy of the image of [key], from the cache or loaded on the caller's thread; none on a failure. */
+    fun now(key: ImageKey): Drawable?
 
     /** Whether [uri] can load off the main thread: a file or a drawable of the app. */
     fun loadsLater(uri: String): Boolean
 
-    /** Loads [uri] off the main thread and gives a copy of it, or none on a failure, to [done] on the main thread. */
-    fun later(uri: String, done: (Drawable?) -> Unit)
+    /** Loads [key] off the main thread and gives a copy of it, or none on a failure, to [done] on the main thread. */
+    fun later(key: ImageKey, done: (Drawable?) -> Unit)
 }
 
 /**
@@ -22,31 +25,39 @@ internal interface ImageSource {
  * comes at once; what it doesn't, when the place can show it later, loads off the main thread and comes when ready;
  * everything else loads at once. The last request of a place wins: a load that arrives after the place asked again,
  * or after [forget] or [clear], is dropped. A load that fails gives the place no image, as an option without one:
- * the image it showed before doesn't stay. Main thread only.
+ * the image it showed before doesn't stay. A request builds the key of its image once (a file's version is read once).
+ * Main thread only.
  */
 internal class ImageRequests<P : Any>(private val source: ImageSource) {
     // The open load of each place: its number, which a later request of the place replaces.
     private val waiting = HashMap<P, Long>()
     private var last = 0L
 
+    /** The key of [uri] now, for a caller that compares it before it asks ([request] with the key). */
+    fun key(uri: String): ImageKey = source.key(uri)
+
+    /** [request] for the image of [uri], its key built here. */
+    fun request(place: P, uri: String, mayWait: Boolean, show: (Drawable?) -> Unit) =
+        request(place, source.key(uri), mayWait, show)
+
     /**
-     * Gives [show] the image of [uri] for [place]: now when the cache has it, or when the place can't wait for it
+     * Gives [show] the image of [key] for [place]: now when the cache has it, or when the place can't wait for it
      * ([mayWait] false: the first frame needs it) or the uri can't load off the main thread (Metro's address, a content
      * uri); otherwise later, unless [place] asks again first. Null when it doesn't load: the place shows none.
      */
-    fun request(place: P, uri: String, mayWait: Boolean, show: (Drawable?) -> Unit) {
+    fun request(place: P, key: ImageKey, mayWait: Boolean, show: (Drawable?) -> Unit) {
         waiting.remove(place)
-        source.cached(uri)?.let {
+        source.cached(key)?.let {
             show(it)
             return
         }
-        if (!mayWait || !source.loadsLater(uri)) {
-            show(source.now(uri))
+        if (!mayWait || !source.loadsLater(key.uri)) {
+            show(source.now(key))
             return
         }
         val number = ++last
         waiting[place] = number
-        source.later(uri) { image ->
+        source.later(key) { image ->
             if (waiting[place] != number) return@later
             waiting.remove(place)
             show(image)
