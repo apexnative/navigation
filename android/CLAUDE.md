@@ -53,7 +53,8 @@ top-level folder. Main thread only, unless a line says otherwise.
 - `slots/`, `safearea/`, `nativescreen/`: the views of `ANNSlot` and `ANNSafeAreaView`, the slot screen, the
   native-screen context and calls.
 - `splash/`, `customrow/`, `utils/`: the splash hold, theme and copy; the tabs' custom row options; helpers
-  (`UiThread`, `ImageLoader`, `MaterialTheme`, `TestIds`, `WindowFolds`, `DevelopmentLog`).
+  (`UiThread`, `ImageLoader` with `OptionImages`, `ImageKey`, `ImageRequests`, `MaterialTheme`, `TestIds`, `WindowFolds`,
+  `DevelopmentLog`).
 - `android/src/main/jni/`: `CMakeLists.txt` builds the codegen target with the C++ of `ios/cpp` (the slot's and the
   safe area view's shadow nodes); `ApexNavigationSpec.h` replaces the generated header so autolinking sees their
   descriptors.
@@ -127,7 +128,10 @@ top-level folder. Main thread only, unless a line says otherwise.
 - **Module thread.** The `check` of every command with a promise: `LayoutReader` and, through it, `OptionsReader` (also
   for `setDefaultOptions`, `mergeOptions` and the options of `dismissModal`, in the runner's `prepare` step);
   `ReadableJson` for native-screen props. The registry of native screens is read under its lock. Images are not loaded
-  here; `ImageLoader` loads them when the options apply, on main.
+  here; they load when the options apply, through the one cache of `utils/OptionImages` (by `ImageKey`): at once on
+  main where the first frame needs them (`ImageLoader`: the top bar's buttons, menus, back button and search
+  suggestions; a tab's first icon; a new FAB), on its background thread for a file or a drawable of the app where the
+  view takes them when ready (`ImageRequests`: a changed tab icon, a FAB's changed icon, the FAB menu's actions).
 - **Main thread.** Everything else: the command body, nodes, views, events, the stores' writes. Any thread may read
   `ReloadCoordinator.generation`.
 

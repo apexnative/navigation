@@ -75,7 +75,8 @@ text the command rejects with. The reader runs on the module thread; the checks 
 already) run on main.
 
 - iOS: `ANNLayoutReader` reads the JSON into `ANNLayoutNode`; `ANNLayoutValidator` checks what shows; the options of the
-  tree are read afterwards on main by `ANNLayoutTreeOptions` (images load there).
+  tree are read afterwards on main by `ANNLayoutTreeOptions`; an image keeps only its source there and loads through
+  `ANNOptionImages` when something shows it.
 - Android: `LayoutReader` reads React Native's data straight into `LayoutNode` and calls `OptionsReader` in the same
   pass, so layout and options are read on the module thread; `LayoutChecks` holds the checks against what shows. Images
   load later, when the options apply.
@@ -390,9 +391,12 @@ themselves.
   back has something to do. JS tells Android whether it listens (`setBackListeners`).
 - **Events.** iOS sends through the module `ANNTurboEventEmitter`; Android through the device event emitter of the
   React context, and can send without an activity.
-- **Options reading.** iOS reads a tree's options on main (images load there); Android reads layout and options on the
-  module thread and loads images when the options apply. So an unreadable option rejects on Android before the checks
-  of the body (the screen isn't shown, isn't in a stack, the id shows already); on iOS after them.
+- **Options reading.** iOS reads a tree's options on main; Android reads layout and options on the module thread. So
+  an unreadable option rejects on Android before the checks of the body (the screen isn't shown, isn't in a stack, the
+  id shows already); on iOS after them. Both load an option's image through one cache when it shows (iOS
+  `ANNOptionImages`, Android `OptionImages`): at once where the first frame needs it (the top bar before a push, a
+  tab's first icon, a new FAB), off the main thread for a file of the app where the view takes it when it is ready (a
+  tab's changed icon; on Android also the FAB's).
 - **Platform-only checks and logs.** Only Android rejects more than 5 tabs (`tooManyTabs`: its tab bar shows at most
   5); only iOS rejects a pair before iOS 27.1 (`pairUnsupported`). Only Android logs a failed `preparePush`, which iOS
   answers with `null`. Only iOS has `notAnswered`. A command whose promise resolves with nothing gives JS `undefined`

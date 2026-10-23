@@ -27,7 +27,7 @@ Swift is not used here: apps reach the core through the public headers (`Public/
 - `Layouts/SplitView/`: The split view module, plus the core's `ANNSplitViewPresenter` and `ANNSplitViewCommands`.
 - `Layouts/Arrangement/`: The pair (iOS 27.1): `ANNArrangementViewController`, `ANNArrangementState`.
 - `TopBar/`: The bar of a screen: title, buttons, back button, large title, appearance, search, toolbar, edge effects.
-- `Options/`, `Options/Params`: One `ANN<Group>Options` class per group, the field table, the value kinds and parsers (`Bool`, `Color`, `Text`, `Image`, …).
+- `Options/`, `Options/Params`: One `ANN<Group>Options` class per group, the field table, the value kinds and parsers (`Bool`, `Color`, `Text`, `Image`, …), the images' cache and loader (`ANNOptionImages`).
 - `Animations/`: The custom transition engine: plan, animator, wait, frame driver, rules; `Elements/` and `Interpolators/`.
 - `React/`, `React/Slots/`: React views of screens and components, the surface host, the safe area view, the slot host and slot screens.
 - `Public/ApexNavigation/`: The headers apps import: `ApexNavigation.h`, `ANNAppDelegate.h`, `ANNSceneDelegate.h`.
@@ -73,8 +73,11 @@ Top-level files: `Package.swift` (SwiftPM; `headerFolders` lists every folder wh
 - **Module queue:** the layout check (`ANNLayoutReader`) and the sync getters. The check reads only stores safe from
   any thread (`ApexNavigation hasNativeScreenNamed:`, `ANNArrangementState canShowArrangements`).
 - **Main queue:** everything else. A command body starts with `ANNAssertMainQueue()`. The options of a layout are parsed
-  here (`ANNLayoutTreeOptions`, images load while they are read). `ANNEventEmitter` moves an event from another queue
+  here (`ANNLayoutTreeOptions`; an image keeps only its source). `ANNEventEmitter` moves an event from another queue
   to the main queue.
+- **The images' queue** (`ANNOptionImages`, `Options/Params`): every option image decodes there, through one cache.
+  An element that shows an image asks for it when it applies and waits for it (the first frame needs it); only a tab
+  item's new icon on the bar that shows comes later (`ANNBottomTabsPresenter`), the last build of the item winning.
 - **Sync getters** answer JS during a screen's first render: `getScreenInsets`, `getScreenRegions`,
   `getArrangementState`, `getHinge`, `getStartInfo`. They read `ANNScreenInsets`, `ANNScreenRegions`,
   `ANNArrangementState`, `ANNHinge lastValue`, written on the main queue and guarded by `@synchronized`.

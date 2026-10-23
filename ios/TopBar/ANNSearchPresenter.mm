@@ -422,9 +422,11 @@ static ANNUserChoice *ANNScopeChoice(NSString *scope) {
 
 #pragma mark - Tokens
 
+// A token's key names its icon by the source the options give, never by the decoded image: a key read before and after
+// the cache lets the image go, or a file at the same path changes, stays the same, and computing it loads nothing.
 static NSString *ANNTokenKey(ANNSearchTokenOptions *token) {
     return [NSString stringWithFormat:@"%@\n%@\n%@\n%@", [token.identifier withDefault:@""], [token.text withDefault:@""],
-                                      [token.sfSymbol withDefault:@""], [token.icon withDefault:nil] ?: @""];
+                                      [token.sfSymbol withDefault:@""], token.icon.source.sourceKey ?: @""];
 }
 
 static NSArray<NSString *> *ANNTokenIds(NSArray<UISearchToken *> *tokens) {
@@ -552,10 +554,11 @@ static ANNUserChoice *ANNTokensChoice(NSArray<ANNSearchTokenOptions *> *tokens) 
 
 #pragma mark - Suggestions
 
+// A suggestion's key names its icon by its source, as a token's does (`ANNTokenKey`).
 static NSString *ANNSuggestionKey(ANNSearchSuggestionOptions *suggestion) {
     return [NSString stringWithFormat:@"%@\n%@\n%@\n%@\n%@", [suggestion.identifier withDefault:@""],
                                       [suggestion.title withDefault:@""], [suggestion.accessibilityLabel withDefault:@""],
-                                      [suggestion.sfSymbol withDefault:@""], [suggestion.icon withDefault:nil] ?: @""];
+                                      [suggestion.sfSymbol withDefault:@""], suggestion.icon.source.sourceKey ?: @""];
 }
 
 static NSArray<NSString *> *ANNSuggestionKeys(NSArray<ANNSearchSuggestionOptions *> *suggestions) {

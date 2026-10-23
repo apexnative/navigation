@@ -68,9 +68,10 @@ dispatcher.
    `+[ANNErrorTexts nowhereToShow]` when there is no window, then runs the body in `@try`. The body finds Home in
    `ANNNodeRegistry` and calls `+[ANNStackCommands push:componentId:what:answer:]`.
 4. **`ANNStackCommands`.** Finds the stack by walking `layoutParent`; checks `ANNLayoutValidator` (an id already shown,
-   what a stack takes); reads the options of the whole tree with `ANNLayoutTreeOptions` (images load here); checks
-   `ANNLayoutFactory canMakeTrees:`; a node with `preview.nativeID` goes to `ANNPreviewPush`; a `key` of an entry below
-   goes back to that entry; else `+[ANNLayoutFactory nodeFromLayout:options:]` makes Profile (an
+   what a stack takes); reads the options of the whole tree with `ANNLayoutTreeOptions` (an image keeps its source,
+   loaded through `ANNOptionImages` when an element shows it); checks `ANNLayoutFactory canMakeTrees:`; a node with
+   `preview.nativeID` goes to `ANNPreviewPush`; a `key` of an entry below goes back to that entry; else
+   `+[ANNLayoutFactory nodeFromLayout:options:]` makes Profile (an
    `ANNComponentViewController` with an `ANNComponentPresenter`, content from `ANNReactViewCreator`) and registers it.
    No view is rendered yet.
 5. **`-[ANNStackQueue push:answer:…]`.** The node joins `entries` now (every check reads `entries`), the operation is

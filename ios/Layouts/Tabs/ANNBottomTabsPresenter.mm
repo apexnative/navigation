@@ -3,6 +3,7 @@
 #import "ANNBottomTabsAccessoryView.h"
 #import "ANNBottomTabsController.h"
 #import "ANNBottomTabsCustomRow.h"
+#import "ANNOptionImages.h"
 #import "ANNTabDotView.h"
 #import "ANNTabsDesign.h"
 #import "UITabBar+utils.h"
@@ -73,6 +74,8 @@ static id ANNValue(NSArray *list, NSUInteger index) {
     NSMutableDictionary<NSString *, ANNBottomTabsAccessoryView *> *_accessoryViews;
     // The pictures of the bar's colors by color and size.
     NSMutableDictionary<NSArray *, UIImage *> *_colorImages;
+    // The icons an item waits for, by layout index: a token per wait, which a later build of the item replaces.
+    NSMutableDictionary<NSNumber *, NSObject *> *_iconLoads;
 }
 
 - (nullable ANNBottomTabsController *)tabs {
@@ -122,6 +125,7 @@ static id ANNValue(NSArray *list, NSUInteger index) {
     _buttonIds = [NSMapTable weakToStrongObjectsMapTable];
     _accessoryViews = [NSMutableDictionary new];
     _colorImages = [NSMutableDictionary new];
+    _iconLoads = [NSMutableDictionary new];
     for (NSUInteger index = 0; index < count; index++) {
         [_badges addObject:NSNull.null];
         [_dots addObject:[ANNBottomTabDotIndicatorOptions new]];
@@ -336,8 +340,12 @@ static id ANNValue(NSArray *list, NSUInteger index) {
     // The row's items show nothing: no image, no title, only the accessibility.
     NSString *text = [ANNBottomTabItemBuilder titleOf:bottomTab];
     NSString *title = row || _titlesHidden ? nil : text;
-    UIImage *icon = row ? nil : [ANNBottomTabItemBuilder iconOf:bottomTab];
-    UIImage *selectedIcon = row ? nil : [ANNBottomTabItemBuilder selectedIconOf:bottomTab];
+    // While new icons load off the main queue the item keeps the ones it shows; a wait of an earlier build is over.
+    [_iconLoads removeObjectForKey:@(index)];
+    BOOL keepsIcons = !row && [self loadsIconsLaterOf:bottomTab atIndex:index];
+    UIImage *icon = row || keepsIcons ? nil : [ANNBottomTabItemBuilder iconOf:bottomTab];
+    UIImage *selectedIcon =
+        row || keepsIcons ? nil : [ANNBottomTabItemBuilder selectedIconOf:bottomTab];
     if (@available(iOS 18.0, *)) {
         if (uiTab) {
             UITab *systemTab = uiTab;
@@ -349,12 +357,13 @@ static id ANNValue(NSArray *list, NSUInteger index) {
                     systemTab.title = tabTitle;
                 }
             }
-            if ((!search || icon || row) && systemTab.image != icon) {
+            if (!keepsIcons && (!search || icon || row) && systemTab.image != icon) {
                 systemTab.image = icon;
             }
 #if __IPHONE_OS_VERSION_MAX_ALLOWED >= 270000
             if (@available(iOS 26.1, *)) {
-                if ((!search || selectedIcon || row) && systemTab.selectedImage != selectedIcon) {
+                if (!keepsIcons && (!search || selectedIcon || row) &&
+                    systemTab.selectedImage != selectedIcon) {
                     systemTab.selectedImage = selectedIcon;
                 }
             }
@@ -375,7 +384,7 @@ static id ANNValue(NSArray *list, NSUInteger index) {
             item.accessibilityLabel = text;
         }
     }
-    if (!roleItem || icon) {
+    if (!keepsIcons && (!roleItem || icon)) {
         if (item.image != icon) {
             item.image = icon;
         }
@@ -435,6 +444,56 @@ static id ANNValue(NSArray *list, NSUInteger index) {
             systemTab.accessibilityIdentifier = testID;
         }
     }
+}
+
+// New raster icons of an item on the bar that shows load off the main queue when the cache doesn't have them: the item
+// takes them when they came, built again from the same options, unless it was built again first (the last build wins).
+// The first icons, and every icon while the bar is out of a window, load at once: the tab's first frame shows them.
+- (BOOL)loadsIconsLaterOf:(ANNBottomTabOptions *)bottomTab atIndex:(NSUInteger)index {
+    if (!_tabsAreSet || !self.tabs.viewIfLoaded.window) {
+        return NO;
+    }
+    NSMutableArray<ANNImageSource *> *later = [NSMutableArray new];
+    for (Image *raster in [ANNBottomTabItemBuilder rastersOf:bottomTab]) {
+        if ([ANNOptionImages loadsLater:raster.source]) {
+            [later addObject:raster.source];
+        }
+    }
+    if (!later.count) {
+        return NO;
+    }
+    NSObject *load = [NSObject new];
+    _iconLoads[@(index)] = load;
+    __block NSUInteger pending = later.count;
+    __block BOOL asking = YES;
+    __weak ANNBottomTabsPresenter *weakSelf = self;
+    for (ANNImageSource *source in later) {
+        [ANNOptionImages loadLater:source
+                              done:^(UIImage *image) {
+                                pending--;
+                                ANNBottomTabsPresenter *presenter = weakSelf;
+                                if (pending == 0 && !asking) {
+                                    [presenter iconsCame:load atIndex:index bottomTab:bottomTab];
+                                }
+                              }];
+    }
+    asking = NO;
+    if (pending == 0) {
+        // A load ended while the others were asked for: the cache has them all now.
+        [_iconLoads removeObjectForKey:@(index)];
+        return NO;
+    }
+    return YES;
+}
+
+- (void)iconsCame:(NSObject *)load
+          atIndex:(NSUInteger)index
+        bottomTab:(ANNBottomTabOptions *)bottomTab {
+    if (_iconLoads[@(index)] != load || index >= self.tabs.layoutTabs.count) {
+        return;
+    }
+    [_iconLoads removeObjectForKey:@(index)];
+    [self buildItemAtIndex:index bottomTab:bottomTab updatesBadgeAndDot:NO];
 }
 
 - (void)updateDotAtIndex:(NSUInteger)index
