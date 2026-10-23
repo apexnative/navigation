@@ -55,7 +55,7 @@ class CommandAnswerTest {
     fun failingStepsAreLoggedAndThePromiseGoes() {
         val logged = mutableListOf<String>()
         val failing = object : AnswerEvents {
-            override fun beforeAnswer() = throw IllegalStateException("no navigator")
+            override fun stateNow() = throw IllegalStateException("no navigator")
 
             override fun commandCompleted(commandName: String, commandId: String, completionTime: Long) =
                 throw IllegalStateException()
@@ -105,6 +105,24 @@ class CommandAnswerTest {
         rejected.reject("the screen 'Home' is not shown")
         assertTrue(journal.entries.isEmpty())
         assertFalse(resolved.isAnswered)
+    }
+
+    @Test
+    fun theStateGoesOncePerAnswer() {
+        val answer = answer("push")
+        answer.reportStateNow()
+        answer.reportStateNow()
+        answer.resolve("Details")
+        assertEquals(listOf("state", "resolve:Details", "completed:push"), journal.entries)
+    }
+
+    @Test
+    fun anAnswerOfAJavaScriptThatWentSendsNoState() {
+        val answer = answer("push")
+        ReloadCoordinator.advance()
+        answer.reportStateNow()
+        answer.resolve("Details")
+        assertTrue(journal.entries.isEmpty())
     }
 
     @Test

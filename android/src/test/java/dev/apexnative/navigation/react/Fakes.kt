@@ -45,9 +45,9 @@ class FakePromise(private val journal: Journal) : Promise {
     }
 }
 
-/** The state step and `ANN.CommandCompleted`, written into [journal]. */
+/** The answer's state step (`state`) and `ANN.CommandCompleted`, written into [journal]. */
 internal class FakeEvents(private val journal: Journal) : AnswerEvents {
-    override fun beforeAnswer() {
+    override fun stateNow() {
         journal.entries += "state"
     }
 

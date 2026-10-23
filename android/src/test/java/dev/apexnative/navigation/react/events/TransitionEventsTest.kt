@@ -2,6 +2,7 @@ package dev.apexnative.navigation.react.events
 
 import android.app.Activity
 import dev.apexnative.navigation.options.Options
+import dev.apexnative.navigation.react.AnswerEvents
 import dev.apexnative.navigation.react.CommandAnswer
 import dev.apexnative.navigation.react.FakeEvents
 import dev.apexnative.navigation.react.FakePromise
@@ -62,14 +63,46 @@ class TransitionEventsTest {
                 "stateNeeded",
                 "didAppear:Details",
                 "stateNeeded",
-                "stateNow",
-                "events",
                 "state",
+                "events",
                 "resolve:Details",
                 "completed:push",
             ),
             entries,
         )
+    }
+
+    @Test
+    fun theStateGoesOncePerAnswerWhenItsTransitionSentIt() {
+        val answer = answer("push")
+        AppearanceDispatcher.endTransition(emptyList(), emptyList(), { entries += "events" }, answer, "Details")
+        answer.reportStateNow()
+        assertEquals(listOf("state", "events", "resolve:Details", "completed:push"), entries)
+    }
+
+    @Test
+    fun anAnswerOfAJavaScriptThatWentSendsNoState() {
+        val answer = answer("push")
+        ReloadCoordinator.advance()
+        AppearanceDispatcher.endTransition(emptyList(), emptyList(), { entries += "events" }, answer, "Details")
+        assertEquals(listOf("events"), entries)
+    }
+
+    @Test
+    fun aTransitionThatEndsAfterItsAnswerSendsTheStateOfItsEnd() {
+        val answer = answer("pop")
+        answer.reject("the screen 'Home' is not shown")
+        AppearanceDispatcher.endTransition(emptyList(), emptyList(), { entries += "events" }, answer, "Home")
+        assertEquals(listOf("reject:the screen 'Home' is not shown", "stateNow", "events"), entries)
+    }
+
+    @Test
+    fun aTransitionThatEndsAfterTheAnswerOfAJavaScriptThatWentSendsNoState() {
+        val answer = answer("pop")
+        answer.reject("the screen 'Home' is not shown")
+        ReloadCoordinator.advance()
+        AppearanceDispatcher.endTransition(emptyList(), emptyList(), { entries += "events" }, answer, "Home")
+        assertEquals(listOf("reject:the screen 'Home' is not shown", "events"), entries)
     }
 
     @Test
@@ -85,9 +118,20 @@ class TransitionEventsTest {
 
             override fun release() = Unit
         }
-        AppearanceDispatcher.endTransition(emptyList(), emptyList(), { entries += "events" }, answer("push"), "Details")
+        val failing = object : AnswerEvents {
+            override fun stateNow() = throw IllegalStateException("no root")
+
+            override fun commandCompleted(commandName: String, commandId: String, completionTime: Long) {
+                entries += "completed:$commandName"
+            }
+        }
+        val answer =
+            CommandAnswer("push", "push3", FakePromise(journal), ReloadCoordinator.generation, failing, { 0L }) {
+                logged += it
+            }
+        AppearanceDispatcher.endTransition(emptyList(), emptyList(), { entries += "events" }, answer, "Details")
         AppearanceDispatcher.endTransition(emptyList(), emptyList(), { entries += "userEvents" }, null, null)
-        assertEquals(listOf("events", "state", "resolve:Details", "completed:push", "userEvents"), entries)
+        assertEquals(listOf("events", "resolve:Details", "completed:push", "userEvents"), entries)
         assertEquals(
             listOf(
                 "[ApexNavigation] push: could not report the navigation state: no root",

@@ -41,7 +41,7 @@ JS ── ANNTurboModule ──────────────────�
                    ANNSystemUI                            │ system/SystemUiOwner
        ▼
    dispatcher      ANNAppearanceDispatcher                │ react/events/AppearanceDispatcher
-   state, emitter  ANNNavigationState, ANNEventEmitter    │ react/events/NavigationStateReporter, EventEmitter
+   state, emitter  ANNNavigationState, ANNEventEmitter    │ react/events/NavigationState, EventEmitter
        ▼
    ANN.<Name> events ──► JS (iOS through ANNTurboEventEmitter, Android through React Native's device event emitter)
 ```
@@ -137,9 +137,11 @@ stops its React surfaces on main, clears its stores and sends `NativeScreenRelea
 reload the events of the old JS are silent.
 
 - iOS: `ANNScreenAppearance` per content, `ANNAppearanceDispatcher`, `ANNNavigationState` (coalesced updates, holds, the
-  state before an answer), `ANNEventEmitter` (drops events once its generation moved).
-- Android: `ScreenAppearance`, `AppearanceDispatcher`, `NavigationStateReporter`, `EventEmitter`. The dispatcher reaches
-  the reporter through `AppearanceDispatcher.StateUpdates`.
+  state now), `ANNEventEmitter` (drops events once its generation moved).
+- Android: `ScreenAppearance`, `AppearanceDispatcher`, `NavigationState` (coalesced updates, holds, the state now),
+  `EventEmitter`. The dispatcher reaches the state through `AppearanceDispatcher.StateUpdates`.
+- The state before an answer goes once per answer, from the answer (`-[ANNCommandAnswer reportStateNow]`,
+  `CommandAnswer.reportStateNow`): at the end of its transition, or before its promise.
 
 ### 2.6 Coordinators
 
@@ -204,7 +206,7 @@ Each rule has one owner. A feature that needs the rule calls the owner; it does 
 | Options cache               | `ANNOptionsCache`, moved by the setter of `ANNNodeHelper.options`, by `setUserChoice:forKey:` and by defaults | `OptionsCache`, moved by the `ViewController.options` setter, by `changeChoices` and by `DefaultOptions.set` |
 | Options a layout shows with | the node's `resolveOptions` (own, then the current child down)                                                | `resolveShownOptions`                                                                                        |
 | Appearance dispatcher       | `ANNAppearanceDispatcher`                                                                                     | `AppearanceDispatcher`                                                                                       |
-| Navigation state            | `ANNNavigationState`: `holdUpdates`, `releaseUpdates`, `updateNow`                                            | `NavigationStateReporter` through `AppearanceDispatcher.StateUpdates`: `hold`, `release`                     |
+| Navigation state            | `ANNNavigationState`: `holdUpdates`, `releaseUpdates`, `updateNow`                                            | `NavigationState` through `AppearanceDispatcher.StateUpdates`: `hold`, `release`, `updateNow`                |
 | Answer id of a stack entry  | `ANNStackAnswerIdOf` in `ANNStackQueue.h`                                                                     | `StackController.answerIdOf`, asked by the queue through `StackQueue.Host`                                   |
 | Screens of an entry         | `ANNStackScreensOfEntry`                                                                                      | `StackController.screenIdOf`, `optionsScreen`                                                                |
 | Screen readiness            | `ANNScreenReadiness`, by screen id                                                                            | `ScreenReadiness` and `ContentReadiness`                                                                     |
@@ -327,13 +329,14 @@ class they work with.
 
 1. `ComponentWillAppear` of what comes, at the start (`beginTransition`), held until its content mounted, at most 0.5 s.
 2. At the end (`endTransition`): `ComponentDidDisappear` of what left, then `ComponentDidAppear` of what came.
-3. `NavigationStateChanged`, if the state changed.
+3. `NavigationStateChanged`, if the state changed: the answer's one state step.
 4. The transition's own events (`ScreenPopped`, `ModalDismissed`; none for a push).
 5. The promise resolves with the id of the screen shown.
 6. `CommandCompleted`, for the commands that show or dismiss.
 
-Before step 5 the state goes once more if it changed since step 3, so JS `await`s a command and finds its result in
-`getState()`. The answer is sent once; nothing is sent for a JavaScript that went. A command without a promise
+The answer sends the state once: at step 3, or, for a command answered without a transition's end (a `setRoot` with
+modals or overlays in its layout), right before step 5, so JS `await`s a command and finds its result in `getState()`.
+The answer is sent once; nothing is sent for a JavaScript that went, the state neither. A command without a promise
 (`mergeOptions`) sends no state and no `CommandCompleted`.
 
 **A tab press**, the same for every source (the system bar, the iPad tab strip and sidebar, the custom row, Android's

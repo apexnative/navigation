@@ -186,7 +186,7 @@ class CommandRunnerTest {
     @Test
     fun stateStepFailureIsLoggedAndThePromiseGoes() {
         val failing = object : AnswerEvents {
-            override fun beforeAnswer() = throw IllegalStateException("no navigator")
+            override fun stateNow() = throw IllegalStateException("no navigator")
 
             override fun commandCompleted(commandName: String, commandId: String, completionTime: Long) {
                 journal.entries += "completed:$commandName"

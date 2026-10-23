@@ -25,7 +25,7 @@ top-level folder. Main thread only, unless a line says otherwise.
   `ReactView` (a React root), the stores (`ScreenInsets`, `ScreenRegions`, `ArrangementStates`, `Hinge`, `StartInfo`),
   `LaunchLink`, `ScrollEvents`.
 - `react/events/`: `AppearanceDispatcher`, `ScreenAppearance`, `EventEmitter`, `EventContract` (made by
-  `scripts/contract.mjs`), `NavigationStateReporter`, `ComponentType`.
+  `scripts/contract.mjs`), `NavigationState`, `ComponentType`.
 - `viewcontrollers/viewcontroller/`: `ViewController` (the base of every node), `Presenter`, `IReactView` (what a
   screen shows), `ScrollEventListener`.
 - `viewcontrollers/child/`, `parent/`: `ChildController` and the registry; `ParentController` (the base of layouts),
@@ -105,7 +105,7 @@ top-level folder. Main thread only, unless a line says otherwise.
 - System bars: `system/SystemUiOwner.kt`, `SystemUiLayers.kt`, `SystemUiRules.kt`, `SystemUiWindow.kt`,
   `AppDirection.kt`; `viewcontrollers/parent/ContainerBackground.kt`.
 - Events and state: `react/events/AppearanceDispatcher.kt`, `ScreenAppearance.kt`, `EventEmitter.kt`,
-  `NavigationStateReporter.kt`; `react/CommandAnswer.kt`.
+  `NavigationState.kt`; `react/CommandAnswer.kt`.
 - Options (parsing, merging): `options/Options.kt`, `OptionsReader.kt`, `OptionsCache.kt`, `DefaultOptions.kt`,
   `params/`, `parsers/`; `viewcontrollers/viewcontroller/ViewController.kt` (resolution).
 - Error texts and answers: `react/ErrorTexts.kt` and `react/CommandContract.kt`, made by `scripts/contract.mjs` from

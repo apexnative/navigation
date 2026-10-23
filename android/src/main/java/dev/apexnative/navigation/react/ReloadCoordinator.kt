@@ -4,7 +4,7 @@ import com.facebook.react.bridge.ReactContext
 import dev.apexnative.navigation.NavigationActivity
 import dev.apexnative.navigation.nativescreen.NativeScreenCalls
 import dev.apexnative.navigation.react.events.EventEmitter
-import dev.apexnative.navigation.react.events.NavigationStateReporter
+import dev.apexnative.navigation.react.events.NavigationState
 import dev.apexnative.navigation.utils.UiThread
 import dev.apexnative.navigation.viewcontrollers.navigator.BackCallbackState
 import dev.apexnative.navigation.viewcontrollers.navigator.Navigator
@@ -39,7 +39,7 @@ internal object ReloadCoordinator {
     /**
      * The JavaScript goes (a reload, or the host is destroyed). Any thread: the number grows at once; the layouts of
      * every navigation activity go on the main thread, with the "reloading" mark, and so do the listeners of the
-     * JavaScript that went (back, hinge).
+     * JavaScript that went (back, hinge) and the holds of the navigation state its `setRoot` left.
      */
     fun onJavaScriptGoes() {
         advance()
@@ -48,6 +48,7 @@ internal object ReloadCoordinator {
             launches.contextGone()
             try {
                 Navigators.all().forEach { it.onReload() }
+                NavigationState.javaScriptWent()
                 BackCallbackState.setJsListeners(false)
                 Hinge.setEnabled(Navigators.current(), false)
             } finally {
@@ -59,13 +60,15 @@ internal object ReloadCoordinator {
     /**
      * The developer tools of [activity] reload the JavaScript ("R R", the reload broadcast): the number grows first, so
      * the navigation of the activity goes without a word to the JavaScript that goes, then its layers go
-     * ([NavigationActivity.onReload]). The host's own reset follows as the reload destroys it. Main thread.
+     * ([NavigationActivity.onReload]) with the holds of the navigation state. The host's own reset follows as the
+     * reload destroys it. Main thread.
      */
     fun resetForDeveloperReload(activity: NavigationActivity) {
         advance()
         Navigator.setReloading(true)
         try {
             activity.onReload()
+            NavigationState.javaScriptWent()
         } finally {
             Navigator.setReloading(false)
         }
@@ -92,7 +95,7 @@ internal object ReloadCoordinator {
      */
     fun launchIfDue(activity: NavigationActivity) {
         val context = launches.takeDue(activity, activity.isNavigationResumed) ?: return
-        NavigationStateReporter.reset()
+        NavigationState.reset()
         EventEmitter(context).emitAppLaunched()
     }
 }

@@ -7,11 +7,13 @@ import org.junit.Test
  * The navigation state's posted update and its hold: one update per pass of the main loop; what is asked while held,
  * and a posted update that runs while held, goes once, at the last release.
  */
-class StateHoldTest {
+class NavigationStateUpdatesTest {
     private val asked = mutableListOf<String>()
     private val posted = mutableListOf<() -> Unit>()
     private var generation = 1
-    private val hold = StateHold(post = { posted += it }, generation = { generation }) { asked += "update" }
+    private val hold = NavigationState.Updates(post = { posted += it }, generation = { generation }) {
+        asked += "update"
+    }
 
     // The next pass of the main loop.
     private fun nextPass() {
@@ -94,6 +96,22 @@ class StateHoldTest {
         nextPass()
         assertEquals(emptyList<String>(), asked)
         hold.release()
+        nextPass()
+        assertEquals(listOf("update"), asked)
+    }
+
+    @Test
+    fun aHoldLeftByAJavaScriptThatWentHoldsNothingOfTheNext() {
+        // The old JavaScript's `setRoot` held the updates and never released them.
+        hold.hold()
+        hold.setNeedsUpdate()
+        generation++
+        hold.dropHolds()
+        assertEquals(0, hold.count)
+        nextPass()
+        assertEquals(emptyList<String>(), asked)
+        // The new JavaScript's next update goes in the next pass.
+        hold.setNeedsUpdate()
         nextPass()
         assertEquals(listOf("update"), asked)
     }

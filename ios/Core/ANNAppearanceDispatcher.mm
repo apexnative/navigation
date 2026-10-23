@@ -305,7 +305,18 @@ static BOOL ANNIsInsideNode(UIViewController *screen, UIViewController *node) {
     for (UIViewController *node in shown) {
         [self nodeDidAppear:node];
     }
-    [ANNNavigationState updateNowFor:answer.commandName];
+    // The state before the transition's events, once per answer: the answer's own step before its promise finds it
+    // sent. A user's transition has no answer; one whose answer went before its end (an interrupt) sends the state of
+    // its end itself, as Android does.
+    if (!answer) {
+        [ANNNavigationState updateNow];
+    } else if (answer.answered) {
+        if (answer.isCurrent) {
+            [ANNNavigationState updateNowFor:answer.commandName];
+        }
+    } else {
+        [answer reportStateNow];
+    }
     if (events) {
         events();
     }

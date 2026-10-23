@@ -128,7 +128,6 @@ class OverlayCoordinatorTest {
                 "will:Toast",
                 "didAppear:Toast",
                 "stateNeeded",
-                "stateNow",
                 "state",
                 "resolve:Toast",
                 "completed:showOverlay",
@@ -258,7 +257,6 @@ class OverlayCoordinatorTest {
             listOf(
                 "didDisappear:Inner",
                 "stateNeeded",
-                "stateNow",
                 "state",
                 "resolve:Overlay1",
                 "completed:dismissOverlay",
@@ -280,7 +278,6 @@ class OverlayCoordinatorTest {
             listOf(
                 "didDisappear:Inner",
                 "stateNeeded",
-                "stateNow",
                 "state",
                 "resolve:Overlay1",
                 "completed:dismissOverlay",

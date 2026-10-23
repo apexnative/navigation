@@ -31,7 +31,7 @@ coordinators: RootCoordinator · StackQueue (one per stack) · ModalCoordinator 
 presenters: ComponentPresenter · StackPresenter + TopBarPresenter · BottomTabsPresenter · SideMenuPresenter ·
             SplitViewPresenter · system/SystemUiOwner (status bar, navigation bar, orientation, keyboard)
  ▼
-react/events/AppearanceDispatcher ─► NavigationStateReporter ─► EventEmitter ─► ANN.* events ─► JS
+react/events/AppearanceDispatcher ─► NavigationState ─► EventEmitter ─► ANN.* events ─► JS
 ```
 
 - **Way in.** `NavigationTurboModule` only turns a method into a `CommandRunner` call; it holds no navigation logic. It
@@ -84,11 +84,12 @@ react/events/AppearanceDispatcher ─► NavigationStateReporter ─► EventEmi
    `AppearanceDispatcher.beginTransition`: **`ComponentWillAppear`** of Profile. The transition runs
    (`StackTransitions`, `SystemTransition`, or the screens' own animation, `AnimationRules.stackIsOwn`).
 8. **End.** `finishPush` calls `AppearanceDispatcher.endTransition`: **`ComponentDidDisappear`** of Home, then
-   **`ComponentDidAppear`** of Profile, then `reportState` (**`NavigationStateChanged`**, only if it changed), then the
-   transition's own events (none for a push), then `CommandAnswer.resolve` with Profile's id.
-9. **Answer.** `resolve` sends the state once more if it changed (`AnswerEvents.beforeAnswer`), resolves the promise,
-   then sends **`CommandCompleted`** (`CommandContract.COMPLETED`). After the task, `BackCallbackState.update` recomputes what
-   back does.
+   **`ComponentDidAppear`** of Profile, then the answer's one state step (`CommandAnswer.reportStateNow`:
+   **`NavigationStateChanged`**, only if it changed), then the transition's own events (none for a push), then
+   `CommandAnswer.resolve` with Profile's id.
+9. **Answer.** `resolve` sends the state only when no transition sent it (`reportStateNow` runs once per answer: a
+   `setRoot` with layout modals sends it here), resolves the promise, then sends **`CommandCompleted`**
+   (`CommandContract.COMPLETED`). After the task, `BackCallbackState.update` recomputes what back does.
 
 The events go from the main thread, synchronously, through `EventEmitter.current()`; the promise is answered once.
 
@@ -127,13 +128,16 @@ Each rule has one owner. Change the owner, not a caller; if a new feature needs 
   `beginTransition` starts the appearances; `endTransition` runs what left, then what came, then the state, then the
   transition's events, then the answer. Events asked before a screen's content is ready are held in its
   `ScreenAppearance` (until the content mounts or `HOLD_LIMIT_MILLIS`).
-- **Navigation state.** `AppearanceDispatcher.state` (`StateUpdates`) is the one way to ask for it: `StateHold`
-  coalesces the asks to one posted update per pass of the main loop and keeps it while held; the update calls
-  `NavigationStateReporter.updateNow`. `updateNow` also runs before every answer of a command that changes what shows
-  (`CommandAnswer`) and is never held. It reads the navigator through `Navigators.current()`, and `stateOf` finds the
+- **Navigation state.** `NavigationState` owns it: the last state sent, the walk (`stateOf`), the posted update and its
+  holds (`NavigationState.Updates`). `AppearanceDispatcher.state` (`StateUpdates`) is the one way to ask for it:
+  `setNeedsUpdate` coalesces the asks to one posted update per pass of the main loop and keeps it while held; the
+  update calls `updateNow`. A command's answer sends it once, at once and never held (`CommandAnswer.reportStateNow`):
+  at the end of its transition, else right before its promise for the commands that change what shows; nothing for a
+  JavaScript that went. It reads the navigator through `Navigators.current()`, and `stateOf` finds the
   `tab` as the nearest tabs of the visible screen (the last tabs met walking down from the visible layout). A `setRoot`
   with layout modals or overlays takes `AppearanceDispatcher.StateUpdates.hold()` and releases it right before its
-  answer, so JavaScript hears one state; every hold has one `release()`.
+  answer, so JavaScript hears one state; every hold has one `release()`. The holds go when the JavaScript goes
+  (`NavigationState.javaScriptWent`), so one left by its `setRoot` never holds the next JavaScript's updates.
 - **Answer.** `CommandAnswer`: resolves or rejects once, and nothing once the JavaScript went. The id a stack entry
   answers with is one rule, `StackController.answerIdOf` (the queue asks it through `StackQueue.Host.answerIdOf` with
   an `AnswerKind`): `push` answers the entry's own id (a pair's), every other command the screen it stands for (a
@@ -206,7 +210,7 @@ Modules are the feature classes that plug into the core through its contract (th
   (`splash/`), animations (`FadeThrough`, `SystemTransition`, `TransitionTargets`, three element animators), utils
   (`MaterialTheme`, `NavigationLog`, `awaitBarComponents`, `whenDrawn`).
 - **Stores and singletons:** regions (`Hinge`, `ScreenInsets`, `ScreenRegions`, `WindowFolds`), pair state
-  (`ArrangementStates`), links (`LaunchLink`, `StartInfo`), events (`NavigationStateReporter`), commands
+  (`ArrangementStates`), links (`LaunchLink`, `StartInfo`), events (`NavigationState`), commands
   (`BackCallbackState`), stack (`PreparedFrame`).
 
 How they plug in:

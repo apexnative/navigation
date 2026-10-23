@@ -61,7 +61,7 @@ class StackCustomTest {
         assertTrue(display.isRunning(b))
         assertFalse(display.isRunning(a))
         display.finish(b)
-        h.assertEvents("didDisappear:A", "didAppear:B", "stateNow", "state", "push1 resolve B", "completed:push")
+        h.assertEvents("didDisappear:A", "didAppear:B", "state", "push1 resolve B", "completed:push")
         h.assertViews("raise:B", "detach:A")
     }
 
@@ -76,7 +76,7 @@ class StackCustomTest {
         assertFalse(display.isRunning(b))
         display.finish(a)
         h.assertEvents(
-            "will:B", "didDisappear:A", "didAppear:B", "stateNow", "state", "push1 resolve B", "completed:push",
+            "will:B", "didDisappear:A", "didAppear:B", "state", "push1 resolve B", "completed:push",
         )
     }
 
@@ -121,7 +121,7 @@ class StackCustomTest {
         assertEquals(listOf("Slide"), h.host.tabBarMoves)
         display.finish(b)
         h.assertEvents(
-            "will:A", "didDisappear:B", "didAppear:A", "stateNow", "popped:B", "destroyed:B", "state",
+            "will:A", "didDisappear:B", "didAppear:A", "state", "popped:B", "destroyed:B",
             "pop1 resolve B", "completed:pop",
         )
         assertEquals(1f, display.valuesOf(a).alpha)
