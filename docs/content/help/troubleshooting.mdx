@@ -235,9 +235,9 @@ A signed-in user sees Login for a moment, then the app.
 
 <Os name="iOS" /> Between the launch screen and the first screen, the window is empty for a moment.
 
-**Why:** the launch screen is made with the `UILaunchScreen` dictionary of `Info.plist`, not a storyboard. The navigation keeps a copy of a storyboard on screen until the first root, and can't make one of the dictionary. `doctor` warns about it under Launch screen.
+**Why:** the app has no launch screen the navigation can copy: `Info.plist` names no storyboard and has no `UILaunchScreen` dictionary (or `UILaunchScreens` default), and no legacy launch images.
 
-**Fix:** run `npx apex-navigation splash`, or name a storyboard in `UILaunchStoryboardName` and remove `UILaunchScreen`. More: [Make the native splash](../guides/splash-screen#command).
+**Fix:** run `npx apex-navigation splash`, or name a storyboard in `UILaunchStoryboardName`. More: [Make the native splash](../guides/splash-screen#command).
 
 ### Android brings the app back without its pushed screens {#android-relaunch}
 

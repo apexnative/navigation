@@ -303,7 +303,7 @@ describe('doctor', () => {
     ]);
   });
 
-  it('warns about UILaunchScreen without a storyboard', () => {
+  it('says nothing about UILaunchScreen without a storyboard: the navigation copies it too', () => {
     const root = app();
     const plist = path.join(root, IOS, 'Info.plist');
     fs.writeFileSync(
@@ -315,9 +315,7 @@ describe('doctor', () => {
           '<key>UILaunchScreen</key>\n\t<dict/>'
         )
     );
-    expect(checks(root)).toEqual([
-      expect.objectContaining({ title: 'Launch screen', status: 'warn' }),
-    ]);
+    expect(checks(root)).toEqual([]);
   });
 
   it('says nothing about an app without a splash of the CLI and with a storyboard', () => {

@@ -7,9 +7,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// either at once. The status bar follows the Info.plist keys `UIStatusBarStyle` and `UIStatusBarHidden`. Main queue.
 @interface ANNSplashViewController : UIViewController
 
-/// The copy of the launch screen: the initial view controller of `UILaunchStoryboardName` as a child (a storyboard
-/// that doesn't load: the first view of the nib of that name), else the legacy launch images, full screen. Nil when the
-/// app has none of these: the window then has no root view controller until the first root.
+/// The copy of the launch screen. When iOS builds it from the Info.plist (`UILaunchScreen`, or the default of
+/// `UILaunchScreens`), the same color, image and bars as plain views; else the initial view controller of
+/// `UILaunchStoryboardName` as a child (a storyboard that doesn't load: the first view of the nib of that name), else
+/// the legacy launch images, full screen. Nil when the app has none of these: the window then has no root view
+/// controller until the first root.
 + (nullable instancetype)launchScreenCopyWithBounds:(CGRect)bounds;
 
 /// The blank screen after a reload: clear when the default options give the window a color (`window.backgroundColor`),

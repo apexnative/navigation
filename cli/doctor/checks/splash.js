@@ -17,34 +17,16 @@ const CIRCLE = 192;
 const LOGO_HEIGHT = /<dimen name="apex_navigation_splash_logo_height">([\d.]+)dp<\/dimen>/;
 
 /**
- * The native splash: made from its settings in package.json on both platforms, its logo whole on Android 12+; without
- * settings, a launch screen the navigation can't keep on screen until the first screen draws.
+ * The native splash: made from its settings in package.json on both platforms, its logo whole on Android 12+. Without
+ * settings there is nothing to check: the navigation keeps a copy of a storyboard and of `UILaunchScreen` alike.
  * @param {string} root
  * @param {Project} project
  * @returns {Check[]}
  */
 function splashChecks(root, project) {
-  const plist = project.infoPlist && fs.readFileSync(project.infoPlist, 'utf8');
   const saved = readConfig(root).splash;
-  if (!saved) {
-    // UILaunchScreen alone: iOS shows it, but the navigation keeps only a storyboard while the first screen renders.
-    if (
-      plist?.includes('<key>UILaunchScreen</key>') &&
-      !plist.includes('<key>UILaunchStoryboardName</key>')
-    ) {
-      return [
-        {
-          group: 'app',
-          title: 'Launch screen',
-          status: 'warn',
-          detail:
-            'UILaunchScreen in Info.plist: an empty window shows between it and the first screen',
-          fix: SPLASH,
-        },
-      ];
-    }
-    return [];
-  }
+  if (!saved) return [];
+  const plist = project.infoPlist && fs.readFileSync(project.infoPlist, 'utf8');
   const resolved = resolveSettings(root, {}, saved);
   if ('errors' in resolved) {
     return [

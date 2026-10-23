@@ -88,7 +88,9 @@ async function splash({
   }
   const plist = project.infoPlist && fs.readFileSync(project.infoPlist, 'utf8');
   if (plist?.includes('<key>UILaunchScreen</key>')) {
-    command.warn('Info.plist has UILaunchScreen too: remove it, so that iOS shows the storyboard.');
+    command.warn(
+      'Info.plist has UILaunchScreen too: iOS shows it instead of the storyboard; remove it, so that iOS shows the storyboard.'
+    );
   }
   return command.apply(
     [

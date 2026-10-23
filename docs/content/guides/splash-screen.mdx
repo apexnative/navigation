@@ -383,7 +383,7 @@ Keep the whole logo inside the circle, or Android cuts its corners: the command 
 
 <Os name="iOS" /> The navigation keeps the storyboard that `UILaunchStoryboardName` names, whatever is in it. Edit `SplashScreen.storyboard` in Xcode for more than a logo on a color, and don't run `splash` again: it writes the storyboard anew. After a change by hand, delete the app and install it again, as iOS keeps the old launch screen in a cache.
 
-A launch screen made with the `UILaunchScreen` dictionary of `Info.plist`, without a storyboard, shows at launch, but the navigation can't make a copy of it: an empty window shows between it and the first screen. `doctor` warns about it; run `splash`, or name a storyboard.
+A launch screen made with the `UILaunchScreen` dictionary of `Info.plist` is kept the same way: the navigation draws its color, its image and its bars as iOS does, until the first screen. With both keys iOS shows the dictionary, not the storyboard. Of `UILaunchScreens`, the navigation copies the default screen; a launch screen chosen for a link's scheme shows only until the default's copy takes its place. A launch storyboard named only in `UILaunchStoryboards` isn't copied: name it in `UILaunchStoryboardName` too.
 
 <Os name="Android" /> The system splash screen is an icon on a color whatever you do. A splash theme of your own works when it names your app's theme in `apexNavigationPostSplashTheme`, and the background and the logo in `apexNavigationSplashBackground` and `apexNavigationSplashLogo` for the copy, as in [What the command writes](#files).
 

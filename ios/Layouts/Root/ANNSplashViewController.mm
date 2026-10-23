@@ -34,9 +34,63 @@ static NSArray<NSString *> *ANNLegacyLaunchImageNames(CGFloat height) {
     return names;
 }
 
+static NSDictionary *ANNDictionaryOrNil(id value) {
+    return [value isKindOfClass:NSDictionary.class] ? value : nil;
+}
+
+static NSString *ANNStringOrNil(id value) {
+    return [value isKindOfClass:NSString.class] && [value length] > 0 ? value : nil;
+}
+
+// The definition that a plural key (`UILaunchScreens`, `UILaunchStoryboards`) marks as its default.
+static NSDictionary *ANNDefaultDefinition(id plural, NSString *definitionsKey,
+                                          NSString *identifierKey, NSString *defaultKey) {
+    NSDictionary *dictionary = ANNDictionaryOrNil(plural);
+    NSArray *definitions = dictionary[definitionsKey];
+    NSString *defaultIdentifier = ANNStringOrNil(dictionary[defaultKey]);
+    if (![definitions isKindOfClass:NSArray.class] || !defaultIdentifier) {
+        return nil;
+    }
+    for (id definition in definitions) {
+        NSDictionary *entry = ANNDictionaryOrNil(definition);
+        if ([entry[identifierKey] isEqual:defaultIdentifier]) {
+            return entry;
+        }
+    }
+    return nil;
+}
+
+// The launch screen that iOS builds from the Info.plist without a storyboard, or nil when it shows a storyboard. Of
+// `UILaunchStoryboardName`, `UILaunchScreen`, the default of `UILaunchStoryboards` and the default of
+// `UILaunchScreens`, the last one present wins (SplashBoard's `XBApplicationLaunchCompatibilityInfo`). A launch by a
+// link that `UILaunchScreens` maps to a screen of its own still gets the default here.
+static NSDictionary *ANNLaunchScreenConfiguration(NSBundle *bundle) {
+    NSDictionary *screen =
+        ANNDefaultDefinition([bundle objectForInfoDictionaryKey:@"UILaunchScreens"],
+                             @"UILaunchScreenDefinitions", @"UILaunchScreenIdentifier",
+                             @"UIDefaultLaunchScreen");
+    if (screen) {
+        return screen;
+    }
+    if (ANNDefaultDefinition([bundle objectForInfoDictionaryKey:@"UILaunchStoryboards"],
+                             @"UILaunchStoryboardDefinitions", @"UILaunchStoryboardIdentifier",
+                             @"UIDefaultLaunchStoryboard")) {
+        return nil;
+    }
+    return ANNDictionaryOrNil([bundle objectForInfoDictionaryKey:@"UILaunchScreen"]);
+}
+
 @implementation ANNSplashViewController {
     UIViewController *_content;
     UIView *_contentView;
+    NSDictionary *_launchScreen;
+    // The parts of a launch screen built from `UILaunchScreen`, laid out once the safe area is known.
+    UIImageView *_imageView;
+    BOOL _imageRespectsSafeArea;
+    UINavigationBar *_navigationBar;
+    UIImageView *_navigationBarImageView;
+    UIView *_bottomBar;
+    UIImageView *_bottomBarImageView;
 }
 
 - (instancetype)initWithContent:(UIViewController *)content
@@ -52,6 +106,12 @@ static NSArray<NSString *> *ANNLegacyLaunchImageNames(CGFloat height) {
 
 + (instancetype)launchScreenCopyWithBounds:(CGRect)bounds {
     NSBundle *bundle = NSBundle.mainBundle;
+    NSDictionary *launchScreen = ANNLaunchScreenConfiguration(bundle);
+    if (launchScreen) {
+        ANNSplashViewController *copy = [[self alloc] initWithContent:nil contentView:nil blank:NO];
+        copy->_launchScreen = launchScreen;
+        return copy;
+    }
     NSString *storyboardName = [bundle objectForInfoDictionaryKey:@"UILaunchStoryboardName"];
     if ([storyboardName isKindOfClass:NSString.class] && storyboardName.length > 0) {
         UIViewController *initial = nil;
@@ -97,6 +157,10 @@ static NSArray<NSString *> *ANNLegacyLaunchImageNames(CGFloat height) {
         view.backgroundColor = windowHasColor ? UIColor.clearColor : UIColor.systemBackgroundColor;
         return;
     }
+    if (_launchScreen) {
+        [self buildLaunchScreen];
+        return;
+    }
     UIView *contentView = _contentView;
     if (_content) {
         [self addChildViewController:_content];
@@ -107,6 +171,89 @@ static NSArray<NSString *> *ANNLegacyLaunchImageNames(CGFloat height) {
         UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     [view addSubview:contentView];
     [_content didMoveToParentViewController:self];
+}
+
+#pragma mark - The launch screen of `UILaunchScreen`
+
+// Built as SplashBoard builds it: the named color over the whole screen, else the system background; the named image
+// at its own size in the middle of the screen or of its safe area, stretched instead when the asset has slicing; a tab
+// bar or a toolbar at the bottom and a navigation bar at the top, the system's own bars, or the bar's named image
+// stretched over the bar's place. A name the asset catalog doesn't have leaves its part out, as iOS does.
+- (void)buildLaunchScreen {
+    UIView *view = self.view;
+    NSString *colorName = ANNStringOrNil(_launchScreen[@"UIColorName"]);
+    UIColor *color = colorName ? [UIColor colorNamed:colorName] : nil;
+    view.backgroundColor = color ?: UIColor.systemBackgroundColor;
+
+    NSString *imageName = ANNStringOrNil(_launchScreen[@"UIImageName"]);
+    UIImage *image = imageName ? [UIImage imageNamed:imageName] : nil;
+    if (image) {
+        _imageView = [[UIImageView alloc] initWithImage:image];
+        _imageView.contentMode = UIEdgeInsetsEqualToEdgeInsets(image.capInsets, UIEdgeInsetsZero)
+                                     ? UIViewContentModeCenter
+                                     : UIViewContentModeScaleToFill;
+        id respects = _launchScreen[@"UIImageRespectsSafeAreaInsets"];
+        _imageRespectsSafeArea = [respects respondsToSelector:@selector(boolValue)] &&
+                                 [respects boolValue];
+        [view addSubview:_imageView];
+    }
+
+    // A toolbar takes the bottom before a tab bar; a navigation bar comes on top of either.
+    id toolbar = _launchScreen[@"UIToolbar"];
+    id tabBar = _launchScreen[@"UITabBar"];
+    if (toolbar || tabBar) {
+        _bottomBar = toolbar ? [UIToolbar new] : [UITabBar new];
+        _bottomBarImageView = [self addBar:_bottomBar configuration:toolbar ?: tabBar];
+    }
+    id navigationBar = _launchScreen[@"UINavigationBar"];
+    if (navigationBar) {
+        _navigationBar = [UINavigationBar new];
+        _navigationBarImageView = [self addBar:_navigationBar configuration:navigationBar];
+    }
+}
+
+// Adds the bar, or its image in its place when its configuration names one that loads.
+- (UIImageView *)addBar:(UIView *)bar configuration:(id)configuration {
+    NSString *name = ANNStringOrNil(ANNDictionaryOrNil(configuration)[@"UIImageName"]);
+    UIImage *image = name ? [UIImage imageNamed:name] : nil;
+    UIImageView *imageView = image ? [[UIImageView alloc] initWithImage:image] : nil;
+    bar.hidden = imageView != nil;
+    [self.view addSubview:bar];
+    if (imageView) {
+        [self.view addSubview:imageView];
+    }
+    return imageView;
+}
+
+// The safe area is known only in the window, so the parts are laid out here, after every change of it.
+- (void)viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+    if (!_launchScreen) {
+        return;
+    }
+    CGRect bounds = self.view.bounds;
+    UIEdgeInsets safeArea = self.view.safeAreaInsets;
+    _imageView.frame =
+        _imageRespectsSafeArea ? UIEdgeInsetsInsetRect(bounds, safeArea) : bounds;
+    [self layOutBar:_bottomBar imageView:_bottomBarImageView atBottom:YES];
+    [self layOutBar:_navigationBar imageView:_navigationBarImageView atBottom:NO];
+}
+
+// A bar is as tall as UIKit makes it, plus the safe area on its edge of the screen, and as wide as the screen.
+- (void)layOutBar:(UIView *)bar
+        imageView:(UIImageView *)imageView
+         atBottom:(BOOL)atBottom {
+    if (!bar) {
+        return;
+    }
+    CGRect bounds = self.view.bounds;
+    UIEdgeInsets safeArea = self.view.safeAreaInsets;
+    CGFloat height = [bar sizeThatFits:bounds.size].height +
+                     (atBottom ? safeArea.bottom : safeArea.top);
+    CGFloat y = atBottom ? CGRectGetMaxY(bounds) - height : CGRectGetMinY(bounds);
+    CGRect frame = CGRectMake(CGRectGetMinX(bounds), y, CGRectGetWidth(bounds), height);
+    bar.frame = frame;
+    imageView.frame = frame;
 }
 
 #pragma mark - The status bar, as the launch screen had it
