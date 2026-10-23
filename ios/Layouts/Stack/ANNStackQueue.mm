@@ -371,12 +371,13 @@ static NSArray<UIViewController *> *ANNTopFirst(NSArray<UIViewController *> *ent
 
 - (void)noneWithValue:(id)value
                answer:(ANNCommandAnswer *)answer
+                 what:(NSString *)what
           componentId:(NSString *)componentId
                source:(UIViewController *)source {
     ANNAssertMainQueue();
     ANNStackOperation *operation = [self operationOfKind:ANNStackOperationNone
                                                   answer:answer
-                                                    what:@"pop"
+                                                    what:what
                                              componentId:componentId
                                                   source:source];
     operation.value = value;

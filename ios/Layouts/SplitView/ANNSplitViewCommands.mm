@@ -45,17 +45,26 @@ static BOOL ANNIsOnScreen(UIViewController *node) {
 
 @class ANNColumnRequest;
 
+// A request the newest of its column superseded: its answer and the id it resolves with, its own screen's (each
+// `showInColumn` answers its own screen, as on Android).
+@interface ANNSupersededRequest : NSObject
+@property(nonatomic, strong) ANNCommandAnswer *answer;
+@property(nonatomic, copy) NSString *value;
+@end
+
+@implementation ANNSupersededRequest
+@end
+
 // "The last request of a column" (`showInColumn` step 2): one per split view and column. The newest request decides
-// what the requests it superseded answer: its id, or its rejection.
+// when the requests it superseded answer; each of them resolves with its own screen's id whatever the newest one's
+// outcome, as on Android.
 @interface ANNColumnRecord : NSObject
 @property(nonatomic, weak, nullable) UIViewController *splitView;
 @property(nonatomic, copy) NSString *column;
 // Weakly: what runs the newest request holds it (the waiting requests, the split view's call, the push).
 @property(nonatomic, weak, nullable) ANNColumnRequest *newest;
-@property(nonatomic, strong) NSMutableArray<ANNCommandAnswer *> *superseded;
+@property(nonatomic, strong) NSMutableArray<ANNSupersededRequest *> *superseded;
 @property(nonatomic) BOOL ended;
-@property(nonatomic, copy, nullable) NSString *value;
-@property(nonatomic, copy, nullable) NSString *rejection;
 @end
 
 @implementation ANNColumnRecord
@@ -353,18 +362,23 @@ static NSMapTable<UIViewController *, ANNColumnRecordsOfSplitView *> *ANNColumnR
     [self request:request endedWithValue:nil rejection:text];
 }
 
-// Superseded at its readiness: its screen goes without having shown (no events), and its answer is the newest
-// request's, at once when that answered.
+// Superseded at its readiness: its screen goes without having shown (no events). It answers when the newest request
+// does, at once when that answered, with its own screen's id: the newest one's rejection (a container for a stack
+// column, a split view that went) is about that request only.
 + (void)supersede:(ANNColumnRequest *)request {
     [self leaveWaitingPlace:request];
     request.done = YES;
+    NSString *value = ANNStackAnswerIdOf(request.screen, ANNStackAnswerCommandShowInColumn);
     [request.screen destroy];
     ANNColumnRecord *record = request.record;
     if (record.ended) {
-        [self answer:request.answer value:record.value rejection:record.rejection];
+        [request.answer resolve:value];
         return;
     }
-    [record.superseded addObject:request.answer];
+    ANNSupersededRequest *superseded = [ANNSupersededRequest new];
+    superseded.answer = request.answer;
+    superseded.value = value;
+    [record.superseded addObject:superseded];
 }
 
 // (a) The split view shows the screen in the column: a stack column's screens are replaced without an animation and
@@ -373,14 +387,26 @@ static NSMapTable<UIViewController *, ANNColumnRecordsOfSplitView *> *ANNColumnR
 // `DidDisappear` of the screens that left, `DidAppear` of the new one, the state, then the answer.
 + (void)show:(ANNColumnRequest *)request inSplitView:(UIViewController *)splitView {
     UIViewController *screen = request.screen;
+    UIViewController *columnNode =
+        [(id<ANNLayoutProtocol>)splitView viewControllerOfColumn:request.column];
+    // A stack column takes what a stack takes, a screen or a pair; any other layout rejects `columnIsStack`, as on
+    // Android. A column that is a screen alone takes any layout in its place.
+    if ([columnNode isKindOfClass:UINavigationController.class] &&
+        [ANNLayoutValidator checkStackChild:request.layout
+                                    stackId:columnNode.layoutInfo.componentId ?: @""]) {
+        [self leaveWaitingPlace:request];
+        [screen destroy];
+        [self request:request
+            endedWithValue:nil
+                 rejection:[ANNErrorTexts columnIsStack:request.componentId column:request.column]];
+        return;
+    }
     // Before the parking lets go of it, so that UIKit's calls stay silent until the end.
     [ANNAppearanceDispatcher driveAppearanceOf:@[ screen ]];
     request.driven = YES;
     [self leaveWaitingPlace:request];
     // A screen alone in a column has the split view as its parent by the layout (UIKit puts it into a navigation
     // controller of its own); a stack column's stack is its parent.
-    UIViewController *columnNode =
-        [(id<ANNLayoutProtocol>)splitView viewControllerOfColumn:request.column];
     if (columnNode && ![columnNode isKindOfClass:UINavigationController.class]) {
         [screen setExplicitLayoutParent:splitView];
     }
@@ -485,7 +511,8 @@ static NSMapTable<UIViewController *, ANNColumnRecordsOfSplitView *> *ANNColumnR
 
 #pragma mark - The answers
 
-// The request answers once; when it is the newest of its column, the requests it superseded answer the same.
+// The request answers once; when it is the newest of its column, the requests it superseded answer then, each with its
+// own screen's id.
 + (void)request:(ANNColumnRequest *)request
     endedWithValue:(NSString *)value
          rejection:(NSString *)rejection {
@@ -499,13 +526,11 @@ static NSMapTable<UIViewController *, ANNColumnRecordsOfSplitView *> *ANNColumnR
         return;
     }
     record.ended = YES;
-    record.value = value;
-    record.rejection = rejection;
     record.newest = nil;
-    NSArray<ANNCommandAnswer *> *superseded = [record.superseded copy];
+    NSArray<ANNSupersededRequest *> *superseded = [record.superseded copy];
     [record.superseded removeAllObjects];
-    for (ANNCommandAnswer *answer in superseded) {
-        [self answer:answer value:value rejection:rejection];
+    for (ANNSupersededRequest *each in superseded) {
+        [each.answer resolve:each.value];
     }
     // A request that begins from now on starts a record of its own.
     UIViewController *splitView = record.splitView;

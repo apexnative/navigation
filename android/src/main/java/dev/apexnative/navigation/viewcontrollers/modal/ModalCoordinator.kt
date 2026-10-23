@@ -731,7 +731,7 @@ internal class ModalCoordinator(
     // without the events not sent yet; what waits for it rejects, the layer it took out comes back, and the modals that
     // wait go on.
     private fun dismissFailed(record: ModalRecord, e: Throwable) {
-        val text = ErrorTexts.couldNot("dismiss the modal of the screen '${record.rootId}'", ErrorTexts.reasonOf(e))
+        val text = ErrorTexts.couldNot("dismiss the modal '${record.rootId}'", ErrorTexts.reasonOf(e))
         val listed = record in records
         val under = layerUnder(record)
         runCatching { record.stopAnimation?.invoke() }
@@ -835,8 +835,8 @@ internal class ModalCoordinator(
             State.Presenting -> record.waitingDismissals += dismissal
             State.Shown -> if (isTop(record)) beginDismissal(record, dismissal) else closeBelow(record, dismissal)
             State.Dismissing -> dismissal.answer?.let(record.answers::add)
-            State.ClosedBelow -> dismissal.answer?.resolve(record.rootId)
-            State.WithOldRoot, State.Gone -> dismissal.answer?.reject(ErrorTexts.screenNotShown(record.rootId))
+            // It went already, or goes with the old root: the dismissal just completes, as on iOS.
+            State.ClosedBelow, State.WithOldRoot, State.Gone -> dismissal.answer?.resolve(record.rootId)
         }
     }
 
@@ -850,7 +850,7 @@ internal class ModalCoordinator(
         record.state = State.Gone
         records.remove(record)
         views.remove(record)
-        val screen = AppearanceDispatcher.visibleNode(record.root)
+        val screen = AppearanceDispatcher.modalScreen(record.root)
         record.showAnswer?.resolve(record.rootId)
         record.showAnswer = null
         record.chain?.let {
@@ -1012,7 +1012,7 @@ internal class ModalCoordinator(
         val wasOut = isOut(revealed)
         val counted = members.filter { it.state != State.ClosedBelow && !it.reported }
         batch.count = counted.size
-        batch.screen = counted.lastOrNull()?.let { AppearanceDispatcher.visibleNode(it.root) }
+        batch.screen = counted.lastOrNull()?.let { AppearanceDispatcher.modalScreen(it.root) }
         // The top that leaves with its animation: one already leaving keeps its own.
         val top = members.lastOrNull { it.state in ANIMATED_IN_BATCH }
         batch.top = top

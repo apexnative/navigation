@@ -9,11 +9,15 @@ import dev.apexnative.navigation.options.SplitViewOptions
 import dev.apexnative.navigation.options.params.Bool
 import dev.apexnative.navigation.options.params.Fraction
 import dev.apexnative.navigation.options.params.Text
+import dev.apexnative.navigation.react.CommandListener
+import dev.apexnative.navigation.react.ErrorTexts
 import dev.apexnative.navigation.react.events.DispatcherFixture
 import dev.apexnative.navigation.react.events.EventEmitter
 import dev.apexnative.navigation.viewcontrollers.child.ChildControllersRegistry
 import dev.apexnative.navigation.viewcontrollers.navigator.LayoutFactory
 import dev.apexnative.navigation.viewcontrollers.parent.ShowsColumns
+import dev.apexnative.navigation.viewcontrollers.stack.StackController
+import dev.apexnative.navigation.viewcontrollers.stack.StackPresenter
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.TestLayout
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.TestScreen
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.ViewController
@@ -60,10 +64,10 @@ class SplitViewControllerTest {
 
     private fun screen(id: String) = node(LayoutType.Component, id, emptyList())
 
-    // A split view of two screens of the unit tests, in a layout that keeps what its children merged.
-    private inner class Made {
+    // A split view of two screens of the unit tests (or [secondary] given), in a layout that keeps what its children
+    // merged.
+    private inner class Made(val secondary: ViewController<*> = TestScreen(activity, registry, "Details1")) {
         val primary = TestScreen(activity, registry, "Home1")
-        val secondary = TestScreen(activity, registry, "Details1")
         val presenter = SplitViewPresenter(activity)
         val split = SplitViewController(
             activity,
@@ -154,5 +158,79 @@ class SplitViewControllerTest {
         assertSame(made.secondary, made.split.currentChild)
         assertEquals(listOf(made.secondary), made.split.visibleChildren())
         assertEquals(listOf(made.secondary), made.split.waitedChildren())
+    }
+
+    // `showInColumn` in the split view, before its view: the column's checks and what takes the column.
+
+    private class Answer : CommandListener {
+        val got = mutableListOf<String>()
+
+        override fun onSuccess(childId: String) {
+            got += "success:$childId"
+        }
+
+        override fun onError(message: String) {
+            got += "error:$message"
+        }
+    }
+
+    @Test
+    fun aColumnTheSplitViewDoesntHaveRejects() {
+        val made = Made()
+        val answer = Answer()
+        val screen = TestScreen(activity, registry, "Profile1")
+        assertTrue(made.split.showScreen(screen, "inspector", true, made.secondary, answer))
+        assertEquals(listOf("error:${ErrorTexts.noSuchColumn("Details1", "inspector")}"), answer.got)
+        assertFalse(made.secondary.isDestroyed)
+        assertSame(made.secondary, made.split.currentChild)
+    }
+
+    @Test
+    fun aScreenTakesTheColumnOfAScreenAloneAndTheOldOneGoes() {
+        val made = Made()
+        val answer = Answer()
+        val screen = TestScreen(activity, registry, "Profile1")
+        assertTrue(made.split.showScreen(screen, "secondary", true, made.secondary, answer))
+        assertEquals(listOf("success:Profile1"), answer.got)
+        assertTrue(made.secondary.isDestroyed)
+        assertNull(registry.find("Details1"))
+        assertSame(made.split, screen.parentController)
+        assertSame(screen, made.split.currentChild)
+        assertEquals(listOf(made.primary, screen), made.split.childControllers.toList())
+    }
+
+    @Test
+    fun theSplitViewShowsInItsPrimaryColumnToo() {
+        val made = Made()
+        val answer = Answer()
+        val screen = TestScreen(activity, registry, "Settings1")
+        assertTrue(made.split.showScreen(screen, "primary", true, made.secondary, answer))
+        assertEquals(listOf("success:Settings1"), answer.got)
+        assertTrue(made.primary.isDestroyed)
+        assertEquals(listOf(screen, made.secondary), made.split.childControllers.toList())
+    }
+
+    @Test
+    fun aContainerTakesTheColumnOfAScreenAlone() {
+        val made = Made()
+        val answer = Answer()
+        val stack = TestLayout(activity, registry, "Stack2")
+        stack.add(TestScreen(activity, registry, "Profile1"))
+        assertTrue(made.split.showScreen(stack, "secondary", false, made.secondary, answer))
+        assertEquals(listOf("success:Stack2"), answer.got)
+        assertTrue(made.secondary.isDestroyed)
+        assertSame(made.split, stack.parentController)
+    }
+
+    @Test
+    fun aStackColumnRejectsAContainer() {
+        val column = StackController(activity, registry, "Stack1", StackPresenter(activity), Options())
+        val made = Made(secondary = column)
+        val answer = Answer()
+        val tabs = TestLayout(activity, registry, "Tabs2")
+        assertTrue(made.split.showScreen(tabs, "secondary", false, made.primary, answer))
+        assertEquals(listOf("error:${ErrorTexts.columnIsStack("Home1", "secondary")}"), answer.got)
+        assertFalse(column.isDestroyed)
+        assertSame(column, made.split.currentChild)
     }
 }

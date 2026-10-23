@@ -28,7 +28,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 #pragma mark - The contract
 
-/// `ANN.AppLaunched`, without a payload. While JavaScript has no listener of it, it is kept and goes once JavaScript
+/// `ANN.AppLaunched`, with an empty payload. While JavaScript has no listener of it, it is kept and goes once JavaScript
 /// adds the first one. Main queue.
 - (void)sendAppLaunched;
 

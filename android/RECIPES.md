@@ -31,8 +31,10 @@ The steps for adding an option and for adding a command to the Android core; rea
 4. New layout fields are read and checked in `LayoutReader`; checks against what shows are in `LayoutChecks` or in the
    command, before any node is made. Every rejection text is a function in `ErrorTexts` (same words as iOS),
    made by `node scripts/contract.mjs` from `src/interfaces/contract/errors.json`: a new text goes there.
-5. The answer goes through `CommandAnswer`: add the name to `COMPLETED_COMMANDS` when the command changes what shows
-   (then the state, the promise and `CommandCompleted` follow in that order). A transition ends through
+5. The answer goes through `CommandAnswer`: give the command its entry in `src/interfaces/contract/commands.json`
+   (what it resolves with, `state` when it may change what shows, `completed` when it shows or dismisses) and run
+   `node scripts/contract.mjs`, which makes `CommandContract` (then the state, the promise and `CommandCompleted` follow
+   in that order). A transition ends through
    `AppearanceDispatcher.endTransition`.
 6. Tests: `CommandRunnerTest`, `CommandAnswerTest`, `ErrorTextsTest`, `LayoutReaderTest`; a stack operation also needs a
    case in the queue tests (`StackQueueHarness`).

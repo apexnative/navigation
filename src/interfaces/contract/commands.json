@@ -1,0 +1,101 @@
+{
+  "description": "Every command with a promise (an async method of src/adapters/NativeANNTurboModule.ts): what it resolves with, whether the navigation state goes before its answer (`state`), and whether `ANN.CommandCompleted` follows the answer (`completed`). scripts/contract.mjs makes ios/Contract/ANNCommandContract.{h,mm} and android/.../react/CommandContract.kt from it, and fails when a command of the spec is missing here or a command here is not in the spec.",
+  "commands": [
+    {
+      "name": "setRoot",
+      "resolves": "the id of the root, once the root and the layout's modals and overlays show",
+      "state": true,
+      "completed": true
+    },
+    {
+      "name": "push",
+      "resolves": "the id of the screen that shows; of a pair, the pair's id",
+      "state": true,
+      "completed": true
+    },
+    {
+      "name": "preparePush",
+      "resolves": "the frame `{ width, height, padding }` of the prepared screen, or null; always null on iOS",
+      "state": false,
+      "completed": false
+    },
+    {
+      "name": "pop",
+      "resolves": "the id of the screen that went",
+      "state": true,
+      "completed": true
+    },
+    {
+      "name": "popTo",
+      "resolves": "the id of the screen it went back to",
+      "state": true,
+      "completed": true
+    },
+    {
+      "name": "popToRoot",
+      "resolves": "the id of the first screen of the stack",
+      "state": true,
+      "completed": true
+    },
+    {
+      "name": "setStackRoot",
+      "resolves": "the id of the new top screen",
+      "state": true,
+      "completed": true
+    },
+    {
+      "name": "showModal",
+      "resolves": "the id of the modal's root",
+      "state": true,
+      "completed": true
+    },
+    {
+      "name": "dismissModal",
+      "resolves": "the id of the modal's root",
+      "state": true,
+      "completed": true
+    },
+    {
+      "name": "dismissAllModals",
+      "resolves": "an empty string",
+      "state": true,
+      "completed": true
+    },
+    {
+      "name": "showOverlay",
+      "resolves": "the id of the overlay's root",
+      "state": true,
+      "completed": true
+    },
+    {
+      "name": "dismissOverlay",
+      "resolves": "the id of the overlay's root",
+      "state": true,
+      "completed": true
+    },
+    {
+      "name": "dismissAllOverlays",
+      "resolves": "an empty string",
+      "state": true,
+      "completed": true
+    },
+    {
+      "name": "showInColumn",
+      "resolves": "the id of the screen that shows",
+      "state": true,
+      "completed": true
+    },
+    {
+      "name": "setColumnShown",
+      "resolves": "nothing once the columns stopped moving (`undefined` on iOS, `null` on Android)",
+      "state": true,
+      "completed": false
+    },
+    {
+      "name": "getLaunchLink",
+      "resolves": "the link that launched the app, or null",
+      "state": false,
+      "completed": false
+    }
+  ]
+}

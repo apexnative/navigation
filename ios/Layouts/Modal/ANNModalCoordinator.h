@@ -25,7 +25,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// `dismissModal`: the record of `componentId` (its root's id or any id inside, also of a modal closed below or by the
 /// user), the options merged into its visible screen, the animation from the command's screen, then its state decides.
-/// Answers with the root's id.
+/// Answers with the root's id. The last modal over no root rejects `[ANNErrorTexts modalWithoutRoot:]`, as on Android.
 + (void)dismissModal:(NSString *)componentId
              options:(nullable NSDictionary *)options
               answer:(ANNCommandAnswer *)answer;

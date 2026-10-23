@@ -38,8 +38,15 @@ class StackColumnsTest {
 
     private fun rejection(): String? = h.events().firstOrNull { " reject " in it }?.substringAfter(" reject ")
 
-    private fun showInColumn(from: String, id: String, type: LayoutType = LayoutType.Component, key: String? = null) =
-        h.commands.showInColumn(from, h.layout(id, key = key, type = type), h.answer("showInColumn"), "show '$id'")
+    private fun showInColumn(
+        from: String,
+        id: String,
+        type: LayoutType = LayoutType.Component,
+        key: String? = null,
+        column: String = "secondary",
+    ) = h.commands.showInColumn(
+        from, column, h.layout(id, key = key, type = type), h.answer("showInColumn"), "show '$id'",
+    )
 
     // showInColumn.
 
@@ -50,6 +57,8 @@ class StackColumnsTest {
         val made = h.registry.find("B")
         assertSame(made, columns.shown)
         assertSame(h.registry.find("A"), columns.from)
+        assertEquals("secondary", columns.column)
+        assertEquals(true, columns.goesInStack)
         // Nothing until the pane stopped.
         assertTrue(h.events().isEmpty())
         columns.listener?.onSuccess("B")
@@ -61,7 +70,7 @@ class StackColumnsTest {
         h.start(h.screen("A"))
         showInColumn("A", "B")
         val made = columns.shown ?: error("B")
-        val text = ErrorTexts.columnNotStack("A", "secondary")
+        val text = ErrorTexts.noSuchColumn("A", "inspector")
         columns.listener?.onError(text)
         assertEquals(text, rejection())
         assertTrue(made.isDestroyed)
@@ -146,15 +155,31 @@ class StackColumnsTest {
     }
 
     @Test
-    fun anIdThatShowsAndAContainerRejectBeforeAnyNode() {
+    fun anIdThatShowsRejectsBeforeAnyNode() {
         h.start(h.screen("A"))
         showInColumn("A", "A")
         assertEquals(ErrorTexts.alreadyShown("A"), rejection())
-        h.clear()
+        assertNull(columns.shown)
+    }
+
+    @Test
+    fun aContainerGoesToTheSplitViewWhichDecidesWhatItsColumnTakes() {
+        h.start(h.screen("A"))
+        showInColumn("A", "Stack2", type = LayoutType.Stack, column = "primary")
+        assertSame(h.registry.find("Stack2"), columns.shown)
+        assertEquals("primary", columns.column)
+        assertEquals(false, columns.goesInStack)
+    }
+
+    @Test
+    fun aContainerPushedForTheCompactLayoutRejectsAsAPushAndGoes() {
+        h.start(h.screen("A"))
+        columns.takes = false
         showInColumn("A", "Stack2", type = LayoutType.Stack)
         assertEquals(ErrorTexts.stackTakesScreens(STACK, "Stack"), rejection())
+        assertTrue(columns.shown?.isDestroyed == true)
         assertNull(h.registry.find("Stack2"))
-        assertNull(columns.shown)
+        assertEquals(listOf("A"), h.entries())
     }
 
     @Test
@@ -198,6 +223,8 @@ class StackColumnsTest {
         var takes = true
         var fails = false
         var shown: ViewController<*>? = null
+        var column: String? = null
+        var goesInStack: Boolean? = null
         var from: ViewController<*>? = null
         var listener: CommandListener? = null
         val columnCalls = mutableListOf<String>()
@@ -205,10 +232,14 @@ class StackColumnsTest {
 
         override fun showScreen(
             screen: ViewController<*>,
+            column: String,
+            goesInStack: Boolean,
             from: ViewController<*>,
             listener: CommandListener,
         ): Boolean {
             shown = screen
+            this.column = column
+            this.goesInStack = goesInStack
             this.from = from
             if (fails) error("the split view failed")
             if (!takes) return false

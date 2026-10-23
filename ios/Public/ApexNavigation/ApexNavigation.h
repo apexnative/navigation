@@ -37,7 +37,7 @@ NS_SWIFT_NAME(NativeScreenContext)
 
 /**
  * Runs a command of the navigation from this screen in JS, as `useNavigation()` of a React screen does: push, pop,
- * popTo, popToRoot, showInColumn, showModal, dismiss, showOverlay, dismissOverlay, setOptions, selectTab, setTabBadge.
+ * popTo, popToRoot, showInColumn, showModal, dismiss, showOverlay, setOptions, selectTab, setTabBadge.
  * `arguments` are those of the JS command; `completion` gets what it resolved with.
  *
  * ```swift

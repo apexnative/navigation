@@ -232,6 +232,17 @@ class StackCommandsTest {
         assertTrue("popToRoot1 resolve A" in h.events())
     }
 
+    // showInColumn out of a split view: a push.
+
+    @Test
+    fun showInColumnOutOfASplitViewRejectsAContainerBeforeAnyNode() {
+        h.start(h.screen("A"))
+        h.commands.showInColumn("A", "secondary", h.layout("Tabs1", type = LayoutType.BottomTabs),
+            h.answer("showInColumn"), "show")
+        assertEquals(ErrorTexts.stackTakesScreens(STACK, "BottomTabs"), rejection())
+        assertNull(h.registry.find("Tabs1"))
+    }
+
     // setStackRoot.
 
     private fun setStackRoot(from: String, vararg ids: String) = h.commands.setStackRoot(
@@ -265,6 +276,27 @@ class StackCommandsTest {
         assertTrue("popped:A" !in h.events())
         assertTrue(a.isDestroyed)
         assertEquals(listOf("A", "C"), h.entries())
+    }
+
+    @Test
+    fun setStackRootRejectsTheStacksOwnId() {
+        h.start(h.screen("A"))
+        setStackRoot("A", STACK)
+        assertEquals(ErrorTexts.alreadyShown(STACK), rejection())
+        assertEquals(listOf("A"), h.entries())
+    }
+
+    @Test
+    fun setStackRootRejectsAnIdOfAScreenThatIsNoLongerAnEntry() {
+        val b = h.screen("B")
+        h.start(h.screen("A"), b)
+        h.pop(b)
+        // B is still on its way out: JavaScript sees it gone, its id isn't free yet.
+        assertEquals(listOf("A"), h.entries())
+        assertSame(b, h.registry.find("B"))
+        setStackRoot("A", "B")
+        assertEquals(ErrorTexts.alreadyShown("B"), rejection())
+        h.display.finishAll()
     }
 
     @Test

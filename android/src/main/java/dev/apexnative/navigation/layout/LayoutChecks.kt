@@ -47,5 +47,9 @@ internal object LayoutChecks {
      */
     @JvmStatic
     fun checkStackChild(node: LayoutNode, stackId: String): String? =
-        if (node.type in stackChildren) null else ErrorTexts.stackTakesScreens(stackId, node.type.jsName)
+        if (isStackChild(node)) null else ErrorTexts.stackTakesScreens(stackId, node.type.jsName)
+
+    /** Whether a stack takes [node]: a screen, a native screen or a pair, not a container. */
+    @JvmStatic
+    fun isStackChild(node: LayoutNode): Boolean = node.type in stackChildren
 }

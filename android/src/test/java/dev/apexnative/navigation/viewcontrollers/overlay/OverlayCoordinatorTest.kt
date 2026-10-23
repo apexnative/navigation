@@ -229,20 +229,29 @@ class OverlayCoordinatorTest {
     }
 
     @Test
-    fun dismissOverlayTakesTheRootsIdOnly() {
+    fun dismissOverlayRejectsAnIdInNoOverlay() {
         val stack = TestLayout(activity, registry, "Overlay1")
         stack.add(screen("Inner"))
         show(stack)
+        screen("Elsewhere")
         entries.clear()
-        overlays.dismiss("Inner", answer("dismissOverlay"))
+        overlays.dismiss("Elsewhere", answer("dismissOverlay"))
         overlays.dismiss("Nobody", answer("dismissOverlay"))
         assertEquals(
             listOf(
-                "reject:${ErrorTexts.notInOverlay("Inner")}",
+                "reject:${ErrorTexts.notInOverlay("Elsewhere")}",
                 "reject:${ErrorTexts.screenNotShown("Nobody")}",
             ),
             entries,
         )
+        assertEquals(listOf(stack), overlays.layers())
+    }
+
+    @Test
+    fun dismissOverlayWithTheRootsIdTakesTheOverlay() {
+        val stack = TestLayout(activity, registry, "Overlay1")
+        stack.add(screen("Inner"))
+        show(stack)
         entries.clear()
         overlays.dismiss("Overlay1", answer("dismissOverlay"))
         assertEquals(
@@ -257,6 +266,43 @@ class OverlayCoordinatorTest {
             entries,
         )
         assertTrue(stack.isDestroyed)
+        assertTrue(overlays.overlays.isEmpty())
+    }
+
+    @Test
+    fun dismissOverlayWithTheIdOfAScreenInsideTakesItsOverlayAndAnswersTheRootsId() {
+        val stack = TestLayout(activity, registry, "Overlay1")
+        stack.add(screen("Inner"))
+        show(stack)
+        entries.clear()
+        overlays.dismiss("Inner", answer("dismissOverlay"))
+        assertEquals(
+            listOf(
+                "didDisappear:Inner",
+                "stateNeeded",
+                "stateNow",
+                "state",
+                "resolve:Overlay1",
+                "completed:dismissOverlay",
+            ),
+            entries,
+        )
+        assertTrue(stack.isDestroyed)
+        assertTrue(overlays.overlays.isEmpty())
+    }
+
+    @Test
+    fun dismissOverlayWithTheIdOfAScreenInsideAWaitingOneCancelsItWithTheRootsId() {
+        val stack = TestLayout(activity, registry, "Overlay1")
+        stack.add(screen("Inner", ready = false))
+        show(stack)
+        entries.clear()
+        overlays.dismiss("Inner", answer("dismissOverlay"))
+        assertEquals(
+            listOf("state", "resolve:Overlay1", "completed:showOverlay", "state", "resolve:Overlay1",
+                "completed:dismissOverlay"),
+            entries,
+        )
         assertTrue(overlays.overlays.isEmpty())
     }
 

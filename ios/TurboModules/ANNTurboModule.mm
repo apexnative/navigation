@@ -139,7 +139,7 @@ RCT_EXPORT_MODULE(ANNTurboModule)
 // navigation has a host. React Native starts its surface once the bundle ran.
 - (void)startHost {
     [ANNCommandRunner runVoid:@"startHost"
-                         what:@"startHost"
+                         what:@"start the host of the slots"
                          body:^{
                            RCTHost *host = [ApexNavigation getHost];
                            if (host) {
@@ -170,22 +170,23 @@ RCT_EXPORT_MODULE(ANNTurboModule)
                          }];
 }
 
-// `mergeOptions`: a node nobody has (not made yet, gone, a reload) takes nothing, without a log; a node of a modal that
-// goes with the old root is not shown (logged). The values that could be read merge even when one couldn't. The whole
-// apply is one Core Animation transaction, closed on any error. Then the modal or the overlay of the node takes the
-// merge once (`mergeOptions` step 5).
+// `mergeOptions`: without the navigation's window it logs `nowhereToShow` (JavaScript keeps the options for the next
+// root); a node nobody has (not made yet, gone, a reload) or a node of a modal that goes with the old root takes
+// nothing, without a log, as on Android. The values that could be read merge even when one couldn't. The whole apply
+// is one Core Animation transaction, closed on any error. Then the modal or the overlay of the node takes the merge
+// once (`mergeOptions` step 5).
 - (void)mergeOptions:(NSString *)componentId options:(NSDictionary *)options {
     NSString *what = ANNWhat(@"merge the options of the screen '%@'", componentId);
     [ANNCommandRunner runVoid:@"mergeOptions"
                          what:what
                          body:^{
-                           UIViewController *node = [ANNNodeRegistry nodeForComponentId:componentId];
-                           if (!node) {
+                           if (!ApexNavigation.mainWindow) {
+                               [ANNCommandRunner logFailure:@"mergeOptions"
+                                                       text:ANNErrorTexts.nowhereToShow];
                                return;
                            }
-                           if ([ANNModalCoordinator isWithOldRoot:node]) {
-                               NSString *text = [ANNErrorTexts screenNotShown:componentId];
-                               [ANNCommandRunner logFailure:@"mergeOptions" text:text];
+                           UIViewController *node = ANNCommandNode(componentId);
+                           if (!node) {
                                return;
                            }
                            NSString *unreadablePath = nil;
@@ -244,13 +245,13 @@ RCT_EXPORT_MODULE(ANNTurboModule)
                      }];
 }
 
-// iOS lays out no screen before its push: always null.
+// iOS lays out no screen before its push: always null (`NSNull`; nil would reach JavaScript as `undefined`).
 - (void)preparePush:(NSString *)commandId
         componentId:(NSString *)componentId
              layout:(NSDictionary *)layout
             resolve:(RCTPromiseResolveBlock)resolve
              reject:(RCTPromiseRejectBlock)reject {
-    [ANNErrorHandler resolve:resolve of:@"preparePush" value:nil];
+    [ANNErrorHandler resolve:resolve of:@"preparePush" value:NSNull.null];
 }
 
 - (void)cancelPreparedPush:(NSString *)componentId {
@@ -551,26 +552,21 @@ RCT_EXPORT_MODULE(ANNTurboModule)
                     check:nil
                      body:^(id layout, ANNCommandAnswer *answer) {
                        // The links module answers once the launch links are known, at once in the background
-                       // (`getLaunchLink`): the URL, or null.
+                       // (`getLaunchLink`): the URL, or null (`NSNull`; nil would reach JavaScript as `undefined`).
                        [ANNDeepLinkQueue takeLaunchLink:^(NSURL *url) {
-                         [answer resolve:url.absoluteString];
+                         [answer resolve:url.absoluteString ?: (id)NSNull.null];
                        }];
                      }];
 }
 
 - (void)updateNativeScreenProps:(NSString *)componentId update:(NSDictionary *)update {
     NSString *what = ANNWhat(@"updateNativeScreenProps for the screen '%@'", componentId);
-    // At once, also during a transition; a node that isn't a native screen, or no node, takes nothing.
+    // At once, also during a transition; a node that isn't a native screen, no node, or a node of a modal that goes
+    // with the old root takes nothing, without a log, as on Android.
     [ANNCommandRunner runVoid:@"updateNativeScreenProps"
                          what:what
                          body:^{
                            UIViewController *node = ANNCommandNode(componentId);
-                           // A node of a modal that goes with the old root is not shown.
-                           if (!node && [ANNNodeRegistry nodeForComponentId:componentId]) {
-                               NSString *text = [ANNErrorTexts screenNotShown:componentId];
-                               [ANNCommandRunner logFailure:@"updateNativeScreenProps" text:text];
-                               return;
-                           }
                            if ([node isKindOfClass:ANNExternalViewController.class]) {
                                [((ANNExternalViewController *)node).nativeScreenContext
                                    applyUpdate:update];

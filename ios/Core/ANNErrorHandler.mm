@@ -23,8 +23,10 @@
     resolve(value);
 }
 
+// A warning, not an error: a failed command without a promise (a `mergeOptions` the screen can't take) is the app's
+// to notice, not a red box over it; Android logs it the same way, without a dialog.
 + (void)logFailureOf:(NSString *)method text:(NSString *)text {
-    RCTLogError(@"[ApexNavigation] %@: %@", method, text);
+    RCTLogWarn(@"[ApexNavigation] %@: %@", method, text);
 }
 
 @end

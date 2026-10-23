@@ -28,7 +28,9 @@ compact? }, children }`, built by `toNativeLayout` (`src/engine/layout.ts`). Typ
 
 ## Adding a command
 
-1. The method in the codegen spec, `src/adapters/NativeANNTurboModule.ts`.
+1. The method in the codegen spec, `src/adapters/NativeANNTurboModule.ts`. A method with a promise also gets its entry
+   in `src/interfaces/contract/commands.json` (what it resolves with, whether the state and `ANN.CommandCompleted`
+   go with its answer); `node scripts/contract.mjs` fails until it has one.
 2. `src/engine/commands.ts`: build the JSON, give the command its id (`nextId`), note where screens go (`places.ts`).
 3. `src/api/commands/`: the public command; `command(name, …)` (`errors.ts`) wraps it, `placeFor` checks what JS
    already knows before it asks the native side.

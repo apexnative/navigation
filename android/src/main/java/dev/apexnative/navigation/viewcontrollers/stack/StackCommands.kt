@@ -105,32 +105,41 @@ internal class StackCommands(
     }
 
     /**
-     * `showInColumn` (Android): [layout] in the secondary pane of the split view of the screen [componentId], or over
-     * that screen in its stack. Before any node: the screen is there, else `the screen '<id>' is not shown`; the push's
-     * checks of the layout (an id that shows already; a container, which the stack of the screen, else its split view,
-     * doesn't take); a screen prepared with the id goes. The screen is made at once, a native screen's view too. The
-     * split view takes it (the answer once its pane stopped, or the rejection of the pane); with the compact layout on
-     * screen, or without a split view, it is pushed over [componentId] in its stack, with the push's answer and errors;
-     * neither: `the screen '<id>' is neither in a split view nor in a stack`. Every rejection after the screen was made
-     * destroys it. Two calls in a row each make their screen the root of the pane in turn, and each answers its own id.
+     * `showInColumn` (Android): [layout] in [column] of the split view of the screen [componentId], or over that screen
+     * in its stack. Before any node: the screen is there, else `the screen '<id>' is not shown`; the layout has no id
+     * that shows already; out of a split view, the push's check of the layout (a container, which the stack doesn't
+     * take); a screen prepared with the id goes. The screen is made at once, a native screen's view too. The split view
+     * takes it — in place of a stack column's screens or of a column's content — with the answer once its pane
+     * stopped, or rejects (a column it doesn't have, a container for a stack column); with the compact layout on
+     * screen, or without a split view, it is pushed over [componentId] in its stack, with the push's checks, answer and
+     * errors; neither: `the screen '<id>' is neither in a split view nor in a stack`. Every rejection after the screen
+     * was made destroys it. Two calls in a row each make their screen the column's content in turn, and each answers
+     * its own id.
      */
-    fun showInColumn(componentId: String, layout: LayoutNode, answer: CommandAnswer, what: String) {
+    fun showInColumn(componentId: String, column: String, layout: LayoutNode, answer: CommandAnswer, what: String) {
         val source = find(componentId)?.takeIf { !prepared.isPrepared(it) }
             ?: return answer.reject(ErrorTexts.screenNotShown(componentId))
         val shown = LayoutChecks.firstShownId(listOf(layout), ::isShown) { false }
         if (shown != null) return answer.reject(ErrorTexts.alreadyShown(shown))
         val columns = nodeWith<ShowsColumns>(source)
         val stack = source as? StackController ?: source.findParentStack()
-        val placeId = stack?.id ?: (columns as? ViewController<*>)?.id
-        placeId?.let { id -> LayoutChecks.checkStackChild(layout, id)?.let { return answer.reject(it) } }
+        // Out of a split view it can only be a push: the stack's check comes before any node.
+        if (columns == null && stack != null) {
+            LayoutChecks.checkStackChild(layout, stack.id)?.let { return answer.reject(it) }
+        }
         if (!factory.canMake(layout)) return answer.reject(ErrorTexts.notDoneYet("showInColumn"))
         prepared.discard(layout.id)
         val node = make(layout)
         try {
-            if (columns?.showScreen(node, source, destroyingOnError(node, answer)) == true) return
+            val goesInStack = LayoutChecks.isStackChild(layout)
+            if (columns?.showScreen(node, column, goesInStack, source, destroyingOnError(node, answer)) == true) return
             if (stack == null) {
                 node.destroy()
                 return answer.reject(ErrorTexts.neitherSplitViewNorStack(componentId))
+            }
+            LayoutChecks.checkStackChild(layout, stack.id)?.let {
+                node.destroy()
+                return answer.reject(it)
             }
             pushMade(stack, source, node, layout, answer, what)
         } catch (e: Throwable) {
@@ -225,8 +234,9 @@ internal class StackCommands(
     fun setStackRoot(componentId: String, layouts: List<LayoutNode>, answer: CommandAnswer, what: String) {
         if (layouts.isEmpty()) return answer.reject(ErrorTexts.noScreensForStack(componentId))
         val stack = stackOf(componentId, answer) ?: return
-        // An id of this stack may come again: the new screen replaces it (`setStackRoot` step 3).
-        val shown = LayoutChecks.firstShownId(layouts, { isShown(it) && !isOf(stack, it) }) { false }
+        // An id of an entry of this stack may come again: the new screen replaces it (`setStackRoot` step 3). The
+        // stack's own id, and a screen an accepted cut or replace took away, show elsewhere or still go: as on iOS.
+        val shown = LayoutChecks.firstShownId(layouts, ::isShown) { isInEntryOf(stack, it.id) }
         if (shown != null) return answer.reject(ErrorTexts.alreadyShown(shown))
         for (layout in layouts) LayoutChecks.checkStackChild(layout, stack.id)?.let { return answer.reject(it) }
         if (!layouts.all(factory::canMake)) return answer.reject(ErrorTexts.notDoneYet("setStackRoot"))
@@ -357,10 +367,10 @@ internal class StackCommands(
     // A node of the registry has [id], and it isn't only prepared for a push (`push` step 1, `preparePush`).
     private fun isShown(id: String): Boolean = registry.find(id)?.let { !prepared.isPrepared(it) } == true
 
-    // The node with [id] is [stack] or in it.
-    private fun isOf(stack: StackController, id: String): Boolean {
-        val node = find(id) ?: return false
-        return node === stack || node.findParentStack() === stack
+    // The node with [id] is in an entry of [stack] as JavaScript sees it (`StackQueue.entries`), not the stack itself.
+    private fun isInEntryOf(stack: StackController, id: String): Boolean {
+        val node = find(id)?.takeIf { it !== stack } ?: return false
+        return stack.entryOf(node)?.let { it in stack.queue.entries } == true
     }
 
     // A node of [layout], with its view made now when it has a native screen: its creator's failure rejects the

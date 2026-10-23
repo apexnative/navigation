@@ -211,7 +211,7 @@ class NavigationTurboModule(reactContext: ReactApplicationContext) : NativeANNTu
         layout: ReadableMap,
         promise: Promise,
     ) {
-        // Android has one column to show screens in: the secondary pane (`showInColumn`).
+        // Android's split view has the primary and the secondary pane; another column rejects (`showInColumn`).
         val what = "show the screen '${LayoutReader.idOf(layout)}' in the '$column' column"
         runner.run(
             name = "showInColumn",
@@ -219,7 +219,7 @@ class NavigationTurboModule(reactContext: ReactApplicationContext) : NativeANNTu
             what = what,
             promise = promise,
             check = { LayoutReader.node(layout, context = appContext()) },
-        ) { node, answer -> navigator().stackCommands.showInColumn(componentId, node, answer, what) }
+        ) { node, answer -> navigator().stackCommands.showInColumn(componentId, column, node, answer, what) }
     }
 
     override fun setColumnShown(
@@ -295,9 +295,10 @@ class NavigationTurboModule(reactContext: ReactApplicationContext) : NativeANNTu
         })
     }
 
-    // The navigation of the activity the command runs in; the runner checked there is one.
+    // The navigation of the activity the command runs in; the runner checked there is an activity. One without its
+    // navigation yet (or any more) has nowhere to show screens either: the command rejects with the runner's own text.
     private fun navigator(): Navigator =
-        requireNotNull(Navigators.current()?.navigator) { "the activity has no navigation" }
+        Navigators.current()?.navigator ?: throw LayoutException(ErrorTexts.nowhereToShow())
 
     // The app's context, which the colors of the options resolve platform colors with.
     private fun appContext(): Context = reactApplicationContext.applicationContext

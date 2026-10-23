@@ -106,7 +106,8 @@ top-level folder. Main thread only, unless a line says otherwise.
   `NavigationStateReporter.kt`; `react/CommandAnswer.kt`.
 - Options (parsing, merging): `options/Options.kt`, `OptionsReader.kt`, `OptionsCache.kt`, `DefaultOptions.kt`,
   `params/`, `parsers/`; `viewcontrollers/viewcontroller/ViewController.kt` (resolution).
-- Error texts: `react/ErrorTexts.kt`, made by `scripts/contract.mjs` from `src/interfaces/contract/errors.json`.
+- Error texts and answers: `react/ErrorTexts.kt` and `react/CommandContract.kt`, made by `scripts/contract.mjs` from
+  `src/interfaces/contract/errors.json` and `commands.json`.
 - Links: `react/LaunchLink.kt`, `NavigationActivity.kt` (`onNewIntent`); `react/StartInfo.kt`.
 - Hinge and regions: `react/Hinge.kt`, `react/ScreenRegions.kt`, `react/ScreenInsets.kt`, `utils/WindowFolds.kt`.
 - Native screens: `nativescreen/NativeScreenContext.kt`, `NativeScreenCalls.kt`, `NativeScreenCreator.kt`;

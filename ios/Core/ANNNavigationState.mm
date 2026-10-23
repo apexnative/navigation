@@ -2,12 +2,12 @@
 #import "ANNAssert.h"
 #import "ANNBottomTabsController.h"
 #import "ANNComponentViewController.h"
+#import "ANNErrorHandler.h"
 #import "ANNErrorTexts.h"
 #import "ANNModalCoordinator.h"
 #import "ANNSlotContainers.h"
 #import "ApexNavigation+Internal.h"
 #import "UIViewController+LayoutProtocol.h"
-#import <React/RCTLog.h>
 
 // Main queue.
 static BOOL ANNUpdateScheduled;
@@ -58,6 +58,10 @@ static BOOL ANNSameValue(id a, id b) {
 }
 
 + (void)updateNow {
+    [self updateNowFor:nil];
+}
+
++ (void)updateNowFor:(NSString *)commandName {
     ANNAssertMainQueue();
     NSString *screenId = nil;
     NSString *name = nil;
@@ -74,8 +78,9 @@ static BOOL ANNSameValue(id a, id b) {
         }
     } @catch (NSException *exception) {
         NSString *reason = exception.reason.length > 0 ? exception.reason : exception.name;
-        RCTLogWarn(@"[ApexNavigation] %@",
-                   [ANNErrorTexts couldNot:@"report the navigation state" reason:reason]);
+        [ANNErrorHandler logFailureOf:commandName ?: @"transition"
+                                 text:[ANNErrorTexts couldNot:@"report the navigation state"
+                                                        reason:reason]];
         return;
     }
     if (ANNHasLastState && ANNSameValue(screenId, ANNLastScreenId) &&
@@ -89,8 +94,8 @@ static BOOL ANNSameValue(id a, id b) {
     [ApexNavigation.eventEmitter sendNavigationStateChanged:screenId name:name tab:tab];
 }
 
-+ (void)reportBeforeAnswer {
-    [self updateNow];
++ (void)reportBeforeAnswerOf:(NSString *)commandName {
+    [self updateNowFor:commandName];
 }
 
 + (void)reset {

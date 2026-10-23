@@ -240,8 +240,9 @@ internal class RootCoordinator(
     /**
      * The activity's layers go: the `setRoot` on its way ends, then the root it replaced, the current root and its root
      * are destroyed, as at any destroy (their events reach only their own JavaScript). [answerPending]: the activity
-     * went, the waiting `setRoot` resolves with `''` (JavaScript sets the root again in the next activity); otherwise
-     * (a reload) it gets no answer.
+     * went; a `setRoot` whose root still waited resolves with `''` (JavaScript sets the root again in the next
+     * activity), one whose root showed (its transition ran, or the modals and overlays of its layout were showing)
+     * resolves with the root's id. Otherwise (a reload) it gets no answer.
      */
     fun destroyAll(answerPending: Boolean) {
         val pending = pending
@@ -256,7 +257,9 @@ internal class RootCoordinator(
         modals.replacedRootGone()
         pending?.let(::releaseState)
         if (pending != null && pending.phase == Phase.Waiting) firstRoot.rootDestroyed()
-        if (answerPending) pending?.answer?.resolve("")
+        if (!answerPending || pending == null) return
+        // An empty id tells JavaScript the root didn't show: its start waits for the next activity and sets it there.
+        pending.answer.resolve(if (pending.phase == Phase.Waiting) "" else pending.root.id)
     }
 
     // Waits for the screens that show when the root shows, then runs its transition. Without `waitForRender` one limit

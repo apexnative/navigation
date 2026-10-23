@@ -60,7 +60,7 @@ Top-level files: `Package.swift` (SwiftPM; `headerFolders` lists every folder wh
 - System bars, orientation, direction — `Core/`: `ANNSystemUI`, `ANNSystemUIRules`, `ANNAppDirection`, `ANNNodePresenter` (the answers to UIKit)
 - Events and state — `Core/`: `ANNEventEmitter`, `ANNEventContract` (names and keys, made by `scripts/contract.mjs`), `ANNAppearanceDispatcher`, `ANNScreenAppearance`, `ANNNavigationState`; `TurboModules/`: `ANNTurboEventEmitter`
 - Options: parsing, merging, defaults — `Options/`: `ANNOptions`, `ANNOptionField`, `ANNOptionsReader`, `ANNDefaultOptions`, `ANNOptionsCache`; `Core/`: `ANNOptionsRepaint`
-- Error texts — `Contract/`: `ANNErrorTexts` (made from `src/interfaces/contract/errors.json` by `scripts/contract.mjs`); `Core/`: `ANNErrorHandler`
+- Error texts and answers — `Contract/`: `ANNErrorTexts` and `ANNCommandContract` (made from `src/interfaces/contract/errors.json` and `commands.json` by `scripts/contract.mjs`); `Core/`: `ANNErrorHandler`
 - Links — `Core/`: `ANNDeepLinkQueue`; the `getLaunchLink` method of `ANNTurboModule`
 - Key commands — `Core/`: `ANNKeyCommands`; `Layouts/Screen/`: `ANNComponentViewController`
 - Hinge, regions — `Core/`: `ANNHinge`; `Layouts/Screen/`: `ANNScreenRegions`; `Layouts/Arrangement/`: `ANNArrangementState`

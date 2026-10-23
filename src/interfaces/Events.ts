@@ -195,11 +195,12 @@ export type HingeState = 'closed' | 'partiallyOpen' | 'fullyOpen' | 'unknown';
  */
 export interface HingeChangedEvent {
   /**
-   * The state of the hinge. On Android `closed` means the device has no fold, or its angle is below 90 degrees.
+   * The state of the hinge. On Android `closed` means the app's window has no fold, or the angle is below 90 degrees,
+   * so a device open flat with a window off the fold (split screen) reports `closed`; Android never gives `unknown`.
    */
   state?: HingeState;
   /**
-   * The angle of the hinge in degrees (on iOS to tenths). Missing when the state is `unknown` and where the system
+   * The angle of the hinge in degrees, to tenths. Missing when the state is `unknown` and where the system
    * gives no angle.
    */
   angle?: number;

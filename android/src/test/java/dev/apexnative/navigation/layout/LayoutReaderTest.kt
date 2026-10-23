@@ -796,6 +796,14 @@ class LayoutReaderTest {
         assertEquals(mapOf("primary" to "A", "secondary" to "C"), node.columnChildren().mapValues { it.value.id })
     }
 
+    @Test
+    fun aSplitViewAtARepeatedColumnNameHasNoColumnAndPasses() {
+        val inner = split("Inner", null, screen("C"), screen("D"))
+        val node = read(split("V", listOf("primary", "secondary", "secondary"), screen("A"), screen("B"), inner))
+        assertEquals(mapOf("primary" to "A", "secondary" to "B"), node.columnChildren().mapValues { it.value.id })
+        assertEquals(3, node.children.size)
+    }
+
     // Options: read once the whole layout passed its checks, depth first.
 
     private fun unreadable(): JavaOnlyMap =

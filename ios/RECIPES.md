@@ -37,6 +37,7 @@ you do exactly that; the map is `ios/CLAUDE.md`.
    thrown with `+[ANNErrorTexts rejection:]`. A new text goes into `src/interfaces/contract/errors.json`, and
    `node scripts/contract.mjs` makes `ANNErrorTexts` (and Android's `ErrorTexts`) from it; never edit them by hand.
 6. **The answer:** end through `ANNAppearanceDispatcher` (`endTransitionHiding:…answer:value:`) or call
-   `-[ANNCommandAnswer resolve:]`; the state and `ANN.CommandCompleted` follow by themselves for the names in
-   `ANNCompletedCommandNames`. Add the name there when the command shows or dismisses.
+   `-[ANNCommandAnswer resolve:]`; the state and `ANN.CommandCompleted` follow by themselves as `ANNCommandContract`
+   says. A new command with a promise gets its entry in `src/interfaces/contract/commands.json` (what it resolves
+   with, `state`, `completed`), then `node scripts/contract.mjs`.
 7. **Android** gets the same command; its tests check the texts.

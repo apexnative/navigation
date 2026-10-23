@@ -22,7 +22,7 @@ import type { ScreenName, ShowArgs } from '../types';
 interface ScreenCommands {
   /** The screen the commands act from. */
   readonly screen: ScreenInfo;
-  /** Shows a screen over this one in its stack; resolves with the id of the screen shown. */
+  /** Shows a screen over this one in its stack; resolves with the id of the screen shown (for a pair, the pair's id). */
   push<Name extends ScreenName>(name: Name, ...args: ShowArgs<Name, PushConfig>): Promise<string>;
   /**
    * Goes back to the screen before this one in its stack. The first screen of a split view column shown over the list

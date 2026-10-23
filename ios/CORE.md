@@ -85,7 +85,7 @@ dispatcher.
    `+[ANNAppearanceDispatcher endTransitionHiding:showing:events:answer:value:]`. In this order: `ComponentDidDisappear`
    of Home, `ComponentDidAppear` of Profile, `ANN.NavigationStateChanged` (`+[ANNNavigationState updateNow]`), the
    transition's `events`, then `-[ANNCommandAnswer resolve:]`: the state again if it changed
-   (`reportBeforeAnswer`), the promise with Profile's id, then `ANN.CommandCompleted`. `finish:` frees the queue for
+   (`reportBeforeAnswerOf:`), the promise with Profile's id, then `ANN.CommandCompleted`. `finish:` frees the queue for
    the next operation.
 
 Events go out through `ANNEventEmitter` on the main queue and reach JS through `ANNTurboEventEmitter`.

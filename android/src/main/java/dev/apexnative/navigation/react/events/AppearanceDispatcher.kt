@@ -391,12 +391,14 @@ internal object AppearanceDispatcher {
 
     /**
      * [modal] went with [count] modals (EVT-ModalDismissed): `ANN.ModalDismissed` with the id and the name of the
-     * screen the modal shows, down its current children.
+     * screen the modal shows, down its current children ([modalScreen]); a modal that shows no screen gives its own id
+     * and no name.
      */
     fun modalDismissed(modal: ViewController<*>, count: Int) {
         if (!ReloadCoordinator.isCurrent(modal.jsGeneration)) return
-        val screen = visibleNode(modal)
-        sender.modalDismissed(screen.id, screen.currentComponentName.orEmpty(), count)
+        val named = modalScreen(modal)
+        val name = if (named is ParentController<*>) "" else named.currentComponentName.orEmpty()
+        sender.modalDismissed(named.id, name, count)
     }
 
     /**
@@ -449,7 +451,7 @@ internal object AppearanceDispatcher {
      * modal shows. Nothing for a JavaScript that went.
      */
     fun modalAttemptedToDismiss(modal: ViewController<*>) {
-        val screen = visibleNode(modal)
+        val screen = modalScreen(modal)
         if (ReloadCoordinator.isCurrent(screen.jsGeneration)) sender.modalAttemptedToDismiss(screen.id)
     }
 
@@ -458,18 +460,26 @@ internal object AppearanceDispatcher {
      * Nothing for a JavaScript that went.
      */
     fun sheetDetentChanged(modal: ViewController<*>, detent: Any) {
-        val screen = visibleNode(modal)
+        val screen = modalScreen(modal)
         if (ReloadCoordinator.isCurrent(screen.jsGeneration)) sender.sheetDetentChanged(screen.id, detent)
     }
 
     /**
      * The screen [node] shows: the node at the end of its current children (the one "visible screen" of the core): what
-     * `ANN.ModalDismissed`, `ANN.ModalAttemptedToDismiss`, `ANN.SheetDetentChanged` and back's
-     * `ANN.NavigationButtonPressed` of a modal name. A layout without a child answers itself.
+     * back's `ANN.NavigationButtonPressed` of a modal names, and, through [modalScreen], its `ANN.ModalDismissed`,
+     * `ANN.ModalAttemptedToDismiss` and `ANN.SheetDetentChanged`. A layout without a child answers itself.
      */
     fun visibleNode(node: ViewController<*>): ViewController<*> {
         var current = node
         while (current is ParentController<*>) current = current.currentChild ?: break
         return current
     }
+
+    /**
+     * The node the events of the modal [modal] (its root) name: its [visibleNode] when that is a screen; the root
+     * itself when the chain ends in a layout without a child, as on iOS. Asked again of what it gave, it gives the
+     * same.
+     */
+    fun modalScreen(modal: ViewController<*>): ViewController<*> =
+        visibleNode(modal).takeUnless { it is ParentController<*> } ?: modal
 }

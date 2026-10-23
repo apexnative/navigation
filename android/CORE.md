@@ -82,7 +82,7 @@ react/events/AppearanceDispatcher ─► NavigationStateReporter ─► EventEmi
    **`ComponentDidAppear`** of Profile, then `reportState` (**`NavigationStateChanged`**, only if it changed), then the
    transition's own events (none for a push), then `CommandAnswer.resolve` with Profile's id.
 9. **Answer.** `resolve` sends the state once more if it changed (`AnswerEvents.beforeAnswer`), resolves the promise,
-   then sends **`CommandCompleted`** (`COMPLETED_COMMANDS`). After the task, `BackCallbackState.update` recomputes what
+   then sends **`CommandCompleted`** (`CommandContract.COMPLETED`). After the task, `BackCallbackState.update` recomputes what
    back does.
 
 The events go from the main thread, synchronously, through `EventEmitter.current()`; the promise is answered once.

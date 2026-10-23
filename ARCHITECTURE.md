@@ -179,7 +179,7 @@ Each rule has one owner. A feature that needs the rule calls the owner; it does 
 
 | Seam                        | iOS                                                                               | Android                                                                                   |
 | --------------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Way in                      | `ANNTurboModule`; every async method through `ANNCommandRunner`                   | `NavigationTurboModule`; every async method through `CommandRunner`                       |
+| Way in                      | `ANNTurboModule`; every async method but `preparePush` through `ANNCommandRunner` | `NavigationTurboModule`; every async method through `CommandRunner`                       |
 | Layout check                | `ANNLayoutReader` on the module queue                                             | `LayoutReader` on the module thread; `LayoutChecks` on main                               |
 | Answer                      | `ANNCommandAnswer`: state, promise, `CommandCompleted`; once                      | `CommandAnswer`: the same, through `AnswerEvents`                                         |
 | Error texts                 | `ANNErrorTexts`, made from `src/interfaces/contract/errors.json`                  | `ErrorTexts`, made from the same file                                                     |
@@ -321,19 +321,23 @@ Before step 5 the state goes once more if it changed since step 3, so JS `await`
 `getState()`. The answer is sent once; nothing is sent for a JavaScript that went. A command without a promise
 (`mergeOptions`) sends no state and no `CommandCompleted`.
 
-**The table.** Both platforms answer from one table: the error texts of `src/interfaces/contract/errors.json` and the
-event names and payload keys of the types in `src/interfaces/` (`Events.ts`, `ComponentEvents.ts`).
-`scripts/contract.mjs` makes `ANNErrorTexts` and `ANNEventContract` (iOS) and `ErrorTexts` and `EventContract`
-(Android) from them; the files are committed, and `scripts/check.sh` fails when one differs from its source. A new
-text or key goes into the source, never into the made files. Which text a case gives and what a command resolves with
-are behavior, kept the same by each platform's code.
+**The table.** Both platforms answer from one table: the error texts of `src/interfaces/contract/errors.json`, the
+commands with a promise in `src/interfaces/contract/commands.json` (checked against the async methods of the spec:
+whether the state and `CommandCompleted` go with each answer, and what each resolves with, written down there), and
+the event names and payload keys of the types in `src/interfaces/` (`Events.ts`, `ComponentEvents.ts`).
+`scripts/contract.mjs` makes `ANNErrorTexts`, `ANNCommandContract` and `ANNEventContract` (iOS) and `ErrorTexts`,
+`CommandContract` and `EventContract` (Android) from them; the files are committed, and `scripts/check.sh` fails when
+one differs from its source. A text, a key or a command's list is never written by hand. Which text a case gives and
+what a command resolves with are behavior, kept by each platform's code (the resolve values are not checked by the
+table): the same on both platforms, apart from what section 6 lists.
 
 **Errors.** A command that fails on the native side rejects its promise with a text from the error table; JS adds
 `[navigation] <command>:`. The check rejects before a node exists; a failure in the body rejects with `could not
 <what>: <reason>`; a failure in a step that runs later (a ready handler, a timer, the end of a transition) is caught by
 the owner's guard and rejects the command too. On iOS an answer that goes away unanswered while its JavaScript runs
 rejects `could not run '<command>': the native core let it go without an answer`, so a path that forgets to answer
-never leaves the promise waiting. A command without a promise writes one line to the log. An exception never ends the app.
+never leaves the promise waiting. A command without a promise writes one line to the log, `[ApexNavigation]
+<command>: <text>` (a warning on iOS, `Log.e` on Android). An exception never ends the app.
 
 ## 6. Where the platforms differ on purpose
 
@@ -359,7 +363,12 @@ themselves.
 - **Events.** iOS sends through the module `ANNTurboEventEmitter`; Android through the device event emitter of the
   React context, and can send without an activity.
 - **Options reading.** iOS reads a tree's options on main (images load there); Android reads layout and options on the
-  module thread and loads images when the options apply.
+  module thread and loads images when the options apply. So an unreadable option rejects on Android before the checks
+  of the body (the screen isn't shown, isn't in a stack, the id shows already); on iOS after them.
+- **Platform-only checks and logs.** Only Android rejects more than 5 tabs (`tooManyTabs`: its tab bar shows at most
+  5); only iOS rejects a pair before iOS 27.1 (`pairUnsupported`). Only Android logs a failed `preparePush`, which iOS
+  answers with `null`. Only iOS has `notAnswered`. A command whose promise resolves with nothing gives JS `undefined`
+  on iOS and `null` on Android (`setColumnShown`).
 - **Prepared push.** `preparePush` lays a screen out before React renders it, so a push can start in the frame the
   content mounts. Android does it (`PreparedPushes`); iOS answers null and the push goes the usual way.
 - **Pair and hinge.** The pair is `UIArrangementViewController` on iOS 27.1 and later (built with that SDK; before it
