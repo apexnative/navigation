@@ -315,8 +315,10 @@ class BottomTabsController(
     private enum class How { Press, Code, Back }
 
     /**
-     * A tap on the tab at [index], on the bar or on its cell of the custom row: its `ANN.BottomTabPressed` first, then
-     * the selection, the repeat, or nothing, as its resolved options say.
+     * A tap on the tab at [index], on the bar or on its cell of the custom row, the one path of both: a switch still
+     * running ends first, with its `ANN.BottomTabSelected`; then this press's `ANN.BottomTabPressed`, then the
+     * selection (`ANN.BottomTabSelected` after the new screen's DidAppear), the repeat (the pop's own events), or
+     * nothing, as its resolved options say. The same order as `-[ANNBottomTabsController pressTabAtIndex:source:]`.
      */
     internal fun onTabPressed(index: Int) {
         if (isDestroyed || index !in tabs.indices) return

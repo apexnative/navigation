@@ -817,7 +817,7 @@ static void ANNStacksOfNode(UIViewController *node, NSMutableArray<ANNStackContr
     if (index >= _tabs.count || self.nodeHelper.destroyed) {
         return NO;
     }
-    [self sendPendingSelected];
+    [self finishEarlierSelection];
     _pressedIndex = NSNotFound;
     // The release of a long press: UIKit would select the tab under the finger.
     if (source == ANNTabPressSourceBar && index == _longPressedIndex) {
@@ -957,6 +957,14 @@ static void ANNStacksOfNode(UIViewController *node, NSMutableArray<ANNStackContr
     [self sendPendingSelected];
 }
 
+// Before anything newer on these tabs (a press, a long press, a More pick, a choice from code): a switch still running
+// ends with its appearances and schedules its `Selected`, and a `Selected` still waiting goes, as Android's
+// `flushPendingSelected` does.
+- (void)finishEarlierSelection {
+    [self endSwitch];
+    [self sendPendingSelected];
+}
+
 - (void)sendPendingSelected {
     if (!_hasPendingSelected) {
         return;
@@ -980,8 +988,8 @@ static void ANNStacksOfNode(UIViewController *node, NSMutableArray<ANNStackContr
     if (index >= _tabs.count || self.nodeHelper.destroyed) {
         return;
     }
-    // A pending `Selected` goes before the event of a later press.
-    [self sendPendingSelected];
+    // A running switch and a pending `Selected` go before the event of a later press.
+    [self finishEarlierSelection];
     if (marksSelection) {
         _longPressedIndex = index;
     }
@@ -1024,7 +1032,7 @@ static void ANNStacksOfNode(UIViewController *node, NSMutableArray<ANNStackContr
 // first, then UIKit's, then the state at once.
 - (void)selectTabFromCode:(NSUInteger)index {
     ANNAssertMainQueue();
-    [self sendPendingSelected];
+    [self finishEarlierSelection];
     _pressedIndex = NSNotFound;
     if (index == _selectedTabIndex || index >= _tabs.count || self.nodeHelper.destroyed) {
         return;
@@ -1235,7 +1243,7 @@ static void ANNStacksOfNode(UIViewController *node, NSMutableArray<ANNStackContr
     if (pick && index == _selectedTabIndex) {
         return;
     }
-    [self sendPendingSelected];
+    [self finishEarlierSelection];
     _pressedIndex = NSNotFound;
     if (pick) {
         [self sendPressedOfTabAtIndex:index wasSelected:NO];

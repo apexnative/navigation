@@ -334,6 +334,21 @@ Before step 5 the state goes once more if it changed since step 3, so JS `await`
 `getState()`. The answer is sent once; nothing is sent for a JavaScript that went. A command without a promise
 (`mergeOptions`) sends no state and no `CommandCompleted`.
 
+**A tab press**, the same for every source (the system bar, the iPad tab strip and sidebar, the custom row, Android's
+Material bar), through one path (`-[ANNBottomTabsController pressTabAtIndex:source:]`,
+`BottomTabsController.onTabPressed`):
+
+1. A switch of the tabs still running ends, with its `BottomTabSelected`.
+2. `BottomTabPressed { tabIndex, bottomTabsId, screenId?, wasSelected }`.
+3. Another tab: `ComponentWillAppear` of its screen; at the end of the switch `ComponentDidDisappear` of the screen
+   that was left and `ComponentDidAppear` of the new one; then `BottomTabSelected`, the left tab's `popToRootOnBlur`
+   (its `ScreenPopped`) and the navigation state, once. The selected tab again: the pop of the user's back to the
+   first screen, or a scroll to the top; with `popToRootOnPress: false` nothing. `selectTabOnPress: false`: nothing.
+4. A long press sends `BottomTabLongPressed` only.
+
+A choice from code (`bottomTabs.currentTabIndex`, `currentTabId`) and Android's back between tabs send the
+appearances and the state, without the press events.
+
 **The table.** Both platforms answer from one table: the error texts of `src/interfaces/contract/errors.json`, the
 commands with a promise in `src/interfaces/contract/commands.json` (checked against the async methods of the spec:
 whether the state and `CommandCompleted` go with each answer, and what each resolves with, written down there), and
