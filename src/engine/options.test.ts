@@ -1,5 +1,5 @@
 import { toNativeOptions } from './options';
-import { propsOf } from './props';
+import { forgetProps, isOptionsComponent, propsOf } from './props';
 
 type Fields = Record<string, any>;
 
@@ -100,5 +100,28 @@ describe('the id of a component in options', () => {
     expect(titleOf(toNativeOptions<Fields>(options)).componentId).not.toBe(
       titleOf(toNativeOptions<Fields>(options)).componentId
     );
+  });
+});
+
+describe('the props of a component in options', () => {
+  it('stay when its root goes, and go with the node', () => {
+    const options = toNativeOptions<Fields>(
+      { topBar: { title: { component: { name: 'Clock', passProps: { count: 3 } } } } },
+      'Component7'
+    );
+    const id = titleOf(options).componentId;
+    expect(isOptionsComponent(id)).toBe(true);
+    expect(propsOf(id)).toEqual({ count: 3 });
+    forgetProps('Component7');
+    expect(propsOf(id)).toEqual({});
+    expect(isOptionsComponent(id)).toBe(false);
+  });
+
+  it('of an id the app gave go with its root as before', () => {
+    toNativeOptions<Fields>(
+      { topBar: { title: { component: { id: 'Title', name: 'Clock' } } } },
+      'Component8'
+    );
+    expect(isOptionsComponent('Title')).toBe(false);
   });
 });
