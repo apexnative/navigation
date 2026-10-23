@@ -379,6 +379,9 @@ class BottomTabsController(
         // A layer that waits for the tabs waits for the tab they show now.
         navigator?.shownScreensChanged(this)
         if (onScreen) AppearanceDispatcher.beginTransition(listOf(shown))
+        // From code and by back the state goes at once, as on iOS: `selectTab` resolves on it, and the command after
+        // it must act in this tab, not in the one still fading out.
+        if (how != How.Press) AppearanceDispatcher.reportState()
         if (views == null) return switched(index, previous, how, onScreen, hasViews = false)
         endSwitch = views.switch(shown, left, animated = onScreen) {
             endSwitch = null
@@ -390,8 +393,8 @@ class BottomTabsController(
      * The switch to the tab at [index] from [previous] ended: what went disappears, what came appears — unless the tabs
      * stopped showing during the fade (a modal over them): it appears when they show again; then for a press
      * `ANN.BottomTabSelected` right after the new screen's DidAppear and the left tab's `popToRootOnBlur`, with the state
-     * as one update after them; from code and by back, `popToRootOnBlur` and the state at once. [onScreen]: the switch
-     * started on screen.
+     * as one update after them; from code and by back, `popToRootOnBlur` and the state, which went at the start too
+     * ([select]). [onScreen]: the switch started on screen.
      */
     private fun switched(index: Int, previous: Int, how: How, onScreen: Boolean, hasViews: Boolean) {
         val left = tabs[previous]
