@@ -60,7 +60,7 @@ export interface NavigationButtonPressedEvent {
    * `ApexNavigation.back`; the hardware back of a modal has `ApexNavigation.hardwareBackButton`.
    */
   buttonId: string;
-  /** (iOS) For a button with `toggle`: its new state, already written into the options of the screen. */
+  /** (iOS) For a button with `toggle`: its new state, which the screen keeps. */
   selected?: boolean;
 }
 

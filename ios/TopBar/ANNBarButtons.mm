@@ -3,6 +3,7 @@
 #import "ANNIconButtonImage.h"
 #import "ANNShowTextButton.h"
 #import "ANNUIBarButtonItem.h"
+#import "ANNUserChoice.h"
 #import "UIViewController+LayoutProtocol.h"
 #import <React/RCTLog.h>
 
@@ -52,6 +53,187 @@ static void ANNSetButtonsOfSide(ANNNavigationOptions *options, ANNBarButtonsSide
             options.toolbar.buttons = buttons;
             break;
     }
+}
+
+static ANNButtonOptions *ANNButtonWithId(NSArray<ANNButtonOptions *> *buttons, NSString *buttonId) {
+    for (ANNButtonOptions *button in buttons) {
+        if ([[button.identifier withDefault:nil] isEqualToString:buttonId]) {
+            return button;
+        }
+    }
+    return nil;
+}
+
+// The button `buttonId` of `side` in `options` changed on a copy, in a new list; nothing when the side has no such
+// button. The other buttons stay the objects they are: nothing changes them.
+static void ANNChangeButton(ANNNavigationOptions *options,
+                            ANNBarButtonsSide side,
+                            NSString *buttonId,
+                            void (^change)(ANNButtonOptions *changed)) {
+    NSArray<ANNButtonOptions *> *list = ANNButtonsOfSide(options, side);
+    if (!ANNButtonWithId(list, buttonId)) {
+        return;
+    }
+    NSMutableArray<ANNButtonOptions *> *changedList = [NSMutableArray arrayWithCapacity:list.count];
+    for (ANNButtonOptions *button in list) {
+        if ([[button.identifier withDefault:nil] isEqualToString:buttonId]) {
+            ANNButtonOptions *copy = [button copy];
+            change(copy);
+            [changedList addObject:copy];
+        } else {
+            [changedList addObject:button];
+        }
+    }
+    ANNSetButtonsOfSide(options, side, changedList);
+}
+
+#pragma mark - The user's choices
+
+static NSString *ANNToggleChoiceKey(ANNBarButtonsSide side, NSString *buttonId) {
+    return [NSString stringWithFormat:@"buttons.%ld.selected.%@", (long)side, buttonId];
+}
+
+static NSString *ANNButtonMenuChoiceKey(ANNBarButtonsSide side, NSString *buttonId) {
+    return [NSString stringWithFormat:@"buttons.%ld.menu.%@", (long)side, buttonId];
+}
+
+// The button `buttonId` of `side` in `options`, or nil.
+static ANNButtonOptions *ANNButtonIn(ANNNavigationOptions *options, ANNBarButtonsSide side,
+                                     NSString *buttonId) {
+    return ANNButtonWithId(ANNButtonsOfSide(options, side), buttonId);
+}
+
+// A toggle the user flipped: `selected` of the button with its id, wherever its list comes from. It goes when the
+// node's resolution after a merge has no such button, or when the merge gives the button a `selected` other than the
+// app had (the own button's, else the button the node resolved to before the merge), by the rules of a menu's check.
+static ANNUserChoice *ANNToggleChoice(ANNBarButtonsSide side, NSString *buttonId, BOOL selected) {
+    return [ANNUserChoice choiceWithValue:@(selected)
+        apply:^(ANNNavigationOptions *options, id value) {
+          BOOL on = [(NSNumber *)value boolValue];
+          ANNChangeButton(options, side, buttonId, ^(ANNButtonOptions *changed) {
+            changed.selected = [Bool withValue:on];
+          });
+        }
+        merged:^id(id value, ANNNavigationOptions *merge, ANNNavigationOptions *own,
+                   ANNNavigationOptions *before, ANNNavigationOptions *after) {
+          if (!ANNButtonIn(after, side, buttonId)) {
+              return nil;
+          }
+          ANNButtonOptions *given = ANNButtonIn(merge, side, buttonId);
+          if (!given.selected.hasValue) {
+              return value;
+          }
+          ANNButtonOptions *was = ANNButtonIn(own, side, buttonId);
+          if (!was.selected.hasValue) {
+              was = ANNButtonIn(before, side, buttonId);
+          }
+          BOOL same = [given.selected withDefault:NO] == [was.selected withDefault:NO];
+          return same ? value : nil;
+        }];
+}
+
+// The items of the level (a menu's or a submenu's own list, without its submenus) that holds `itemId`, at any depth;
+// nil when no level holds it.
+static NSArray<ANNMenuItemOptions *> *ANNLevelOf(NSArray<ANNMenuItemOptions *> *items,
+                                                 NSString *itemId) {
+    NSMutableArray<ANNMenuItemOptions *> *level = [NSMutableArray new];
+    BOOL holds = NO;
+    for (ANNMenuItemOptions *item in items) {
+        NSString *leafId = item.items.count ? nil : [item.identifier withDefault:nil];
+        if (leafId) {
+            [level addObject:item];
+            holds = holds || [leafId isEqualToString:itemId];
+        }
+    }
+    if (holds) {
+        return level;
+    }
+    for (ANNMenuItemOptions *item in items) {
+        if (item.items.count) {
+            NSArray<ANNMenuItemOptions *> *found = ANNLevelOf(item.items, itemId);
+            if (found) {
+                return found;
+            }
+        }
+    }
+    return nil;
+}
+
+// The ids of the items in the level that holds `itemId`: the neighbors one pick unchecks.
+static NSArray<NSString *> *ANNNeighborsOf(NSArray<ANNMenuItemOptions *> *items, NSString *itemId) {
+    NSMutableArray<NSString *> *ids = [NSMutableArray new];
+    for (ANNMenuItemOptions *item in ANNLevelOf(items, itemId)) {
+        [ids addObject:[item.identifier withDefault:@""]];
+    }
+    return ids;
+}
+
+// The checked items of the level that holds `itemId` in `menu`: the field a merge gives that level. Nil when `menu`
+// doesn't hold the item.
+static NSSet<NSString *> *ANNCheckedInLevel(ANNMenuOptions *menu, NSString *itemId) {
+    NSArray<ANNMenuItemOptions *> *level = menu ? ANNLevelOf(menu.items, itemId) : nil;
+    if (!level) {
+        return nil;
+    }
+    NSMutableSet<NSString *> *checked = [NSMutableSet new];
+    for (ANNMenuItemOptions *item in level) {
+        if ([item.checked withDefault:NO]) {
+            [checked addObject:[item.identifier withDefault:@""]];
+        }
+    }
+    return checked;
+}
+
+// A menu that has items, or nil: a merge without items gives no menu.
+static ANNMenuOptions *ANNMenuWithItems(ANNMenuOptions *menu) {
+    return menu.items ? menu : nil;
+}
+
+// The picks of single-selection levels in one menu, in the order made: the resolution plays them again on a copy of
+// the menu it has, so a new menu from the app keeps the check where its items have the same ids. As on Android
+// (`UserChoices.yieldTo`), at each merge into the node a pick goes when the node's resolution after it no longer has
+// the item, or when the merge gives the menu with other checks in the pick's level than the app had there (the own
+// options' menu, else the menu the node resolved to before the merge); the picks of the other levels stay.
+typedef ANNMenuOptions *_Nullable (^ANNMenuOf)(ANNNavigationOptions *options);
+typedef void (^ANNSetMenu)(ANNNavigationOptions *options, ANNMenuOptions *menu);
+
+static ANNUserChoice *ANNMenuChoice(NSArray<NSString *> *picks,
+                                    ANNMenuOf menuOf,
+                                    ANNSetMenu setMenu) {
+    return [ANNUserChoice choiceWithValue:picks
+        apply:^(ANNNavigationOptions *options, id value) {
+          ANNMenuOptions *menu = menuOf(options);
+          if (menu.items.count == 0) {
+              return;
+          }
+          ANNMenuOptions *copy = [ANNBarButtons deepCopyOfMenu:menu];
+          for (NSString *itemId in (NSArray<NSString *> *)value) {
+              [copy itemPicked:itemId];
+          }
+          setMenu(options, copy);
+        }
+        merged:^id(id value, ANNNavigationOptions *merge, ANNNavigationOptions *own,
+                   ANNNavigationOptions *before, ANNNavigationOptions *after) {
+          ANNMenuOptions *now = ANNMenuWithItems(menuOf(after));
+          ANNMenuOptions *given = ANNMenuWithItems(menuOf(merge));
+          ANNMenuOptions *was = ANNMenuWithItems(menuOf(own)) ?: ANNMenuWithItems(menuOf(before));
+          NSArray<NSString *> *made = value;
+          NSMutableArray<NSString *> *kept = [NSMutableArray new];
+          for (NSString *itemId in made) {
+              BOOL gone = !now || !ANNLevelOf(now.items, itemId);
+              NSSet<NSString *> *givenChecks = given ? ANNCheckedInLevel(given, itemId) : nil;
+              NSSet<NSString *> *wasChecks = ANNCheckedInLevel(was, itemId);
+              BOOL same = givenChecks == wasChecks || [givenChecks isEqualToSet:wasChecks];
+              BOOL changed = given && !same;
+              if (!gone && !changed) {
+                  [kept addObject:itemId];
+              }
+          }
+          if (kept.count == 0) {
+              return nil;
+          }
+          return kept.count == made.count ? value : kept;
+        }];
 }
 
 static UIColor *ANNColorOf(Color *color) {
@@ -438,11 +620,12 @@ static UIBarButtonSystemItem ANNSystemItemOf(NSString *name) {
               }
               UIMenu *built = [current menuWithPickHandler:^(NSString *itemId) {
                 [weakSelf menuItemPicked:itemId
-                    menuOf:^ANNMenuOptions *(ANNNavigationOptions *resolved) {
-                      return resolved.topBar.overflowMenu;
+                    choiceKey:@"topBar.overflowMenu"
+                    menuOf:^ANNMenuOptions *(ANNNavigationOptions *options) {
+                      return options.topBar.overflowMenu;
                     }
-                    setMenu:^(ANNNavigationOptions *own, ANNMenuOptions *copy) {
-                      own.topBar.overflowMenu = copy;
+                    setMenu:^(ANNNavigationOptions *options, ANNMenuOptions *copy) {
+                      options.topBar.overflowMenu = copy;
                     }];
               }];
               UIMenu *section = [UIMenu menuWithTitle:built.title
@@ -880,16 +1063,14 @@ static UIBarButtonSystemItem ANNSystemItemOf(NSString *name) {
     __weak ANNBarButtons *weakSelf = self;
     item.menu = [menu menuWithPickHandler:^(NSString *itemId) {
       [weakSelf menuItemPicked:itemId
+          choiceKey:ANNButtonMenuChoiceKey(side, buttonId)
           menuOf:^ANNMenuOptions *(ANNNavigationOptions *options) {
-            return [ANNBarButtons buttonWithId:buttonId in:ANNButtonsOfSide(options, side)].menu;
+            return ANNButtonWithId(ANNButtonsOfSide(options, side), buttonId).menu;
           }
-          setMenu:^(ANNNavigationOptions *own, ANNMenuOptions *copy) {
-            [weakSelf changeButton:buttonId
-                              side:side
-                           inOwn:own
-                            change:^(ANNButtonOptions *changed) {
-                              changed.menu = copy;
-                            }];
+          setMenu:^(ANNNavigationOptions *options, ANNMenuOptions *copy) {
+            ANNChangeButton(options, side, buttonId, ^(ANNButtonOptions *changed) {
+              changed.menu = copy;
+            });
           }];
     }];
     if (![button.menuOnLongPress withDefault:NO]) {
@@ -948,22 +1129,15 @@ static UIBarButtonSystemItem ANNSystemItemOf(NSString *name) {
         [screen.eventEmitter sendOnNavigationButtonPressed:componentId buttonId:press.buttonId];
         return;
     }
-    // A toggle flips, the options keep the new state, then the event tells it.
+    // A toggle flips, the user layer keeps the new state, then the event tells it.
     ANNUIBarButtonItem *item = press.item;
     BOOL selected = !item.selected;
     item.selected = selected;
     _selected[press.buttonId] = @(selected);
-    __weak ANNBarButtons *weakSelf = self;
     NSString *buttonId = press.buttonId;
     ANNBarButtonsSide side = press.side;
-    [screen changeOwnOptions:^(ANNNavigationOptions *own) {
-      [weakSelf changeButton:buttonId
-                        side:side
-                     inOwn:own
-                      change:^(ANNButtonOptions *changed) {
-                        changed.selected = [Bool withValue:selected];
-                      }];
-    }];
+    [screen setUserChoice:ANNToggleChoice(side, buttonId, selected)
+                   forKey:ANNToggleChoiceKey(side, buttonId)];
     [screen.eventEmitter sendOnNavigationButtonPressed:componentId
                                               buttonId:buttonId
                                               selected:@(selected)];
@@ -971,46 +1145,15 @@ static UIBarButtonSystemItem ANNSystemItemOf(NSString *name) {
 
 + (nullable ANNButtonOptions *)buttonWithId:(NSString *)buttonId
                                         in:(NSArray<ANNButtonOptions *> *)buttons {
-    for (ANNButtonOptions *button in buttons) {
-        if ([[button.identifier withDefault:nil] isEqualToString:buttonId]) {
-            return button;
-        }
-    }
-    return nil;
-}
-
-// The button `buttonId` of `side` in the own options, changed on a copy: the own list when it has the button, else the
-// list the screen shows (from its stack or the defaults), copied into the own options first. Lists are new arrays.
-- (void)changeButton:(NSString *)buttonId
-                side:(ANNBarButtonsSide)side
-               inOwn:(ANNNavigationOptions *)own
-              change:(void (^)(ANNButtonOptions *changed))change {
-    NSArray<ANNButtonOptions *> *list = ANNButtonsOfSide(own, side);
-    if (![ANNBarButtons buttonWithId:buttonId in:list]) {
-        list = ANNButtonsOfSide([_screen resolveOptionsWithDefault], side);
-    }
-    if (![ANNBarButtons buttonWithId:buttonId in:list]) {
-        return;
-    }
-    NSMutableArray<ANNButtonOptions *> *changedList = [NSMutableArray arrayWithCapacity:list.count];
-    for (ANNButtonOptions *button in list) {
-        ANNButtonOptions *copy = [button copy];
-        if (button.menu.items.count > 0) {
-            copy.menu = [ANNBarButtons deepCopyOfMenu:button.menu];
-        }
-        if ([[button.identifier withDefault:nil] isEqualToString:buttonId]) {
-            change(copy);
-        }
-        [changedList addObject:copy];
-    }
-    ANNSetButtonsOfSide(own, side, changedList);
+    return ANNButtonWithId(buttons, buttonId);
 }
 
 #pragma mark - Menus
 
 - (void)menuItemPicked:(NSString *)itemId
+             choiceKey:(NSString *)choiceKey
                 menuOf:(ANNMenuOptions *_Nullable (^)(ANNNavigationOptions *options))menuOf
-               setMenu:(void (^)(ANNNavigationOptions *own, ANNMenuOptions *menu))setMenu {
+               setMenu:(void (^)(ANNNavigationOptions *options, ANNMenuOptions *menu))setMenu {
     UIViewController *screen = _screen;
     NSString *componentId = screen.layoutInfo.componentId;
     if (!screen || componentId.length == 0) {
@@ -1021,13 +1164,18 @@ static UIBarButtonSystemItem ANNSystemItemOf(NSString *name) {
     if (!menu || ![ANNBarButtons menu:menu hasSingleSelectionOf:itemId]) {
         return;
     }
-    // The check lands on the screen's own copy, which shares nothing with the menus of the stack, the defaults or
-    // other screens.
-    ANNMenuOptions *copy = [ANNBarButtons deepCopyOfMenu:menu];
-    [copy itemPicked:itemId];
-    [screen changeOwnOptions:^(ANNNavigationOptions *own) {
-      setMenu(own, copy);
-    }];
+    // The new pick goes last; the earlier picks of its own list go, so a pick the app takes away later doesn't bring
+    // back one the user replaced.
+    NSArray<NSString *> *made = [screen userChoiceForKey:choiceKey].value ?: @[];
+    NSArray<NSString *> *neighbors = ANNNeighborsOf(menu.items, itemId);
+    NSMutableArray<NSString *> *picks = [NSMutableArray new];
+    for (NSString *pick in made) {
+        if (![neighbors containsObject:pick]) {
+            [picks addObject:pick];
+        }
+    }
+    [picks addObject:itemId];
+    [screen setUserChoice:ANNMenuChoice(picks, menuOf, setMenu) forKey:choiceKey];
 }
 
 + (BOOL)menu:(ANNMenuOptions *)menu hasSingleSelectionOf:(NSString *)itemId {

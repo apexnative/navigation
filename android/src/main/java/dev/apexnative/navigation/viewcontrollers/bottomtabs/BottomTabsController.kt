@@ -247,7 +247,7 @@ class BottomTabsController(
     // `mergeOptions` with the tabs' id: their own options, then what they show, then the layouts around without
     // `bottomTabs`; the one-shot options act once, also while the view isn't shown.
     override fun mergeOptions(options: Options) {
-        this.options = this.options.copy().mergeWith(options)
+        mergeOwnOptions(options)
         applyMerge(options, null)
         performOnParentController { it.mergeChildOptions(withoutBottomTabs(options), this) }
     }

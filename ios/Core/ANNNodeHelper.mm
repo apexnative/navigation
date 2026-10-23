@@ -29,8 +29,14 @@ static NSPointerArray *ANNWeakNodes(NSArray<UIViewController *> *nodes) {
 
 NSString *const ANNContainerReadyHandlerKey = @"ApexNavigation.container";
 
+// Set while a node works out the app's resolution (`appResolution`): no user layer is written. Main queue.
+static BOOL ANNUserLayersLeftOut = NO;
+
 @implementation ANNNodeHelper {
     ANNNavigationOptions *_options;
+    // The user layer: the choices by key, and their keys in the order they were set, the order they are written in.
+    NSMutableDictionary<NSString *, ANNUserChoice *> *_userChoices;
+    NSMutableArray<NSString *> *_userChoiceKeys;
     // The ready handlers by key, and their keys in the order they were first set.
     NSMutableDictionary<NSString *, dispatch_block_t> *_readyHandlers;
     NSMutableArray<NSString *> *_readyKeys;
@@ -108,10 +114,24 @@ NSString *const ANNContainerReadyHandlerKey = @"ApexNavigation.container";
 - (void)setDefaultOptions:(ANNNavigationOptions *)defaultOptions {
 }
 
+// With a user layer, the choices meet the merge as on Android: they see the app's resolution before it and after it
+// (the merge in place for that, uncached), and those the merge changes leave; the setter then moves the cache once for
+// both.
 - (void)mergeOwnOptions:(ANNNavigationOptions *)options {
-    ANNNavigationOptions *merged = _options ? [_options copy] : [ANNNavigationOptions new];
+    ANNAssertMainQueue();
+    ANNNavigationOptions *own = _options ?: [ANNNavigationOptions new];
+    ANNNavigationOptions *merged = [own copy];
     [merged mergeOptions:options];
-    self.options = merged;
+    if (_userChoiceKeys.count == 0) {
+        self.options = merged;
+        return;
+    }
+    ANNNavigationOptions *before = [self appResolution];
+    ANNNavigationOptions *stored = [merged withoutOneShotOptions];
+    _options = stored;
+    ANNNavigationOptions *after = [self appResolution];
+    [self userChoicesMeetMerge:options own:own before:before after:after];
+    self.options = stored;
 }
 
 - (void)changeOwnOptions:(void (^)(ANNNavigationOptions *options))change {
@@ -120,10 +140,78 @@ NSString *const ANNContainerReadyHandlerKey = @"ApexNavigation.container";
     self.options = changed;
 }
 
+#pragma mark - The user layer
+
+- (void)setUserChoice:(ANNUserChoice *)choice forKey:(NSString *)key {
+    ANNAssertMainQueue();
+    if (!choice && !_userChoices[key]) {
+        return;
+    }
+    if (!_userChoices) {
+        _userChoices = [NSMutableDictionary new];
+        _userChoiceKeys = [NSMutableArray new];
+    }
+    // A choice set again goes last: it is the newest.
+    [_userChoiceKeys removeObject:key];
+    if (choice) {
+        _userChoices[key] = choice;
+        [_userChoiceKeys addObject:key];
+    } else {
+        [_userChoices removeObjectForKey:key];
+    }
+    [ANNOptionsCache optionsChanged];
+}
+
+- (ANNUserChoice *)userChoiceForKey:(NSString *)key {
+    return _userChoices[key];
+}
+
+// Each choice answers the merge itself: it stays, keeps a part, or goes. The order of the rest stays.
+- (void)userChoicesMeetMerge:(ANNNavigationOptions *)merge
+                         own:(ANNNavigationOptions *)own
+                      before:(ANNNavigationOptions *)before
+                       after:(ANNNavigationOptions *)after {
+    for (NSString *key in [_userChoiceKeys copy]) {
+        ANNUserChoice *choice = _userChoices[key];
+        ANNUserChoice *kept = [choice choiceAfterMerge:merge own:own before:before after:after];
+        if (kept == choice) {
+            continue;
+        }
+        if (kept) {
+            _userChoices[key] = kept;
+        } else {
+            [_userChoices removeObjectForKey:key];
+            [_userChoiceKeys removeObject:key];
+        }
+    }
+}
+
+// The node's resolution with the defaults and without any user layer: what the app's options alone give (Android's
+// `resolveCurrentOptions().withDefaultOptions`). Built now, never cached: the resolution reads no cache on the way.
+- (ANNNavigationOptions *)appResolution {
+    BOOL leftOut = ANNUserLayersLeftOut;
+    ANNUserLayersLeftOut = YES;
+    @try {
+        return [self resolveOptionsWithDefaultUncached];
+    } @finally {
+        ANNUserLayersLeftOut = leftOut;
+    }
+}
+
+- (void)applyUserLayerTo:(ANNNavigationOptions *)options {
+    if (ANNUserLayersLeftOut) {
+        return;
+    }
+    for (NSString *key in _userChoiceKeys) {
+        [_userChoices[key] applyTo:options];
+    }
+}
+
 #pragma mark - Resolving
 
 - (ANNNavigationOptions *)resolveOptions {
     ANNNavigationOptions *result = _options ? [_options copy] : [ANNNavigationOptions new];
+    [self applyUserLayerTo:result];
     UIViewController *child = [_node getCurrentChild];
     if (child) {
         [result mergeOptions:[child resolveOptions]];
@@ -168,7 +256,9 @@ NSString *const ANNContainerReadyHandlerKey = @"ApexNavigation.container";
     return [self resolveOfNode:node parents:parents];
 }
 
-// Built on copies: the defaults never go into a node's own options.
+// Built on copies: the defaults never go into a node's own options. Each parent's user layer goes over its own
+// options; a node without a current child writes its own layer once more at the end, for the lists it takes from its
+// parents or the defaults (a toggle of a button of the stack's). Writing a choice twice gives the same result.
 - (ANNNavigationOptions *)resolveOfNode:(UIViewController *)node
                                 parents:(NSArray<UIViewController *> *)parents {
     ANNNavigationOptions *result = [ANNDefaultOptions.current copy];
@@ -177,8 +267,12 @@ NSString *const ANNContainerReadyHandlerKey = @"ApexNavigation.container";
         if (own) {
             [result mergeOptions:own];
         }
+        [parent.nodeHelper applyUserLayerTo:result];
     }
     [result mergeOptions:[node resolveOptions]];
+    if (![node getCurrentChild]) {
+        [self applyUserLayerTo:result];
+    }
     return result;
 }
 

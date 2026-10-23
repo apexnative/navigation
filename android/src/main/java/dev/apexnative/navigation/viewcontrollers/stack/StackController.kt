@@ -470,7 +470,7 @@ class StackController(
 
     // `mergeOptions` with the stack's id: its own options, what it shows, then the layouts around.
     override fun mergeOptions(options: Options) {
-        this.options = this.options.copy().mergeWith(options)
+        mergeOwnOptions(options)
         applyOrKeep(options, null)
         performOnParentController { it.mergeChildOptions(withoutStackGroups(options), this) }
     }

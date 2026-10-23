@@ -83,18 +83,30 @@ already) run on main.
 ### 2.3 Options model
 
 A typed tree of groups, one class per group. Parsing is tolerant: a value of the wrong kind stays unset. One merge rule
-(`mergeOptions`) and one rule of defaults. The options a node shows with are resolved as its own, then its parents',
-then the defaults, and the result is cached per node. The cache has one invalidation point: a change of a node's own
-options and a change of the defaults. The resolved result is read-only; code that wants to change it copies it first.
-Module options groups plug into the same tree.
+(`mergeOptions`) and one rule of defaults. The options a node shows with are resolved in four layers, weakest first:
+the defaults, its parents', its own, and its user layer; the result is cached per node. The user layer keeps what the
+user chose in the native UI (a toggled bar button, the check of a single-selection menu, the search scope, the search
+tokens and the suggestions the system removed; on iOS a renamed title) apart from the own options. It goes over the
+rest by identity, a button and a menu item by their ids and a scope by its id, not as a tree merged over: a new list
+keeps the choices of the same ids, and a button, item or scope that is gone takes its choice with it. An unrelated
+`mergeOptions`, the same values sent again and `setDefaultOptions` keep a choice; a `mergeOptions` into the node that
+gives the chosen field a value other than the node had before (its own options, or where they don't set it, what its
+parents and the defaults gave) replaces it, as does one after which the button, item or scope is gone. A merge into a
+parent doesn't. The layer goes with its node. The cache has
+one invalidation point: a change of a node's own options, of its user layer, or of the defaults. A change of the
+defaults repaints only what shows; a node that is hidden takes them when it shows. The resolved result is read-only;
+code that wants to change it copies it first. Module options groups plug into the same tree.
 
 - iOS: `ANNOptions` with a field table (`+optionFields`) that gives parsing, merging, copying and `hasValue` to every
   group; `ANNOptionsReader` reads, `ANNNodeHelper` resolves (`resolveOptionsWithDefault`), `ANNOptionsCache` is the
-  generation, `ANNDefaultOptions` the defaults. Value kinds are in `Options/Params`.
+  generation, `ANNDefaultOptions` the defaults. Value kinds are in `Options/Params`. `ANNNodeHelper` also keeps the user
+  layer (`setUserChoice:forKey:`; an `ANNUserChoice` is a write by identity and a rule for the app's merge).
 - Android: `Options` is the root; each group writes `parse`, `mergeWith`, `mergeWithDefault`, `copy` and `hasValue`;
   value types are in `options/params/`, tolerant readers in `options/parsers/`. `ViewController.resolveCurrentOptions`
   caches against `OptionsCache`; `DefaultOptions` holds the defaults. A test walks the whole tree by reflection, so a
-  field that is not read, copied, merged or defaulted fails it.
+  field that is not read, copied, merged or defaulted fails it. The user layer is `UserChoices` per node, written
+  through `ViewController.changeChoices`, applied in `resolveCurrentOptions(defaultOptions)` and yielding in
+  `mergeOwnOptions`.
 
 ### 2.4 Node tree and registry
 
@@ -178,35 +190,35 @@ dark switch. The system UI has one owner per window or activity.
 
 Each rule has one owner. A feature that needs the rule calls the owner; it does not copy the rule.
 
-| Seam                        | iOS                                                                               | Android                                                                                   |
-| --------------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Way in                      | `ANNTurboModule`; every async method but `preparePush` through `ANNCommandRunner` | `NavigationTurboModule`; every async method through `CommandRunner`                       |
-| Layout check                | `ANNLayoutReader` on the module queue                                             | `LayoutReader` on the module thread; `LayoutChecks` on main                               |
-| Answer                      | `ANNCommandAnswer`: state, promise, `CommandCompleted`; once                      | `CommandAnswer`: the same, through `AnswerEvents`                                         |
-| Error texts                 | `ANNErrorTexts`, made from `src/interfaces/contract/errors.json`                  | `ErrorTexts`, made from the same file                                                     |
-| Event names and keys        | `ANNEventContract`, made from the event types of `src/interfaces/`                | `EventContract`, made from the same types                                                 |
-| Registry                    | `ANNNodeRegistry`, one for the process, weak                                      | `ChildControllersRegistry`, one per `Navigator`; `Navigators` holds the activities weakly |
-| Factory                     | `ANNLayoutFactory`; `ANNSideMenuPresenter` is the one other file naming a module  | `LayoutFactory`                                                                           |
-| Options cache               | `ANNOptionsCache`, moved by the setter of `ANNNodeHelper.options` and by defaults | `OptionsCache`, moved by the `ViewController.options` setter and by `DefaultOptions.set`  |
-| Options a layout shows with | the node's `resolveOptions` (own, then the current child down)                    | `resolveShownOptions`                                                                     |
-| Appearance dispatcher       | `ANNAppearanceDispatcher`                                                         | `AppearanceDispatcher`                                                                    |
-| Navigation state            | `ANNNavigationState`: `holdUpdates`, `releaseUpdates`, `updateNow`                | `NavigationStateReporter` through `AppearanceDispatcher.StateUpdates`: `hold`, `release`  |
-| Answer id of a stack entry  | `ANNStackAnswerIdOf` in `ANNStackQueue.h`                                         | `StackController.answerIdOf`, asked by the queue through `StackQueue.Host`                |
-| Screens of an entry         | `ANNStackScreensOfEntry`                                                          | `StackController.screenIdOf`, `optionsScreen`                                             |
-| Screen readiness            | `ANNScreenReadiness`, by screen id                                                | `ScreenReadiness` and `ContentReadiness`                                                  |
-| Render wait                 | `ANNRenderWait`                                                                   | `RenderWait`                                                                              |
-| Waited screens              | `waitedComponentViewControllers`                                                  | `ParentController.waitedChildren`                                                         |
-| Waiting place               | `ANNParking`: the window, a stack's view, a preview's host view                   | the root under the current one (`RootLayerViews`), the stack's own view (`StackViews`)    |
-| Waits to show               | `ANNPendingLayers`                                                                | `WaitingLayer`, kept by `Navigator`                                                       |
-| What a node shows changed   | `ANNShownScreens`: pending layer, modal hold, system UI                           | `Navigator.shownScreensChanged`: waiting layer, parent stack's queue, modal sheet         |
-| Modal records               | `ANNModalCoordinator`, `ANNModal`                                                 | `ModalCoordinator`, `ModalRecord`                                                         |
-| Presentation gate           | `ANNPresentationGate`: every UIKit present and dismiss in the main window         | none: transitions overlap                                                                 |
-| Overlays                    | `ANNOverlayCoordinator`, a window each                                            | `OverlayCoordinator`, a layer of the activity                                             |
-| System UI owner             | `ANNSystemUI`, the rules in `ANNSystemUIRules`                                    | `SystemUiOwner` per `Navigator`; only `SystemUiWindow` writes to the window               |
-| Reload                      | `ANNReloadCoordinator`: the generation of the JavaScript                          | `ReloadCoordinator`: the generation; `ReactGateway` tells it                              |
-| Room for the bars           | `ANNScreenSafeArea`, `ANNScreenInsets`                                            | `ScreenFrame`, `ScreenSafeArea`; `ScreenFrame.topRoomOf` for a screen and a pair          |
-| A container's own move      | the container's UIKit callbacks, told to `ANNAppearanceDispatcher`                | `ShownChildren`, through the dispatcher's order                                           |
-| Back                        | `ANNStackController`, `InteractivePopGestureDelegate`, `uikitShows:` of the queue | `NavigationActivity` → `Navigator.handleBack` → `StackQueue`; `BackCallbackState`         |
+| Seam                        | iOS                                                                                                           | Android                                                                                                      |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Way in                      | `ANNTurboModule`; every async method but `preparePush` through `ANNCommandRunner`                             | `NavigationTurboModule`; every async method through `CommandRunner`                                          |
+| Layout check                | `ANNLayoutReader` on the module queue                                                                         | `LayoutReader` on the module thread; `LayoutChecks` on main                                                  |
+| Answer                      | `ANNCommandAnswer`: state, promise, `CommandCompleted`; once                                                  | `CommandAnswer`: the same, through `AnswerEvents`                                                            |
+| Error texts                 | `ANNErrorTexts`, made from `src/interfaces/contract/errors.json`                                              | `ErrorTexts`, made from the same file                                                                        |
+| Event names and keys        | `ANNEventContract`, made from the event types of `src/interfaces/`                                            | `EventContract`, made from the same types                                                                    |
+| Registry                    | `ANNNodeRegistry`, one for the process, weak                                                                  | `ChildControllersRegistry`, one per `Navigator`; `Navigators` holds the activities weakly                    |
+| Factory                     | `ANNLayoutFactory`; `ANNSideMenuPresenter` is the one other file naming a module                              | `LayoutFactory`                                                                                              |
+| Options cache               | `ANNOptionsCache`, moved by the setter of `ANNNodeHelper.options`, by `setUserChoice:forKey:` and by defaults | `OptionsCache`, moved by the `ViewController.options` setter, by `changeChoices` and by `DefaultOptions.set` |
+| Options a layout shows with | the node's `resolveOptions` (own, then the current child down)                                                | `resolveShownOptions`                                                                                        |
+| Appearance dispatcher       | `ANNAppearanceDispatcher`                                                                                     | `AppearanceDispatcher`                                                                                       |
+| Navigation state            | `ANNNavigationState`: `holdUpdates`, `releaseUpdates`, `updateNow`                                            | `NavigationStateReporter` through `AppearanceDispatcher.StateUpdates`: `hold`, `release`                     |
+| Answer id of a stack entry  | `ANNStackAnswerIdOf` in `ANNStackQueue.h`                                                                     | `StackController.answerIdOf`, asked by the queue through `StackQueue.Host`                                   |
+| Screens of an entry         | `ANNStackScreensOfEntry`                                                                                      | `StackController.screenIdOf`, `optionsScreen`                                                                |
+| Screen readiness            | `ANNScreenReadiness`, by screen id                                                                            | `ScreenReadiness` and `ContentReadiness`                                                                     |
+| Render wait                 | `ANNRenderWait`                                                                                               | `RenderWait`                                                                                                 |
+| Waited screens              | `waitedComponentViewControllers`                                                                              | `ParentController.waitedChildren`                                                                            |
+| Waiting place               | `ANNParking`: the window, a stack's view, a preview's host view                                               | the root under the current one (`RootLayerViews`), the stack's own view (`StackViews`)                       |
+| Waits to show               | `ANNPendingLayers`                                                                                            | `WaitingLayer`, kept by `Navigator`                                                                          |
+| What a node shows changed   | `ANNShownScreens`: pending layer, modal hold, system UI                                                       | `Navigator.shownScreensChanged`: waiting layer, parent stack's queue, modal sheet                            |
+| Modal records               | `ANNModalCoordinator`, `ANNModal`                                                                             | `ModalCoordinator`, `ModalRecord`                                                                            |
+| Presentation gate           | `ANNPresentationGate`: every UIKit present and dismiss in the main window                                     | none: transitions overlap                                                                                    |
+| Overlays                    | `ANNOverlayCoordinator`, a window each                                                                        | `OverlayCoordinator`, a layer of the activity                                                                |
+| System UI owner             | `ANNSystemUI`, the rules in `ANNSystemUIRules`                                                                | `SystemUiOwner` per `Navigator`; only `SystemUiWindow` writes to the window                                  |
+| Reload                      | `ANNReloadCoordinator`: the generation of the JavaScript                                                      | `ReloadCoordinator`: the generation; `ReactGateway` tells it                                                 |
+| Room for the bars           | `ANNScreenSafeArea`, `ANNScreenInsets`                                                                        | `ScreenFrame`, `ScreenSafeArea`; `ScreenFrame.topRoomOf` for a screen and a pair                             |
+| A container's own move      | the container's UIKit callbacks, told to `ANNAppearanceDispatcher`                                            | `ShownChildren`, through the dispatcher's order                                                              |
+| Back                        | `ANNStackController`, `InteractivePopGestureDelegate`, `uikitShows:` of the queue                             | `NavigationActivity` → `Navigator.handleBack` → `StackQueue`; `BackCallbackState`                            |
 
 Rules that belong to several rows:
 

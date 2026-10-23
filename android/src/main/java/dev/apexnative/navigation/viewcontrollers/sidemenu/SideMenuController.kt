@@ -131,7 +131,7 @@ internal class SideMenuController(
 
     // `mergeOptions` with the side menu's id: its own options, then what a merge does, then the layouts around.
     override fun mergeOptions(options: Options) {
-        this.options = this.options.copy().mergeWith(options)
+        mergeOwnOptions(options)
         applyMerge(options)
         performOnParentController { it.mergeChildOptions(SideMenuRules.withoutSideMenu(options), this) }
     }

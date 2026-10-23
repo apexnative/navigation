@@ -116,8 +116,8 @@ Each of these owns one rule. Call it; do not copy it.
 - `ANNCommandAnswer`: The answer: state, then promise, then `ANN.CommandCompleted`; once; silent for a JavaScript that went. Called by: Every coordinator and queue.
 - `ANNNodeRegistry`: Every node by id, weakly. Filled by the factory, cleared at a reload. Called by: Commands, modules, `findViewController:`.
 - `ANNLayoutFactory`: The core code that names module classes (`ANNSplitViewController`, `ANNSideMenuViewController`, `ANNArrangementViewController`); `ANNSideMenuPresenter` is the one other file that does. One maker per layout type; registers each node. Called by: Every command that shows a layout.
-- `ANNOptionsCache`: The one invalidation point of resolved options. Called by: The setter of `ANNNodeHelper.options` and `ANNDefaultOptions` only.
-- `ANNNodeHelper resolveOptionsWithDefault`: What a node shows with: defaults, parents' own options, the node's `resolveOptions` (own, then the current child down). Cached, read-only. Called by: Presenters, coordinators.
+- `ANNOptionsCache`: The one invalidation point of resolved options. Called by: The setters of `ANNNodeHelper.options` and of its user layer (`setUserChoice:forKey:`), and `ANNDefaultOptions`, only.
+- `ANNNodeHelper resolveOptionsWithDefault`: What a node shows with: defaults, parents' own options (each with its user layer), the node's `resolveOptions` (own, its user layer, then the current child down). Cached, read-only. Called by: Presenters, coordinators.
 - `ANNAppearanceDispatcher`: The only sender of `ComponentWillAppear`, `ComponentDidAppear`, `ComponentDidDisappear`; the end-of-transition order; the events of a node that goes. Called by: Screens, queues, coordinators.
 - `ANNNavigationState`: The visible screen and the nearest tabs it is in (the last tabs met walking down); coalesced updates, holds, the state before an answer. Called by: The dispatcher, `ANNCommandAnswer`, `ANNRootCoordinator`.
 - `ANNScreenReadiness`: The signals of a screen's safe area view (has one, laid out, content rendered), sticky, by screen id. Called by: `ANNSafeAreaViewComponentView`, `ANNReactView`.

@@ -156,7 +156,9 @@ top-level folder. Main thread only, unless a line says otherwise.
   skips the table that decides interrupts and answers.
 - Every event of an appearance goes through `AppearanceDispatcher`. A container with its own loop of
   `onViewWillAppear` / `onViewDidAppear` / `onViewDisappear` sends the events in the wrong order.
-- Never change a resolved options object: it is cached and shared. Copy it, or write through `changeOptions`.
+- Never change a resolved options object: it is cached and shared. Copy it, or write through `changeOptions`; a
+  user's choice goes through `changeChoices` (the user layer), never into own options, or the next `mergeOptions`
+  wipes it.
 - A new option field that is not in `mergeWith`, `mergeWithDefault`, `copy` or the fixture is dropped silently somewhere
   in the chain; `WholeTreeTest` exists to catch it.
 - A new wait is a new `RenderWait` value, not a new timer. A wait that survives a destroy or a supersede hangs a promise;

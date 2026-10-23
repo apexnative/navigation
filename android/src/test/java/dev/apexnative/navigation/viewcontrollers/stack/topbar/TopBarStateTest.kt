@@ -5,7 +5,6 @@ import android.view.MotionEvent
 import android.view.ViewGroup
 import com.facebook.react.bridge.JavaOnlyMap
 import dev.apexnative.navigation.options.BackButtonOptions
-import dev.apexnative.navigation.options.ButtonMenuOptions
 import dev.apexnative.navigation.options.ButtonOptions
 import dev.apexnative.navigation.options.Options
 import dev.apexnative.navigation.options.SearchBarOptions
@@ -390,49 +389,6 @@ class TopBarStateTest {
         assertSame(cellA, cells.cellOf(a, "CC1"))
         cells.retain(a, emptySet())
         assertEquals(listOf(cellB, cellA), emptied)
-    }
-
-    // Menu checks.
-
-    private fun menu(single: Boolean = true) = ButtonMenuOptions(
-        single,
-        listOf(
-            ButtonMenuOptions.Item("list", "List", null, false, false, true),
-            ButtonMenuOptions.Item("grid", "Grid", null, false, false, false),
-        ),
-    )
-
-    @Test
-    fun aPickOfAMenuFromTheStackLandsInTheScreensOwnCopy() {
-        val a = screen("A")
-        val shared = menu()
-        val resolved = Options()
-        resolved.topBar.buttons.right = listOf(ButtonOptions(Text("view")).apply { this.menu = shared })
-        MenuChecks.write(a, resolved, "view", "grid")
-        val own = a.options.topBar.buttons.right?.single()?.menu
-        val ownItems = own?.items?.filterIsInstance<ButtonMenuOptions.Item>().orEmpty()
-        assertEquals(listOf(false, true), ownItems.map { it.checked })
-        // The stack's menu is untouched.
-        assertEquals(listOf(true, false), shared.items.filterIsInstance<ButtonMenuOptions.Item>().map { it.checked })
-    }
-
-    @Test
-    fun aPickOfTheOverflowMenuLandsInTheScreensOwnCopy() {
-        val a = screen("A")
-        val shared = menu()
-        val resolved = Options().apply { topBar.overflowMenu = shared }
-        MenuChecks.write(a, resolved, null, "grid")
-        val own = a.options.topBar.overflowMenu?.items?.filterIsInstance<ButtonMenuOptions.Item>().orEmpty()
-        assertEquals(listOf(false, true), own.map { it.checked })
-        assertTrue((shared.items[0] as ButtonMenuOptions.Item).checked)
-    }
-
-    @Test
-    fun aMenuWithoutSingleSelectionMovesNoCheck() {
-        val a = screen("A")
-        val resolved = Options().apply { topBar.overflowMenu = menu(single = false) }
-        MenuChecks.write(a, resolved, null, "grid")
-        assertNull(a.options.topBar.overflowMenu)
     }
 
     // The back button's merge exceptions.

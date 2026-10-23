@@ -14,7 +14,6 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import com.facebook.react.ReactApplication
 import dev.apexnative.navigation.options.SearchBarOptions
-import dev.apexnative.navigation.options.params.Text
 import dev.apexnative.navigation.options.params.ThemeColour
 import dev.apexnative.navigation.react.events.EventEmitter
 import dev.apexnative.navigation.utils.dp
@@ -148,10 +147,11 @@ class StackSearchPresenter(
 
     private fun searchOf(screen: ViewController<*>): ScreenSearch =
         searches.getOrPut(screen.view) {
-            // The search of a pair of screens is its primary's: its events name that screen, which keeps the scope.
+            // The search of a pair of screens is its primary's: its events name that screen, which keeps the scope in
+            // its user layer, where a merge that sends the same options again doesn't take it away.
             val owner = (screen as? OptionsScreen)?.optionsScreen ?: screen
             ScreenSearch(this, owner.id, styleContext(), loadIcon) { scope ->
-                owner.changeOptions { it.topBar.searchBar.selectedScope = Text(scope) }
+                owner.changeChoices { it.pickScope(scope) }
             }
         }
 

@@ -8,8 +8,8 @@ import dev.apexnative.navigation.options.parsers.IconParser
  * A menu of the bar: `topBar.overflowMenu`, or the `menu` of a button. Its items, and submenus among them; with
  * `singleSelection` one item of a level has a checkmark at a time.
  *
- * Copied options share it, so the checkmark a pick moves stays with the screen when it appears again, until new
- * options give the menu again.
+ * Copied options share it, so nobody changes a menu in place but in a copy of its own: the check a user's pick moves
+ * lives in the screen's user layer (`UserChoices`), which goes into a copy as the screen's options resolve.
  */
 class ButtonMenuOptions(
     @JvmField val singleSelection: Boolean,

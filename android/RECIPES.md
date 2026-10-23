@@ -14,7 +14,11 @@ The steps for adding an option and for adding a command to the Android core; rea
    (a repaint after a light/dark switch or `setDefaultOptions`); a system-bar option goes through `SystemUiRules`.
    Read colors with `ThemeColour.get` at apply so they follow the theme.
 4. The cache needs nothing: own options are written only through `ViewController.options`, `changeOptions` and
-   `mergeOptions`, defaults only through `DefaultOptions.set`. Never change a resolved result.
+   `mergeOptions` (`mergeOwnOptions`), defaults only through `DefaultOptions.set`. Never change a resolved result.
+   What the user chooses in the native UI (a menu's check, a search scope) is not written into own options: it goes
+   into the node's user layer through `ViewController.changeChoices` (`options/UserChoices.kt`), which applies it by
+   id over the resolved options and lets it go when a merge changes that field. A new kind of choice is a field of
+   `UserChoices` with its `applyTo` and `yieldTo`; `changeOptions` stays for the library's own bookkeeping of a merge.
 5. Tests: add the field to `OptionsFixture.full()`. `WholeTreeTest` walks the tree by reflection and fails when a field
    is not read, copied, merged or defaulted. Add cases to `ReadersTest`, `MergeRuleTest` and the area's rules test.
 6. The docs page and a Showcase control; one meaning on both platforms, and where Android can't do it the JSDoc says so
