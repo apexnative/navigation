@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.0.0-alpha.5](https://github.com/apexnative/navigation/compare/v1.0.0-alpha.4...v1.0.0-alpha.5) (2026-10-23)
+
+
+### Features
+
+* android back options, a launch screen copy from UILaunchScreen, modal and back fixes ([#43](https://github.com/apexnative/navigation/issues/43)) ([29f311e](https://github.com/apexnative/navigation/commit/29f311e318134f284a0c6279e6c86e15612c9343))
+
+
+### Bug Fixes
+
+* **android:** send the state of a tab switch from code at its start ([#44](https://github.com/apexnative/navigation/issues/44)) ([34d03d0](https://github.com/apexnative/navigation/commit/34d03d0214cf09e14329d0bae51e47d46063f054))
+* **hooks:** measure agent folder scopes from the worktree a file is in ([#42](https://github.com/apexnative/navigation/issues/42)) ([d306137](https://github.com/apexnative/navigation/commit/d306137534d3ba551fab8a7346c7ad7300c0faf7))
+
 ## [1.0.0-alpha.4](https://github.com/apexnative/navigation/compare/v1.0.0-alpha.3...v1.0.0-alpha.4) (2026-10-23)
 
 
