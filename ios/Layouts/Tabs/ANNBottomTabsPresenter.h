@@ -10,8 +10,8 @@ NS_ASSUME_NONNULL_BEGIN
 /// `ANNBottomTabsController`.
 @interface ANNBottomTabsPresenter : ANNNodePresenter
 
-/// The repaint of a node the repaint pass left (a tab not in a window): its subtree, children first, with their
-/// resolved options.
+/// The repaint of a node the repaint pass left (a tab not in a window), as it is about to show: the nodes of its
+/// subtree whose views are in its view (what shows with it), children first, with their resolved options.
 + (void)repaintNode:(UIViewController *)node;
 
 #pragma mark - Creation, in this order

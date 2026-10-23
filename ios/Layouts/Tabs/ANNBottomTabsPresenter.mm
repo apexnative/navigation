@@ -82,10 +82,20 @@ static id ANNValue(NSArray *list, NSUInteger index) {
 }
 
 + (void)repaintNode:(UIViewController *)node {
+    [self repaintNode:node showingIn:node.viewIfLoaded];
+}
+
+// Children first. Only what shows with the tab repaints: a node whose view is out of the tab's views (a stack's lower
+// screens, a hidden tab of tabs inside) takes the new options at its own appearance, as the repaint of what shows
+// leaves the nodes out of a window (`ANNOptionsRepaint`).
++ (void)repaintNode:(UIViewController *)node showingIn:(nullable UIView *)tabView {
     for (UIViewController *child in node.layoutChildren) {
-        [self repaintNode:child];
+        [self repaintNode:child showingIn:tabView];
     }
-    [node.presenter applyDefaultOptionsChange:[node resolveOptionsWithDefault]];
+    UIView *view = node.viewIfLoaded;
+    if (tabView && view && [view isDescendantOfView:tabView]) {
+        [node.presenter applyDefaultOptionsChange:[node resolveOptionsWithDefault]];
+    }
 }
 
 #pragma mark - Creation

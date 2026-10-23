@@ -24,7 +24,10 @@ import dev.apexnative.navigation.viewcontrollers.stack.QueueReadiness
 import dev.apexnative.navigation.viewcontrollers.stack.QueueScreen
 import dev.apexnative.navigation.viewcontrollers.stack.StackController
 import dev.apexnative.navigation.viewcontrollers.stack.StackPresenter
+import dev.apexnative.navigation.viewcontrollers.viewcontroller.Calls
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.Presenter
+import dev.apexnative.navigation.viewcontrollers.viewcontroller.RecordingPresenter
+import dev.apexnative.navigation.viewcontrollers.viewcontroller.TestScreen
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.ViewController
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -748,6 +751,27 @@ class BottomTabsControllerTest {
         tabs.repaint(tabs.resolveShownOptions(DefaultOptions.current))
         val repaint = bar.calls.filter { it.startsWith("repaintBar") || it.startsWith("Colors") }
         assertEquals(listOf("repaintBar", "Colors:0:2", "Colors:1:1"), repaint)
+    }
+
+    @Test
+    fun aRepaintReachesAHiddenTabOnlyWhenItIsSelected() {
+        val repaints = Calls()
+        val a1 = TestScreen(activity, registry, "A1", Options(), RecordingPresenter(activity, repaints))
+        val b1 = TestScreen(activity, registry, "B1", Options(), RecordingPresenter(activity, repaints))
+        val tabs = tabs(a1, b1, presenter = bar)
+        tabs.onViewWillAppear()
+        tabs.onViewDidAppear()
+        listOf(a1, b1).forEach { it.getView() }
+        // The pass over what shows (`Navigator.repaintLayer`) reaches the selected tab; the tabs' own repaint doesn't
+        // repaint the hidden one.
+        tabs.repaint(tabs.resolveShownOptions(DefaultOptions.current))
+        assertEquals(emptyList<String>(), repaints.entries)
+        tabs.onTabPressed(1)
+        assertEquals(listOf("repaint:B1"), repaints.entries)
+        // Once: shown again without a new repaint, it isn't repainted.
+        tabs.onTabPressed(0)
+        tabs.onTabPressed(1)
+        assertEquals(listOf("repaint:B1"), repaints.entries)
     }
 
     @Test

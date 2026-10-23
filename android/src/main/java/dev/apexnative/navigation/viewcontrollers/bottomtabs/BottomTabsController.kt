@@ -74,6 +74,10 @@ class BottomTabsController(
     private var pendingSelected: (() -> Unit)? = null
     // Ends the fade through of a switch still running, with its events.
     private var endSwitch: (() -> Unit)? = null
+
+    // The made tabs that didn't show at the last repaint (new default options, a light/dark switch): each is repainted
+    // as it is selected, not while hidden.
+    private val staleTabs = mutableSetOf<ViewController<*>>()
     // The bar goes with a stack's transition: the options of the new top don't move it themselves.
     private var riding = false
     private var restAttached = false
@@ -363,6 +367,9 @@ class BottomTabsController(
         }
         selectedIndex = index
         attach(index)
+        // A tab hidden at a repaint takes it now, before its screens appear: its bar's parts, its search's and its
+        // FAB's colors follow the theme and the defaults only through a repaint.
+        if (staleTabs.remove(shown)) Navigator.repaintLayer(shown)
         peekView()?.bar?.let {
             it.setCurrentItem(index, false)
             it.onCustomItemViewSelectionChanged(index)
@@ -592,8 +599,8 @@ class BottomTabsController(
         }
     }
 
-    // The repaint: the bar, the items of every tab, the row, then the made tabs that don't show, which the pass over
-    // what shows doesn't reach.
+    // The repaint: the bar, the items of every tab, the row. Only what shows is repainted (the pass over what shows
+    // reaches the selected tab); a made tab that doesn't show is repainted when it is selected ([staleTabs]).
     internal fun repaint(options: Options) {
         if (isDestroyed) return
         ContainerBackground.apply(this, options)
@@ -603,7 +610,7 @@ class BottomTabsController(
             if (usesRow) layout.bar.customRowOptions = options.bottomTabs.customRow.copy()
         }
         cells.forEachIndexed { index, cell -> cell.update(cellState(index)) }
-        tabs.forEach { if (it !== currentChild && it.isViewCreated) Navigator.repaintLayer(it) }
+        tabs.forEach { if (it !== currentChild && it.isViewCreated) staleTabs += it }
     }
 
     // The custom row: the cells first into the bar's external host, then the row holds them; its look follows the tabs'
@@ -681,6 +688,7 @@ class BottomTabsController(
     override fun destroy() {
         if (isDestroyed) return
         pendingSelected = null
+        staleTabs.clear()
         super.destroy()
         // A switch still running ends with its views at rest, without events: the tabs are gone.
         endSwitch?.invoke()
