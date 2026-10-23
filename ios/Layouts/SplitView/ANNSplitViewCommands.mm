@@ -20,8 +20,12 @@
 #import "UIViewController+LayoutProtocol.h"
 #import <React/RCTLog.h>
 
-// The limits of the bar components of a push: title and background 1 s, buttons 0.5 s.
+// The limits of the bar components of a push: title and background 1 s, buttons 0.5 s. With `waitForRender` unset they
+// count from the wait's start, as a stack's push; with `true`, from the content's end.
 static const ANNBarWaitLimits ANNColumnBarLimits = {1, 0.5};
+
+// How long the push's wait waits for the screen's first content when `waitForRender` is not set, as a stack's push.
+static const NSTimeInterval ANNColumnRenderLimit = 0.5;
 
 // The split view of `node`: the node itself or the nearest of its layout parents that has columns.
 static UIViewController *ANNSplitViewOf(UIViewController *node) {
@@ -193,10 +197,11 @@ static NSMapTable<UIViewController *, ANNColumnRecordsOfSplitView *> *ANNColumnR
     return record;
 }
 
-// Step 1, the push's wait: `waitForRender` unset waits for the bar components only, `true` for the content as long as
-// it takes (with the rule for content nobody knows of), then the bar components; `false` for nothing; nothing either
-// while the source's place isn't seen. Read from the screen's own options over the defaults: it has no place yet. With
-// content, the screen waits unseen in the source's window, as a layer that waits to show.
+// Step 1, the push's wait, as a stack's push: `waitForRender` unset waits for the content at most 0.5 s, `true` as long
+// as it takes (with the rule for content nobody knows of), then the bar components; `false` for nothing; nothing either
+// while the source's place isn't seen. The content's end waits for the calls JavaScript made by then, so that the
+// options of the screen's first commit are applied before it shows. Read from the screen's own options over the
+// defaults: it has no place yet. The screen waits unseen in the source's window, as a layer that waits to show.
 + (void)startWaitOf:(ANNColumnRequest *)request {
     UIViewController *screen = request.screen;
     Bool *waitForRender = [screen resolveOptionsWithDefault].animations.push.waitForRender;
@@ -207,20 +212,22 @@ static NSMapTable<UIViewController *, ANNColumnRecordsOfSplitView *> *ANNColumnR
         [self readyOnNextTurnOf:request];
         return;
     }
-    BOOL content = waitForRender.hasValue;
+    BOOL bounded = !waitForRender.hasValue;
     __weak UIViewController *weakScreen = screen;
     NSArray<UIViewController *> * (^screens)(void) = ^NSArray<UIViewController *> * {
       UIViewController *waited = weakScreen;
       return waited ? waited.waitedComponentViewControllers : @[];
     };
-    ANNRenderWaitContent waited = content ? ANNRenderWaitContentNode : ANNRenderWaitContentNone;
-    ANNRenderWait *wait = [[ANNRenderWait alloc] initWithContent:waited
-                                                            node:content ? screen : nil
-                                                         screens:screens
-                                                           limit:0
-                                                             bar:ANNRenderWaitBarAfterContent
-                                                       barLimits:ANNColumnBarLimits];
-    wait.unknownContentRule = content;
+    ANNRenderWait *wait =
+        [[ANNRenderWait alloc] initWithContent:ANNRenderWaitContentNode
+                                          node:screen
+                                       screens:screens
+                                         limit:bounded ? ANNColumnRenderLimit : 0
+                                           bar:ANNRenderWaitBarAfterContent
+                                     barLimits:ANNColumnBarLimits];
+    wait.unknownContentRule = !bounded;
+    wait.settlesThroughJavaScript = YES;
+    wait.barLimitsFromStart = bounded;
     __weak ANNColumnRequest *weakRequest = request;
     wait.canEnd = ^BOOL {
       ANNColumnRequest *waiting = weakRequest;
@@ -234,7 +241,7 @@ static NSMapTable<UIViewController *, ANNColumnRecordsOfSplitView *> *ANNColumnR
       if (!ready) {
           return;
       }
-      // Without content the screen makes it right before it shows (as a push does).
+      // A screen that didn't render while parked makes its content right before it shows (as a push does).
       [ANNSplitViewCommands render:ready];
       if (ready.starting) {
           [ANNSplitViewCommands readyOnNextTurnOf:ready];
@@ -242,14 +249,12 @@ static NSMapTable<UIViewController *, ANNColumnRecordsOfSplitView *> *ANNColumnR
           [ANNSplitViewCommands readyOf:ready];
       }
     };
-    if (content) {
-        wait.setUp = ^{
-          ANNColumnRequest *waiting = weakRequest;
-          if (waiting) {
-              [ANNSplitViewCommands park:waiting];
-          }
-        };
-    }
+    wait.setUp = ^{
+      ANNColumnRequest *waiting = weakRequest;
+      if (waiting) {
+          [ANNSplitViewCommands park:waiting];
+      }
+    };
     request.wait = wait;
     request.starting = YES;
     @try {

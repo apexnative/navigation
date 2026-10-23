@@ -82,6 +82,9 @@ Top-level files: `Package.swift` (SwiftPM; `headerFolders` lists every folder wh
   `getArrangementState`, `getHinge`, `getStartInfo`. They read `ANNScreenInsets`, `ANNScreenRegions`,
   `ANNArrangementState`, `ANNHinge lastValue`, written on the main queue and guarded by `@synchronized`.
   `ANNReloadCoordinator.generation` and `ANNEventEmitter.isCurrent` are readable from any thread.
+- **After the calls of JavaScript:** `ANNJavaScriptCalls afterCallsMadeSoFar:` runs a step on the main queue after
+  every call JavaScript made by then, by the calls' own way (the JavaScript thread, the module's queue, the main
+  queue). A push's wait ends through it, so the `mergeOptions` of its screen's first commit come first.
 
 ## Checks
 

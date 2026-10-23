@@ -10,6 +10,7 @@
 #import "ANNEventContract.h"
 #import "ANNExternalViewController.h"
 #import "ANNHinge.h"
+#import "ANNJavaScriptCalls.h"
 #import "ANNLayoutReader.h"
 #import "ANNModalCoordinator.h"
 #import "ANNNativeScreenCalls.h"
@@ -29,6 +30,9 @@
 #import "ANNStackCommands.h"
 #import "ApexNavigation+Internal.h"
 #import "UIViewController+LayoutProtocol.h"
+#import <React/RCTCallInvokerModule.h>
+#import <React/RCTInitializing.h>
+#import <React/RCTInvalidating.h>
 
 // How many modules this process made: the first one is a cold start, the next ones come with reloads of JavaScript.
 static NSUInteger ANNTurboModuleCount;
@@ -84,6 +88,11 @@ static BOOL ANNFindsScreen(NSString *componentId, ANNCommandAnswer *answer) {
     return NO;
 }
 
+// The module's call invoker and queue go to `ANNJavaScriptCalls`, so that a step of the core can come after the calls
+// JavaScript made (a push after the options of its screen's first commit).
+@interface ANNTurboModule () <RCTCallInvokerModule, RCTInitializing, RCTInvalidating>
+@end
+
 // Every asynchronous method takes the one path of `ANNCommandRunner`: on the module's queue the layout is read and
 // checked whole, then one task on the main queue runs the command with its area's class. A question answers at once on
 // the JavaScript thread what it answers before the first data.
@@ -93,6 +102,11 @@ static BOOL ANNFindsScreen(NSString *componentId, ANNCommandAnswer *answer) {
 }
 
 RCT_EXPORT_MODULE(ANNTurboModule)
+
+// React Native gives the module its shared queue through this (it has none of its own) and its call invoker, both
+// before `initialize`.
+@synthesize methodQueue = _methodQueue;
+@synthesize callInvoker = _callInvoker;
 
 + (BOOL)requiresMainQueueSetup {
     return NO;
@@ -107,6 +121,14 @@ RCT_EXPORT_MODULE(ANNTurboModule)
         _splashLogo = ANNSplashLogo();
     }
     return self;
+}
+
+- (void)initialize {
+    [ANNJavaScriptCalls setCallInvoker:_callInvoker methodQueue:_methodQueue ofModule:self];
+}
+
+- (void)invalidate {
+    [ANNJavaScriptCalls moduleWent:self];
 }
 
 - (std::shared_ptr<facebook::react::TurboModule>)getTurboModule:

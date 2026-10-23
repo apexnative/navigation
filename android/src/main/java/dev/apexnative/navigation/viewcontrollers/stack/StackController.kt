@@ -12,6 +12,7 @@ import dev.apexnative.navigation.options.Options
 import dev.apexnative.navigation.options.TopBarOptions
 import dev.apexnative.navigation.react.CommandListener
 import dev.apexnative.navigation.react.ErrorTexts
+import dev.apexnative.navigation.react.PendingCalls
 import dev.apexnative.navigation.react.events.AppearanceDispatcher
 import dev.apexnative.navigation.utils.NavigationLog
 import dev.apexnative.navigation.utils.UiThread
@@ -21,8 +22,8 @@ import dev.apexnative.navigation.viewcontrollers.child.ChildControllersRegistry
 import dev.apexnative.navigation.viewcontrollers.component.ComponentViewController
 import dev.apexnative.navigation.viewcontrollers.component.ContentReadiness
 import dev.apexnative.navigation.viewcontrollers.component.Readiness
+import dev.apexnative.navigation.viewcontrollers.component.RenderWait
 import dev.apexnative.navigation.viewcontrollers.component.RestPlace
-import dev.apexnative.navigation.viewcontrollers.component.ScreenContentFactory
 import dev.apexnative.navigation.viewcontrollers.navigator.BackCallbackState
 import dev.apexnative.navigation.viewcontrollers.navigator.Navigator
 import dev.apexnative.navigation.viewcontrollers.parent.ContainerBackground
@@ -81,26 +82,34 @@ class StackController(
 
     /** The one queue of the stack. */
     // The readiness of the screens reaches the queue's waits on the next turn of the main loop: a signal that comes
-    // inside a layout pass or a view's attach moves no view of the container there.
+    // inside a layout pass or a view's attach moves no view of the container there. A pushed screen's mount reaches
+    // its push behind the calls JavaScript made before it (`PendingCalls`), on a later turn too.
     internal var queue = StackQueue(
         display = StackViews(this),
         readiness = ContentReadiness,
         scheduler = { delay, task -> AppearanceDispatcher.scheduler.schedule(delay, task) },
         host = QueueHost(),
         deliver = { signal -> UiThread.post { signal() } },
+        afterCalls = PendingCalls::after,
     )
         private set
 
     /**
      * The unit tests run the stack over their own display, readiness and host (views are stubs there), before any
-     * screen joins it; the readiness signals come at once there.
+     * screen joins it; the readiness signals come at once there, and a push's behind the calls as [afterCalls] says.
      */
-    internal fun useQueueParts(display: StackDisplay, readiness: Readiness, host: StackQueue.Host?) {
+    internal fun useQueueParts(
+        display: StackDisplay,
+        readiness: Readiness,
+        host: StackQueue.Host?,
+        afterCalls: (() -> Unit) -> Unit = { it() },
+    ) {
         queue = StackQueue(
             display = display,
             readiness = readiness,
             scheduler = { delay, task -> AppearanceDispatcher.scheduler.schedule(delay, task) },
             host = host ?: QueueHost(),
+            afterCalls = afterCalls,
         )
     }
 
@@ -730,8 +739,8 @@ class StackController(
             if (peekView() != null) topBar.stage(node)
         }
 
-        override fun isOwnRootScreen(node: ViewController<*>): Boolean =
-            (node as? ComponentViewController)?.componentName?.startsWith(ScreenContentFactory.SLOT_PREFIX) == false
+        override fun hasReactContent(node: ViewController<*>): Boolean =
+            RenderWait.waitedScreens(node).any { it is ComponentViewController }
 
         override fun log(text: String) {
             Log.e(NavigationLog.TAG, text)

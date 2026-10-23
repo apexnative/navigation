@@ -16,7 +16,11 @@
 // How long the new top of a `setStackRoot` waits for its first content when `waitForRender` is not set.
 static const NSTimeInterval ANNStackRootRenderLimit = 0.5;
 
-// The limits of the bar components of a push: title and background 1 s, buttons 0.5 s, together from the wait's start.
+// How long a push waits for its new top's first content when `waitForRender` is not set.
+static const NSTimeInterval ANNPushRenderLimit = 0.5;
+
+// The limits of the bar components of a push: title and background 1 s, buttons 0.5 s. With `waitForRender` unset they
+// count from the wait's start, the content's time coming off them; with `true`, from the content's end.
 static const ANNBarWaitLimits ANNPushBarLimits = {1, 0.5};
 
 // The bar components of a `setStackRoot` within its 0.5 s.
@@ -53,8 +57,8 @@ typedef NS_ENUM(NSInteger, ANNStackOperationKind) {
 @property(nonatomic) BOOL animated;
 @property(nonatomic) BOOL waits;
 @property(nonatomic) BOOL atOnce;
-// When the replace's own wait for its new top started (`waitForRender` unset): the custom transition's wait takes what
-// is left of the 0.5 s. 0 when it didn't wait so.
+// When the push's or the replace's own wait for its new top started (`waitForRender` unset): the custom transition's
+// wait takes what is left of the 0.5 s. 0 when it didn't wait so.
 @property(nonatomic) CFTimeInterval waitStarted;
 @property(nonatomic, copy, nullable) dispatch_block_t completion;
 @property(nonatomic, copy, nullable) ANNTransitionRejectionBlock rejection;
@@ -560,41 +564,35 @@ static NSArray<UIViewController *> *ANNTopFirst(NSArray<UIViewController *> *ent
         [self scheduleRunNext];
         return;
     }
-    // `waitForRender: true` waits for the content as long as it takes, then for the bar components (their limits from
-    // the content's end); unset (also with `enabled: false`), only for the bar components, each kind to its own limit,
-    // without parking (bar roots render out of a window); `false`, for nothing. The content comes during the
-    // transition. A stack that isn't seen never waits.
+    // `waitForRender: true` waits for the content as long as it takes, then for the bar components, each kind to its own
+    // limit from the content's end; unset (also with `enabled: false`), for its first content at most 0.5 s, then for
+    // the bar components, each kind to its own limit from the wait's start (as when the push waited for them alone);
+    // `false`, for nothing, the content coming during the transition. Either wait's content ends after the calls
+    // JavaScript made in the commit that mounted the content (its `useScreenOptions`), content there already too, so
+    // that their options are in the bar on the transition's first frame. A native screen ends the wait at its start. A
+    // stack that isn't seen never waits.
     Bool *waitForRender = [node resolveOptionsWithDefault].animations.push.waitForRender;
     // A push whose caller waited already (a preview, `showInColumn`) waits for nothing here.
     BOOL onScreen = operation.waits && [_display stackIsOnScreen];
     __weak ANNStackQueue *weakSelf = self;
     __weak ANNStackOperation *weakOperation = operation;
-    if (onScreen && waitForRender.hasValue && waitForRender.get) {
+    if (onScreen && (!waitForRender.hasValue || waitForRender.get)) {
+        BOOL bounded = !waitForRender.hasValue;
+        if (bounded) {
+            operation.waitStarted = CACurrentMediaTime();
+        }
         [self waitFor:operation
-                    entry:node
-                  content:ANNRenderWaitContentNode
-                    limit:0
-             unknownLimit:YES
-                      bar:ANNRenderWaitBarAfterContent
-                barLimits:ANNPushBarLimits
-                     then:^{
-                       [weakSelf startPushTransition:weakOperation];
-                     }];
-        return;
-    }
-    if (onScreen && !waitForRender.hasValue) {
-        [self waitFor:operation
-                    entry:node
-                  content:ANNRenderWaitContentNone
-                    limit:0
-             unknownLimit:NO
-                      bar:ANNRenderWaitBarAfterContent
-                barLimits:ANNPushBarLimits
-                     then:^{
-                       // UIKit sizes the screen inside the push: it makes its content right before.
-                       [weakOperation.node render];
-                       [weakSelf startPushTransition:weakOperation];
-                     }];
+                       entry:node
+                     content:ANNRenderWaitContentNode
+                       limit:bounded ? ANNPushRenderLimit : 0
+                unknownLimit:!bounded
+                         bar:ANNRenderWaitBarAfterContent
+                   barLimits:ANNPushBarLimits
+             afterJavaScript:YES
+                barFromStart:bounded
+                        then:^{
+                          [weakSelf startPushTransition:weakOperation];
+                        }];
         return;
     }
     // UIKit sizes the screen inside the push: it makes its content right before.
@@ -617,10 +615,14 @@ static NSArray<UIViewController *> *ANNTopFirst(NSArray<UIViewController *> *ent
     operation.covered = covered;
     ANNTransitionPlan *plan = nil;
     if (animated) {
+        // Unset `waitForRender`: the custom transition's wait takes what is left of the push's own 0.5 s.
+        NSTimeInterval limit =
+            [ANNAnimationRules customWaitLimitAfterWaitStartedAt:operation.waitStarted
+                                                    commandLimit:ANNPushRenderLimit];
         plan = [ANNTransitionPlan stackPlanOfKind:ANNTransitionKindPush
                                         animation:push
                                     waitForRender:push.waitForRender
-                                        waitLimit:ANNCustomTransitionWaitLimit
+                                        waitLimit:limit
                                              from:covered
                                                to:node];
     }
@@ -747,6 +749,8 @@ static NSArray<UIViewController *> *ANNTopFirst(NSArray<UIViewController *> *ent
                  unknownLimit:NO
                           bar:ANNRenderWaitBarWithContent
                     barLimits:ANNStackRootBarLimits
+              afterJavaScript:NO
+                 barFromStart:NO
                          then:^{
                            [weakSelf startReplaceTransition:weakOperation];
                          }];
@@ -760,6 +764,8 @@ static NSArray<UIViewController *> *ANNTopFirst(NSArray<UIViewController *> *ent
                  unknownLimit:YES
                           bar:ANNRenderWaitBarAfterContent
                     barLimits:ANNStackRootBarLimits
+              afterJavaScript:NO
+                 barFromStart:NO
                          then:^{
                            [weakSelf startReplaceTransition:weakOperation];
                          }];
@@ -1047,16 +1053,20 @@ static NSArray<UIViewController *> *ANNTopFirst(NSArray<UIViewController *> *ent
 // for it in the stack's view, its appearance driven: the wait ends at the entry's ready handler (set first, then the
 // park and `render`, then the test of 16.1), at `limit` with `markReady`, or with `unknownLimit` for a screen whose
 // rendered state stays unknown after 1 s. Without content, only the bar components, without parking (bar roots render
-// out of a window). A wait that would end does nothing once its operation ended or belongs to an old JavaScript; its
-// end runs protected (the end steps of the operation, `then`).
+// out of a window). With `afterJavaScript` the content's end waits for the calls JavaScript made by then
+// (`settlesThroughJavaScript`); with `barFromStart` the bar phase's limits count from the wait's start
+// (`barLimitsFromStart`). A wait that would end does nothing once its operation ended or belongs to an old
+// JavaScript; its end runs protected (the end steps of the operation, `then`).
 - (void)waitFor:(ANNStackOperation *)operation
-           entry:(UIViewController *)entry
-         content:(ANNRenderWaitContent)content
-           limit:(NSTimeInterval)limit
-    unknownLimit:(BOOL)unknownLimit
-             bar:(ANNRenderWaitBar)bar
-       barLimits:(ANNBarWaitLimits)barLimits
-            then:(dispatch_block_t)then {
+              entry:(UIViewController *)entry
+            content:(ANNRenderWaitContent)content
+              limit:(NSTimeInterval)limit
+       unknownLimit:(BOOL)unknownLimit
+                bar:(ANNRenderWaitBar)bar
+          barLimits:(ANNBarWaitLimits)barLimits
+    afterJavaScript:(BOOL)afterJavaScript
+       barFromStart:(BOOL)barFromStart
+               then:(dispatch_block_t)then {
     __weak ANNStackQueue *weakSelf = self;
     __weak ANNStackOperation *weakOperation = operation;
     // The screens the wait is about are those the entry waits for (a pair: the ones it puts in the window).
@@ -1070,6 +1080,8 @@ static NSArray<UIViewController *> *ANNTopFirst(NSArray<UIViewController *> *ent
                                                              bar:bar
                                                        barLimits:barLimits];
     wait.unknownContentRule = unknownLimit;
+    wait.settlesThroughJavaScript = afterJavaScript;
+    wait.barLimitsFromStart = barFromStart;
     wait.canEnd = ^BOOL {
       ANNStackQueue *queue = weakSelf;
       ANNStackOperation *waiting = weakOperation;

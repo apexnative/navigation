@@ -85,31 +85,6 @@ class StackScreensTest {
         h.assertViews("placeLower:A", "detach:A")
     }
 
-    // Behind its switch.
-
-    @Test
-    fun aPushOfAnOwnRootScreenStartsAtOnceByDefault() {
-        h.host.ownRoot = true
-        h.start(h.screen("A"))
-        h.push(h.screen("B", ready = false))
-        h.assertViews("raise:B")
-        h.display.finishAll()
-    }
-
-    @Test
-    fun withTheSwitchOnAnOwnRootScreenRendersHiddenFirstAtMostHalfASecond() {
-        StackSwitches.preparesOwnRootPushes = true
-        h.host.ownRoot = true
-        h.start(h.screen("A"))
-        h.push(h.screen("B", ready = false))
-        h.assertViews("placeWaiting:B")
-        h.scheduler.advance(StackQueue.OWN_ROOT_WAIT_MILLIS)
-        h.assertEvents("markReady:B", "will:B")
-        h.assertViews("raise:B")
-        h.display.finishAll()
-        assertEquals(0, h.scheduler.pending)
-    }
-
     // Options up the layouts.
 
     @Test

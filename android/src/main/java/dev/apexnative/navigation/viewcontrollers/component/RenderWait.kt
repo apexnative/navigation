@@ -16,8 +16,10 @@ import dev.apexnative.navigation.viewcontrollers.viewcontroller.ViewController
  * without a limit.
  *
  * What differs between its users are its values, never its steps: the readiness and the clock (fakes in the unit
- * tests), [countsUnknownContent], how a readiness signal is delivered ([deliver]: at once, or posted to the next turn
- * of the main loop), and [step], the guard the user runs every later step in (a timer, a signal). Main thread only.
+ * tests), [countsUnknownContent], how a readiness signal is delivered ([deliver]: at once, posted to the next turn of
+ * the main loop, or behind the calls of JavaScript), whether content ready at once is delivered too
+ * ([deliversReadyContent]), and [step], the guard the user runs every later step in (a timer, a signal). Main thread
+ * only.
  */
 internal class RenderWait(
     private val readiness: Readiness,
@@ -32,6 +34,12 @@ internal class RenderWait(
     private val countsUnknownContent: Boolean,
     /** How a readiness signal reaches the wait: at once by default; posted, when a signal may come inside a layout. */
     private val deliver: (() -> Unit) -> Unit = { it() },
+    /**
+     * Content ready when the wait starts (or retakes) still reaches its end through [deliver], within the limit that
+     * runs: what [deliver] waits behind (a push's: the calls JavaScript made in the commit of that content) comes
+     * first. Off: such content ends the wait at once.
+     */
+    private val deliversReadyContent: Boolean = false,
     /** Runs a later step of the wait (a timer, a signal): the user's guards and protection; as it is by default. */
     private val step: (() -> Unit) -> Unit = { it() },
     private val onEnd: () -> Unit,
@@ -70,7 +78,8 @@ internal class RenderWait(
 
     /**
      * Starts waiting for [screens], and for the content of [unseen] within its first [UNSEEN_LIMIT_MILLIS]; with all
-     * of them ready (and their bars' components, when they count within the limit) it ends at once, before it returns.
+     * of them ready (and their bars' components, when they count within the limit) it ends at once, before it returns,
+     * or through [deliver] with [deliversReadyContent].
      */
     fun start(screens: List<ViewController<*>>, unseen: List<ViewController<*>> = emptyList()) {
         this.screens = screens
@@ -78,15 +87,18 @@ internal class RenderWait(
         unseenDone = unseen.isEmpty()
         waiting = true
         token = Any()
-        // Content ready at once ends the wait, unless the bar's components count within a limit: it runs for them.
-        if (contentReady() && !(bar == Bar.WithinLimit && limitMillis != null)) return contentDone()
+        // Content ready at once ends the wait, unless the bar's components count within a limit (it runs for them) or
+        // the content goes through [deliver] too.
+        val ready = contentReady()
+        if (ready && !deliversReadyContent && !(bar == Bar.WithinLimit && limitMillis != null)) return contentDone()
+        // The timers first: a [deliver] that runs at once may end the wait before this returns.
         cancelContentTimer = when {
             limitMillis != null -> scheduler.schedule(limitMillis) { step { atLimit() } }
             countsUnknownContent -> scheduler.schedule(UNKNOWN_CONTENT_MILLIS) { step { atUnknownContentLimit() } }
             else -> null
         }
         startUnseenLimit()
-        await()
+        if (ready && deliversReadyContent) deliverReady() else await()
     }
 
     /**
@@ -98,7 +110,7 @@ internal class RenderWait(
         this.screens = screens
         this.unseen = unseen
         token = Any()
-        await()
+        if (deliversReadyContent && contentReady()) deliverReady() else await()
     }
 
     /** Ends the wait without [onEnd]: its timers stop, and the signals still to come do nothing. */
@@ -127,6 +139,14 @@ internal class RenderWait(
         unseen.filterNot(readiness::isReady).forEach(readiness::markReady)
         unseenDone = true
         if (contentReady() && cancelBarPhase == null) contentDone()
+    }
+
+    // The content is ready already: it goes once through [deliver] as a signal would, then on as [await] says.
+    private fun deliverReady() {
+        val token = token
+        deliver {
+            step { if (waiting && this.token === token) await() }
+        }
     }
 
     // The content of every screen ready: on to the bars; else the signals of those not ready.

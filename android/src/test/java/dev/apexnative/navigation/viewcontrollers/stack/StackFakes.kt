@@ -448,14 +448,19 @@ internal class FakeStackDisplay(
 /** What the queue tells its stack: the changes of its current child, the ends of its operations. */
 internal class QueueHost(private val log: MutableList<String>) : StackQueue.Host {
     var settled = 0
-    var ownRoot = false
+
+    /** Whether the pushed screens show React content, whose first mount a push waits for (`hasReactContent`). */
+    var reactContent = false
 
     /** The stack's rule of the answers (`StackController.answerIdOf`), which the stack the host is given to sets. */
     var answers: (ViewController<*>, StackQueue.AnswerKind) -> String = { entry, _ -> entry.id }
 
     override fun answerIdOf(entry: ViewController<*>, kind: StackQueue.AnswerKind): String = answers(entry, kind)
 
-    override fun currentChildChanged() = Unit
+    /** Runs as the current child changes: a test reads there what the bar takes. */
+    var whenCurrentChildChanged: () -> Unit = {}
+
+    override fun currentChildChanged() = whenCurrentChildChanged()
 
     /** How the bar's row went with each change of the current child: `Push`, `Pop`, `FadeThrough` or `none`. */
     val barMotions = mutableListOf<String>()
@@ -499,7 +504,7 @@ internal class QueueHost(private val log: MutableList<String>) : StackQueue.Host
         if (topSettled) this.topSettled++
     }
 
-    override fun isOwnRootScreen(node: ViewController<*>): Boolean = ownRoot
+    override fun hasReactContent(node: ViewController<*>): Boolean = reactContent
 
     override fun log(text: String) {
         log += "log:$text"

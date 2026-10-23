@@ -77,8 +77,11 @@ dispatcher.
 5. **`-[ANNStackQueue push:answer:…]`.** The node joins `entries` now (every check reads `entries`), the operation is
    queued, `runNext` starts it when the queue is at rest.
 6. **`startPush:` and `startPushTransition:`.** By `animations.push.waitForRender` the queue waits through
-   `ANNRenderWait`, for the content and the bar components or for the bar components alone (a screen that waits for its
-   content is parked unseen in the stack's view by `ANNParking`, `stackPark:`), then renders the node, drives the appearance of Home and Profile (`+[ANNAppearanceDispatcher driveAppearanceOf:]`), and calls
+   `ANNRenderWait`: unset, for the content at most 0.5 s, with `true` as long as it takes, then for the bar components
+   (their limits from the wait's start when unset, from the content's end with `true`; the screen is parked unseen in
+   the stack's view by `ANNParking`, `stackPark:`); the content's end, content there already too, waits for the calls
+   JavaScript made by then (`ANNJavaScriptCalls`: the JavaScript thread, the module's queue, the main queue), so the
+   options of the screen's first commit are in the bar; with `false` nothing. Then it renders the node, drives the appearance of Home and Profile (`+[ANNAppearanceDispatcher driveAppearanceOf:]`), and calls
    `+[ANNAppearanceDispatcher beginTransitionShowing:]`. Profile's `ComponentWillAppear` is sent now (held until its
    content mounted, 0.5 s at most). `stackChange:` pushes in UIKit; with an own animation `ANNTransitionPlan` and
    `ANNStackAnimatingDelegate` give UIKit the `ANNTransitionAnimator`.

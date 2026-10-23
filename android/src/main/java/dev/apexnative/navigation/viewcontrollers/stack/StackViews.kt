@@ -288,8 +288,8 @@ internal class StackViews(private val stack: StackController) : StackDisplay {
         screen.whenContentMounted(
             waiting = waiting,
             mounted = {
-                // The frame of the mount: the screen shows transparent and lays out; its transition starts on the
-                // pre-draw of that frame.
+                // The frame of the mount: the screen shows transparent and lays out. The pre-draw of that frame hands
+                // the start to the queue, whose transition begins behind the calls JavaScript made before.
                 screen.peekView()?.let {
                     it.alpha = 0f
                     it.visibility = View.VISIBLE

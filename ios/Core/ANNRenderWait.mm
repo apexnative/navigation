@@ -1,11 +1,25 @@
 #import "ANNRenderWait.h"
 #import "ANNAssert.h"
 #import "ANNComponentViewController.h"
+#import "ANNJavaScriptCalls.h"
 #import "ANNScreenReadiness.h"
 #import "UIViewController+LayoutProtocol.h"
+#import <QuartzCore/QuartzCore.h>
 
 // A screen whose rendered state stays unknown counts as ready after this, with `unknownContentRule`.
 static const NSTimeInterval ANNUnknownContentLimit = 1;
+
+// What a kind of the bar whose limit passed in the content phase still gets, with `barLimitsFromStart`: a limit of 0
+// would mean none of its own.
+static const NSTimeInterval ANNPassedBarLimit = 0.001;
+
+// What is left of a bar kind's `limit` after `spent`; no limit of its own stays none.
+static NSTimeInterval ANNBarLimitLeft(NSTimeInterval limit, NSTimeInterval spent) {
+    if (limit <= 0) {
+        return limit;
+    }
+    return MAX(limit - spent, ANNPassedBarLimit);
+}
 
 // The number of the last wait made: each wait listens under a key of its own.
 static NSUInteger ANNRenderWaitCount;
@@ -18,12 +32,18 @@ static NSUInteger ANNRenderWaitCount;
     ANNRenderWaitBar _bar;
     ANNBarWaitLimits _barLimits;
     NSString *_key;
+    // When the running wait started (`barLimitsFromStart`).
+    CFTimeInterval _startTime;
     // The token: each start, phase and end takes the next one, so that what an earlier one set up does nothing.
     NSUInteger _number;
     // Inside `start`: a step runs as it is, under the caller's protection.
     BOOL _starting;
     // Inside `setUp`: a ready handler leaves the node to the readiness test after it.
     BOOL _settingUp;
+    // The content is there and the phase waits for the calls JavaScript made by then (`settlesThroughJavaScript`); the
+    // number of that settle, so that one of an earlier take does nothing.
+    BOOL _settling;
+    NSUInteger _settleNumber;
     // The content nodes still waited, and every node the wait set its ready handler on.
     NSHashTable<UIViewController *> *_waited;
     NSHashTable<UIViewController *> *_listened;
@@ -70,6 +90,7 @@ static NSUInteger ANNRenderWaitCount;
     _isWaiting = YES;
     _isInBarPhase = NO;
     _mountLimitPassed = NO;
+    _startTime = CACurrentMediaTime();
     NSUInteger number = ++_number;
     _starting = YES;
     @try {
@@ -117,11 +138,9 @@ static NSUInteger ANNRenderWaitCount;
     if (![self runs:number]) {
         return;
     }
-    if (_content == ANNRenderWaitContentNode && _node && [self screensAreReady]) {
-        [_waited removeObject:_node];
-    }
+    [self testNode];
     if (_waited.count == 0 && !_barWait) {
-        [self phaseOfNumber:number endedMarkingReady:NO];
+        [self contentOfNumber:number];
     }
 }
 
@@ -206,7 +225,7 @@ static NSUInteger ANNRenderWaitCount;
     }
     [_waited removeObject:node];
     if (_waited.count == 0 && !_barWait) {
-        [self phaseOfNumber:number endedMarkingReady:NO];
+        [self contentOfNumber:number];
     }
 }
 
@@ -219,6 +238,36 @@ static NSUInteger ANNRenderWaitCount;
     if (_waited.count > 0) {
         return;
     }
+    [self contentOfNumber:number];
+}
+
+// What the running phase waited for came by its signals, or was there already. The content phase with
+// `settlesThroughJavaScript` ends once the calls JavaScript made by now are applied: the commit that mounted the content
+// ran its layout effects (`useScreenOptions`) in the same task of the JavaScript thread, so their `mergeOptions` are on
+// their way to the main queue ahead of the settle. Content that was there already (as the wait starts or takes its
+// screens again) may have mounted in a commit that ran just now: it settles too. The bar phase, and screens without
+// React content (a native screen), end at once.
+- (void)contentOfNumber:(NSUInteger)number {
+    if (!_settlesThroughJavaScript || _isInBarPhase || ![self hasReactScreen]) {
+        [self phaseOfNumber:number endedMarkingReady:NO];
+        return;
+    }
+    if (_settling) {
+        return;
+    }
+    _settling = YES;
+    NSUInteger settle = ++_settleNumber;
+    __weak ANNRenderWait *weakSelf = self;
+    [ANNJavaScriptCalls afterCallsMadeSoFar:^{
+      [weakSelf settleOfNumber:number settle:settle];
+    }];
+}
+
+- (void)settleOfNumber:(NSUInteger)number settle:(NSUInteger)settle {
+    if (![self runs:number] || !_settling || settle != _settleNumber) {
+        return;
+    }
+    _settling = NO;
     [self phaseOfNumber:number endedMarkingReady:NO];
 }
 
@@ -240,9 +289,18 @@ static NSUInteger ANNRenderWaitCount;
     }
 }
 
-// The limit: what is still waited counts as rendered from now on, its held events go at once.
+// The limit: what is still waited counts as rendered from now on, its held events go at once. A phase that only waits
+// for the calls of JavaScript (its content is there) ends without marking anything.
 - (void)limitOfNumber:(NSUInteger)number {
-    if (![self runs:number] || (_waited.count == 0 && !_barWait)) {
+    if (![self runs:number]) {
+        return;
+    }
+    if (_settling) {
+        [self stopSettling];
+        [self phaseOfNumber:number endedMarkingReady:NO];
+        return;
+    }
+    if (_waited.count == 0 && !_barWait) {
         return;
     }
     [self phaseOfNumber:number endedMarkingReady:YES];
@@ -288,7 +346,7 @@ static NSUInteger ANNRenderWaitCount;
           [self markContentReady];
       }
       if (self->_bar == ANNRenderWaitBarAfterContent && !self->_isInBarPhase) {
-          [self startBarPhase];
+          [self startBarPhaseWithLimits:[self barLimitsAfterContent]];
           return;
       }
       [self finish];
@@ -309,9 +367,10 @@ static NSUInteger ANNRenderWaitCount;
 
 #pragma mark - The bar phase
 
-// The content is there: the bar components of the screens now, each kind to its own limit from now. Nothing to wait
-// for ends the wait at once.
-- (void)startBarPhase {
+// The content is there: the bar components of the screens now, each kind to its limit in `limits` from now. Nothing to
+// wait for ends the wait at once.
+- (void)startBarPhaseWithLimits:(ANNBarWaitLimits)limits {
+    [self stopSettling];
     [_barWait cancel];
     _barWait = nil;
     [self releaseContent];
@@ -321,7 +380,7 @@ static NSUInteger ANNRenderWaitCount;
     NSArray<UIViewController *> *barScreens = [self barScreens];
     [self rememberTakenScreens:barScreens states:nil];
     ANNBarComponentsWait *barWait = [ANNBarComponentsWait waitForScreens:barScreens
-                                                                  limits:_barLimits
+                                                                  limits:limits
                                                                     done:^{
                                                                       [weakSelf barOfNumber:number];
                                                                     }];
@@ -344,23 +403,28 @@ static NSUInteger ANNRenderWaitCount;
     }
     if (_isInBarPhase) {
         [self runStep:^{
-          [self startBarPhase];
+          [self startBarPhaseWithLimits:self->_barLimits];
         }];
         return;
     }
     // The same token: the limit set at the start stays.
     NSUInteger number = _number;
+    [self stopSettling];
     [self releaseContent];
     [_barWait cancel];
     _barWait = nil;
-    if (take) {
-        [self takeScreensOfNumber:number];
-    } else {
+    if (!take) {
         _takenScreens = nil;
         _takenStates = nil;
-    }
-    if (_waited.count == 0 && !_barWait) {
         [self phaseOfNumber:number endedMarkingReady:NO];
+        return;
+    }
+    // As at the start: a node ready already counts at once (its ready handler waits for the next time), and content
+    // that is there settles again, the settle of the last take having stopped.
+    [self takeScreensOfNumber:number];
+    [self testNode];
+    if (_waited.count == 0 && !_barWait) {
+        [self contentOfNumber:number];
     }
 }
 
@@ -382,6 +446,7 @@ static NSUInteger ANNRenderWaitCount;
 
 // The wait lets go of everything: its handlers, its bar wait; its limits find another token.
 - (void)stop {
+    [self stopSettling];
     _isWaiting = NO;
     _isInBarPhase = NO;
     _takenScreens = nil;
@@ -403,6 +468,12 @@ static NSUInteger ANNRenderWaitCount;
 }
 
 #pragma mark - Helpers
+
+// A settle on its way does nothing from now on.
+- (void)stopSettling {
+    _settling = NO;
+    _settleNumber++;
+}
 
 // What the content phase's take reads of each screen to decide what it waits for: the readiness it needs, whether it
 // has its content yet, whether that content is ready, and whether its root mounted.
@@ -468,6 +539,37 @@ static NSUInteger ANNRenderWaitCount;
         }
     }
     return screens;
+}
+
+// With `ANNRenderWaitContentNode`, the node counts as ready when every screen of it is.
+- (void)testNode {
+    if (_content == ANNRenderWaitContentNode && _node && [self screensAreReady]) {
+        [_waited removeObject:_node];
+    }
+}
+
+// The limits of the bar phase that follows the content phase: with `barLimitsFromStart`, what is left of each since the
+// wait started.
+- (ANNBarWaitLimits)barLimitsAfterContent {
+    ANNBarWaitLimits limits = _barLimits;
+    if (!_barLimitsFromStart) {
+        return limits;
+    }
+    NSTimeInterval spent = CACurrentMediaTime() - _startTime;
+    limits.titleAndBackground = ANNBarLimitLeft(limits.titleAndBackground, spent);
+    limits.buttons = ANNBarLimitLeft(limits.buttons, spent);
+    return limits;
+}
+
+// A screen with React content is among the screens: a commit of React mounted it.
+- (BOOL)hasReactScreen {
+    for (UIViewController *node in [self screens]) {
+        if ([node isKindOfClass:ANNComponentViewController.class] &&
+            ((ANNComponentViewController *)node).reactView) {
+            return YES;
+        }
+    }
+    return NO;
 }
 
 // Every screen has no content to wait for (a native screen) or its content is ready.

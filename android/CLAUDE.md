@@ -21,8 +21,9 @@ top-level folder. Main thread only, unless a line says otherwise.
   `OptionsReader`, `OptionsCache`, `DefaultOptions`. `params/` has the value types (`Bool`, `Text`, `Fraction`,
   `Variant`, `ThemeColour`); `parsers/` reads them tolerantly from React Native data.
 - `react/`: the way in and out: `NavigationTurboModule`, `CommandRunner`, `CommandAnswer`, `ErrorTexts`,
-  `OptionsCommands`, `ReloadCoordinator`, `ReactGateway`, `ReactView` (a React root), the stores (`ScreenInsets`,
-  `ScreenRegions`, `ArrangementStates`, `Hinge`, `StartInfo`), `LaunchLink`, `ScrollEvents`.
+  `OptionsCommands`, `PendingCalls` (a task behind the calls JavaScript made), `ReloadCoordinator`, `ReactGateway`,
+  `ReactView` (a React root), the stores (`ScreenInsets`, `ScreenRegions`, `ArrangementStates`, `Hinge`, `StartInfo`),
+  `LaunchLink`, `ScrollEvents`.
 - `react/events/`: `AppearanceDispatcher`, `ScreenAppearance`, `EventEmitter`, `EventContract` (made by
   `scripts/contract.mjs`), `NavigationStateReporter`, `ComponentType`.
 - `viewcontrollers/viewcontroller/`: `ViewController` (the base of every node), `Presenter`, `IReactView` (what a

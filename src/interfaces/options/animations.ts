@@ -354,8 +354,11 @@ export interface StackAnimationOptions {
   enabled?: boolean;
   /**
    * Whether to wait for the new top screen to be drawn before the transition. Without it, the transition waits for the
-   * content of a screen with an animation of its own for half a second at most, `true` waits as long as it takes,
-   * `false` starts at once, also with an animation of its own.
+   * first mount of the new top's content, half a second at most, with the platform's transition as with an animation
+   * of its own; on a push the options the screen sets as it renders for the first time (`useScreenOptions`, such as
+   * its title) are in its bar from the first frame. `true` waits as long as it takes, `false` starts at once, the
+   * content drawing as it comes ((Android) a push with `appProvider` still renders the screen first). (iOS) The
+   * components of the bar are waited for too, each to its own limit.
    */
   waitForRender?: boolean;
   /**

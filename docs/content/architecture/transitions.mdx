@@ -181,11 +181,10 @@ A screen can come in before its React content has drawn, or wait for it. Coming 
 
 | | By default |
 | --- | --- |
-| <Os name="iOS" /> push | Doesn't wait for the content: the screen slides in with its bar, and the content draws as it comes. It waits only for components in the bar. |
-| <Os name="Android" /> push | Doesn't wait. With `appProvider` a React screen is rendered before the push starts, so it comes in drawn from the first frame. A screen with a React root of its own comes in at once, and its content draws as it comes; so does a native screen. The components of the bar draw as the screen comes in. |
+| Push | Waits for the screen's first mount, half a second at most, so it comes in drawn, with what it set as it rendered (a title from `useScreenOptions`) already in its bar. A native screen comes in at once. <Os name="iOS" /> The components of the bar wait too, each to its own limit from the start of the wait. <Os name="Android" /> The components of the bar draw as the screen comes in; with `appProvider` the screen is rendered before the push starts ([below](#wait-one-tree)). |
 | <Os name="Android" /> modal | Waits for the content and the components of the bar, half a second at most, so the screen comes in drawn. |
 
-`waitForRender` of an animation changes it. `true` waits as long as it takes; `false` comes in at once (a push on Android with `appProvider` [still renders the screen first](#wait-one-tree)):
+`waitForRender` of an animation changes it. `true` waits as long as it takes; `false` comes in at once, the content drawing as it comes (a push on Android with `appProvider` [still renders the screen first](#wait-one-tree)):
 
 ```ts
 navigation.push('Details', {
@@ -193,15 +192,15 @@ navigation.push('Details', {
 });
 ```
 
-A screen that draws nothing at first doesn't hold its transition back: it comes in empty, with its bar.
+A screen that draws nothing at first holds its transition back half a second at most, then comes in with its bar.
 
 ### A push on Android, in one tree {#wait-one-tree}
 
-<Os name="Android" /> With `appProvider` a push doesn't wait for the screen, and the screen still comes in drawn: nothing of it mounts during the transition, which would drop frames. It goes in three steps:
+<Os name="Android" /> With `appProvider` the screen comes in drawn without a wait of its own: nothing of it mounts during the transition, which would drop frames. It goes in three steps:
 
 1. The native side lays the screen out in its stack, out of sight, and gives React its size and its safe area.
 2. React renders the screen at that size with its content, at once.
-3. The push starts in the frame in which that content appears; if it doesn't appear, after half a second.
+3. The push starts right after that content appears, once what the screen set as it rendered (its `useScreenOptions`) is applied; if it doesn't appear, after half a second.
 
 So the push starts later by the time React takes to render the screen, as a push in a native app starts once its screen is built. `waitForRender: false` goes the same way here; `true` waits for the content as long as it takes, and for the components of the bar, half a second at most.
 

@@ -72,8 +72,13 @@ react/events/AppearanceDispatcher ─► NavigationStateReporter ─► EventEmi
 5. **Make and join.** `LayoutFactory.create` makes Profile (a `ComponentViewController`, registered in the
    `ChildControllersRegistry`); `StackController.join` adds it; `StackQueue.push` accepts it as an entry.
 6. **`StackQueue`** is the only way to change a stack's children. `drain` starts the operation when nothing blocks it.
-   `startPush` decides the wait: none, `waitForRender`, or a prepared push. A wait is a `RenderWait` on Profile, and the
-   queue's `deliver` posts readiness signals to the next turn of the loop.
+   `startPush` decides the wait: a prepared push; `waitForRender: true` (as long as it takes); unset, for a screen with
+   React content, Profile's first mount, 0.5 s at most (`PUSH_WAIT_MILLIS`); none for `false`, a native screen or a
+   stack off screen. A wait is a `RenderWait` on Profile. Its mount reaches the push through the queue's `afterCalls`
+   (`PendingCalls`: once through the JavaScript thread, the module's thread and the main thread, the way of a
+   `mergeOptions`), so the `mergeOptions` of the commit that mounted it (`useScreenOptions`) has applied when the
+   transition starts, content mounted before the push too; the prepared push starts the same way after its slot
+   mounted. Unset, the targets of elements take what is left of the 0.5 s.
 7. **Begin.** `beginPush` raises Profile's view (`StackViews`), moves the bar and the tab bar
    (`StackQueue.Host.barTransition`, `tabBarTransition`), calls `StackController` through `currentChildChanged`, then
    `AppearanceDispatcher.beginTransition`: **`ComponentWillAppear`** of Profile. The transition runs
