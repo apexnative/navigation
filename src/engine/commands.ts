@@ -122,7 +122,7 @@ export function setRoot(root: LayoutRoot): Promise<string> {
 
 export function setDefaultOptions(options: Options): void {
   rememberDefaultOptions(options);
-  native.setDefaultOptions(toNativeOptions(options));
+  native.setDefaultOptions(toNativeOptions(options, 'defaultOptions'));
 }
 
 // The show commands that wait in JS, by number: for lazy screens to load, for the first props of native screens, for a
@@ -141,7 +141,7 @@ const preparedScreens = new Set<string>();
  * engine remembers them by the node's id, so the root set again for a new launch of the native side shows them too.
  */
 export function mergeOptions(componentId: string, options: Options): void {
-  const nativeOptions = toNativeOptions(options);
+  const nativeOptions = toNativeOptions(options, componentId);
   const send = () => {
     rememberMergedOptions(componentId, options);
     native.mergeOptions(componentId, nativeOptions);
@@ -431,7 +431,7 @@ export function dismissModal(componentId: string, options?: Options): Promise<st
   dropReactRenderMeasures();
   const commandId = nextId('dismissModal');
   return inOrder(() =>
-    native.dismissModal(commandId, componentId, options && toNativeOptions(options))
+    native.dismissModal(commandId, componentId, options && toNativeOptions(options, componentId))
   );
 }
 

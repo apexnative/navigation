@@ -55,11 +55,12 @@ export type ScreenRootProps = { componentId: string } & Record<string, unknown>;
 const screens = new Map<string, EngineScreen>();
 const roots = new Map<string, ComponentType<{ componentId: string; rootTag?: number }>>();
 let unmounted: ((screenId: string) => void) | undefined;
-// The React root that shows each screen, by its root tag. After a JavaScript reload React Native starts the roots of
-// the old screens again in the new runtime, under the ids the new screens get too, and unmounts them once the new ones
-// show; their root tags are older, as the native side counts them up for as long as the app runs. A slot of the app's
-// one tree has no tag: while the one tree shows a screen with the id, no root of that id lets it go.
-const owners = new Map<string, number>();
+// The React roots mounted under each id, by their root tags. One id can have several: after a JavaScript reload React
+// Native starts the roots of the old screens again in the new runtime, under the ids the new screens get too, and
+// unmounts them once the new ones show; a component of the default or a stack's options has one id and a root in the
+// bar of every screen that shows it. The id lets its props go only with the last of them. A slot of the app's one tree
+// has no tag: while the one tree shows a screen with the id, no root of that id lets it go.
+const owners = new Map<string, Set<number>>();
 
 /** What runs when the root of a screen unmounts: the screen is gone. */
 export function onScreenUnmounted(listener: (screenId: string) => void): void {
@@ -214,14 +215,21 @@ export function screenRoot(
       );
       const props = useSyncExternalStore(watch, () => propsOf(componentId));
       useEffect(() => {
-        if (rootTag !== undefined && rootTag > (owners.get(componentId) ?? -1)) {
-          owners.set(componentId, rootTag);
+        if (rootTag !== undefined) {
+          const tags = owners.get(componentId) ?? new Set<number>();
+          tags.add(rootTag);
+          owners.set(componentId, tags);
         }
         return () => {
-          // An old root of the same id leaves the screen alone, and so does any root while the one tree still has a slot
-          // with the id: a later screen under the id, the restarted root of a screen after a reload into the one tree
-          // (its slot may mount only once the app's provider lets it), the screen rendering again under the provider.
-          if (rootTag !== undefined && owners.get(componentId) !== rootTag) return;
+          // A root while another root of the id is mounted leaves the screen alone, and so does any root while the one
+          // tree still has a slot with the id: a later screen under the id, the restarted root of a screen after a
+          // reload into the one tree (its slot may mount only once the app's provider lets it), the screen rendering
+          // again under the provider.
+          const tags = owners.get(componentId);
+          if (rootTag !== undefined && tags) {
+            tags.delete(rootTag);
+            if (tags.size > 0) return;
+          }
           if (hasSlot(componentId)) return;
           owners.delete(componentId);
           forgetProps(componentId);

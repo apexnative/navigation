@@ -351,7 +351,11 @@ export interface OptionsTopBarButton {
  * replaces it.
  */
 export interface OptionsTopBarButtonComponent {
-  /** The id of the component. Without it, the library gives one. The same `name` and `id` mean the same component. */
+  /**
+   * The id of the component. Without it, the library gives one made of the screen, the component's place in the
+   * options and its `name`: it stays the same for every `mergeOptions` of the screen, so the mounted component stays
+   * and only its props change. The same `name` and `id` mean the same component.
+   */
   id?: string;
   /** The name of the registered component. */
   name: string;

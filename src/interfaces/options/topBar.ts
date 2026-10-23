@@ -11,7 +11,11 @@ import type { Color, FontFamily, FontStyle, FontWeight, ImageResource } from './
  * `name` replaces it.
  */
 export interface OptionsTopBarTitleComponent {
-  /** The id of the component. Without it, the library gives one. The same `name` and `id` mean the same component. */
+  /**
+   * The id of the component. Without it, the library gives one made of the screen, the component's place in the
+   * options and its `name`: it stays the same for every `mergeOptions` of the screen, so the mounted component stays
+   * and only its props change. The same `name` and `id` mean the same component.
+   */
   id?: string;
   /** The name of the registered component. */
   name: string;
@@ -276,7 +280,11 @@ export interface OptionsTopBarBackground {
 
 /** The React component that is the background of the bar. */
 export interface OptionsTopBarBackgroundComponent {
-  /** The id of the component. Without it, the library gives one. The same `name` and `id` mean the same component. */
+  /**
+   * The id of the component. Without it, the library gives one made of the screen, the component's place in the
+   * options and its `name`: it stays the same for every `mergeOptions` of the screen, so the mounted component stays
+   * and only its props change. The same `name` and `id` mean the same component.
+   */
   id?: string;
   /** The name of the registered component. */
   name: string;
@@ -432,7 +440,11 @@ export interface OptionsSearchBarSuggestion {
  * component; a different `id` or `name` replaces the component, and so the search.
  */
 export interface OptionsSearchBarResultsComponent {
-  /** The id of the component. Without it, the library gives one. The same `name` and `id` mean the same component. */
+  /**
+   * The id of the component. Without it, the library gives one made of the screen, the component's place in the
+   * options and its `name`: it stays the same for every `mergeOptions` of the screen, so the mounted component stays
+   * and only its props change. The same `name` and `id` mean the same component.
+   */
   id?: string;
   /** The name of the registered component. */
   name: string;
