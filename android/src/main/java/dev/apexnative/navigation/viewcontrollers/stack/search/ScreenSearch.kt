@@ -36,6 +36,8 @@ import dev.apexnative.navigation.views.stack.topbar.search.SuggestionList
 class ScreenSearch(
     private val host: Host,
     private val screenId: String,
+    /** The sender of the JavaScript the screen was made for: silent once it went. */
+    private val emitter: EventEmitter,
     private val context: Context,
     private val loadIcon: (String) -> Drawable?,
     /** A scope the user picks goes into the screen's options, so it stays when they apply again. */
@@ -45,7 +47,6 @@ class ScreenSearch(
         /** The search changed what the bar shows (open or closed, its text): shown again if it is the shown one. */
         fun refresh(search: ScreenSearch)
         fun isShown(search: ScreenSearch): Boolean
-        fun emitter(): EventEmitter?
         fun keyboard(view: View, show: Boolean)
         /** The stack's view: a search view goes over it. */
         fun stackView(): ViewGroup?
@@ -402,7 +403,7 @@ class ScreenSearch(
 
     // A pick sends searchSuggestionPicked with the suggestion's id; the text stays.
     private fun pickSuggestion(suggestionId: String) {
-        host.emitter()?.emitSearchSuggestionPicked(screenId, suggestionId)
+        emitter.emitSearchSuggestionPicked(screenId, suggestionId)
         setSuggestions(emptyList())
     }
 
@@ -426,18 +427,15 @@ class ScreenSearch(
     private fun sendUpdate(
         focused: Boolean = isActive && (panel?.searchView?.editText ?: searchField.editText).hasFocus(),
     ) {
-        val emitter = host.emitter() ?: return
         eventTargets().forEach { emitter.emitSearchBarUpdated(it, text, focused, scope()) }
     }
 
     private fun sendCancel() {
-        val emitter = host.emitter() ?: return
         eventTargets().forEach { emitter.emitSearchBarCancelPressed(it) }
         sendUpdate()
     }
 
     private fun sendSubmit() {
-        val emitter = host.emitter() ?: return
         eventTargets().forEach { emitter.emitSearchBarSubmitted(it, text, scope()) }
     }
 

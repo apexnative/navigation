@@ -26,14 +26,12 @@ import dev.apexnative.navigation.utils.scrollToTop
 import dev.apexnative.navigation.viewcontrollers.child.ChildControllersRegistry
 import dev.apexnative.navigation.viewcontrollers.component.ComponentViewController
 import dev.apexnative.navigation.viewcontrollers.component.RestPlace
-import dev.apexnative.navigation.viewcontrollers.component.ScreenReadiness
 import dev.apexnative.navigation.viewcontrollers.navigator.BackCallbackState
 import dev.apexnative.navigation.viewcontrollers.navigator.Navigator
 import dev.apexnative.navigation.viewcontrollers.parent.ContainerBackground
 import dev.apexnative.navigation.viewcontrollers.parent.ParentController
 import dev.apexnative.navigation.viewcontrollers.stack.StackController
 import dev.apexnative.navigation.viewcontrollers.stack.fab.FabPlacement
-import dev.apexnative.navigation.viewcontrollers.stack.topbar.BarComponents
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.Presenter
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.ViewController
 import dev.apexnative.navigation.views.animations.FadeThrough
@@ -660,15 +658,12 @@ class BottomTabsController(
     private fun makeCell(index: Int): CustomBottomTabItemView {
         val component = itemOptions(index).component
         val componentId = component.componentId.get(null) ?: "$id.$index"
-        ScreenReadiness.setRendersAtOnce(componentId, true)
-        // Another live root has the id (the same layout set again before the old one went): what it rendered isn't
-        // this one's; the id's readiness goes only with its last root (as the bar's roots).
-        if (BarComponents.isLive(componentId)) ScreenReadiness.forgetRender(componentId)
-        BarComponents.rootMade(componentId)
         val cell = CustomBottomTabItemView(activity)
         val state = cellState(index)
-        cell.show(ReactView(activity, componentId, component.name.get(""), cell.bundleOf(state)), state)
-        cell.onDestroyed = { if (BarComponents.rootStopped(componentId)) ScreenReadiness.remove(componentId) }
+        // Another live root may have the id (the same layout set again before the old one went): each answers by the
+        // render of its own surface, and the id's readiness goes with its last root.
+        val root = ReactView(activity, componentId, component.name.get(""), cell.bundleOf(state), rendersAtOnce = true)
+        cell.show(root, state)
         return cell
     }
 

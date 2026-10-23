@@ -172,6 +172,9 @@ top-level folder. Main thread only, unless a line says otherwise.
   `cancel` it on every exit.
 - A layer that waits to show must be a `WaitingLayer` and leave on every exit (show, supersede, destroy, root gone).
 - Never resolve a promise yourself: only `CommandAnswer` knows whether its JavaScript went and sends the state first.
+- An event of a screen goes to the JavaScript the screen was made for: `EventEmitter.of(node.jsGeneration)`, or an
+  emitter kept from then (it goes silent after a reload). React Native keeps one context across a reload, so a sender
+  taken from the context at event time tells the new JavaScript about a screen it never had.
 - A signal that comes inside a layout pass or a view's attach must not move views there; the stack posts readiness
   (`deliver`).
 - A step that runs later (a timer, a readiness signal, an animator's end, a user callback) runs under no runner: it

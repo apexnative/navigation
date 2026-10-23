@@ -5,7 +5,6 @@ import dev.apexnative.navigation.options.Options
 import dev.apexnative.navigation.options.TitleComponentOptions
 import dev.apexnative.navigation.options.TopBarBackgroundComponentOptions
 import dev.apexnative.navigation.options.params.Text
-import dev.apexnative.navigation.viewcontrollers.component.ScreenReadiness
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.IReactView
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.ViewController
 
@@ -15,7 +14,8 @@ import dev.apexnative.navigation.viewcontrollers.viewcontroller.ViewController
  * same root, never made again; another replaces it, and the old one stops at once. A background with the same `name`
  * and `componentId` on several screens is one root, shared; it stops when no screen of the stack names it any more. The
  * roots go with their screen ([screenDestroyed]) or the stack ([destroyAll]). Each root renders at once, without
- * waiting for its layout: [makeRoot] marks its id so before its surface starts. Main thread only.
+ * waiting for its layout: [makeRoot] makes it so (`ReactView`'s `rendersAtOnce`), and each answers by its own render
+ * when several live roots show one id (`ScreenReadiness`). Main thread only.
  */
 internal class BarComponents(private val makeRoot: (componentId: String, name: String) -> IReactView) {
     /** A root of the bar: what it renders, and its content. */
@@ -151,61 +151,15 @@ internal class BarComponents(private val makeRoot: (componentId: String, name: S
         backgrounds.remove(key)?.let(::stop)
     }
 
-    // Made first, counted after: the maker asks whether another root with the id lives.
-    private fun make(key: Key): Root {
-        val root = Root(key.name, key.componentId, makeRoot(key.componentId, key.name))
-        LiveIds.add(key.componentId)
-        return root
-    }
+    private fun make(key: Key): Root = Root(key.name, key.componentId, makeRoot(key.componentId, key.name))
 
-    // Stops a root once; what the readiness store kept of its id goes unless another live root holds the id.
-    private fun stop(root: Root) {
-        root.view.destroy()
-        if (LiveIds.remove(root.componentId)) ScreenReadiness.remove(root.componentId)
-    }
+    // Stops a root once; its content takes its mark of rendering at once with it.
+    private fun stop(root: Root) = root.view.destroy()
 
     private fun keyOf(name: Text, componentId: Text, id: Text): Key? {
         val componentName = name.get(null)?.takeIf { it.isNotEmpty() } ?: return null
         val rootId = componentId.get(null)?.takeIf { it.isNotEmpty() } ?: id.get(null)?.takeIf { it.isNotEmpty() }
             ?: return null
         return Key(componentName, rootId)
-    }
-
-    companion object {
-        /** Whether a bar root with [id] is alive now, in any stack. */
-        fun isLive(id: String): Boolean = LiveIds.has(id)
-
-        /**
-         * Another root that renders at once lives with [id] (a cell of the tabs' custom row): it counts as the bar's
-         * roots do, so a root that stops clears the id's readiness only when it was the last one with it.
-         */
-        internal fun rootMade(id: String) = LiveIds.add(id)
-
-        /** A root of [rootMade] stopped; true when no live root has [id] any more. */
-        internal fun rootStopped(id: String): Boolean = LiveIds.remove(id)
-
-        /** The JavaScript went (a reload): no id counts as held by a live root any more, as `ScreenReadiness.reset`. */
-        fun reset() = LiveIds.clear()
-    }
-
-    // The ids of the bar roots alive now, in every stack: a root that stops clears its id's readiness only when it was
-    // the last one with it.
-    private object LiveIds {
-        private val counts = HashMap<String, Int>()
-
-        fun has(id: String): Boolean = (counts[id] ?: 0) > 0
-
-        fun clear() = counts.clear()
-
-        fun add(id: String) {
-            counts[id] = (counts[id] ?: 0) + 1
-        }
-
-        // True when no root with the id is left.
-        fun remove(id: String): Boolean {
-            val count = (counts[id] ?: return true) - 1
-            if (count <= 0) counts.remove(id) else counts[id] = count
-            return count <= 0
-        }
     }
 }

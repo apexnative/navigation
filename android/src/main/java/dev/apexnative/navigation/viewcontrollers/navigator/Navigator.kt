@@ -40,7 +40,6 @@ import dev.apexnative.navigation.viewcontrollers.parent.ParentController
 import dev.apexnative.navigation.viewcontrollers.stack.PreparedPushes
 import dev.apexnative.navigation.viewcontrollers.stack.StackCommands
 import dev.apexnative.navigation.viewcontrollers.stack.StackController
-import dev.apexnative.navigation.viewcontrollers.stack.topbar.BarComponents
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.ViewController
 import dev.apexnative.navigation.views.animations.FadeThrough
 import dev.apexnative.navigation.views.animations.SideAnimator
@@ -451,7 +450,6 @@ class Navigator(
         destroyLayers(answerPending = false)
         // Nothing the old screens told of their readiness holds for the screens of the new JavaScript.
         ScreenReadiness.reset()
-        BarComponents.reset()
         // Without layers back leaves the app until the new JavaScript sets its root.
         BackCallbackState.update(this)
     }

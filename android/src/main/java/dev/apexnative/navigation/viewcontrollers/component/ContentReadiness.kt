@@ -5,7 +5,7 @@ import dev.apexnative.navigation.viewcontrollers.viewcontroller.ViewController
 /**
  * Whether a screen's content rendered, which a command waits for before the screen comes in: a new root (`setRoot`),
  * a push (unless `waitForRender: false`), the new top of a `setStackRoot`. A wait never listens to the readiness store
- * itself: the content keeps the one listener of its id and tells every waiter. Main thread only.
+ * itself: the content keeps its own listener of its id and tells every waiter. Main thread only.
  */
 internal interface Readiness {
     /** The content of [screen] rendered; a screen without content to wait for is ready. */

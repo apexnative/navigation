@@ -41,7 +41,6 @@ import dev.apexnative.navigation.utils.ImageLoader
 import dev.apexnative.navigation.utils.ImageLoadingListenerAdapter
 import dev.apexnative.navigation.utils.TestIds
 import dev.apexnative.navigation.utils.UiUtils
-import dev.apexnative.navigation.viewcontrollers.component.ScreenReadiness
 import dev.apexnative.navigation.viewcontrollers.navigator.BackCallbackState
 import dev.apexnative.navigation.viewcontrollers.stack.StackDisplay
 import dev.apexnative.navigation.viewcontrollers.stack.StackDisplay.BarMotion
@@ -936,14 +935,10 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
         return resolved.component
     }
 
-    private fun makeRoot(componentId: String, name: String): IReactView {
-        // A component of the bar renders at once, without waiting for its layout, from before its surface starts.
-        ScreenReadiness.setRendersAtOnce(componentId, true)
-        // Another live root has this id (a component of the stack's options on two screens): what it rendered isn't
-        // this root's, which answers by its own render.
-        if (BarComponents.isLive(componentId)) ScreenReadiness.forgetRender(componentId)
-        return ReactView(activity, componentId, name)
-    }
+    // A component of the bar renders at once, without waiting for its layout. Another live root may show the same id
+    // (a component of the stack's options on two screens): each answers by the render of its own surface.
+    private fun makeRoot(componentId: String, name: String): IReactView =
+        ReactView(activity, componentId, name, rendersAtOnce = true)
 
     private fun loadIcon(uri: String): Drawable? {
         var loaded: Drawable? = null

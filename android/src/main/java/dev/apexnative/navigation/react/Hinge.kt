@@ -9,7 +9,6 @@ import android.os.Build
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
-import com.facebook.react.ReactApplication
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.WritableMap
 import dev.apexnative.navigation.react.events.EventContract
@@ -22,7 +21,8 @@ import java.lang.ref.WeakReference
  * sensor (Android 11+), in degrees to a tenth as on iOS. Android has no public state of a closed device: closed is a
  * window without a fold, or an angle under 90° ([valueOf]). No sensor and no fold: no hinge, `{}`. It runs while
  * JavaScript has a hook mounted (`setHingeUpdates`), the sensor only while the activity is resumed too; the same value
- * is not sent twice. Main thread only, but [get].
+ * is not sent twice. The values go to the JavaScript that turned the updates on (`EventEmitter.current` then): after a
+ * reload, until the updates stop, they go nowhere. Main thread only, but [get].
  */
 internal object Hinge {
     /** A value of the hinge: its state, and its angle in degrees to a tenth; none while the state is unknown. */
@@ -33,6 +33,8 @@ internal object Hinge {
     private const val CLOSED_BELOW = 90f
 
     private var enabled = false
+    // The sender of the JavaScript that turned the updates on; none while they are off.
+    private var emitter: EventEmitter? = null
     private var activity: WeakReference<Activity>? = null
     private var folds: WindowFolds? = null
     private var sensorManager: SensorManager? = null
@@ -63,9 +65,11 @@ internal object Hinge {
     fun setEnabled(activity: Activity?, enabled: Boolean) {
         this.enabled = enabled
         if (!enabled) {
+            emitter = null
             detach()
             return
         }
+        emitter = EventEmitter.current()
         activity?.let(::attachTo)
         update()
     }
@@ -134,8 +138,7 @@ internal object Hinge {
         val value = valueOf(folds.folds.firstOrNull(), sensor != null, angle)
         if (value == last) return
         last = value
-        val reactContext = (activity?.get()?.application as? ReactApplication)?.reactHost?.currentReactContext ?: return
-        EventEmitter(reactContext).emitHingeChanged(toMap(value))
+        emitter?.emitHingeChanged(toMap(value))
     }
 
     /**

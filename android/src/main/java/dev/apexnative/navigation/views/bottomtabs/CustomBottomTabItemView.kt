@@ -22,9 +22,6 @@ open class CustomBottomTabItemView(context: Context) : FrameLayout(context) {
     private var state: TabCellState? = null
     private var destroyed = false
 
-    /** Runs once as the cell stops: what was kept for its content's id goes. */
-    internal var onDestroyed: (() -> Unit)? = null
-
     /** The content the cell shows, filling it, made with [state] as its first props. */
     internal fun show(view: IReactView, state: TabCellState) {
         content = view
@@ -68,8 +65,6 @@ open class CustomBottomTabItemView(context: Context) : FrameLayout(context) {
         didDisappear()
         destroyed = true
         content?.destroy()
-        onDestroyed?.invoke()
-        onDestroyed = null
     }
 
     /** The props of [state] as React Native takes them. */

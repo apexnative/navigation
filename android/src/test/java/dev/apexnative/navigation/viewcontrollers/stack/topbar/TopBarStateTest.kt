@@ -16,6 +16,7 @@ import dev.apexnative.navigation.options.params.Bool
 import dev.apexnative.navigation.options.params.Fraction
 import dev.apexnative.navigation.options.params.Text
 import dev.apexnative.navigation.options.params.ThemeColour
+import dev.apexnative.navigation.react.ReactView
 import dev.apexnative.navigation.react.events.ComponentType
 import dev.apexnative.navigation.react.events.DispatcherFixture
 import dev.apexnative.navigation.react.events.EventJournal
@@ -359,15 +360,17 @@ class TopBarStateTest {
     }
 
     @Test
-    fun aRootRendersAtOnceAndItsMarkGoesWithIt() {
-        val marking = BarComponents { id, _ ->
-            ScreenReadiness.setRendersAtOnce(id, true)
-            Root()
-        }
+    fun aRootRendersAtOnceAndTheMarkGoesWithTheLastRootOfItsId() {
+        fixture.install()
+        val marking = BarComponents { id, name -> ReactView(activity, id, name, rendersAtOnce = true) }
         val a = screen("A")
+        val b = screen("B")
         marking.title(a, title("Title", "Marked"))
+        marking.title(b, title("Title", "Marked"))
         assertFalse(ScreenReadiness.waitsForReadiness("Marked"))
         marking.screenDestroyed(a)
+        assertFalse(ScreenReadiness.waitsForReadiness("Marked"))
+        marking.screenDestroyed(b)
         assertTrue(ScreenReadiness.waitsForReadiness("Marked"))
     }
 

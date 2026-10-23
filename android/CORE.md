@@ -141,7 +141,11 @@ Each rule has one owner. Change the owner, not a caller; if a new feature needs 
 - **Stack queue.** `StackQueue`: every command, back and return of a container goes through it; it keeps `entries`
   (what JavaScript sees) and `shown` (what the container shows) and answers once.
 - **Screen readiness.** `ScreenReadiness` (by id; written by `SafeAreaView`) and `ContentReadiness` (the `Readiness`
-  the waits ask, through `IReactView.isReady`).
+  the waits ask, through `IReactView.isReady`). As on iOS, the signals are kept (a listener that comes later hears them
+  at once), an id has a listener per key (several roots of one bar component), and each signal carries the React
+  surface it came from: a `ReactView` takes only its own surface's, so an old root with the same id never makes a new
+  one ready. An id renders at once while a root marks it (`ReactView`'s `rendersAtOnce`); the last one takes the id's
+  signals with it. A screen's id is cleared as the screen is made and destroyed, everything on reload.
 - **Render wait.** `RenderWait`: the one wait for screens to render, used by `RootCoordinator`, `ModalCoordinator`,
   `OverlayCoordinator` and `StackQueue`; `RenderWait.waitedScreens` walks `ParentController.waitedChildren()` at every
   level. What differs between users are values (limit, bar phase, unknown-content rule), never steps.
@@ -227,4 +231,5 @@ How they plug in:
 - **Core code in a module's folder:** `viewcontrollers/splitview/SplitViewPresenter.kt`, `slots/SlotScreenView.kt`,
   and in `views/animations/` and `views/element/` everything except the files named above.
 - **Stores** are written on the main thread by the core and read from any thread; they are cleared with their nodes and on
-  reload.
+  reload. Their events, and the search's, go through the emitter of the JavaScript the screen was made for
+  (`EventEmitter.of(node.jsGeneration)`); the hinge keeps the `EventEmitter.current()` of the call that turned it on.

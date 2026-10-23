@@ -31,7 +31,12 @@ class SlotScreenView(
     private val whenMounted = mutableListOf<Runnable>()
     private val whenRendered = mutableListOf<Runnable>()
     private val mountedHandlers = LinkedHashMap<String, Runnable>()
-    private var readinessListener: ScreenReadiness.Listener? = null
+    private var listening = false
+
+    // The safe area view of a slot renders in the app's one React tree: every signal of the id is the screen's.
+    private val readiness = object : ScreenReadiness.Listener {
+        override fun onContentRendered() = checkReadiness()
+    }
     private var mounted = false
     private var readyTold = false
     private var destroyed = false
@@ -105,14 +110,9 @@ class SlotScreenView(
         if (readyTold) return listener.run()
         whenRendered += listener
         if (isReady()) return checkReadiness()
-        if (readinessListener != null) return
-        val readiness = object : ScreenReadiness.Listener {
-            override fun onLaidOut() = Unit
-
-            override fun onContentRendered() = checkReadiness()
-        }
-        readinessListener = readiness
-        ScreenReadiness.setListener(componentId, readiness)
+        if (listening) return
+        listening = true
+        ScreenReadiness.addListener(componentId, this, readiness)
     }
 
     override fun whenSlotContentMounted(listener: Runnable) {
@@ -151,8 +151,8 @@ class SlotScreenView(
     }
 
     private fun stopListening() {
-        val readiness = readinessListener ?: return
-        readinessListener = null
-        ScreenReadiness.removeListener(componentId, readiness)
+        if (!listening) return
+        listening = false
+        ScreenReadiness.removeListener(componentId, this)
     }
 }

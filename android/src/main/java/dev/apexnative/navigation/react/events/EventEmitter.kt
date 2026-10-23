@@ -6,6 +6,7 @@ import com.facebook.react.bridge.ReactContext
 import com.facebook.react.bridge.WritableMap
 import dev.apexnative.navigation.NavigationApplication
 import dev.apexnative.navigation.nativescreen.NativeScreenCalls
+import dev.apexnative.navigation.react.ReloadCoordinator
 import dev.apexnative.navigation.utils.NavigationLog
 import org.json.JSONArray
 
@@ -13,12 +14,26 @@ import org.json.JSONArray
  * Sends the events `ANN.<Name>` to the JavaScript of [reactContext] through React Native's device event emitter, in
  * the order they are sent: sent from the main thread only. Without a context, or when its React instance is gone, an
  * event is dropped with one line in the log. The names and the keys come from [EventContract], made from the types of
- * `src/interfaces/`. The core sends through [current]; modules keep making their own.
+ * `src/interfaces/`.
+ *
+ * An emitter belongs to one JavaScript, as on iOS (`ANNEventEmitter`): it takes the number of the JavaScript
+ * ([generation], `ReloadCoordinator`) when it is made and drops every event silently once that number moved. React
+ * Native keeps one context across a reload (bridgeless), so without it an event of a screen of the JavaScript that
+ * went would reach the new one, which may have a screen with the same id. The core and its modules send through
+ * [current], or [of] with the number of the JavaScript a node was made for.
  */
-class EventEmitter(private val reactContext: ReactContext?) {
-    /** Whether an event sent now reaches JavaScript. */
+class EventEmitter @JvmOverloads constructor(
+    private val reactContext: ReactContext?,
+    /** The number of the JavaScript this emitter sends to: by default the one that runs as it is made. */
+    val generation: Int = ReloadCoordinator.generation,
+) {
+    /** Whether the JavaScript of this emitter still runs: its events go only then. Any thread. */
+    val isCurrent: Boolean
+        get() = ReloadCoordinator.isCurrent(generation)
+
+    /** Whether an event sent now reaches JavaScript: its JavaScript still runs, in a live React instance. */
     val canSend: Boolean
-        get() = reactContext?.hasActiveReactInstance() == true
+        get() = isCurrent && reactContext?.hasActiveReactInstance() == true
 
     fun emitAppLaunched() = emit(EventContract.AppLaunched.EVENT, Arguments.createMap())
 
@@ -167,6 +182,8 @@ class EventEmitter(private val reactContext: ReactContext?) {
         Arguments.createMap().apply { putString(EventContract.ScreenPopped.COMPONENT_ID, componentId) }
 
     private fun emit(name: String, data: WritableMap) {
+        // The JavaScript of this emitter went: the new one never had its screens.
+        if (!isCurrent) return
         val context = reactContext
         if (context == null || !context.hasActiveReactInstance()) {
             Log.w(NavigationLog.TAG, "Could not send event $name. React context is null!")
@@ -176,10 +193,20 @@ class EventEmitter(private val reactContext: ReactContext?) {
     }
 
     companion object {
-        /** The sender to the JavaScript that runs now: the React context of the app's `ReactGateway`. */
+        /**
+         * The sender to the JavaScript that runs now: the React context of the app's `ReactGateway`. It goes silent
+         * once that JavaScript goes (a reload): one kept for later sends nothing to the next.
+         */
         @JvmStatic
-        fun current(): EventEmitter =
-            EventEmitter(NavigationApplication.instanceOrNull?.reactGatewayOrNull?.currentReactContext)
+        fun current(): EventEmitter = of(ReloadCoordinator.generation)
+
+        /**
+         * The sender to the JavaScript [generation] (a node's `jsGeneration`): the React context of the app's
+         * `ReactGateway` while that JavaScript runs, silent once it went, so an event of a screen made for the
+         * JavaScript that went never reaches the new one.
+         */
+        internal fun of(generation: Int): EventEmitter =
+            EventEmitter(NavigationApplication.instanceOrNull?.reactGatewayOrNull?.currentReactContext, generation)
 
         // The names of the events, for modules outside the library; inside it, [EventContract] has them with their
         // keys.

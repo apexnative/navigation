@@ -23,11 +23,15 @@ import dev.apexnative.navigation.viewcontrollers.viewcontroller.ScrollEventListe
  * is made with the view, from the app's React host, and fills it; it starts once, as the view joins a window, and stops
  * once, on the main thread, as the view is destroyed.
  *
- * Ready once the safe area view of the screen told [ScreenReadiness] that the content rendered into it; a screen
- * without a safe area view (no view ever told anything of its id) once the root view of its surface has children, read
- * on this view's own layout passes. Ready once, ready for good; what waits for it ([whenReady]) runs then, once.
- * Without either, the limits of what waits decide: the view has no timer of its own. It owns the record of its
- * appearance, which the dispatcher of the appearance events holds until the content is ready (`AppearanceDispatcher`).
+ * Ready once the safe area view of the screen, in this view's own surface, told [ScreenReadiness] that the content
+ * rendered into it: the signal of another root with the same id (an old one, another live root of a bar component)
+ * never makes this one ready. A screen without a safe area view (no view ever told anything of its id) is ready once
+ * the root view of its surface has children, read on this view's own layout passes. A root that renders at once
+ * ([rendersAtOnce]: a component of a bar, a tab's cell) marks its id so from before its surface starts until it stops.
+ * Ready once, ready for good; what waits for it ([whenReady]) runs then, once.
+ * Without a signal or children, the limits of what waits decide: the view has no timer of its own. It owns the
+ * record of its appearance, which the dispatcher of the appearance events holds until the content is ready
+ * (`AppearanceDispatcher`).
  */
 @SuppressLint("ViewConstructor")
 class ReactView @JvmOverloads constructor(
@@ -36,6 +40,8 @@ class ReactView @JvmOverloads constructor(
     override val componentName: String,
     /** Props given by the native side, over `componentId`: the state of a tab's cell. */
     initialProps: Bundle? = null,
+    /** The root renders at once, without waiting for its layout: a component of a bar or a tab's cell. */
+    private val rendersAtOnce: Boolean = false,
 ) : FrameLayout(context), IReactView {
     private val scrollEventListener = ScrollEventListener()
     private var destroyed = false
@@ -44,7 +50,14 @@ class ReactView @JvmOverloads constructor(
     // What waited for the readiness was told; a question of isReady alone tells nothing, so nothing runs inside it.
     private var readyTold = false
     private val readyListeners = mutableListOf<Runnable>()
-    private var readinessListener: ScreenReadiness.Listener? = null
+    private var listening = false
+
+    // What this root hears of its id: only the signals of its own surface.
+    private val readiness = object : ScreenReadiness.Listener {
+        override fun accepts(source: Int): Boolean = ownSource()?.let { it == source } ?: true
+
+        override fun onContentRendered() = checkReadiness()
+    }
 
     // None without the app's host (the unit tests).
     private val surface: ReactSurface?
@@ -59,8 +72,17 @@ class ReactView @JvmOverloads constructor(
      */
     internal var contentChildCount: () -> Int = { (surface?.view as? ViewGroup)?.childCount ?: 0 }
 
+    /**
+     * The id of this root's React surface, which the signals of its safe area view carry: React Native gives it as
+     * the surface starts (none matches before) and never gives it again. Null without a surface: every signal of the
+     * id is its own. The unit tests give their own.
+     */
+    internal var ownSource: () -> Int? = { surface?.surfaceID }
+
     init {
         require(componentId.isNotEmpty()) { "a React root needs the id of its screen" }
+        // Before the surface exists, so its safe area view never asks before the mark is there.
+        if (rendersAtOnce) ScreenReadiness.setRendersAtOnce(componentId, this, true)
         val props = Bundle().apply {
             initialProps?.let(::putAll)
             putString(COMPONENT_ID, componentId)
@@ -103,14 +125,9 @@ class ReactView @JvmOverloads constructor(
         if (readyTold) return listener.run()
         readyListeners += listener
         if (isReady()) return checkReadiness()
-        if (readinessListener != null) return
-        val readiness = object : ScreenReadiness.Listener {
-            override fun onLaidOut() = Unit
-
-            override fun onContentRendered() = checkReadiness()
-        }
-        readinessListener = readiness
-        ScreenReadiness.setListener(componentId, readiness)
+        if (listening) return
+        listening = true
+        ScreenReadiness.addListener(componentId, this, readiness)
     }
 
     /**
@@ -126,23 +143,24 @@ class ReactView @JvmOverloads constructor(
         waiting.forEach(Runnable::run)
     }
 
-    // The safe area view said so; without one, the root view of the surface has children.
-    private fun hasRendered(): Boolean = when (ScreenReadiness.isContentRendered(componentId)) {
+    // The safe area view of this root's surface said so; without one, the root view of the surface has children.
+    private fun hasRendered(): Boolean = when (ScreenReadiness.isContentRendered(componentId, readiness)) {
         true -> true
         false -> false
         null -> contentChildCount() > 0
     }
 
     private fun stopListening() {
-        val readiness = readinessListener ?: return
-        readinessListener = null
-        ScreenReadiness.removeListener(componentId, readiness)
+        if (!listening) return
+        listening = false
+        ScreenReadiness.removeListener(componentId, this)
     }
 
     /**
      * Stops the content, once, on the main thread: its appearance ends first (DidDisappear if its WillAppear went,
      * else what is held goes with it), then the surface stops and leaves the host, so a reload doesn't start it again
-     * in the new JavaScript.
+     * in the new JavaScript. A root that renders at once takes its mark away: the last one of its id takes what was
+     * said of the id with it.
      */
     override fun destroy() {
         if (destroyed) return
@@ -150,6 +168,7 @@ class ReactView @JvmOverloads constructor(
         destroyed = true
         readyListeners.clear()
         stopListening()
+        if (rendersAtOnce) ScreenReadiness.setRendersAtOnce(componentId, this, false)
         val surface = surface ?: return
         if (started) surface.stop()
         surface.detach()

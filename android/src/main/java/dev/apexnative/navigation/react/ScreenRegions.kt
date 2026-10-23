@@ -3,7 +3,6 @@ package dev.apexnative.navigation.react
 import android.app.Activity
 import android.graphics.Rect
 import androidx.core.view.WindowInsetsCompat
-import com.facebook.react.ReactApplication
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.WritableArray
 import com.facebook.react.bridge.WritableMap
@@ -32,9 +31,16 @@ internal object ScreenRegions {
 
     /**
      * Measures the regions of the screen whose content the layout puts at [content] in the window (pixels), with the
-     * window's [insets] (the camera cutout), and tells JavaScript when they changed. Main thread only.
+     * window's [insets] (the camera cutout), and tells JavaScript when they changed, through [emitter], the one of the
+     * JavaScript the screen was made for: silent once it went. Main thread only.
      */
-    fun update(activity: Activity, screenId: String, content: Rect, insets: WindowInsetsCompat?) {
+    fun update(
+        activity: Activity,
+        screenId: String,
+        content: Rect,
+        insets: WindowInsetsCompat?,
+        emitter: EventEmitter,
+    ) {
         val folds = WindowFolds.of(activity)?.folds.orEmpty()
         val cutouts = insets?.displayCutout?.boundingRects.orEmpty()
         val density = activity.resources.displayMetrics.density
@@ -46,8 +52,7 @@ internal object ScreenRegions {
         val previous = regions.put(screenId, value)
         // None at first is what JavaScript reads before the first layout.
         if (previous == value || (previous == null && value.isEmpty)) return
-        val reactContext = (activity.application as? ReactApplication)?.reactHost?.currentReactContext ?: return
-        EventEmitter(reactContext).emitScreenRegionsChanged(screenId, toMap(value))
+        emitter.emitScreenRegionsChanged(screenId, toMap(value))
     }
 
     /** `{ division, occlusion }`, empty lists for an unknown screen and before its first layout. Any thread. */

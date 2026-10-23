@@ -1,7 +1,5 @@
 package dev.apexnative.navigation.react
 
-import android.content.Context
-import com.facebook.react.ReactApplication
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.WritableMap
 import dev.apexnative.navigation.react.events.EventContract
@@ -36,8 +34,11 @@ object ScreenInsets {
         }
     }
 
-    /** Keeps the screen's insets and padding, and tells when they changed. */
-    fun update(context: Context, screenId: String, value: Insets, paddingValue: Insets) {
+    /**
+     * Keeps the screen's insets and padding, and tells when they changed through [emitter], the one of the JavaScript
+     * the screen was made for: silent once it went.
+     */
+    fun update(screenId: String, value: Insets, paddingValue: Insets, emitter: EventEmitter) {
         if (padding.put(screenId, paddingValue) != paddingValue) {
             paddingListeners[screenId]?.toList()?.forEach { it() }
         }
@@ -49,8 +50,7 @@ object ScreenInsets {
             left = (value.left - paddingValue.left).coerceAtLeast(0.0),
         )
         if (insets.put(screenId, uncovered) == uncovered) return
-        val reactContext = (context.applicationContext as? ReactApplication)?.reactHost?.currentReactContext ?: return
-        EventEmitter(reactContext).emitScreenInsetsChanged(screenId, toMap(uncovered))
+        emitter.emitScreenInsetsChanged(screenId, toMap(uncovered))
     }
 
     /** `{ top, right, bottom, left }`, empty before the screen was laid out. Any thread. */

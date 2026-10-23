@@ -52,6 +52,47 @@ class ContentReadinessTest {
     }
 
     @Test
+    fun aReactRootTakesOnlyTheRenderOfItsOwnSurface() {
+        val home = ReactView(activity, "Home1", "Home")
+        home.ownSource = { NEW_SURFACE }
+        ScreenReadiness.wrapped("Home1")
+        home.whenReady { told++ }
+        ScreenReadiness.contentRendered("Home1", OLD_SURFACE)
+        assertFalse(home.isReady())
+        assertEquals(0, told)
+        ScreenReadiness.contentRendered("Home1", NEW_SURFACE)
+        assertTrue(home.isReady())
+        assertEquals(1, told)
+    }
+
+    @Test
+    fun aReactRootWhoseSurfaceRenderedBeforeItWaitedIsReadyAtOnce() {
+        ScreenReadiness.contentRendered("Home1", NEW_SURFACE)
+        val home = ReactView(activity, "Home1", "Home")
+        home.ownSource = { NEW_SURFACE }
+        home.whenReady { told++ }
+        assertEquals(1, told)
+    }
+
+    @Test
+    fun twoRootsOfOneBarComponentIdEachWaitForTheirOwnRender() {
+        val first = ReactView(activity, "Title3", "Title", rendersAtOnce = true).apply { ownSource = { OLD_SURFACE } }
+        val second = ReactView(activity, "Title3", "Title", rendersAtOnce = true).apply { ownSource = { NEW_SURFACE } }
+        ScreenReadiness.wrapped("Title3")
+        first.whenReady { told++ }
+        second.whenReady { told += 10 }
+        ScreenReadiness.contentRendered("Title3", OLD_SURFACE)
+        assertEquals(1, told)
+        assertFalse(second.isReady())
+        first.destroy()
+        assertFalse(ScreenReadiness.waitsForReadiness("Title3"))
+        ScreenReadiness.contentRendered("Title3", NEW_SURFACE)
+        assertEquals(11, told)
+        second.destroy()
+        assertTrue(ScreenReadiness.waitsForReadiness("Title3"))
+    }
+
+    @Test
     fun aReactRootWithoutASafeAreaViewIsReadyOnceItsRootHasChildren() {
         val home = ReactView(activity, "Home1", "Home")
         home.whenReady { told++ }
@@ -152,5 +193,11 @@ class ContentReadinessTest {
         details.slotContentDidMount()
         fixture.scheduler.advance(AppearanceDispatcher.HOLD_LIMIT_MILLIS)
         assertEquals(listOf("will:Details2", "didAppear:Details2", "stateNeeded"), entries)
+    }
+
+    private companion object {
+        // Two React surfaces: the one of an old root, the one of the root that waits.
+        const val OLD_SURFACE = 1
+        const val NEW_SURFACE = 11
     }
 }

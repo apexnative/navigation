@@ -45,7 +45,7 @@ class ScreenDestroyTest {
     fun uninstall() {
         fixture.uninstall()
         listOf("Home1", "Details2").forEach(SlotContainers::remove)
-        ScreenReadiness.remove("Home1")
+        ScreenReadiness.reset()
     }
 
     @Test
@@ -94,7 +94,7 @@ class ScreenDestroyTest {
         slot.slotContentDidMount()
         home.onViewDidAppear()
         entries.clear()
-        ScreenReadiness.setRendersAtOnce("Home1", true)
+        ScreenReadiness.setRendersAtOnce("Home1", this, true)
         home.destroy()
         assertEquals(listOf("didDisappear:Home1", "stateNeeded", "slotDestroyed:Home1"), entries)
         assertTrue(home.isDestroyed)
@@ -190,7 +190,7 @@ class ScreenDestroyTest {
     fun aLaterScreenWithTheSameIdKeepsTheData() {
         val first = screen("Home1", "Home")
         val later = screen("Home1", "Home")
-        ScreenReadiness.setRendersAtOnce("Home1", true)
+        ScreenReadiness.setRendersAtOnce("Home1", this, true)
         first.destroy()
         assertSame(later, registry.find("Home1"))
         assertFalse(ScreenReadiness.waitsForReadiness("Home1"))
@@ -201,7 +201,7 @@ class ScreenDestroyTest {
     @Test
     fun aScreenAloneWithItsIdTakesItsDataAway() {
         val home = screen("Home1", "Home")
-        ScreenReadiness.setRendersAtOnce("Home1", true)
+        ScreenReadiness.setRendersAtOnce("Home1", this, true)
         home.destroy()
         assertTrue(ScreenReadiness.waitsForReadiness("Home1"))
     }
