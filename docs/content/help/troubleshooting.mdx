@@ -76,13 +76,22 @@ Options set in `static options` on a component no longer apply.
 
 **Fix:** move them into `defineScreen({ component, options })`; the object carries over as it is. More: [Options next to the screen](../migration/from-react-native-navigation#options).
 
-### The Android app crashes at start: React Native loads twice {#loads-twice}
+### The Android app crashes at start: React Native isn't loaded {#not-loaded}
 
-<Os name="Android" /> The app closes at once, and `doctor` reports `MainApplication.kt calls loadReactNative(this), NavigationApplication loads it too`.
+<Os name="Android" /> The app closes at once with `NavigationApplication needs React Native loaded first`, and `doctor` reports `MainApplication.kt doesn't call loadReactNative(this) in onCreate`.
 
-**Why:** `NavigationApplication` loads React Native itself, and a second load crashes the app.
+**Why:** `NavigationApplication` leaves the load of React Native to the template's `loadReactNative(this)`, which loads it as the app's Gradle files say (the New Architecture, edge-to-edge). Without the call nothing loads it.
 
-**Fix:** remove the `loadReactNative(this)` call from `MainApplication.kt`. More: [Android files](../start/installation#android-files).
+**Fix:** keep the template's `onCreate`, or run `npx apex-navigation setup`, which adds it:
+
+```kotlin title="MainApplication.kt"
+override fun onCreate() {
+  super.onCreate()
+  loadReactNative(this)
+}
+```
+
+More: [Android files](../start/installation#android-files).
 
 ### doctor warns about the JDK {#jdk}
 

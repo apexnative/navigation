@@ -3,6 +3,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { withReactNativeLoaded } = require('../setup/steps/mainApplication');
 
 /** @typedef {import('../changes').FileChange} FileChange */
 /** @typedef {import('./report').ReportItem} ReportItem */
@@ -158,6 +159,11 @@ function planNative(project) {
     const before = fs.readFileSync(file, 'utf8');
     let next = before;
     for (const [pattern, replacement] of rewrite.rules) next = next.replace(pattern, replacement);
+    // react-native-navigation loaded React Native itself; the navigation's application leaves it to the template's
+    // loadReactNative(this), which such an app doesn't have.
+    if (file === project.mainApplication && /:\s*NavigationApplication\(/.test(next)) {
+      next = withReactNativeLoaded(next) ?? next;
+    }
     if (next !== before) {
       changes.push({
         name: path.basename(file),

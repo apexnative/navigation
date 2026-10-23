@@ -169,7 +169,8 @@ dark switch. The system UI has one owner per window or activity.
 - iOS: `ApexNavigation` (`bootstrapWithHost:`, `registerNativeScreen:…`, `findViewController:`), `ANNAppDelegate`,
   `ANNSceneDelegate`, the splash (`ANNSplashViewController`), reload by `ANNReloadCoordinator`. Apps import the headers
   of `ios/Public/ApexNavigation/`.
-- Android: `NavigationApplication` (React host through `ReactGateway`, native screens by name), `NavigationActivity`
+- Android: `NavigationApplication` (React host through `ReactGateway`, made on first use after the app's
+  `loadReactNative(this)` in `onCreate`; native screens by name), `NavigationActivity`
   (layers, splash hold, back, developer reload), `NavigationPackage`, edge-to-edge (`EdgeToEdgeDecision`), the splash
   (`SplashHold`, `SplashView`, `SplashTheme`). `ANN.AppLaunched` goes once per pair of an activity and a React context.
 

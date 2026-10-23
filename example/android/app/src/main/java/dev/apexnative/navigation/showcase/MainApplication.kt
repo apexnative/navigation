@@ -2,6 +2,7 @@ package dev.apexnative.navigation.showcase
 
 import com.facebook.react.PackageList
 import com.facebook.react.ReactHost
+import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import dev.apexnative.navigation.NavigationApplication
 import dev.apexnative.navigation.showcase.nativescreens.NativeProfileScreen
@@ -9,9 +10,8 @@ import dev.apexnative.navigation.showcase.nativescreens.UsePropsDemoScreen
 import dev.apexnative.navigation.showcase.settings.ShowcaseSettingsPackage
 
 /**
- * NavigationApplication replaces the default Application: it initializes SoLoader and the
- * New Architecture entry point in onCreate, so the template's `loadReactNative(this)` call
- * must NOT be invoked a second time here.
+ * NavigationApplication in place of the template's Application. `onCreate` keeps the template's
+ * `loadReactNative(this)`: the navigation makes its React host after React Native is loaded.
  */
 class MainApplication : NavigationApplication() {
 
@@ -28,6 +28,7 @@ class MainApplication : NavigationApplication() {
 
   override fun onCreate() {
     super.onCreate()
+    loadReactNative(this)
     // Native screens, which `screens` names with `nativeScreen`.
     registerNativeScreen("NativeProfileScreen") { activity, context -> NativeProfileScreen(activity, context).asView() }
     registerNativeScreen("UsePropsDemoScreen") { activity, context -> UsePropsDemoScreen(activity, context).view }

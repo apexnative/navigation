@@ -190,25 +190,34 @@ describe('doctor', () => {
     });
   });
 
-  it('finds React Native loaded twice, not a comment that mentions it', async () => {
+  it('finds React Native not loaded, not fooled by a comment that mentions it', async () => {
     const file = 'android/app/src/main/java/com/helloworld/MainApplication.kt';
-    const withCall = makeApp({
-      setUp: true,
-      edit: (root) =>
-        fs.appendFileSync(
-          path.join(root, file),
-          '\nfun start(app: android.app.Application) { loadReactNative(app) }\n'
-        ),
-    });
-    expect((await check(withCall)).find('React Native loads twice')).toMatchObject({
+    const withoutCall = (/** @type {string} */ extra) =>
+      makeApp({
+        setUp: true,
+        edit: (root) => {
+          const text = fs.readFileSync(path.join(root, file), 'utf8');
+          fs.writeFileSync(
+            path.join(root, file),
+            text.replace('    loadReactNative(this)\n', extra)
+          );
+        },
+      });
+    expect((await check(withoutCall(''))).find('React Native not loaded')).toMatchObject({
       status: 'error',
+      fix: { run: 'setup' },
     });
-    const withComment = makeApp({
-      setUp: true,
-      edit: (root) =>
-        fs.appendFileSync(path.join(root, file), '\n// No loadReactNative(this) here.\n'),
+    const withComment = await check(withoutCall('    // loadReactNative(this) is gone.\n'));
+    expect(withComment.find('React Native not loaded')).toMatchObject({ status: 'error' });
+    const twice = await check(
+      withoutCall('    SoLoader.init(this, OpenSourceMergedSoMapping)\n    loadReactNative(this)\n')
+    );
+    expect(twice.find('React Native loads twice')).toMatchObject({
+      status: 'error',
+      fix: { run: 'setup' },
     });
-    const { find } = await check(withComment);
+    const { find } = await check(makeApp({ setUp: true }));
+    expect(find('React Native not loaded')).toBeUndefined();
     expect(find('React Native loads twice')).toBeUndefined();
     expect(find('Native files')).toMatchObject({ status: 'ok' });
   });

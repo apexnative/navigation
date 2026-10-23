@@ -35,7 +35,8 @@ function removeUnusedImports(text, names) {
   for (const name of names) {
     const line = new RegExp(`^import\\s+${escape(name)}[ \\t]*\\r?\\n`, 'm');
     const simple = name.slice(name.lastIndexOf('.') + 1);
-    const code = result.replace(/^import\s.*$/gm, '');
+    // A name in a comment is no use of the import.
+    const code = codeOf(result).replace(/^import\s.*$/gm, '');
     if (line.test(result) && !new RegExp(`\\b${escape(simple)}\\b`).test(code))
       result = result.replace(line, '');
   }

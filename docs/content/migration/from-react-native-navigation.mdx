@@ -147,7 +147,7 @@ Each piece of `react-native-navigation`, and what takes its place. The [steps](#
 | `AppRegistry` left out of `index.js` | `AppRegistry.registerComponent(name, Navigation)` of the package. |
 | `RNNAppDelegate`, `import ReactNativeNavigation` | `ANNAppDelegate`, `import ApexNavigation`. |
 | `com.reactnativenavigation.*` | `dev.apexnative.navigation.*`. |
-| `NavigationReactNativeHost` in `MainApplication` | The template's `reactHost`; `NavigationApplication` loads React Native itself. |
+| `NavigationReactNativeHost` in `MainApplication` | The template's `reactHost`, and its `loadReactNative(this)` in `onCreate`. |
 | `RNNKotlinVersion` in `android/build.gradle` | Nothing: the library reads `kotlinVersion`. |
 
 ## The move, step by step {#steps}
@@ -223,11 +223,12 @@ import dev.apexnative.navigation.NavigationActivity
 class MainActivity : NavigationActivity()
 ```
 
-The application drops `NavigationReactNativeHost` and keeps the `reactHost` of the React Native template. `NavigationApplication` loads React Native in its `onCreate`, so the app doesn't call `loadReactNative` again.
+The application drops `NavigationReactNativeHost` and keeps the `reactHost` of the React Native template. react-native-navigation loaded React Native itself; the navigation leaves it to the template's `loadReactNative(this)` in `onCreate`, which `migrate` adds.
 
 ```kotlin title="MainApplication.kt"
 import com.facebook.react.PackageList
 import com.facebook.react.ReactHost
+import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import dev.apexnative.navigation.NavigationApplication
 
@@ -237,6 +238,11 @@ class MainApplication : NavigationApplication() {
       context = applicationContext,
       packageList = PackageList(this).packages,
     )
+  }
+
+  override fun onCreate() {
+    super.onCreate()
+    loadReactNative(this)
   }
 }
 ```

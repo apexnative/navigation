@@ -31,6 +31,7 @@ import com.facebook.react.PackageList
 import com.facebook.react.ReactHost
 import com.facebook.react.ReactNativeHost
 import com.facebook.react.ReactPackage
+import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.load
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.reactnativenavigation.NavigationApplication
 import com.reactnativenavigation.RNNToggles
@@ -51,6 +52,13 @@ class MainApplication : NavigationApplication(mapOf(
 
     override val reactHost: ReactHost
         get() = getDefaultReactHost(applicationContext, reactNativeHost)
+
+    override fun onCreate() {
+        super.onCreate()
+        if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
+            load()
+        }
+    }
 }
 `,
   'android/app/src/main/java/com/myapp/MainActivity.kt':
@@ -187,6 +195,13 @@ describe('migrate from react-native-navigation', () => {
     const application = read(root, 'android/app/src/main/java/com/myapp/MainApplication.kt');
     expect(application).toContain('import dev.apexnative.navigation.NavigationApplication');
     expect(application).toContain('ANNToggles.TOP_BAR_COLOR_ANIMATION__PUSH to true,');
+    expect(application).toContain(
+      'import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative'
+    );
+    expect(application).toContain(
+      '    override fun onCreate() {\n        super.onCreate()\n        loadReactNative(this)\n    }\n}\n'
+    );
+    expect(application).not.toMatch(/DefaultNewArchitectureEntryPoint|\bload\(\)/);
     expect(application).not.toMatch(/NavigationPackage|TAB_BAR_TRANSLUCENCE|reactnativenavigation/);
     expect(read(root, 'android/app/src/main/java/com/myapp/MainActivity.kt')).toContain(
       'import dev.apexnative.navigation.NavigationActivity'

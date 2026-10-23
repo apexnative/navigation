@@ -99,9 +99,100 @@ describe('a file changed by hand', () => {
     expect(result.status).toBe('change');
     const next = result.status === 'change' ? result.next : '';
     expect(next).toContain(
-      'override fun onCreate() {\n    super.onCreate()\n    Analytics.start(this)\n  }'
+      'override fun onCreate() {\n    super.onCreate()\n    loadReactNative(this)\n    Analytics.start(this)\n  }'
     );
-    expect(next).not.toContain('loadReactNative');
+  });
+
+  it('adds loadReactNative(this) to an application of the navigation without it', () => {
+    const done = read('setup-done', 'MainApplication.kt');
+    const without = done
+      .replace('    loadReactNative(this)\n', '')
+      .replace('import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative\n', '');
+    const result = planMainApplication(without);
+    expect(result.status === 'change' && result.next).toBe(done);
+    const noOnCreate = without.replace(/\n\n {2}override fun onCreate\(\) \{[\s\S]*?\n {2}\}/, '');
+    const added = planMainApplication(noOnCreate);
+    expect(added.status === 'change' && added.next).toBe(done);
+  });
+
+  it('drops a load of its own when it adds loadReactNative(this)', () => {
+    const done = read('setup-done', 'MainApplication.kt');
+    const own = done
+      .replace(
+        'import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative\n',
+        'import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.load\n'
+      )
+      .replace(
+        '    loadReactNative(this)\n',
+        '    if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {\n      load()\n    }\n'
+      );
+    const result = planMainApplication(own);
+    expect(result.status === 'change' && result.next).toBe(done);
+    const twice = done.replace(
+      '    loadReactNative(this)\n',
+      '    SoLoader.init(this, OpenSourceMergedSoMapping)\n    loadReactNative(this)\n'
+    );
+    const fixed = planMainApplication(twice);
+    expect(fixed.status === 'change' && fixed.next).toBe(done);
+  });
+
+  it('drops the template entry point with its comment, and its import', () => {
+    const done = read('setup-done', 'MainApplication.kt');
+    const own = done
+      .replace(
+        'import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative\n',
+        'import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.load\n'
+      )
+      .replace(
+        '    loadReactNative(this)\n',
+        '    if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {\n' +
+          '      // If you opted-in for the New Architecture, we load the native entry point for this app.\n' +
+          '      load()\n    }\n'
+      );
+    const result = planMainApplication(own);
+    expect(result.status === 'change' && result.next).toBe(done);
+  });
+
+  it('leaves a load with arguments to the author', () => {
+    const done = read('setup-done', 'MainApplication.kt');
+    const text = done
+      .replace(
+        'import com.facebook.react.ReactHost\n',
+        'import com.facebook.react.ReactHost\nimport com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.load\n'
+      )
+      .replace(
+        '    loadReactNative(this)\n',
+        '    loadReactNative(this)\n    load(bridgelessEnabled = true)\n'
+      );
+    expect(planMainApplication(text).status).toBe('manual');
+  });
+
+  it('keeps a function of its own named load', () => {
+    const done = read('setup-done', 'MainApplication.kt');
+    const text = done.replace(
+      '    loadReactNative(this)\n',
+      '    loadReactNative(this)\n    load()\n'
+    );
+    expect(planMainApplication(text).status).toBe('done');
+  });
+
+  it('adds onCreate inside the class, past what follows it', () => {
+    const done = read('setup-done', 'MainApplication.kt');
+    const without = done
+      .replace(/\n\n {2}override fun onCreate\(\) \{[\s\S]*?\n {2}\}/, '')
+      .replace('import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative\n', '');
+    const result = planMainApplication(`${without}\n// The end of the application {}\n`);
+    expect(result.status === 'change' && result.next).toBe(
+      `${done}\n// The end of the application {}\n`
+    );
+  });
+
+  it("can't tell where to load React Native in an onCreate without super.onCreate()", () => {
+    const text = read('setup-done', 'MainApplication.kt').replace(
+      '    super.onCreate()\n    loadReactNative(this)\n',
+      '    Analytics.start(this)\n'
+    );
+    expect(planMainApplication(text).status).toBe('manual');
   });
 
   it("can't tell how to move a delegate of the activity's own", () => {

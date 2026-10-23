@@ -14,6 +14,7 @@ const {
 const { mainActivity } = require('../../links/native');
 const { findProject } = require('../../project');
 const { codeOf } = require('../../setup/source');
+const { loadsReactNativeItself } = require('../../setup/steps/mainApplication');
 const { planCodegen } = require('../../codegen');
 const { readConfig } = require('../../config');
 const { planProject } = require('../../setup');
@@ -138,20 +139,29 @@ function appChecks({ root, run }) {
 
   checks.push(...splashChecks(root, project), ...iconChecks(root, project));
 
-  // A second load of React Native crashes the app on start: the most common slip of a setup by hand.
+  // NavigationApplication leaves the load of React Native to the template's call: without it the app closes on start,
+  // and so it does with a second load of the app's own next to it.
   const application = project.mainApplication && fs.readFileSync(project.mainApplication, 'utf8');
-  if (
-    application &&
-    /:\s*NavigationApplication\(\)/.test(application) &&
-    /\bloadReactNative\s*\(/.test(codeOf(application))
-  ) {
-    checks.push({
-      group: 'app',
-      title: 'React Native loads twice',
-      status: 'error',
-      detail: 'MainApplication.kt calls loadReactNative(this), NavigationApplication loads it too',
-      fix: { label: 'Remove loadReactNative(this) from MainApplication.kt' },
-    });
+  if (application && /:\s*NavigationApplication\(/.test(application)) {
+    const loads = /\bloadReactNative\s*\(/.test(codeOf(application));
+    if (!loads) {
+      checks.push({
+        group: 'app',
+        title: 'React Native not loaded',
+        status: 'error',
+        detail: "MainApplication.kt doesn't call loadReactNative(this) in onCreate",
+        fix: SETUP,
+      });
+    } else if (loadsReactNativeItself(application)) {
+      checks.push({
+        group: 'app',
+        title: 'React Native loads twice',
+        status: 'error',
+        detail:
+          'MainApplication.kt loads React Native itself (SoLoader.init or the New Architecture entry point) next to loadReactNative(this)',
+        fix: SETUP,
+      });
+    }
   }
   const generated = generatedCheck(root, run);
   if (generated) checks.push(generated);
