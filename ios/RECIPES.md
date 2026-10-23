@@ -16,9 +16,14 @@ you do exactly that; the map is `ios/CLAUDE.md`.
    what the merge names) and in `applyDefaultOptionsChange:`. A system-UI option also goes into
    `+[ANNSystemUI groupsNamedBy:onlyRead:]`; a bar-placement option into `ANNOptionsChangeScreenBars`.
 4. **The cache.** Never invalidate by hand. Own options change through `ANNNodeHelper` (`mergeOwnOptions:`,
-   `changeOwnOptions:`) and defaults through `+[ANNDefaultOptions setCurrent:]`; both call
-   `+[ANNOptionsCache optionsChanged]`. A presenter or module that keeps a choice of the user writes it with
-   `changeOwnOptions:`, never into the options in place.
+   `changeOwnOptions:`), the user layer through `setUserChoice:forKey:`, and defaults through
+   `+[ANNDefaultOptions setCurrent:]`; all call `+[ANNOptionsCache optionsChanged]`. `changeOwnOptions:` is for what
+   the core keeps of the app's merges. A presenter or module that keeps a choice of the user (a toggle, a menu check,
+   a scope) puts an `ANNUserChoice` into the node's user layer under a key of its own: its `apply` block writes the
+   choice by identity (a button or item by its id) on a copy, its `merged` block says when the app's merge takes it
+   away, by Android's rules (`UserChoices.yieldTo`): a value other than the app had there (the own options', else the
+   node's resolution before the merge), or what the choice is about gone from the resolution after it. Never into the
+   options in place.
 5. **Android** reads the same JSON and has unit tests of parsing and merging; the iOS side has none (see Checks in `ios/CLAUDE.md`).
 6. **The rule:** an option does what its name promises, with the same meaning on both platforms
    (`.claude/rules/general.md`, `.claude/rules/options.md`). A platform that can't, says so in the JSDoc.
@@ -37,6 +42,7 @@ you do exactly that; the map is `ios/CLAUDE.md`.
    thrown with `+[ANNErrorTexts rejection:]`. A new text goes into `src/interfaces/contract/errors.json`, and
    `node scripts/contract.mjs` makes `ANNErrorTexts` (and Android's `ErrorTexts`) from it; never edit them by hand.
 6. **The answer:** end through `ANNAppearanceDispatcher` (`endTransitionHiding:…answer:value:`) or call
-   `-[ANNCommandAnswer resolve:]`; the state and `ANN.CommandCompleted` follow by themselves for the names in
-   `ANNCompletedCommandNames`. Add the name there when the command shows or dismisses.
+   `-[ANNCommandAnswer resolve:]`; the state and `ANN.CommandCompleted` follow by themselves as `ANNCommandContract`
+   says. A new command with a promise gets its entry in `src/interfaces/contract/commands.json` (what it resolves
+   with, `state`, `completed`), then `node scripts/contract.mjs`.
 7. **Android** gets the same command; its tests check the texts.

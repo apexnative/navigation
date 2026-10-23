@@ -10,7 +10,7 @@ export type ComponentType =
 
 /** The fields every appearance event has. */
 interface ComponentAppearanceEvent {
-  /** The id of the component: the screen, or the screen the bar component belongs to. */
+  /** The id of the component: of the screen, or the bar component's own id. */
   componentId: string;
   /** The name of the component: for a screen, its name without any internal prefix. */
   componentName: string;
@@ -60,7 +60,7 @@ export interface NavigationButtonPressedEvent {
    * `ApexNavigation.back`; the hardware back of a modal has `ApexNavigation.hardwareBackButton`.
    */
   buttonId: string;
-  /** (iOS) For a button with `toggle`: its new state, already written into the options of the screen. */
+  /** (iOS) For a button with `toggle`: its new state, which the screen keeps. */
   selected?: boolean;
 }
 

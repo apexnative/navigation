@@ -122,7 +122,7 @@ function screen(component: LayoutComponent, inPair = false, keyed = !inPair): La
     type: 'Component',
     data: {
       name: rendersInSlot(name) ? slotName(id, name) : name,
-      options: toNativeOptions(options),
+      options: toNativeOptions(options, id),
       ...(key !== undefined && { key }),
     },
     children: [],
@@ -167,12 +167,13 @@ function arrangement(
 }
 
 function external(component: ExternalComponent): LayoutNode {
+  const id = component.id || nextId('ExternalComponent');
   return {
-    id: component.id || nextId('ExternalComponent'),
+    id,
     type: 'ExternalComponent',
     data: {
       name: String(component.name),
-      options: toNativeOptions(component.options),
+      options: toNativeOptions(component.options, id),
       passProps: component.passProps,
     },
     children: [],
@@ -185,10 +186,11 @@ function parent(
   options: Options | undefined,
   children: Layout[] = []
 ): LayoutNode {
+  const nodeId = id || nextId(type);
   return {
-    id: id || nextId(type),
+    id: nodeId,
     type,
-    data: { options: toNativeOptions(options) },
+    data: { options: toNativeOptions(options, nodeId) },
     children: children.map(toNativeLayout),
   };
 }
@@ -213,10 +215,11 @@ function sideMenu(menu: LayoutSideMenu): LayoutNode {
     data: {},
     children: [toNativeLayout(content)],
   });
+  const id = menu.id || nextId('SideMenuRoot');
   return {
-    id: menu.id || nextId('SideMenuRoot'),
+    id,
     type: 'SideMenuRoot',
-    data: { options: toNativeOptions(menu.options) },
+    data: { options: toNativeOptions(menu.options, id) },
     children: [
       ...(menu.left ? [side('SideMenuLeft', menu.left)] : []),
       side('SideMenuCenter', menu.center),
@@ -238,10 +241,14 @@ function splitView(split: LayoutSplitView): LayoutNode {
     ] as [string, Layout | undefined][]
   ).filter((column): column is [string, Layout] => column[1] !== undefined);
   const present = split.master && split.detail ? columns : [];
+  const id = split.id || nextId('SplitView');
   return {
-    id: split.id || nextId('SplitView'),
+    id,
     type: 'SplitView',
-    data: { options: toNativeOptions(split.options), columns: present.map(([column]) => column) },
+    data: {
+      options: toNativeOptions(split.options, id),
+      columns: present.map(([column]) => column),
+    },
     children: present.map(([, content]) => toNativeLayout(content)),
   };
 }

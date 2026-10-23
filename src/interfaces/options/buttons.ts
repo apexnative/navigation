@@ -138,8 +138,10 @@ export type OptionsTopBarButtonMenuElement =
 /**
  * A menu of the top bar: the menu of a button, the overflow menu, the menu of the title. A list of `items` sent with
  * `mergeOptions` replaces the earlier list as a whole, and `items: []` removes the menu; `title` and
- * `singleSelection` merge field by field (iOS). What the user picks in a `singleSelection` menu is written back into
- * the options of the screen and survives the screen showing again.
+ * `singleSelection` merge field by field (iOS). What the user picks in a `singleSelection` menu stays with the screen,
+ * through it showing again, a `mergeOptions` that sends the same items again and `setDefaultOptions`; a `mergeOptions`
+ * into the screen that changes the checks of that menu's level, or takes the item away, replaces it. A merge into the
+ * stack or the tabs around the screen doesn't.
  */
 export interface OptionsTopBarButtonMenu {
   /** The title above the items. (iOS) Android doesn't show it. */
@@ -285,8 +287,10 @@ export interface OptionsTopBarButton {
   badgeTextColor?: Color;
   /**
    * (iOS) Whether the button is a toggle: every press flips `selected` and sends a press with the new state. The state
-   * is written into the options of the screen under the button's id, so it survives the screen showing again, and a
-   * button set again without `selected` takes the state of the button with the same id. Not for component buttons,
+   * stays with the screen under the button's id, through it showing again, a `mergeOptions` that sends the same
+   * buttons again and `setDefaultOptions`; a `mergeOptions` into the screen that changes `selected` replaces it (a merge
+   * into the stack around it doesn't). A button set again
+   * without `selected` takes the state of the button with the same id. Not for component buttons,
    * buttons with `iconBackground`, and `showText` buttons.
    */
   toggle?: boolean;
@@ -351,7 +355,11 @@ export interface OptionsTopBarButton {
  * replaces it.
  */
 export interface OptionsTopBarButtonComponent {
-  /** The id of the component. Without it, the library gives one. The same `name` and `id` mean the same component. */
+  /**
+   * The id of the component. Without it, the library gives one made of the screen, the component's place in the
+   * options and its `name`: it stays the same for every `mergeOptions` of the screen, so the mounted component stays
+   * and only its props change. The same `name` and `id` mean the same component.
+   */
   id?: string;
   /** The name of the registered component. */
   name: string;

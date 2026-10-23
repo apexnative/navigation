@@ -14,7 +14,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// Resolves a command's promise with `value`. Without a resolve block one line goes to the log instead.
 + (void)resolve:(nullable RCTPromiseResolveBlock)resolve of:(NSString *)method value:(nullable id)value;
 
-/// The log line of a command without a promise: `[ApexNavigation] <method>: <text>`.
+/// The log line of a command without a promise: `[ApexNavigation] <method>: <text>`, a warning (`RCTLogWarn`).
 + (void)logFailureOf:(NSString *)method text:(NSString *)text;
 
 @end

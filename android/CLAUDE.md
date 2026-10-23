@@ -21,8 +21,9 @@ top-level folder. Main thread only, unless a line says otherwise.
   `OptionsReader`, `OptionsCache`, `DefaultOptions`. `params/` has the value types (`Bool`, `Text`, `Fraction`,
   `Variant`, `ThemeColour`); `parsers/` reads them tolerantly from React Native data.
 - `react/`: the way in and out: `NavigationTurboModule`, `CommandRunner`, `CommandAnswer`, `ErrorTexts`,
-  `OptionsCommands`, `ReloadCoordinator`, `ReactGateway`, `ReactView` (a React root), the stores (`ScreenInsets`,
-  `ScreenRegions`, `ArrangementStates`, `Hinge`, `StartInfo`), `LaunchLink`, `ScrollEvents`.
+  `OptionsCommands`, `PendingCalls` (a task behind the calls JavaScript made), `ReloadCoordinator`, `ReactGateway`,
+  `ReactView` (a React root), the stores (`ScreenInsets`, `ScreenRegions`, `ArrangementStates`, `Hinge`, `StartInfo`),
+  `LaunchLink`, `ScrollEvents`.
 - `react/events/`: `AppearanceDispatcher`, `ScreenAppearance`, `EventEmitter`, `EventContract` (made by
   `scripts/contract.mjs`), `NavigationStateReporter`, `ComponentType`.
 - `viewcontrollers/viewcontroller/`: `ViewController` (the base of every node), `Presenter`, `IReactView` (what a
@@ -53,7 +54,8 @@ top-level folder. Main thread only, unless a line says otherwise.
 - `slots/`, `safearea/`, `nativescreen/`: the views of `ANNSlot` and `ANNSafeAreaView`, the slot screen, the
   native-screen context and calls.
 - `splash/`, `customrow/`, `utils/`: the splash hold, theme and copy; the tabs' custom row options; helpers
-  (`UiThread`, `ImageLoader`, `MaterialTheme`, `TestIds`, `WindowFolds`, `DevelopmentLog`).
+  (`UiThread`, `ImageLoader` with `OptionImages`, `ImageKey`, `ImageRequests`, `MaterialTheme`, `TestIds`, `WindowFolds`,
+  `DevelopmentLog`).
 - `android/src/main/jni/`: `CMakeLists.txt` builds the codegen target with the C++ of `ios/cpp` (the slot's and the
   safe area view's shadow nodes); `ApexNavigationSpec.h` replaces the generated header so autolinking sees their
   descriptors.
@@ -106,12 +108,14 @@ top-level folder. Main thread only, unless a line says otherwise.
   `NavigationStateReporter.kt`; `react/CommandAnswer.kt`.
 - Options (parsing, merging): `options/Options.kt`, `OptionsReader.kt`, `OptionsCache.kt`, `DefaultOptions.kt`,
   `params/`, `parsers/`; `viewcontrollers/viewcontroller/ViewController.kt` (resolution).
-- Error texts: `react/ErrorTexts.kt`, made by `scripts/contract.mjs` from `src/interfaces/contract/errors.json`.
+- Error texts and answers: `react/ErrorTexts.kt` and `react/CommandContract.kt`, made by `scripts/contract.mjs` from
+  `src/interfaces/contract/errors.json` and `commands.json`.
 - Links: `react/LaunchLink.kt`, `NavigationActivity.kt` (`onNewIntent`); `react/StartInfo.kt`.
 - Hinge and regions: `react/Hinge.kt`, `react/ScreenRegions.kt`, `react/ScreenInsets.kt`, `utils/WindowFolds.kt`.
 - Native screens: `nativescreen/NativeScreenContext.kt`, `NativeScreenCalls.kt`, `NativeScreenCreator.kt`;
   `viewcontrollers/externalcomponent/`.
-- Slots: `slots/SlotHost.kt`, `SlotView.kt`, `SlotScreenView.kt`, `SlotContainers.kt`, `SlotViewManager.kt`.
+- Slots: `slots/SlotHost.kt`, `SlotView.kt`, `SlotScreenView.kt`, `SlotContainers.kt` (containers and slot views by
+  slot id: a change goes straight to the views of its id, `SlotViews.kt`), `SlotViewManager.kt`.
 - Safe area: `safearea/SafeAreaView.kt`, `SafeAreaViewManager.kt`; `viewcontrollers/component/ScreenReadiness.kt`;
   `react/ScreenInsets.kt`.
 - The C++ of `ANNSlot`, `ANNSafeAreaView`: `android/src/main/jni/CMakeLists.txt`, `ApexNavigationSpec.h`; sources in
@@ -125,7 +129,10 @@ top-level folder. Main thread only, unless a line says otherwise.
 - **Module thread.** The `check` of every command with a promise: `LayoutReader` and, through it, `OptionsReader` (also
   for `setDefaultOptions`, `mergeOptions` and the options of `dismissModal`, in the runner's `prepare` step);
   `ReadableJson` for native-screen props. The registry of native screens is read under its lock. Images are not loaded
-  here; `ImageLoader` loads them when the options apply, on main.
+  here; they load when the options apply, through the one cache of `utils/OptionImages` (by `ImageKey`): at once on
+  main where the first frame needs them (`ImageLoader`: the top bar's buttons, menus, back button and search
+  suggestions; a tab's first icon; a new FAB), on its background thread for a file or a drawable of the app where the
+  view takes them when ready (`ImageRequests`: a changed tab icon, a FAB's changed icon, the FAB menu's actions).
 - **Main thread.** Everything else: the command body, nodes, views, events, the stores' writes. Any thread may read
   `ReloadCoordinator.generation`.
 
@@ -155,7 +162,9 @@ top-level folder. Main thread only, unless a line says otherwise.
   skips the table that decides interrupts and answers.
 - Every event of an appearance goes through `AppearanceDispatcher`. A container with its own loop of
   `onViewWillAppear` / `onViewDidAppear` / `onViewDisappear` sends the events in the wrong order.
-- Never change a resolved options object: it is cached and shared. Copy it, or write through `changeOptions`.
+- Never change a resolved options object: it is cached and shared. Copy it, or write through `changeOptions`; a
+  user's choice goes through `changeChoices` (the user layer), never into own options, or the next `mergeOptions`
+  wipes it.
 - A new option field that is not in `mergeWith`, `mergeWithDefault`, `copy` or the fixture is dropped silently somewhere
   in the chain; `WholeTreeTest` exists to catch it.
 - A new wait is a new `RenderWait` value, not a new timer. A wait that survives a destroy or a supersede hangs a promise;

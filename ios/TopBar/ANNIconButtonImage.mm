@@ -1,5 +1,6 @@
 #import "ANNIconButtonImage.h"
 #import "ANNUtils.h"
+#import <React/RCTLog.h>
 
 @implementation ANNIconButtonImage
 
@@ -9,6 +10,30 @@
               cornerRadius:(CGFloat)cornerRadius
                       size:(CGSize)size
                     insets:(UIEdgeInsets)insets {
+    // An icon that can't be drawn so (no size, insets that leave no room, an exception of the renderer) shows as it is.
+    @try {
+        UIImage *image = [self variantsOfIcon:icon
+                                         tint:tint
+                                   background:background
+                                 cornerRadius:cornerRadius
+                                         size:size
+                                       insets:insets];
+        if (image) {
+            return image;
+        }
+    } @catch (NSException *exception) {
+        RCTLogWarn(@"[ApexNavigation] a button's image could not be drawn on its background: %@",
+                   exception.reason);
+    }
+    return icon;
+}
+
++ (nullable UIImage *)variantsOfIcon:(UIImage *)icon
+                                tint:(UIColor *)tint
+                          background:(UIColor *)background
+                        cornerRadius:(CGFloat)cornerRadius
+                                size:(CGSize)size
+                              insets:(UIEdgeInsets)insets {
     // Each variant carries a scale with its style: an asset of style-only traits gives back an image of scale 1, its
     // pixels taken as points (a 32 pt background drawn 96 pt wide). The current scale and the usual ones are drawn,
     // so a screen of another scale still finds its style. Each variant is an original image, so that a variant UIKit
@@ -30,6 +55,9 @@
                                        size:size
                                      insets:insets
                                      traits:traits];
+            if (!drawn) {
+                return nil;
+            }
             [asset registerImage:[drawn imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal]
                  withTraitCollection:traits];
         }
@@ -54,7 +82,7 @@
     ]];
 }
 
-+ (UIImage *)drawIcon:(UIImage *)icon
++ (nullable UIImage *)drawIcon:(UIImage *)icon
                  tint:(UIColor *)tint
            background:(UIColor *)background
          cornerRadius:(CGFloat)cornerRadius
@@ -66,6 +94,11 @@
                                iconSize.height + insets.top + insets.bottom);
     CGSize canvas = CGSizeMake(size.width > 0 ? size.width : padded.width,
                                size.height > 0 ? size.height : padded.height);
+    BOOL drawable = canvas.width > 0 && canvas.height > 0 && isfinite(canvas.width) &&
+                    isfinite(canvas.height);
+    if (!drawable) {
+        return nil;
+    }
     UIImage *drawn = icon;
     if (tint) {
         drawn = [icon imageWithTintColor:[tint resolvedColorWithTraitCollection:traits]

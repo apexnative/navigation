@@ -37,8 +37,18 @@ internal class StackQueueHarness(realHost: Boolean = false) {
     val host = QueueHost(journal)
     val prepared = PreparedPushes()
     val readiness = QueueReadiness(journal)
+    /**
+     * The tasks behind the calls of JavaScript ([holdsCalls]): what runs once the calls made before a pushed screen's
+     * mount applied.
+     */
+    val heldCalls = mutableListOf<() -> Unit>()
+
+    /** A push's mount waits behind the calls of JavaScript until [runCalls]; off, it comes at once. */
+    var holdsCalls = false
     val stack = StackController(activity, registry, STACK, StackPresenter(activity), Options()).also {
-        it.useQueueParts(display, readiness, if (realHost) null else host)
+        it.useQueueParts(display, readiness, if (realHost) null else host) { task ->
+            if (holdsCalls) heldCalls += task else task()
+        }
         host.answers = it::answerIdOf
         it.preparedPushes = { prepared }
     }
@@ -51,7 +61,6 @@ internal class StackQueueHarness(realHost: Boolean = false) {
 
     fun uninstall() {
         fixture.uninstall()
-        StackSwitches.preparesOwnRootPushes = false
         // What the React screens of a test told of their readiness holds for no other test.
         ScreenReadiness.reset()
     }
@@ -76,6 +85,13 @@ internal class StackQueueHarness(realHost: Boolean = false) {
         top.onViewWillAppear()
         top.onViewDidAppear()
         clear()
+    }
+
+    /** The calls JavaScript made before have applied: what waited behind them runs, in order. */
+    fun runCalls() {
+        val tasks = heldCalls.toList()
+        heldCalls.clear()
+        tasks.forEach { it() }
     }
 
     fun clear() {

@@ -68,16 +68,20 @@ dispatcher.
    `+[ANNErrorTexts nowhereToShow]` when there is no window, then runs the body in `@try`. The body finds Home in
    `ANNNodeRegistry` and calls `+[ANNStackCommands push:componentId:what:answer:]`.
 4. **`ANNStackCommands`.** Finds the stack by walking `layoutParent`; checks `ANNLayoutValidator` (an id already shown,
-   what a stack takes); reads the options of the whole tree with `ANNLayoutTreeOptions` (images load here); checks
-   `ANNLayoutFactory canMakeTrees:`; a node with `preview.nativeID` goes to `ANNPreviewPush`; a `key` of an entry below
-   goes back to that entry; else `+[ANNLayoutFactory nodeFromLayout:options:]` makes Profile (an
+   what a stack takes); reads the options of the whole tree with `ANNLayoutTreeOptions` (an image keeps its source,
+   loaded through `ANNOptionImages` when an element shows it); checks `ANNLayoutFactory canMakeTrees:`; a node with
+   `preview.nativeID` goes to `ANNPreviewPush`; a `key` of an entry below goes back to that entry; else
+   `+[ANNLayoutFactory nodeFromLayout:options:]` makes Profile (an
    `ANNComponentViewController` with an `ANNComponentPresenter`, content from `ANNReactViewCreator`) and registers it.
    No view is rendered yet.
 5. **`-[ANNStackQueue push:answer:…]`.** The node joins `entries` now (every check reads `entries`), the operation is
    queued, `runNext` starts it when the queue is at rest.
 6. **`startPush:` and `startPushTransition:`.** By `animations.push.waitForRender` the queue waits through
-   `ANNRenderWait`, for the content and the bar components or for the bar components alone (a screen that waits for its
-   content is parked unseen in the stack's view by `ANNParking`, `stackPark:`), then renders the node, drives the appearance of Home and Profile (`+[ANNAppearanceDispatcher driveAppearanceOf:]`), and calls
+   `ANNRenderWait`: unset, for the content at most 0.5 s, with `true` as long as it takes, then for the bar components
+   (their limits from the wait's start when unset, from the content's end with `true`; the screen is parked unseen in
+   the stack's view by `ANNParking`, `stackPark:`); the content's end, content there already too, waits for the calls
+   JavaScript made by then (`ANNJavaScriptCalls`: the JavaScript thread, the module's queue, the main queue), so the
+   options of the screen's first commit are in the bar; with `false` nothing. Then it renders the node, drives the appearance of Home and Profile (`+[ANNAppearanceDispatcher driveAppearanceOf:]`), and calls
    `+[ANNAppearanceDispatcher beginTransitionShowing:]`. Profile's `ComponentWillAppear` is sent now (held until its
    content mounted, 0.5 s at most). `stackChange:` pushes in UIKit; with an own animation `ANNTransitionPlan` and
    `ANNStackAnimatingDelegate` give UIKit the `ANNTransitionAnimator`.
@@ -85,7 +89,7 @@ dispatcher.
    `+[ANNAppearanceDispatcher endTransitionHiding:showing:events:answer:value:]`. In this order: `ComponentDidDisappear`
    of Home, `ComponentDidAppear` of Profile, `ANN.NavigationStateChanged` (`+[ANNNavigationState updateNow]`), the
    transition's `events`, then `-[ANNCommandAnswer resolve:]`: the state again if it changed
-   (`reportBeforeAnswer`), the promise with Profile's id, then `ANN.CommandCompleted`. `finish:` frees the queue for
+   (`reportBeforeAnswerOf:`), the promise with Profile's id, then `ANN.CommandCompleted`. `finish:` frees the queue for
    the next operation.
 
 Events go out through `ANNEventEmitter` on the main queue and reach JS through `ANNTurboEventEmitter`.
@@ -116,8 +120,8 @@ Each of these owns one rule. Call it; do not copy it.
 - `ANNCommandAnswer`: The answer: state, then promise, then `ANN.CommandCompleted`; once; silent for a JavaScript that went. Called by: Every coordinator and queue.
 - `ANNNodeRegistry`: Every node by id, weakly. Filled by the factory, cleared at a reload. Called by: Commands, modules, `findViewController:`.
 - `ANNLayoutFactory`: The core code that names module classes (`ANNSplitViewController`, `ANNSideMenuViewController`, `ANNArrangementViewController`); `ANNSideMenuPresenter` is the one other file that does. One maker per layout type; registers each node. Called by: Every command that shows a layout.
-- `ANNOptionsCache`: The one invalidation point of resolved options. Called by: The setter of `ANNNodeHelper.options` and `ANNDefaultOptions` only.
-- `ANNNodeHelper resolveOptionsWithDefault`: What a node shows with: defaults, parents' own options, the node's `resolveOptions` (own, then the current child down). Cached, read-only. Called by: Presenters, coordinators.
+- `ANNOptionsCache`: The one invalidation point of resolved options. Called by: The setters of `ANNNodeHelper.options` and of its user layer (`setUserChoice:forKey:`), and `ANNDefaultOptions`, only.
+- `ANNNodeHelper resolveOptionsWithDefault`: What a node shows with: defaults, parents' own options (each with its user layer), the node's `resolveOptions` (own, its user layer, then the current child down). Cached, read-only. Called by: Presenters, coordinators.
 - `ANNAppearanceDispatcher`: The only sender of `ComponentWillAppear`, `ComponentDidAppear`, `ComponentDidDisappear`; the end-of-transition order; the events of a node that goes. Called by: Screens, queues, coordinators.
 - `ANNNavigationState`: The visible screen and the nearest tabs it is in (the last tabs met walking down); coalesced updates, holds, the state before an answer. Called by: The dispatcher, `ANNCommandAnswer`, `ANNRootCoordinator`.
 - `ANNScreenReadiness`: The signals of a screen's safe area view (has one, laid out, content rendered), sticky, by screen id. Called by: `ANNSafeAreaViewComponentView`, `ANNReactView`.

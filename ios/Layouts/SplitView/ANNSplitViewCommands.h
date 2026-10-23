@@ -15,8 +15,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// `showInColumn`: the push's checks of the layout (the options of the tree, what the core makes), then the screen is
 /// made and waits by the push's rules. Once it is ready, by the state then: the source in a split view not collapsed
 /// into its compact layout — the split view shows the screen in `column`, unless a later request of that column began
-/// meanwhile (the last one wins); else the source in a stack — a push over it; else a rejection. The answer is the
-/// shown screen's id; every rejection destroys the screen.
+/// meanwhile (the last one wins; the superseded one answers when the last one does, with its own screen's id whatever
+/// the last one's outcome, as on Android); else the source in a stack — a push over it; else a rejection. The answer
+/// is the shown screen's id; every rejection destroys the screen.
 + (void)showInColumn:(NSString *)column
               layout:(ANNLayoutNode *)layout
          componentId:(NSString *)componentId

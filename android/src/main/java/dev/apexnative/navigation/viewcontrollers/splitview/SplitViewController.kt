@@ -15,6 +15,7 @@ import dev.apexnative.navigation.options.SplitViewGroupOptions
 import dev.apexnative.navigation.options.SplitViewOptions
 import dev.apexnative.navigation.react.CommandListener
 import dev.apexnative.navigation.react.CommandListenerAdapter
+import dev.apexnative.navigation.react.ErrorTexts
 import dev.apexnative.navigation.react.events.EventEmitter
 import dev.apexnative.navigation.system.SystemUiOwner
 import dev.apexnative.navigation.utils.TestIds
@@ -24,6 +25,7 @@ import dev.apexnative.navigation.viewcontrollers.child.ChildControllersRegistry
 import dev.apexnative.navigation.viewcontrollers.navigator.BackCallbackState
 import dev.apexnative.navigation.viewcontrollers.navigator.Navigator
 import dev.apexnative.navigation.viewcontrollers.parent.ChildOffsetFromRest
+import dev.apexnative.navigation.viewcontrollers.parent.OptionsScreen
 import dev.apexnative.navigation.viewcontrollers.parent.ParentController
 import dev.apexnative.navigation.viewcontrollers.parent.ReturnsScreenFromColumn
 import dev.apexnative.navigation.viewcontrollers.parent.ShownChildren
@@ -45,8 +47,9 @@ class SplitViewController(
     presenter: Presenter,
     initialOptions: Options,
     private var split: SplitViewOptions,
-    private val primary: ViewController<*>,
-    private val secondary: ViewController<*>,
+    // The panes' content; `showInColumn` may give a pane a new one.
+    private var primary: ViewController<*>,
+    private var secondary: ViewController<*>,
     private val compact: ViewController<*>?,
     private val eventEmitter: EventEmitter,
 ) : ParentController<SplitViewLayout>(activity, childRegistry, id, presenter, initialOptions),
@@ -421,25 +424,65 @@ class SplitViewController(
     }
 
     /**
-     * Shows [screen] in the secondary pane in place of what it shows and brings the pane into view. False with the
-     * compact layout on screen: the screen goes over [from], the screen the command comes from.
+     * Shows [screen] in [column] (`primary` or `secondary`; Android has no other) in place of what the pane shows, and
+     * brings the pane into view. A stack pane's screens are replaced by it, unless it is a container
+     * (![goesInStack]): `columnIsStack`. Any other pane is taken by it, and its content goes. A column the split view
+     * doesn't have: `noSuchColumn`. False with the compact layout on screen: the screen goes over [from], the screen
+     * the command comes from.
      */
-    override fun showScreen(screen: ViewController<*>, from: ViewController<*>, listener: CommandListener): Boolean {
+    override fun showScreen(
+        screen: ViewController<*>,
+        column: String,
+        goesInStack: Boolean,
+        from: ViewController<*>,
+        listener: CommandListener,
+    ): Boolean {
         if (isViewCreated && getView().isCompact) return false
-        val stack = secondary as? StackController
-        if (stack == null) {
-            listener.onError("the 'secondary' column of the split view of the screen '${from.id}' is not a stack")
-            return true
+        val pane = when (column) {
+            PRIMARY -> primary
+            SECONDARY -> secondary
+            else -> null
         }
-        stack.setRoot(listOf(screen), false, object : CommandListenerAdapter() {
-            override fun onSuccess(childId: String) {
-                updateBackButton()
-                showSecondary { listener.onSuccess(childId) }
-            }
+        when {
+            pane == null -> listener.onError(ErrorTexts.noSuchColumn(from.id, column))
+            pane is StackController && !goesInStack -> listener.onError(ErrorTexts.columnIsStack(from.id, column))
+            pane is StackController -> pane.setRoot(listOf(screen), false, object : CommandListenerAdapter() {
+                override fun onSuccess(childId: String) {
+                    updateBackButton()
+                    bringIntoView(column) { listener.onSuccess(childId) }
+                }
 
-            override fun onError(message: String) = listener.onError(message)
-        })
+                override fun onError(message: String) = listener.onError(message)
+            })
+            else -> {
+                replacePane(pane, screen)
+                updateBackButton()
+                val shownId = ((screen as? OptionsScreen)?.optionsScreen ?: screen).id
+                bringIntoView(column) { listener.onSuccess(shownId) }
+            }
+        }
         return true
+    }
+
+    // [next] takes the pane of [old], a screen alone or a container, as iOS puts a screen in place of a column's: its
+    // view goes where the old one's was, the children shown are told as a move of the panes tells them (DidDisappear
+    // of what left, DidAppear of what came), and [old] goes with its screens.
+    private fun replacePane(old: ViewController<*>, next: ViewController<*>) {
+        next.setParentController(this)
+        if (old === primary) primary = next else secondary = next
+        peekView()?.let { layout ->
+            layout.panes.replacePane(old.getView(), next.getView())
+            applyTestIds(primary.getView(), secondary.getView())
+            hideCoveredPane()
+            shownChildren.moved()
+            tellShownChanged()
+        }
+        old.destroy()
+    }
+
+    // The pane of [column] comes into view; [done] once the panes stopped.
+    private fun bringIntoView(column: String, done: Runnable) {
+        if (column == PRIMARY) setColumnShown(PRIMARY, true, done) else showSecondary(done)
     }
 
     private fun showSecondary(done: Runnable) {

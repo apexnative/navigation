@@ -305,7 +305,7 @@ static BOOL ANNIsInsideNode(UIViewController *screen, UIViewController *node) {
     for (UIViewController *node in shown) {
         [self nodeDidAppear:node];
     }
-    [ANNNavigationState updateNow];
+    [ANNNavigationState updateNowFor:answer.commandName];
     if (events) {
         events();
     }

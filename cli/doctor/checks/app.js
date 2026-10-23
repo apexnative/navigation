@@ -11,8 +11,10 @@ const {
   reactNativeVersion,
   usesExpo,
 } = require('../../app');
+const { mainActivity } = require('../../links/native');
 const { findProject } = require('../../project');
 const { codeOf } = require('../../setup/source');
+const { loadsReactNativeItself } = require('../../setup/steps/mainApplication');
 const { planCodegen } = require('../../codegen');
 const { readConfig } = require('../../config');
 const { planProject } = require('../../setup');
@@ -27,6 +29,16 @@ const { splashChecks } = require('./splash');
 const SETUP = { label: 'npx apex-navigation setup', run: /** @type {const} */ ('setup') };
 const GENERATED = ['ApexNavigation.generated.swift', 'ApexNavigationGenerated.kt'];
 const CODEGEN = { label: 'npx apex-navigation codegen', run: /** @type {const} */ ('codegen') };
+// The changes the main activity must handle itself; the template's value has them all.
+const CONFIG_CHANGES = [
+  'orientation',
+  'screenSize',
+  'smallestScreenSize',
+  'screenLayout',
+  'uiMode',
+];
+const TEMPLATE_CONFIG_CHANGES =
+  'keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode';
 
 /**
  * React Native, the navigation, and the files setup sets up.
@@ -122,26 +134,62 @@ function appChecks({ root, run }) {
     });
   }
 
+  const configChanges = configChangesCheck(project.manifest);
+  if (configChanges) checks.push(configChanges);
+
   checks.push(...splashChecks(root, project), ...iconChecks(root, project));
 
-  // A second load of React Native crashes the app on start: the most common slip of a setup by hand.
+  // NavigationApplication leaves the load of React Native to the template's call: without it the app closes on start,
+  // and so it does with a second load of the app's own next to it.
   const application = project.mainApplication && fs.readFileSync(project.mainApplication, 'utf8');
-  if (
-    application &&
-    /:\s*NavigationApplication\(\)/.test(application) &&
-    /\bloadReactNative\s*\(/.test(codeOf(application))
-  ) {
-    checks.push({
-      group: 'app',
-      title: 'React Native loads twice',
-      status: 'error',
-      detail: 'MainApplication.kt calls loadReactNative(this), NavigationApplication loads it too',
-      fix: { label: 'Remove loadReactNative(this) from MainApplication.kt' },
-    });
+  if (application && /:\s*NavigationApplication\(/.test(application)) {
+    const loads = /\bloadReactNative\s*\(/.test(codeOf(application));
+    if (!loads) {
+      checks.push({
+        group: 'app',
+        title: 'React Native not loaded',
+        status: 'error',
+        detail: "MainApplication.kt doesn't call loadReactNative(this) in onCreate",
+        fix: SETUP,
+      });
+    } else if (loadsReactNativeItself(application)) {
+      checks.push({
+        group: 'app',
+        title: 'React Native loads twice',
+        status: 'error',
+        detail:
+          'MainApplication.kt loads React Native itself (SoLoader.init or the New Architecture entry point) next to loadReactNative(this)',
+        fix: SETUP,
+      });
+    }
   }
   const generated = generatedCheck(root, run);
   if (generated) checks.push(generated);
   return checks;
+}
+
+/**
+ * Whether the main activity handles the changes of its window itself, as the React Native template has it. Without
+ * one of them Android recreates the activity on a rotation, a resize, a fold or a light/dark switch: every screen goes
+ * with it and the navigation starts again from its root. Nothing without a manifest or a main activity.
+ * @param {string | undefined} manifest
+ * @returns {Check | undefined}
+ */
+function configChangesCheck(manifest) {
+  if (!manifest || !fs.existsSync(manifest)) return undefined;
+  const activity = mainActivity(fs.readFileSync(manifest, 'utf8'));
+  if (!activity) return undefined;
+  const value = /android:configChanges\s*=\s*(?:"([^"]*)"|'([^']*)')/.exec(activity.text);
+  const declared = (value?.[1] ?? value?.[2] ?? '').split('|').map((change) => change.trim());
+  const missing = CONFIG_CHANGES.filter((change) => !declared.includes(change));
+  if (missing.length === 0) return undefined;
+  return {
+    group: 'app',
+    title: 'Config changes',
+    status: 'warn',
+    detail: `the main activity doesn't handle ${missing.join(', ')}: Android recreates it, and every screen with it`,
+    fix: { label: `Set android:configChanges="${TEMPLATE_CONFIG_CHANGES}" on the main activity` },
+  };
 }
 
 /**

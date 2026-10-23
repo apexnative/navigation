@@ -2,6 +2,7 @@
 #import "ANNEventEmitter.h"
 #import "ANNScreenInsets.h"
 #import "ANNSearchResultsViewController.h"
+#import "ANNUserChoice.h"
 
 static void *ANNSearchFieldColorContext = &ANNSearchFieldColorContext;
 
@@ -47,6 +48,47 @@ static NSString *ANNResultsKey(ANNComponentOptions *component) {
         return nil;
     }
     return [NSString stringWithFormat:@"%@\n%@", component.name.get, component.componentId.get];
+}
+
+static NSString *const ANNScopeChoiceKey = @"topBar.searchBar.selectedScope";
+static NSString *const ANNTokensChoiceKey = @"topBar.searchBar.tokens";
+static NSString *const ANNSuggestionsChoiceKey = @"topBar.searchBar.suggestions";
+
+static BOOL ANNHasScope(ANNNavigationOptions *options, NSString *scopeId) {
+    for (ANNSearchScopeOptions *scope in options.topBar.searchBar.scopes) {
+        if ([[scope.identifier withDefault:nil] isEqualToString:scopeId]) {
+            return YES;
+        }
+    }
+    return NO;
+}
+
+// The scope the user picked, by its id: it stays over the app's `selectedScope` where the scopes have it, as on
+// Android (`UserChoices.yieldTo`). It goes at a merge into the screen that gives another `selectedScope` than the app
+// had there (the own options', else the screen's resolution before the merge), or after which the screen's scopes
+// don't have it.
+static ANNUserChoice *ANNScopeChoice(NSString *scope) {
+    return [ANNUserChoice choiceWithValue:scope
+        apply:^(ANNNavigationOptions *options, id value) {
+          if (ANNHasScope(options, value)) {
+              options.topBar.searchBar.selectedScope = [Text withValue:value];
+          }
+        }
+        merged:^id(id value, ANNNavigationOptions *merge, ANNNavigationOptions *own,
+                   ANNNavigationOptions *before, ANNNavigationOptions *after) {
+          if (!ANNHasScope(after, value)) {
+              return nil;
+          }
+          Text *given = merge.topBar.searchBar.selectedScope;
+          if (!given.hasValue) {
+              return value;
+          }
+          Text *ownScope = own.topBar.searchBar.selectedScope;
+          Text *was = ownScope.hasValue ? ownScope : before.topBar.searchBar.selectedScope;
+          NSString *merged = [given withDefault:nil];
+          NSString *had = [was withDefault:nil];
+          return merged == had || [merged isEqualToString:had] ? value : nil;
+        }];
 }
 
 @interface ANNSearchPresenter () <UISearchResultsUpdating, UISearchBarDelegate, UISearchControllerDelegate>
@@ -380,9 +422,11 @@ static NSString *ANNResultsKey(ANNComponentOptions *component) {
 
 #pragma mark - Tokens
 
+// A token's key names its icon by the source the options give, never by the decoded image: a key read before and after
+// the cache lets the image go, or a file at the same path changes, stays the same, and computing it loads nothing.
 static NSString *ANNTokenKey(ANNSearchTokenOptions *token) {
     return [NSString stringWithFormat:@"%@\n%@\n%@\n%@", [token.identifier withDefault:@""], [token.text withDefault:@""],
-                                      [token.sfSymbol withDefault:@""], [token.icon withDefault:nil] ?: @""];
+                                      [token.sfSymbol withDefault:@""], token.icon.source.sourceKey ?: @""];
 }
 
 static NSArray<NSString *> *ANNTokenIds(NSArray<UISearchToken *> *tokens) {
@@ -393,6 +437,59 @@ static NSArray<NSString *> *ANNTokenIds(NSArray<UISearchToken *> *tokens) {
         }
     }
     return ids;
+}
+
+static NSArray<NSString *> *ANNTokenKeys(NSArray<ANNSearchTokenOptions *> *tokens) {
+    NSMutableArray<NSString *> *keys = [NSMutableArray new];
+    for (ANNSearchTokenOptions *token in tokens) {
+        [keys addObject:ANNTokenKey(token)];
+    }
+    return keys;
+}
+
+// The tokens the field has after the user deleted some (or brought them back with Undo), as copies of their options:
+// they stay over the app's `tokens` until a merge gives a list other than the app had there (the own options', else
+// the screen's resolution before the merge), as the other choices. After a merge the tokens the screen's resolution no
+// longer has (by id) leave the choice, and all of them when it has no `tokens`.
+static ANNUserChoice *ANNTokensChoice(NSArray<ANNSearchTokenOptions *> *tokens) {
+    return [ANNUserChoice choiceWithValue:tokens
+        apply:^(ANNNavigationOptions *options, id value) {
+          // Copies: two trees never share a group.
+          NSArray<ANNSearchTokenOptions *> *kept = value;
+          NSMutableArray<ANNSearchTokenOptions *> *copies =
+              [NSMutableArray arrayWithCapacity:kept.count];
+          for (ANNSearchTokenOptions *token in kept) {
+              [copies addObject:[token copy]];
+          }
+          options.topBar.searchBar.tokens = copies;
+        }
+        merged:^id(id value, ANNNavigationOptions *merge, ANNNavigationOptions *own,
+                   ANNNavigationOptions *before, ANNNavigationOptions *after) {
+          NSArray<ANNSearchTokenOptions *> *now = after.topBar.searchBar.tokens;
+          if (!now) {
+              return nil;
+          }
+          NSArray<ANNSearchTokenOptions *> *given = merge.topBar.searchBar.tokens;
+          if (given) {
+              NSArray<ANNSearchTokenOptions *> *was =
+                  own.topBar.searchBar.tokens ?: before.topBar.searchBar.tokens;
+              if (!was || ![ANNTokenKeys(given) isEqualToArray:ANNTokenKeys(was)]) {
+                  return nil;
+              }
+          }
+          NSMutableSet<NSString *> *ids = [NSMutableSet new];
+          for (ANNSearchTokenOptions *token in now) {
+              [ids addObject:[token.identifier withDefault:@""]];
+          }
+          NSArray<ANNSearchTokenOptions *> *chosen = value;
+          NSMutableArray<ANNSearchTokenOptions *> *kept = [NSMutableArray new];
+          for (ANNSearchTokenOptions *token in chosen) {
+              if ([ids containsObject:[token.identifier withDefault:@""]]) {
+                  [kept addObject:token];
+              }
+          }
+          return kept.count == chosen.count ? value : kept;
+        }];
 }
 
 // The field gets the tokens again only when the options changed: setting them resets the user's selection.
@@ -426,7 +523,7 @@ static NSArray<NSString *> *ANNTokenIds(NSArray<UISearchToken *> *tokens) {
     field.tokens = searchTokens;
 }
 
-// The tokens the field has now, written to the screen's options when the user deleted some (or brought them back with
+// The tokens the field has now, kept in the screen's user layer when the user deleted some (or brought them back with
 // Undo), so the options apply them as they are. Their ids, or nil when the search bar has no tokens option.
 - (NSArray<NSString *> *)syncTokens:(UISearchTextField *)field {
     if (!_tokenOptions) {
@@ -444,24 +541,77 @@ static NSArray<NSString *> *ANNTokenIds(NSArray<UISearchToken *> *tokens) {
     }
     if (![_appliedTokens isEqualToArray:keys]) {
         _appliedTokens = keys;
-        [_viewController changeOwnOptions:^(ANNNavigationOptions *options) {
-          // Copies: the objects above belong to the applied tree, and two trees never share a group.
-          NSMutableArray<ANNSearchTokenOptions *> *own = [NSMutableArray arrayWithCapacity:tokens.count];
-          for (ANNSearchTokenOptions *token in tokens) {
-              [own addObject:[token copy]];
-          }
-          options.topBar.searchBar.tokens = own;
-        }];
+        // Copies: the objects above belong to the applied tree, and two trees never share a group.
+        NSMutableArray<ANNSearchTokenOptions *> *kept =
+            [NSMutableArray arrayWithCapacity:tokens.count];
+        for (ANNSearchTokenOptions *token in tokens) {
+            [kept addObject:[token copy]];
+        }
+        [_viewController setUserChoice:ANNTokensChoice(kept) forKey:ANNTokensChoiceKey];
     }
     return ids;
 }
 
 #pragma mark - Suggestions
 
+// A suggestion's key names its icon by its source, as a token's does (`ANNTokenKey`).
 static NSString *ANNSuggestionKey(ANNSearchSuggestionOptions *suggestion) {
     return [NSString stringWithFormat:@"%@\n%@\n%@\n%@\n%@", [suggestion.identifier withDefault:@""],
                                       [suggestion.title withDefault:@""], [suggestion.accessibilityLabel withDefault:@""],
-                                      [suggestion.sfSymbol withDefault:@""], [suggestion.icon withDefault:nil] ?: @""];
+                                      [suggestion.sfSymbol withDefault:@""], suggestion.icon.source.sourceKey ?: @""];
+}
+
+static NSArray<NSString *> *ANNSuggestionKeys(NSArray<ANNSearchSuggestionOptions *> *suggestions) {
+    NSMutableArray<NSString *> *keys = [NSMutableArray new];
+    for (ANNSearchSuggestionOptions *suggestion in suggestions) {
+        [keys addObject:ANNSuggestionKey(suggestion)];
+    }
+    return keys;
+}
+
+// The suggestions UIKit removed, by their keys: they stay out of the app's `suggestions` until a merge gives a list
+// other than the app had there (the own options', else the screen's resolution before the merge); the new ones of such
+// a list show. After a merge the removed ones the screen's resolution no longer has leave the choice.
+static ANNUserChoice *ANNRemovedSuggestionsChoice(NSArray<NSString *> *removed) {
+    return [ANNUserChoice choiceWithValue:removed
+        apply:^(ANNNavigationOptions *options, id value) {
+          NSArray<ANNSearchSuggestionOptions *> *suggestions = options.topBar.searchBar.suggestions;
+          if (!suggestions) {
+              return;
+          }
+          NSSet<NSString *> *gone = [NSSet setWithArray:value];
+          NSMutableArray<ANNSearchSuggestionOptions *> *kept = [NSMutableArray new];
+          for (ANNSearchSuggestionOptions *suggestion in suggestions) {
+              if (![gone containsObject:ANNSuggestionKey(suggestion)]) {
+                  [kept addObject:suggestion];
+              }
+          }
+          options.topBar.searchBar.suggestions = kept;
+        }
+        merged:^id(id value, ANNNavigationOptions *merge, ANNNavigationOptions *own,
+                   ANNNavigationOptions *before, ANNNavigationOptions *after) {
+          NSArray<ANNSearchSuggestionOptions *> *given = merge.topBar.searchBar.suggestions;
+          if (given) {
+              NSArray<ANNSearchSuggestionOptions *> *was =
+                  own.topBar.searchBar.suggestions ?: before.topBar.searchBar.suggestions;
+              if (!was || ![ANNSuggestionKeys(given) isEqualToArray:ANNSuggestionKeys(was)]) {
+                  return nil;
+              }
+          }
+          NSSet<NSString *> *now =
+              [NSSet setWithArray:ANNSuggestionKeys(after.topBar.searchBar.suggestions)];
+          NSArray<NSString *> *removed = value;
+          NSMutableArray<NSString *> *kept = [NSMutableArray new];
+          for (NSString *key in removed) {
+              if ([now containsObject:key]) {
+                  [kept addObject:key];
+              }
+          }
+          if (kept.count == 0) {
+              return nil;
+          }
+          return kept.count == removed.count ? value : kept;
+        }];
 }
 
 - (void)applySuggestions:(NSArray<ANNSearchSuggestionOptions *> *)suggestions
@@ -491,13 +641,20 @@ static NSString *ANNSuggestionKey(ANNSearchSuggestionOptions *suggestion) {
     search.searchSuggestions = items.count ? items : nil;
 }
 
-// UIKit has removed the suggestions: so do the screen's options, and the next ones from mergeOptions show.
+// UIKit has removed the suggestions: the screen's user layer keeps them out, with those it removed before, and the next
+// ones from mergeOptions show.
 - (void)syncSuggestions:(UISearchController *)search API_AVAILABLE(ios(16.0)) {
     if (_appliedSuggestions.count && !search.searchSuggestions.count) {
+        NSArray<NSString *> *removed = _appliedSuggestions;
         _appliedSuggestions = @[];
-        [_viewController changeOwnOptions:^(ANNNavigationOptions *options) {
-          options.topBar.searchBar.suggestions = @[];
-        }];
+        UIViewController<ANNLayoutProtocol> *viewController = _viewController;
+        ANNUserChoice *before = [viewController userChoiceForKey:ANNSuggestionsChoiceKey];
+        NSArray<NSString *> *removedBefore = before.value;
+        if (removedBefore.count) {
+            removed = [removedBefore arrayByAddingObjectsFromArray:removed];
+        }
+        [viewController setUserChoice:ANNRemovedSuggestionsChoice(removed)
+                               forKey:ANNSuggestionsChoiceKey];
     }
 }
 
@@ -606,14 +763,12 @@ static NSString *ANNSuggestionKey(ANNSearchSuggestionOptions *suggestion) {
     }
 }
 
-// The pick is written to the screen's options, so it stays when the options apply again. UIKit then updates the
+// The pick is kept in the screen's user layer, so it stays when the options apply again. UIKit then updates the
 // search results: searchBarUpdated carries the new scope.
 - (void)searchBar:(UISearchBar *)searchBar selectedScopeButtonIndexDidChange:(NSInteger)selectedScope {
     NSString *scope = [self selectedScope:searchBar];
     if (scope) {
-        [_viewController changeOwnOptions:^(ANNNavigationOptions *options) {
-          options.topBar.searchBar.selectedScope = [Text withValue:scope];
-        }];
+        [_viewController setUserChoice:ANNScopeChoice(scope) forKey:ANNScopeChoiceKey];
     }
 }
 

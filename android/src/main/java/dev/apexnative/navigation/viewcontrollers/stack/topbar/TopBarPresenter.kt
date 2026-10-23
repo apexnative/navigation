@@ -1008,8 +1008,16 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
         button.priority.get(null),
     ).joinToString("|")
 
-    private fun menuKey(menu: ButtonMenuOptions): String =
-        menu.items.joinToString("|") { "${it.title}:${it.icon}:${it.testID}" } + menu.testID
+    // What the overflow menu shows, its submenus and checks with it: a check the app moves, or one of the user layer
+    // that leaves, fills the menu again.
+    private fun menuKey(menu: ButtonMenuOptions): String = elementsKey(menu.items) + menu.testID
+
+    private fun elementsKey(elements: List<ButtonMenuOptions.Element>): String = elements.joinToString("|") {
+        "${it.title}:${it.icon}:${it.testID}" + when (it) {
+            is ButtonMenuOptions.Item -> ":${it.checked}:${it.disabled}"
+            is ButtonMenuOptions.Submenu -> "[${elementsKey(it.items)}]"
+        }
+    }
 
     private fun fontKey(font: FontOptions): String =
         listOf(font.fontFamily, font.fontStyle, font.fontWeight).joinToString { it.get(null).toString() }

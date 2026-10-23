@@ -19,13 +19,16 @@ import java.lang.ref.WeakReference
 
 /**
  * The device's hinge (`useHinge`): its state from the fold in the activity's window, its angle from the hinge angle
- * sensor (Android 11+). Android has no public state of a closed device: closed is a window without a fold and an
- * angle under 90°. No sensor and no fold: no hinge, `{}`. It runs while JavaScript has a hook mounted
- * (`setHingeUpdates`), the sensor only while the activity is resumed too; the same value is not sent twice. Main
- * thread only, but [get].
+ * sensor (Android 11+), in degrees to a tenth as on iOS. Android has no public state of a closed device: closed is a
+ * window without a fold, or an angle under 90° ([valueOf]). No sensor and no fold: no hinge, `{}`. It runs while
+ * JavaScript has a hook mounted (`setHingeUpdates`), the sensor only while the activity is resumed too; the same value
+ * is not sent twice. Main thread only, but [get].
  */
 internal object Hinge {
-    data class Value(val state: String, val angle: Float?)
+    /** A value of the hinge: its state, and its angle in degrees to a tenth; none while the state is unknown. */
+    data class Value(val state: String, val angle: Double?)
+
+    private const val UNKNOWN = "unknown"
 
     private const val CLOSED_BELOW = 90f
 
@@ -128,28 +131,33 @@ internal object Hinge {
         if (!enabled) return
         val folds = folds ?: return
         if (!folds.hasInfo || (listening && angle == null)) return
-        val fold = folds.folds.firstOrNull()
-        val angle = angle
-        val value = if (fold == null && sensor == null) {
-            null
-        } else {
-            val state = when {
-                fold?.halfOpened == true -> "partiallyOpen"
-                fold != null -> "fullyOpen"
-                angle != null && angle < CLOSED_BELOW -> "closed"
-                else -> "unknown"
-            }
-            Value(state, angle)
-        }
+        val value = valueOf(folds.folds.firstOrNull(), sensor != null, angle)
         if (value == last) return
         last = value
         val reactContext = (activity?.get()?.application as? ReactApplication)?.reactHost?.currentReactContext ?: return
         EventEmitter(reactContext).emitHingeChanged(toMap(value))
     }
 
+    /**
+     * The value of the window's first [fold] and the sensor's [angle]: none without a fold and without a sensor
+     * ([hasSensor]). `closed` without a fold or under 90°, else `partiallyOpen` for a half-opened fold and `fullyOpen`
+     * for a flat one. The angle goes to a tenth, as iOS gives it: the sensor's noise doesn't make a new value, and it
+     * is left out while the state is unknown.
+     */
+    fun valueOf(fold: WindowFolds.Fold?, hasSensor: Boolean, angle: Float?): Value? {
+        if (fold == null && !hasSensor) return null
+        val state = when {
+            fold == null || (angle != null && angle < CLOSED_BELOW) -> "closed"
+            fold.halfOpened -> "partiallyOpen"
+            else -> "fullyOpen"
+        }
+        val tenths = angle?.let { Math.round(it * 10.0) / 10.0 }
+        return Value(state, tenths.takeIf { state != UNKNOWN })
+    }
+
     private fun toMap(value: Value?): WritableMap = Arguments.createMap().apply {
         if (value == null) return@apply
         putString(EventContract.HingeChanged.STATE, value.state)
-        value.angle?.let { putDouble(EventContract.HingeChanged.ANGLE, it.toDouble()) }
+        if (value.state != UNKNOWN) value.angle?.let { putDouble(EventContract.HingeChanged.ANGLE, it) }
     }
 }

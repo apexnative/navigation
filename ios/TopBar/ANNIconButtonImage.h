@@ -13,6 +13,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// `tint` colors the icon (nil: its own colors); `background` fills the rectangle of `size` (zero: the icon's size)
 /// rounded by `cornerRadius`; `insets` pad the icon. Colors may be dynamic: each variant resolves them.
+/// An icon that can't be drawn so (no room, an exception while drawing) comes back as it is.
 + (UIImage *)imageWithIcon:(UIImage *)icon
                       tint:(nullable UIColor *)tint
                 background:(nullable UIColor *)background

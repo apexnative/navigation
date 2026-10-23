@@ -13,6 +13,7 @@
 #import "ANNTitleGlassView.h"
 #import "ANNTitleView.h"
 #import "ANNToolbarPresenter.h"
+#import "ANNUserChoice.h"
 #import "UIViewController+LayoutProtocol.h"
 
 // The key of the bar's handler on the screen's content mounts.
@@ -57,6 +58,30 @@ static NSArray<UIMenuElement *> *ANNRenameElementsOf(NSArray<UIMenuElement *> *e
         }
     }
     return kept;
+}
+
+static NSString *const ANNRenameChoiceKey = @"topBar.title.text";
+
+// The title the user gave: it stays over the app's `title.text` until a merge gives another text than the app had
+// there (the own options', else the title the screen resolved to before the merge, as the other choices); a re-render
+// that sends the old title again keeps it.
+static ANNUserChoice *ANNRenameChoice(NSString *title) {
+    return [ANNUserChoice choiceWithValue:title
+        apply:^(ANNNavigationOptions *options, id value) {
+          options.topBar.title.text = [Text withValue:value];
+        }
+        merged:^id(id value, ANNNavigationOptions *merge, ANNNavigationOptions *own,
+                   ANNNavigationOptions *before, ANNNavigationOptions *after) {
+          Text *text = merge.topBar.title.text;
+          if (!text.hasValue) {
+              return value;
+          }
+          Text *ownText = own.topBar.title.text;
+          Text *was = ownText.hasValue ? ownText : before.topBar.title.text;
+          NSString *merged = [text withDefault:nil];
+          NSString *had = [was withDefault:nil];
+          return merged == had || [merged isEqualToString:had] ? value : nil;
+        }];
 }
 
 @interface ANNTopBarPresenter () <UINavigationItemRenameDelegate>
@@ -495,8 +520,11 @@ static NSArray<UIMenuElement *> *ANNRenameElementsOf(NSArray<UIMenuElement *> *e
 // The layers of the title: the screen's own text hides a component of its stack or of the defaults; a component in the
 // screen's own options shows over its own text.
 - (BOOL)ownTextHidesComponent {
-    ANNTopBarTitleOptions *own = _screen.options.topBar.title;
-    return own.text.hasValue && !own.text.isNull && !ANNHasComponentName(own.component);
+    UIViewController *screen = _screen;
+    ANNTopBarTitleOptions *own = screen.options.topBar.title;
+    BOOL ownText = (own.text.hasValue && !own.text.isNull) ||
+                   [screen userChoiceForKey:ANNRenameChoiceKey] != nil;
+    return ownText && !ANNHasComponentName(own.component);
 }
 
 // iOS 26: the system subtitle under the title and under the large title, with only the attributes given (a color, or
@@ -644,11 +672,12 @@ static NSArray<UIMenuElement *> *ANNRenameElementsOf(NSArray<UIMenuElement *> *e
         __weak ANNBarButtons *buttons = _buttons;
         UIMenu *menu = [title.menu menuWithPickHandler:^(NSString *itemId) {
           [buttons menuItemPicked:itemId
-              menuOf:^ANNMenuOptions *(ANNNavigationOptions *resolved) {
-                return resolved.topBar.title.menu;
+              choiceKey:@"topBar.title.menu"
+              menuOf:^ANNMenuOptions *(ANNNavigationOptions *options) {
+                return options.topBar.title.menu;
               }
-              setMenu:^(ANNNavigationOptions *own, ANNMenuOptions *copy) {
-                own.topBar.title.menu = copy;
+              setMenu:^(ANNNavigationOptions *options, ANNMenuOptions *copy) {
+                options.topBar.title.menu = copy;
               }];
         }];
         menuTitle = menu.title;
@@ -659,8 +688,8 @@ static NSArray<UIMenuElement *> *ANNRenameElementsOf(NSArray<UIMenuElement *> *e
 
 #pragma mark - UINavigationItemRenameDelegate
 
-// Empty or blank: the old title back, no event; the same: nothing; new: the screen's own `title.text`, the title drawn
-// again, then `ANN.TitleRenamed`.
+// Empty or blank: the old title back, no event; the same: nothing; new: `title.text` in the screen's user layer, the
+// title drawn again, then `ANN.TitleRenamed`.
 - (void)navigationItem:(UINavigationItem *)navigationItem
     didEndRenamingWithTitle:(NSString *)title {
     UIViewController *screen = _screen;
@@ -677,9 +706,7 @@ static NSArray<UIMenuElement *> *ANNRenameElementsOf(NSArray<UIMenuElement *> *e
     if ([title isEqualToString:old]) {
         return;
     }
-    [screen changeOwnOptions:^(ANNNavigationOptions *own) {
-      own.topBar.title.text = [Text withValue:title];
-    }];
+    [screen setUserChoice:ANNRenameChoice(title) forKey:ANNRenameChoiceKey];
     ANNNavigationOptions *options = [screen resolveOptionsWithDefault];
     [self applyTitle:options textWins:NO];
     NSString *componentId = screen.layoutInfo.componentId;

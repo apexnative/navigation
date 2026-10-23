@@ -60,7 +60,10 @@ export function rootGoesOut(nodes: LayoutNode[], again: SentRoot | undefined): v
     pairNodes(before.nodes, nodes, (old, node) => {
       const options = remembered.get(old.id);
       if (!options) return;
-      node.data.options = mergeNativeOptions(node.data.options ?? {}, toNativeOptions(options));
+      node.data.options = mergeNativeOptions(
+        node.data.options ?? {},
+        toNativeOptions(options, node.id)
+      );
       moved.set(node.id, options);
     });
   }

@@ -124,18 +124,18 @@ internal class OverlayCoordinator(
     }
 
     /**
-     * `dismissOverlay`: the overlays with the root id [componentId] go — one that waits is cancelled, one that shows
-     * goes with its events (both, when a replacement of a shown one waits) — and [answer] resolves with the id. An id
-     * no node has: `not shown`; a node that is no overlay's root (Android takes only the root's id): `not in an
-     * overlay`.
+     * `dismissOverlay`: the overlay [componentId] is in — its root or any screen inside it — goes with every overlay of
+     * the same root id: one that waits is cancelled, one that shows goes with its events (both, when a replacement of
+     * a shown one waits). [answer] resolves with the overlay's root id, as on iOS. An id no node has: `not shown`; a
+     * node in no overlay: `not in an overlay`.
      */
     fun dismiss(componentId: String, answer: CommandAnswer) {
-        if (host.find(componentId) == null) return answer.reject(ErrorTexts.screenNotShown(componentId))
-        val matches = records.filter { it.rootId == componentId }
-        if (matches.isEmpty()) return answer.reject(ErrorTexts.notInOverlay(componentId))
+        val node = host.find(componentId) ?: return answer.reject(ErrorTexts.screenNotShown(componentId))
+        val rootId = recordOf(node)?.rootId ?: return answer.reject(ErrorTexts.notInOverlay(componentId))
+        val matches = records.filter { it.rootId == rootId }
         matches.filter { it.state == OverlayRecord.State.Waiting }.forEach(::cancel)
         val shown = matches.filter { it.state == OverlayRecord.State.Shown }
-        if (shown.isEmpty()) return answer.resolve(componentId)
+        if (shown.isEmpty()) return answer.resolve(rootId)
         shown.dropLast(1).forEach { remove(it, null) }
         remove(shown.last(), answer)
     }

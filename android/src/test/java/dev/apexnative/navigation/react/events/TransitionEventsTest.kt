@@ -158,6 +158,30 @@ class TransitionEventsTest {
     }
 
     @Test
+    fun aModalThatShowsNoScreenNamesItsRootInItsEvents() {
+        val modal = TestLayout(activity, registry, "Modal1")
+        modal.add(TestLayout(activity, registry, "Tabs1"))
+        AppearanceDispatcher.modalDismissed(modal, 1)
+        AppearanceDispatcher.modalAttemptedToDismiss(modal)
+        AppearanceDispatcher.sheetDetentChanged(modal, "large")
+        // What [AppearanceDispatcher.modalScreen] gave names the same node again.
+        AppearanceDispatcher.modalDismissed(AppearanceDispatcher.modalScreen(modal), 1)
+        assertEquals(
+            listOf("modalDismissed:Modal1::1", "attempted:Modal1", "detent:Modal1:large", "modalDismissed:Modal1::1"),
+            entries,
+        )
+    }
+
+    @Test
+    fun aModalEventNamesTheScreenAtTheEndOfTheChain() {
+        val modal = TestLayout(activity, registry, "Modal1")
+        modal.add(component("Details2", "Details"))
+        AppearanceDispatcher.modalAttemptedToDismiss(modal)
+        AppearanceDispatcher.sheetDetentChanged(modal, "medium")
+        assertEquals(listOf("attempted:Details2", "detent:Details2:medium"), entries)
+    }
+
+    @Test
     fun aModalOfAJavaScriptThatWentIsDismissedSilently() {
         val stack = TestLayout(activity, registry, "Stack1")
         stack.add(component("Home1", "Home"))

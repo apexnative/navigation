@@ -3,6 +3,7 @@
 #import "ANNLayoutInfo.h"
 #import "ANNNavigationOptions.h"
 #import "ANNNodePresenter.h"
+#import "ANNUserChoice.h"
 #import <UIKit/UIKit.h>
 
 NS_ASSUME_NONNULL_BEGIN
@@ -24,9 +25,11 @@ FOUNDATION_EXPORT NSString *const ANNContainerReadyHandlerKey;
 @property(nonatomic, weak, readonly, nullable) UIViewController *node;
 
 @property(nonatomic, strong, nullable) ANNLayoutInfo *layoutInfo;
-/// The node's own options: its layout options with every `mergeOptions` into it and the choices of the user the modules
-/// keep. The setter stores them without the one-shot options and makes every resolved options miss its cache; it is the
-/// only way to change them. Never change them in place: `mergeOwnOptions:` or `changeOwnOptions:`.
+/// The node's own options: its layout options with every `mergeOptions` into it and what the core keeps of a merge (the
+/// title component a merged text drops, side colors). The user's choices are not here but in the user layer
+/// (`setUserChoice:forKey:`). The setter stores them without the one-shot options and makes every resolved options miss
+/// its cache; it is the only way to change them. Never change them in place: `mergeOwnOptions:` or
+/// `changeOwnOptions:`.
 @property(nonatomic, strong, nullable) ANNNavigationOptions *options;
 /// The default options of the app (`ANNDefaultOptions.current`); setting it does nothing, the defaults are the app's.
 @property(nonatomic, strong, nullable) ANNNavigationOptions *defaultOptions;
@@ -57,21 +60,38 @@ FOUNDATION_EXPORT NSString *const ANNContainerReadyHandlerKey;
 /// the layout, else the fallback (when there is none, the parent view controller).
 - (nullable UIViewController *)layoutParent;
 
-/// `options` merged with `options` given and stored through the setter.
+/// The app's `mergeOptions` into the node: `options` merged with `options` given and stored through the setter. A
+/// choice of the user layer that the merge changes leaves the layer, by Android's rules
+/// (`ANNUserChoice choiceAfterMerge:own:before:after:`): a field given a value other than the app had there (the own
+/// options', else the node's resolution before the merge), or the button, item or scope of the choice gone from the
+/// node's resolution after it; the same value sent again keeps it.
 - (void)mergeOwnOptions:(ANNNavigationOptions *)options;
 
-/// A change of the own options by the core or a module: `change` gets a copy of them, and the copy is stored through
-/// the setter. A presenter or module that keeps a choice of the user in the node's options (a scope, tokens, a
-/// checked menu item, a toggled button) writes it this way, never into the options in place.
+/// A change of the own options by the core: `change` gets a copy of them, and the copy is stored through the setter.
+/// For what the core keeps of the app's merges (the title component a merged text drops, side colors), never for a
+/// choice of the user, which goes into the user layer.
 - (void)changeOwnOptions:(void (^)(ANNNavigationOptions *options))change;
 
-/// The common resolve: a copy of the node's own options with the resolved options of its current child over them, down
-/// the visible chain. A new object each call: a container's override may change it in place.
+/// The user layer: the choices the user made in native UI (a toggled button, the check of a single-selection menu, the
+/// search scope, the tokens and suggestions UIKit removed, a renamed title), one per key, apart from the own options.
+/// The resolution writes them over the own options, by identity (`ANNUserChoice applyTo:`): defaults < parents < own <
+/// user. Setting one (nil removes it) makes every resolved options miss its cache, as a change of own options does.
+/// `setDefaultOptions` never touches the layer; it goes with the node.
+- (void)setUserChoice:(nullable ANNUserChoice *)choice forKey:(NSString *)key;
+
+/// The choice under `key`, or nil.
+- (nullable ANNUserChoice *)userChoiceForKey:(NSString *)key;
+
+/// The common resolve: a copy of the node's own options with its user layer written over them, then the resolved
+/// options of its current child over that, down the visible chain. A new object each call: a container's override may
+/// change it in place.
 - (ANNNavigationOptions *)resolveOptions;
 
-/// What the node shows with: the default options, then the own options of its parents from the farthest to the nearest,
-/// then the node's `resolveOptions`. Cached until any options change (`ANNOptionsCache`), the node has another parent,
-/// or a node of its visible chain has another current child. Read-only: copy it before changing anything.
+/// What the node shows with: the default options, then the own options of its parents (each with its user layer) from
+/// the farthest to the nearest, then the node's `resolveOptions`; a node without a current child (a screen) writes its
+/// user layer once more at the end, so a choice also reaches a list the screen takes from its stack or the defaults.
+/// Cached until any options or user layer change (`ANNOptionsCache`), the node has another parent, or a node of its
+/// visible chain has another current child. Read-only: copy it before changing anything.
 - (ANNNavigationOptions *)resolveOptionsWithDefault;
 
 /// `resolveOptionsWithDefault` built now, without the cache: for a reader whose node resolves through more than its

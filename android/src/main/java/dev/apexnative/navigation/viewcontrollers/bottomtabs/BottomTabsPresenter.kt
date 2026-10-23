@@ -6,7 +6,6 @@ import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
 import android.app.Activity
 import android.graphics.Color
-import android.graphics.drawable.Drawable
 import android.view.View
 import android.view.animation.LinearInterpolator
 import android.view.animation.PathInterpolator
@@ -20,8 +19,8 @@ import dev.apexnative.navigation.options.params.LayoutDirection
 import dev.apexnative.navigation.options.params.ThemeColour
 import dev.apexnative.navigation.options.parsers.TypefaceLoader
 import dev.apexnative.navigation.system.SystemUiOwner
-import dev.apexnative.navigation.utils.ImageLoader
-import dev.apexnative.navigation.utils.ImageLoadingListenerAdapter
+import dev.apexnative.navigation.utils.ImageRequests
+import dev.apexnative.navigation.utils.OptionImages
 import dev.apexnative.navigation.utils.TestIds
 import dev.apexnative.navigation.utils.UiUtils
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.Presenter
@@ -67,7 +66,8 @@ internal open class BottomTabsPresenter(activity: Activity) : Presenter(activity
 
     private var layout: BottomTabsLayout? = null
     private val typefaces = TypefaceLoader(activity)
-    private val icons = HashMap<String, Drawable>()
+    // The icons of the items by item and kind (selected or not): those of the cache at once, the others as below.
+    private val icons = ImageRequests<Pair<Int, Boolean>>(OptionImages.source(activity))
     private val applied = HashMap<Pair<Int, Class<*>>, TabItems.Call>()
     private var motion: Animator? = null
     private var anyIcon = false
@@ -107,18 +107,19 @@ internal open class BottomTabsPresenter(activity: Activity) : Presenter(activity
         for (call in calls) {
             if (call is TabItems.Call.TestId && !itemTestIds) continue
             val key = call.index to call.javaClass
-            if (call !is TabItems.Call.Badge && call !is TabItems.Call.Font && applied[key] == call) continue
+            val before = applied[key]
+            if (call !is TabItems.Call.Badge && call !is TabItems.Call.Font && before == call) continue
             applied[key] = call
-            run(bar, call)
+            run(bar, call, isChange = before != null)
         }
     }
 
-    private fun run(bar: BottomTabs, call: TabItems.Call) {
+    private fun run(bar: BottomTabs, call: TabItems.Call, isChange: Boolean) {
         val index = call.index
         when (call) {
             is TabItems.Call.Title -> bar.setText(index, call.text)
-            is TabItems.Call.Icon -> iconOf(call.uri)?.let { bar.setIcon(index, it) }
-            is TabItems.Call.SelectedIcon -> iconOf(call.uri)?.let { bar.setSelectedIcon(index, it) }
+            is TabItems.Call.Icon -> icon(bar, index, call.uri, false, isChange)
+            is TabItems.Call.SelectedIcon -> icon(bar, index, call.uri, true, isChange)
             is TabItems.Call.Colors -> {
                 bar.setIconActiveColor(index, call.iconActive)
                 bar.setIconInactiveColor(index, call.iconInactive)
@@ -344,17 +345,15 @@ internal open class BottomTabsPresenter(activity: Activity) : Presenter(activity
 
     private fun colorOf(colour: ThemeColour): Int? = colour.get(activity, null)
 
-    // Icons load as they apply and never throw: an icon that doesn't load leaves the item as it was.
-    private fun iconOf(uri: String): Drawable? {
-        icons[uri]?.let { return it.constantState?.newDrawable()?.mutate() ?: it }
-        var loaded: Drawable? = null
-        ImageLoader().loadIcon(activity, uri, object : ImageLoadingListenerAdapter() {
-            override fun onComplete(drawable: Drawable) {
-                loaded = drawable
-            }
-        })
-        loaded?.let { icons[uri] = it }
-        return loaded
+    // Icons never throw: one that doesn't load leaves the item without it (without its selected icon, the item shows
+    // its icon when selected). An item's first icon loads at once, its tab's first frame shows it; a change of it on
+    // the bar that shows loads off the main thread when it can, and the item takes it when ready, unless a newer icon
+    // of the item came first.
+    private fun icon(bar: BottomTabs, index: Int, uri: String, selected: Boolean, isChange: Boolean) {
+        icons.request(index to selected, uri, mayWait = isChange && bar.isAttachedToWindow) { icon ->
+            val shown = layout?.bar ?: return@request
+            if (selected) shown.setSelectedIcon(index, icon) else shown.setIcon(index, icon)
+        }
     }
 
     private companion object {

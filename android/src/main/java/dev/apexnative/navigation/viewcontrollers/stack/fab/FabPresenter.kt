@@ -172,19 +172,20 @@ internal class FabPresenter(
         alignStart = options.alignHorizontally.get("right") == "left"
         val source = source
         fab?.let { fab ->
-            applyButton(fab, options)
+            applyButton(fab, options, mayWait = fab.drawable != null)
             TestIds.apply(fab, options.testID.takeIf { it.hasValue() }?.get())
             val id = shownId.orEmpty()
             fab.setOnClickListener { press(source, id) }
         }
         menu?.let { menu ->
-            applyButton(menu.main, options)
+            applyButton(menu.main, options, mayWait = menu.main.drawable != null)
             TestIds.apply(menu.main, options.testID.takeIf { it.hasValue() }?.get())
             menu.scrimColor = options.scrimColor.get(activity, null)
             menu.setActions(options.actions.orEmpty().map { action ->
                 val actionId = action.id.get("")
                 Fab(activity, actionId).also { button ->
-                    applyButton(button, action)
+                    // The actions show only while the menu is open.
+                    applyButton(button, action, mayWait = !menu.isOpen)
                     TestIds.apply(button, action.testID.takeIf { it.hasValue() }?.get())
                     button.setOnClickListener {
                         press(source, actionId)
@@ -205,9 +206,10 @@ internal class FabPresenter(
         place()
     }
 
-    private fun applyButton(button: Fab, options: FabOptions) {
+    // [mayWait]: the button can take its icon when it is ready, see [Fab.applyIcon].
+    private fun applyButton(button: Fab, options: FabOptions, mayWait: Boolean) {
         val icon = options.icon.takeIf { it.hasValue() }?.get()?.ifEmpty { null }
-        if (icon != null) button.applyIcon(icon, options.iconColor)
+        if (icon != null) button.applyIcon(icon, options.iconColor, mayWait)
         applyColors(button, options)
         button.setMini(options.size.get("regular") == "mini")
     }

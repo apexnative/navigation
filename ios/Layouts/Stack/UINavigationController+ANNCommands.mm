@@ -8,6 +8,7 @@
 // A stack of the core takes the screens through its queue, without a wait. A navigation controller of UIKit's own (the
 // one UIKit puts around a column that is a screen alone) has no queue: it rejects.
 - (void)setStackChildren:(NSArray<UIViewController *> *)children
+                inColumn:(NSString *)column
       fromViewController:(UIViewController *)fromViewController
                 animated:(BOOL)animated
               completion:(ANNTransitionCompletionBlock)completion
@@ -21,9 +22,7 @@
         return;
     }
     NSString *fromId = fromViewController.layoutInfo.componentId ?: @"";
-    NSString *what = [NSString stringWithFormat:@"set the stack of the screen '%@'", fromId];
-    NSString *reason = @"its column is not a stack of the navigation";
-    rejection([ANNErrorTexts couldNot:what reason:reason], nil);
+    rejection([ANNErrorTexts columnNotStack:fromId column:column], nil);
 }
 
 @end

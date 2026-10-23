@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // The one table of the native contract that both platforms answer from. The error texts come from
-// src/interfaces/contract/errors.json, the names of the events and the keys of their payloads from the event types of
-// src/interfaces/ (Events.ts, ComponentEvents.ts). This script writes the files iOS and Android compile from them;
+// src/interfaces/contract/errors.json, what each command answers from src/interfaces/contract/commands.json, the names
+// of the events and the keys of their payloads from the event types of src/interfaces/ (Events.ts,
+// ComponentEvents.ts). This script writes the files iOS and Android compile from them;
 // they are committed, so an app's build needs no Node. With --check it writes nothing and fails when a file differs
 // from what the sources make (scripts/check.sh runs it).
 //
@@ -15,6 +16,8 @@ import ts from 'typescript';
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ANDROID = 'android/src/main/java/dev/apexnative/navigation';
 const ERRORS_SOURCE = 'src/interfaces/contract/errors.json';
+const COMMANDS_SOURCE = 'src/interfaces/contract/commands.json';
+const SPEC_SOURCE = 'src/adapters/NativeANNTurboModule.ts';
 const EVENT_SOURCES = ['src/interfaces/Events.ts', 'src/interfaces/ComponentEvents.ts'];
 const NOTICE = 'Made by scripts/contract.mjs';
 
@@ -455,12 +458,180 @@ function eventContractKotlin(entries) {
   return lines.join('\n');
 }
 
+/**
+ * The commands with a promise as commands.json lists them, checked against the async methods of the TurboModule's
+ * spec: each method has one entry, and each entry is a method.
+ */
+function readCommands() {
+  const source = JSON.parse(fs.readFileSync(path.join(root, COMMANDS_SOURCE), 'utf8'));
+  const specFile = path.join(root, SPEC_SOURCE);
+  const spec = ts.createSourceFile(
+    specFile,
+    fs.readFileSync(specFile, 'utf8'),
+    ts.ScriptTarget.Latest
+  );
+  const asyncMethods = new Set();
+  for (const statement of spec.statements) {
+    if (!ts.isInterfaceDeclaration(statement) || statement.name.text !== 'Spec') continue;
+    for (const member of statement.members) {
+      // A method, or a property that holds a function.
+      const type = ts.isMethodSignature(member)
+        ? member.type
+        : ts.isPropertySignature(member) && member.type && ts.isFunctionTypeNode(member.type)
+          ? member.type.type
+          : undefined;
+      if (!type) continue;
+      if (/^Promise\b/.test(type.getText(spec))) asyncMethods.add(member.name.getText(spec));
+    }
+  }
+  const names = new Set();
+  for (const command of source.commands) {
+    if (names.has(command.name))
+      throw new Error(`${COMMANDS_SOURCE}: '${command.name}' is there twice`);
+    names.add(command.name);
+    if (!asyncMethods.has(command.name))
+      throw new Error(`${COMMANDS_SOURCE}: '${command.name}' is no async method of ${SPEC_SOURCE}`);
+    for (const field of ['state', 'completed']) {
+      if (typeof command[field] !== 'boolean')
+        throw new Error(`${COMMANDS_SOURCE}: '${command.name}' needs '${field}': true or false`);
+    }
+    if (typeof command.resolves !== 'string' || command.resolves.trim() === '')
+      throw new Error(
+        `${COMMANDS_SOURCE}: '${command.name}' needs 'resolves', what it resolves with`
+      );
+    if (command.resolves.includes('*/'))
+      throw new Error(`${COMMANDS_SOURCE}: the 'resolves' of '${command.name}' can't hold '*/'`);
+    if (command.completed && !command.state)
+      throw new Error(
+        `${COMMANDS_SOURCE}: '${command.name}' sends ANN.CommandCompleted without the state`
+      );
+  }
+  for (const method of asyncMethods) {
+    if (!names.has(method))
+      throw new Error(`${COMMANDS_SOURCE}: the async method '${method}' has no entry`);
+  }
+  return source.commands;
+}
+
+const COMMANDS_NOTICE = `${NOTICE} from ${COMMANDS_SOURCE}: change that file and run the script again.`;
+
+function commandContractHeader() {
+  return [
+    `// ${COMMANDS_NOTICE}`,
+    '',
+    '#import <Foundation/Foundation.h>',
+    '',
+    'NS_ASSUME_NONNULL_BEGIN',
+    '',
+    '/// Whether the navigation state goes before the answer of the command `name`: every command that may change what',
+    '/// shows. Any thread.',
+    'FOUNDATION_EXPORT BOOL ANNCommandReportsState(NSString *name);',
+    '',
+    '/// Whether `ANN.CommandCompleted` follows the answer of the command `name`: every command that shows or dismisses.',
+    '/// Any thread.',
+    'FOUNDATION_EXPORT BOOL ANNCommandSendsCompleted(NSString *name);',
+    '',
+    'NS_ASSUME_NONNULL_END',
+    '',
+  ].join('\n');
+}
+
+function objcNameSet(name, commands) {
+  return [
+    `static NSSet<NSString *> *${name}(void) {`,
+    '    static NSSet<NSString *> *names;',
+    '    static dispatch_once_t once;',
+    '    dispatch_once(&once, ^{',
+    '      names = [NSSet setWithArray:@[',
+    ...commands.map((command) => `          @"${command.name}",`),
+    '      ]];',
+    '    });',
+    '    return names;',
+    '}',
+  ];
+}
+
+function commandContractImplementation(commands) {
+  const lines = [`// ${COMMANDS_NOTICE}`, '', '#import "ANNCommandContract.h"', ''];
+  lines.push('// What each command resolves with:');
+  for (const command of commands) {
+    lines.push(
+      ...docLines(`\`${command.name}\`: ${command.resolves}.`, '// - ', OBJC_WIDTH).map(
+        (line, index) => (index === 0 ? line : line.replace(/^\/\/ - /, '//   '))
+      )
+    );
+  }
+  lines.push(
+    '',
+    ...objcNameSet(
+      'ANNStateCommandNames',
+      commands.filter((command) => command.state)
+    ),
+    '',
+    ...objcNameSet(
+      'ANNCompletedCommandNames',
+      commands.filter((command) => command.completed)
+    ),
+    '',
+    'BOOL ANNCommandReportsState(NSString *name) {',
+    '    return [ANNStateCommandNames() containsObject:name];',
+    '}',
+    '',
+    'BOOL ANNCommandSendsCompleted(NSString *name) {',
+    '    return [ANNCompletedCommandNames() containsObject:name];',
+    '}',
+    ''
+  );
+  return lines.join('\n');
+}
+
+function commandContractKotlin(commands) {
+  const set = (name, doc, chosen) => [
+    `    /** ${doc} */`,
+    `    val ${name}: Set<String> = setOf(`,
+    ...chosen.map((command) => `        "${command.name}",`),
+    '    )',
+  ];
+  return [
+    `// ${COMMANDS_NOTICE}`,
+    '',
+    'package dev.apexnative.navigation.react',
+    '',
+    '/**',
+    ' * What the commands with a promise answer, the same table as iOS. What each resolves with:',
+    ...commands.flatMap((command) =>
+      docLines(`\`${command.name}\`: ${command.resolves}.`, ' * - ', KOTLIN_WIDTH).map(
+        (line, index) => (index === 0 ? line : line.replace(/^ \* - /, ' *   '))
+      )
+    ),
+    ' */',
+    'internal object CommandContract {',
+    ...set(
+      'STATE',
+      'The commands whose answer comes after the navigation state: every one that may change what shows.',
+      commands.filter((command) => command.state)
+    ),
+    '',
+    ...set(
+      'COMPLETED',
+      'The commands that send `ANN.CommandCompleted` after their answer: every one that shows or dismisses.',
+      commands.filter((command) => command.completed)
+    ),
+    '}',
+    '',
+  ].join('\n');
+}
+
 const errors = readErrors();
+const commands = readCommands();
 const events = readEvents();
 const outputs = {
   'ios/Contract/ANNErrorTexts.h': errorTextsHeader(errors),
   'ios/Contract/ANNErrorTexts.mm': errorTextsImplementation(errors),
   [`${ANDROID}/react/ErrorTexts.kt`]: errorTextsKotlin(errors),
+  'ios/Contract/ANNCommandContract.h': commandContractHeader(),
+  'ios/Contract/ANNCommandContract.mm': commandContractImplementation(commands),
+  [`${ANDROID}/react/CommandContract.kt`]: commandContractKotlin(commands),
   'ios/Core/ANNEventContract.h': eventContractHeader(events),
   'ios/Core/ANNEventContract.mm': eventContractImplementation(events),
   [`${ANDROID}/react/events/EventContract.kt`]: eventContractKotlin(events),

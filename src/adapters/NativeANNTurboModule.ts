@@ -14,7 +14,7 @@ export interface Spec extends TurboModule {
   setDefaultOptions(options: CodegenTypes.UnsafeObject): void;
   /** Merges options into the layout with the id and applies them to what shows; an unknown id does nothing. */
   mergeOptions(componentId: string, options: CodegenTypes.UnsafeObject): void;
-  /** Pushes a layout over the screen in its stack; resolves with the id of the screen that shows. */
+  /** Pushes a layout over the screen in its stack; resolves with the id of the screen that shows (of a pair: its id). */
   push(commandId: string, componentId: string, layout: CodegenTypes.UnsafeObject): Promise<string>;
   /**
    * (Android, one React tree) Lays the screen of a coming push out in its stack before React renders it, and resolves
@@ -67,7 +67,10 @@ export interface Spec extends TurboModule {
     column: string,
     layout: CodegenTypes.UnsafeObject
   ): Promise<string>;
-  /** Shows or hides a column of the screen's split view; resolves once the columns stopped moving. */
+  /**
+   * Shows or hides a column of the screen's split view; resolves once the columns stopped moving, with nothing (on
+   * Android `null`).
+   */
   setColumnShown(
     commandId: string,
     componentId: string,

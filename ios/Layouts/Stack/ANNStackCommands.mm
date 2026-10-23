@@ -274,6 +274,7 @@
     if (target == stack.queue.entries.lastObject) {
         [stack.queue noneWithValue:componentId
                             answer:answer
+                              what:what
                        componentId:componentId
                             source:target];
         return;

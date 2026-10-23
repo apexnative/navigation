@@ -197,8 +197,8 @@ class ButtonOptions(@JvmField var id: Text = NullText()) {
 
 /**
  * A copy of the menu with new items and submenus and the same values. A menu taken from the default options is copied
- * first, so that the module's in-place `checked` never writes into [DefaultOptions.current]; copies between a node's
- * own and resolved options share the menu on purpose.
+ * first, so that nothing written into a resolved result reaches [DefaultOptions.current]; the user layer writes its
+ * checks into a copy too (`UserChoices`), and copies between a node's own and resolved options share the menu.
  */
 internal fun ButtonMenuOptions.copyMenu(): ButtonMenuOptions =
     ButtonMenuOptions(singleSelection, items.map(::copyElement), testID)

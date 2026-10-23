@@ -59,7 +59,9 @@ private fun ViewController<*>.hostIsShown(): Boolean {
  * Runs [mounted] as the content of this screen's slot mounts into its container, and [start] on the pre-draw of that
  * frame: after React Native applied the whole mount, before the frame is drawn. At once if the content has mounted,
  * after [DRAW_WAIT_LIMIT] if it never does; while [waiting] holds. A screen prepared for its push was rendered at its
- * size and insets before: in that frame it is whole.
+ * size and insets before, so it is whole from that frame on; its push doesn't start in that frame: [start] hands it to
+ * the stack's queue, which starts the transition on a later turn, behind the calls JavaScript made before
+ * (`PendingCalls`), so the `mergeOptions` of the mount's commit has applied.
  */
 fun ViewController<*>.whenContentMounted(waiting: () -> Boolean, mounted: () -> Unit, start: () -> Unit) {
     var done = false

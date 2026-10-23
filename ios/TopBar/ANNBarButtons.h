@@ -17,7 +17,7 @@ typedef NS_ENUM(NSInteger, ANNBarButtonsSide) {
 /// merge of a side. Each button is an `ANNUIBarButtonItem` of the first kind its fields give (React view → icon and
 /// text → image button → SF Symbol → image → text → system item); a button without `id` is not placed. Side colors go
 /// onto what is built, never into the options; what the user chose (a toggle, a menu's check) goes into the screen's
-/// own options. The React buttons' slots are kept by component id, so a button built again reuses its slot. Main queue.
+/// user layer. The React buttons' slots are kept by component id, so a button built again reuses its slot. Main queue.
 @interface ANNBarButtons : NSObject
 
 - (instancetype)initWithScreen:(UIViewController *)screen
@@ -49,12 +49,16 @@ typedef NS_ENUM(NSInteger, ANNBarButtonsSide) {
 /// The width the slot of a React button measured; 0 before it rendered.
 - (CGFloat)measuredWidthOf:(NSString *)componentId;
 
-/// A menu item `itemId` was picked: `ANN.NavigationButtonPressed` with its id, then the check of a single-selection
-/// menu written into the screen's own copy of the menu. `menuOf` gives the menu in `options` (a button's, the title's,
-/// the overflow menu); `setMenu` puts the copy into the own options.
+/// A menu item `itemId` was picked: `ANN.NavigationButtonPressed` with its id, then, in a single-selection list, the
+/// pick kept in the screen's user layer under `choiceKey`, one choice per menu. The resolution plays the picks again on
+/// a copy of the menu it has. `menuOf` gives the menu in `options` (a button's, the title's, the overflow menu),
+/// `setMenu` puts a changed copy there. A merge into the screen takes a pick away when the screen's resolution after it
+/// has no such item, or when it gives the menu with other checks in the pick's level than the app had there, as on
+/// Android. The two blocks capture no presenter: the node keeps them with the choice.
 - (void)menuItemPicked:(NSString *)itemId
+             choiceKey:(NSString *)choiceKey
                 menuOf:(ANNMenuOptions *_Nullable (^)(ANNNavigationOptions *options))menuOf
-               setMenu:(void (^)(ANNNavigationOptions *own, ANNMenuOptions *menu))setMenu;
+               setMenu:(void (^)(ANNNavigationOptions *options, ANNMenuOptions *menu))setMenu;
 
 /// A copy of `menu` that shares no item with it (a new `ANNMenuOptions` and a new `ANNMenuItemOptions` per item, at
 /// any depth).

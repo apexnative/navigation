@@ -2,6 +2,7 @@ package com.helloworld
 
 import com.facebook.react.PackageList
 import com.facebook.react.ReactHost
+import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import dev.apexnative.navigation.NavigationApplication
 
@@ -16,5 +17,10 @@ class MainApplication : NavigationApplication() {
           // add(MyReactNativePackage())
         },
     )
+  }
+
+  override fun onCreate() {
+    super.onCreate()
+    loadReactNative(this)
   }
 }

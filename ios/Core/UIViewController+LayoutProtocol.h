@@ -64,9 +64,16 @@ FOUNDATION_EXPORT ANNWaitedReadiness ANNWaitedReadinessOf(UIViewController *scre
 /// The own options merged with `options` (`ANNNodeHelper mergeOwnOptions:`).
 - (void)mergeOwnOptions:(ANNNavigationOptions *)options;
 
-/// A change of the own options on a copy (`ANNNodeHelper changeOwnOptions:`): the way a presenter or a module keeps a
-/// choice of the user (a scope, tokens, a checked menu item, a toggled button).
+/// A change of the own options on a copy (`ANNNodeHelper changeOwnOptions:`): what the core keeps of the app's merges.
 - (void)changeOwnOptions:(void (^)(ANNNavigationOptions *options))change;
+
+/// A choice of the user in the node's user layer (`ANNNodeHelper setUserChoice:forKey:`): the way a presenter or a
+/// module keeps what the user did (a scope, tokens, a checked menu item, a toggled button, a renamed title). Nil
+/// removes it.
+- (void)setUserChoice:(nullable ANNUserChoice *)choice forKey:(NSString *)key;
+
+/// The choice of the user layer under `key`, or nil (`ANNNodeHelper userChoiceForKey:`).
+- (nullable ANNUserChoice *)userChoiceForKey:(NSString *)key;
 
 #pragma mark - Readiness
 

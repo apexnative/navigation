@@ -44,8 +44,8 @@ class NativeScreenContext @RestrictTo(RestrictTo.Scope.LIBRARY) constructor(
 
     /**
      * Runs a command of the navigation from this screen in JS, as `useNavigation()` of a React screen does: push, pop,
-     * popTo, popToRoot, showInColumn, showModal, dismiss, showOverlay, dismissOverlay, setOptions, selectTab,
-     * setTabBadge. [arguments] are those of the JS command; [result] gets what it resolved with.
+     * popTo, popToRoot, showInColumn, showModal, dismiss, showOverlay, setOptions, selectTab, setTabBadge.
+     * [arguments] are those of the JS command; [result] gets what it resolved with.
      */
     @JvmOverloads
     fun navigate(command: String, arguments: JSONArray = JSONArray(), result: ((Result<Any?>) -> Unit)? = null) =

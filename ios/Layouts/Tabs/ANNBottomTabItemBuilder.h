@@ -23,6 +23,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// (default `iconColor`) unless `disableSelectedIconTint`. Nil without any.
 + (nullable UIImage *)selectedIconOf:(ANNBottomTabOptions *)tab;
 
+/// The images of the options `iconOf:` and `selectedIconOf:` draw from (`bottomTab.icon`, `bottomTab.selectedIcon`):
+/// each one an SF Symbol doesn't cover. Their sources, not their images: nothing loads.
++ (NSArray<Image *> *)rastersOf:(ANNBottomTabOptions *)tab;
+
 /// `selectedIconColor`, else `iconColor` (`bottomTab.selectedIconColor`); nil without both.
 + (nullable UIColor *)selectedIconColorOf:(ANNBottomTabOptions *)tab;
 

@@ -277,8 +277,8 @@ static void ANNCollectIds(UIViewController *node, NSMutableSet<NSString *> *ids)
 
 // The end steps of a record (its show presented, its dismissal ended, closed by the user) run inside UIKit's
 // completions and delegate calls, outside the runner's protection, in any state: a failure there is logged in one line,
-// rejects what of the record still waits for an answer (its show, a chain step, its dismissals), and its drive stops.
-// The gate's `done` ran before the step, as without a failure.
+// answers what of the record still waits for an answer (its show, a chain step, its dismissals:
+// `endFailedOf:showing:exception:`), and its drive stops. The gate's `done` ran before the step, as without a failure.
 + (void)protectEndOf:(ANNModal *)modal showing:(BOOL)showing step:(dispatch_block_t)step {
     @try {
         step();
@@ -288,24 +288,43 @@ static void ANNCollectIds(UIViewController *node, NSMutableSet<NSString *> *ids)
                                : (showing ? @"show a modal" : @"dismiss a modal");
         NSString *reason = exception.reason.length > 0 ? exception.reason : exception.name;
         RCTLogWarn(@"[ApexNavigation] %@", [ANNErrorTexts couldNot:what reason:reason]);
-        [self endFailedOf:modal exception:exception];
+        [self endFailedOf:modal showing:showing exception:exception];
     }
 }
 
-+ (void)endFailedOf:(ANNModal *)modal exception:(NSException *)exception {
+// A failed end step of `modal`: its show rejects. After a failed show the dismissals that wait for it don't fail with
+// it, as on Android: on a modal that shows they run now and resolve once it went (one still `Presenting` shows: UIKit's
+// completion ran); on one that goes another way (a `dismissAllModals`, with the old root) or went already they resolve
+// with its root's id; on one in another transition (a drag, its own dismissal) they wait for that transition's end.
+// A failed dismissal rejects itself and the dismissals behind it.
++ (void)endFailedOf:(ANNModal *)modal showing:(BOOL)showing exception:(NSException *)exception {
     if (!modal) {
         return;
     }
     [self stopDriving:modal];
     NSString *show = [NSString stringWithFormat:@"show the screen '%@'", modal.rootId];
-    NSString *dismiss = [NSString stringWithFormat:@"dismiss the modal '%@'", modal.rootId];
     [modal.showAnswer reject:[ANNCommandRunner rejectionOf:exception what:show]];
-    NSString *dismissText = [ANNCommandRunner rejectionOf:exception what:dismiss];
-    [modal.dismissal.answer reject:dismissText];
-    NSArray<ANNModalDismissal *> *pending = modal.pending.copy;
-    [modal.pending removeAllObjects];
-    for (ANNModalDismissal *waiting in pending) {
-        [waiting.answer reject:dismissText];
+    ANNModalState state = modal.state;
+    BOOL goesAnotherWay = (state == ANNModalStateDismissing && modal.batch) ||
+                          state == ANNModalStateWithOldRoot ||
+                          state == ANNModalStateClosedBelow || state == ANNModalStateGone;
+    if (showing && state == ANNModalStatePresenting) {
+        modal.state = ANNModalStateShown;
+    }
+    if (showing && modal.state == ANNModalStateShown) {
+        [self runPendingOf:modal];
+    } else if (showing && goesAnotherWay) {
+        [modal.dismissal.answer resolve:modal.rootId];
+        [self resolvePendingOf:modal];
+    } else if (!showing) {
+        NSString *dismiss = [NSString stringWithFormat:@"dismiss the modal '%@'", modal.rootId];
+        NSString *dismissText = [ANNCommandRunner rejectionOf:exception what:dismiss];
+        [modal.dismissal.answer reject:dismissText];
+        NSArray<ANNModalDismissal *> *pending = modal.pending.copy;
+        [modal.pending removeAllObjects];
+        for (ANNModalDismissal *waiting in pending) {
+            [waiting.answer reject:dismissText];
+        }
     }
     // A `setRoot` chain goes on (its own steps are guarded by the root coordinator).
     void (^chainStep)(BOOL) = modal.chainStep;
@@ -333,7 +352,7 @@ static void ANNCollectIds(UIViewController *node, NSMutableSet<NSString *> *ids)
             [waiter reject:text];
         }
         for (ANNModal *modal in batch.records.copy) {
-            [self endFailedOf:modal exception:exception];
+            [self endFailedOf:modal showing:NO exception:exception];
         }
     }
 }
@@ -537,7 +556,8 @@ static void ANNCollectIds(UIViewController *node, NSMutableSet<NSString *> *ids)
     modal.coversUnder = under != nil && under.viewIfLoaded.window == nil;
     NSArray<UIViewController *> *hidden = modal.coversUnder ? @[ under ] : @[];
     @try {
-        // The chain step stays on the record until its events went: a failure there tells the chain (`endFailedOf:`).
+        // The chain step stays on the record until its events went: a failure there tells the chain
+        // (`endFailedOf:showing:exception:`).
         void (^chainStep)(BOOL) = modal.chainStep;
         if (chainStep) {
             [ANNAppearanceDispatcher endSwitchHiding:hidden showing:@[ root ] events:nil];
@@ -778,6 +798,11 @@ static void ANNCollectIds(UIViewController *node, NSMutableSet<NSString *> *ids)
         [answer reject:[ANNErrorTexts screenNotShown:componentId]];
         return;
     }
+    // The last modal over no root (shown before any `setRoot`) stays: nothing would be left to show, as on Android.
+    if ([self isLastWithoutRoot:modal]) {
+        [answer reject:[ANNErrorTexts modalWithoutRoot:componentId]];
+        return;
+    }
     // Step 1: the options, read on the main queue; one that can't be read rejects before anything changes. They merge
     // into the modal's visible screen as `mergeOptions` would.
     if (options.count > 0) {
@@ -813,6 +838,22 @@ static void ANNCollectIds(UIViewController *node, NSMutableSet<NSString *> *ids)
         dismissal.animation = animation;
     }
     [self dismiss:modal with:dismissal];
+}
+
+// No root in the window (the splash, or nothing yet) and no other modal that shows or comes: `modal` is all a dismissal
+// would take away. One closed below, going with the old root or gone takes nothing away, so it doesn't count.
++ (BOOL)isLastWithoutRoot:(ANNModal *)modal {
+    if (modal.state == ANNModalStateClosedBelow || modal.state == ANNModalStateGone ||
+        ApexNavigation.mainWindow.rootViewController.isLayoutNode) {
+        return NO;
+    }
+    for (ANNModal *other in ANNModals) {
+        if (other != modal && other.state != ANNModalStateClosedBelow &&
+            other.state != ANNModalStateWithOldRoot && other.state != ANNModalStateGone) {
+            return NO;
+        }
+    }
+    return YES;
 }
 
 // The modal of `node`: the record whose root is the top of `node`'s layout.
@@ -897,7 +938,7 @@ static void ANNCollectIds(UIViewController *node, NSMutableSet<NSString *> *ids)
                    [ANNErrorTexts couldNot:what reason:exception.reason ?: exception.name]);
         // The dismissal still open answers, and so do the dismissals waiting behind it (an answer given already
         // stays as it was).
-        [self endFailedOf:modal exception:exception];
+        [self endFailedOf:modal showing:NO exception:exception];
         done();
     }
 }

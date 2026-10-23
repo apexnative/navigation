@@ -166,9 +166,11 @@ typedef NS_ENUM(NSInteger, ANNStackChange) {
          completion:(nullable dispatch_block_t)completion
           rejection:(nullable ANNTransitionRejectionBlock)rejection;
 
-/// A command that moves nothing (`popTo` of the top) answers `value` in its turn.
+/// A command that moves nothing (`popTo` of the top) answers `value` in its turn; a failure meanwhile rejects with the
+/// command's own `what`.
 - (void)noneWithValue:(id)value
                answer:(ANNCommandAnswer *)answer
+                 what:(NSString *)what
           componentId:(NSString *)componentId
                source:(nullable UIViewController *)source;
 

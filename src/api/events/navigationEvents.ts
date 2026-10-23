@@ -48,7 +48,7 @@ export interface NavigationEvents {
   searchCancelled: ScreenEventOf<SearchBarCancelPressedEvent>;
   /** #### (iOS 16+, Android) The user picked a suggestion of `searchBar.suggestions`; the text stays. */
   searchSuggestionPicked: ScreenEventOf<NativeSearchSuggestionPickedEvent>;
-  /** #### (iOS specific) */
+  /** The user dragged a sheet to another detent. */
   sheetDetentChanged: ScreenEventOf<NativeSheetDetentChangedEvent>;
   /** #### (iOS specific) */
   splitViewDisplayModeChanged: NativeSplitViewDisplayModeChangedEvent;

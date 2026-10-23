@@ -54,8 +54,12 @@ export interface NavigationStateChangedEvent {
 
 /**
  * A tab was selected by the user: a press on the tab, a pick from the "More" list or a press on "More" that showed a
- * tab (iOS). It is sent after the selection, and only when the tab changed; a press on the current tab is reported by
- * `BottomTabPressedEvent` alone. Selecting a tab from code sends nothing.
+ * tab (iOS). It goes right after the `ComponentDidAppear` of the new tab's screen, before the navigation state and
+ * before the tab that was left goes back to its first screen (`popToRootOnBlur`), and only when the tab changed: a
+ * press on the selected tab or on a `selectTabOnPress: false` tab is reported by `BottomTabPressedEvent` alone.
+ * Selecting a tab from code sends nothing. A switch still running when another press, long press or choice from code
+ * comes ends first, with this event, so the events of one press never mix with the next; when that tab's screen
+ * hasn't drawn yet, this event goes before its held `ComponentDidAppear`.
  */
 export interface BottomTabSelectedEvent {
   /** The index of the tab that is now selected. */
@@ -67,24 +71,28 @@ export interface BottomTabSelectedEvent {
 }
 
 /**
- * A tab was pressed, the selected one too. It is sent before the tab is selected; with `selectTabOnPress: false` it is
- * the only thing that happens. A long press sends `BottomTabLongPressedEvent` instead.
+ * A tab was pressed, on the bar or on a cell of `bottomTabs.customRow`, the selected one too. It goes first, before
+ * anything the press does. Another tab: then the switch's `ComponentWillAppear`, `ComponentDidDisappear` and
+ * `ComponentDidAppear`, then `BottomTabSelectedEvent`. The selected tab again (`wasSelected: true`): its stack goes
+ * back to its first screen with the events of the user's back (`ScreenPopped`), or, on the first screen, its content
+ * scrolls to the top; with `popToRootOnPress: false` nothing follows. With `selectTabOnPress: false` it is the only
+ * event and the selection stays. A long press sends `BottomTabLongPressedEvent` instead.
  */
 export interface BottomTabPressedEvent {
   /** The index of the tab that was pressed. */
   tabIndex: number;
   /** The id of the tabs. */
   bottomTabsId: string;
-  /** The id of the screen the tab shows: the top of its stack. */
+  /** The id of the screen the tab shows: the top of its stack, or the tab itself when it is a screen. */
   screenId?: string;
   /** Whether the tab was the selected one already; a press on the selected tab scrolls its content to the top. */
   wasSelected: boolean;
 }
 
 /**
- * A tab was pressed and held. The tab is not selected and gets no press event. On iOS it is not sent for the tabs
- * that are components (`bottomTab.component`, `bottomTabs.customRow`), for "More", or for the tab strip at the top of an
- * iPad. On Android it replaces the tooltip of the tab.
+ * A tab was pressed and held, on the bar or on a cell of `bottomTabs.customRow`. The tab is not selected and gets no
+ * press event. On iOS it is not sent for "More" or for the tab strip at the top of an iPad. On Android it replaces the
+ * tooltip of the tab.
  */
 export interface BottomTabLongPressedEvent {
   /** The index of the tab that was pressed. */
@@ -195,11 +203,12 @@ export type HingeState = 'closed' | 'partiallyOpen' | 'fullyOpen' | 'unknown';
  */
 export interface HingeChangedEvent {
   /**
-   * The state of the hinge. On Android `closed` means the device has no fold, or its angle is below 90 degrees.
+   * The state of the hinge. On Android `closed` means the app's window has no fold, or the angle is below 90 degrees,
+   * so a device open flat with a window off the fold (split screen) reports `closed`; Android never gives `unknown`.
    */
   state?: HingeState;
   /**
-   * The angle of the hinge in degrees (on iOS to tenths). Missing when the state is `unknown` and where the system
+   * The angle of the hinge in degrees, to tenths. Missing when the state is `unknown` and where the system
    * gives no angle.
    */
   angle?: number;

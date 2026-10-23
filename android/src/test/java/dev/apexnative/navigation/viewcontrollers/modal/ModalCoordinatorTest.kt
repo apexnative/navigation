@@ -932,7 +932,7 @@ class ModalCoordinatorTest {
         views.failRemove = true
         views.endDismiss("Details")
         assertEquals(
-            "reject:${ErrorTexts.couldNot("dismiss the modal of the screen 'Details'", "no view")}",
+            "reject:${ErrorTexts.couldNot("dismiss the modal 'Details'", "no view")}",
             entries.last(),
         )
         assertTrue(modals.modals.isEmpty())
@@ -946,7 +946,7 @@ class ModalCoordinatorTest {
         views.failDismiss = true
         assertEquals(true, modals.handleBack(CommandListenerAdapter()))
         assertEquals(
-            listOf("[ApexNavigation] ${ErrorTexts.couldNot("dismiss the modal of the screen 'Details'", "no view")}"),
+            listOf("[ApexNavigation] ${ErrorTexts.couldNot("dismiss the modal 'Details'", "no view")}"),
             host.logged,
         )
         assertTrue(modals.modals.isEmpty())

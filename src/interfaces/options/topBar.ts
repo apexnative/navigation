@@ -11,7 +11,11 @@ import type { Color, FontFamily, FontStyle, FontWeight, ImageResource } from './
  * `name` replaces it.
  */
 export interface OptionsTopBarTitleComponent {
-  /** The id of the component. Without it, the library gives one. The same `name` and `id` mean the same component. */
+  /**
+   * The id of the component. Without it, the library gives one made of the screen, the component's place in the
+   * options and its `name`: it stays the same for every `mergeOptions` of the screen, so the mounted component stays
+   * and only its props change. The same `name` and `id` mean the same component.
+   */
   id?: string;
   /** The name of the registered component. */
   name: string;
@@ -276,7 +280,11 @@ export interface OptionsTopBarBackground {
 
 /** The React component that is the background of the bar. */
 export interface OptionsTopBarBackgroundComponent {
-  /** The id of the component. Without it, the library gives one. The same `name` and `id` mean the same component. */
+  /**
+   * The id of the component. Without it, the library gives one made of the screen, the component's place in the
+   * options and its `name`: it stays the same for every `mergeOptions` of the screen, so the mounted component stays
+   * and only its props change. The same `name` and `id` mean the same component.
+   */
   id?: string;
   /** The name of the registered component. */
   name: string;
@@ -432,7 +440,11 @@ export interface OptionsSearchBarSuggestion {
  * component; a different `id` or `name` replaces the component, and so the search.
  */
 export interface OptionsSearchBarResultsComponent {
-  /** The id of the component. Without it, the library gives one. The same `name` and `id` mean the same component. */
+  /**
+   * The id of the component. Without it, the library gives one made of the screen, the component's place in the
+   * options and its `name`: it stays the same for every `mergeOptions` of the screen, so the mounted component stays
+   * and only its props change. The same `name` and `id` mean the same component.
+   */
   id?: string;
   /** The name of the registered component. */
   name: string;
@@ -518,8 +530,9 @@ export interface OptionsSearchBar {
    */
   scopes?: OptionsSearchBarScope[];
   /**
-   * The id of the selected scope; without it, or with an unknown id, the first. The user's pick is written into the
-   * options of the screen and stays after coming back. `mergeOptions` switches the scope without an event.
+   * The id of the selected scope; without it, or with an unknown id, the first. The user's pick stays with the screen,
+   * after coming back, through a `mergeOptions` that sends the same value again and `setDefaultOptions`. A
+   * `mergeOptions` into the screen with another value switches the scope without an event.
    */
   selectedScope?: string;
   /**
@@ -531,8 +544,8 @@ export interface OptionsSearchBar {
   scopeBarActivation?: 'automatic' | 'onTextEntry' | 'onSearchActivation';
   /**
    * (iOS) Tokens in front of the text of the field. The search events carry the ids of the tokens in the field as
-   * `tokens`; deleting a token sends a search-updated event, and the deleted tokens (and ones brought back with Undo)
-   * are written to the options of the screen. Closing the search clears the field and its tokens. An empty list removes
+   * `tokens`; deleting a token sends a search-updated event, and what the user deleted (or brought back with Undo)
+   * stays with the screen until a `mergeOptions` gives other tokens. Closing the search clears the field and its tokens. An empty list removes
    * them all.
    */
   tokens?: OptionsSearchBarToken[];

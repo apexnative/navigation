@@ -185,7 +185,8 @@ internal interface StackDisplay {
 
     /**
      * The push of a prepared slot screen: [mounted] as the slot's content mounts into the screen's container (or at the
-     * limit of 0.5 s), then [start] on the pre-draw of that frame, while [waiting] holds.
+     * limit of 0.5 s), then [start] on the pre-draw of that frame, while [waiting] holds; the queue starts the
+     * transition from there behind the calls JavaScript made before, on a later turn.
      */
     fun awaitPrepared(screen: ViewController<*>, waiting: () -> Boolean, mounted: () -> Unit, start: () -> Unit)
 }

@@ -454,7 +454,7 @@ class RootCoordinatorTest {
     }
 
     @Test
-    fun theActivityGoingResolvesTheWaitingSetRootWithAnEmptyId() {
+    fun theActivityGoingResolvesTheWaitingSetRootWithoutAnId() {
         val home = screen("Home")
         shown(home)
         val profile = screen("Profile", ready = false)
@@ -547,12 +547,27 @@ class RootCoordinatorTest {
     }
 
     @Test
-    fun theActivityGoingDuringTheLayersAnswersEmpty() {
+    fun theActivityGoingDuringTheLayersResolvesWithTheRootThatShowed() {
         setRoot(screen("Home"), Step("Details"))
         entries.clear()
         coordinator.destroyAll(answerPending = true)
         assertEquals("stop:Details", entries.first())
-        assertEquals(listOf("state", "resolve:", "completed:setRoot"), entries.takeLast(3))
+        assertTrue("resolve:Home" in entries)
+        assertTrue(entries.none { it.startsWith("reject:") })
+    }
+
+    @Test
+    fun theActivityGoingDuringTheTransitionResolvesWithTheRootThatShowed() {
+        shown(screen("Home"))
+        setRoot(screen("Profile"))
+        assertEquals("fade:Home->Profile", layer.log.last())
+        entries.clear()
+        coordinator.destroyAll(answerPending = true)
+        assertTrue("ended:Profile" in layer.log)
+        assertEquals(1, entries.count { it == "resolve:Profile" })
+        assertTrue(entries.none { it.startsWith("reject:") })
+        assertNull(coordinator.root)
+        assertNull(coordinator.pendingRoot)
     }
 
     @Test
@@ -602,7 +617,7 @@ class RootCoordinatorTest {
         assertEquals(1, fixture.journal.holds)
         coordinator.destroyAll(answerPending = true)
         assertEquals(0, fixture.journal.holds)
-        assertEquals(listOf("stateNeeded", "state", "resolve:", "completed:setRoot"), entries.takeLast(4))
+        assertTrue("resolve:Home" in entries)
         // A newer `setRoot` during the layers, then its own layers and their answer: each hold ends once.
         setRoot(screen("Profile"), Step("Login"))
         val last = Step("Toast")

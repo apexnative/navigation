@@ -214,19 +214,21 @@ static UISplitViewControllerColumn ANNSplitViewColumn(NSString *name) {
             completion:(ANNTransitionCompletionBlock)completion
              rejection:(ANNTransitionRejectionBlock)rejection {
     UIViewController *previous = _columns[column];
-    NSString *fromId = fromViewController.layoutInfo.componentId;
+    NSString *fromId = fromViewController.layoutInfo.componentId ?: @"";
     if (!previous) {
         rejection([ANNErrorTexts noSuchColumn:fromId column:column], nil);
         return;
     }
     if ([previous isKindOfClass:UINavigationController.class]) {
-        // UIKit does not take a navigation controller among the screens of another.
+        // UIKit does not take a navigation controller among the screens of another. The core rejects every layout a
+        // stack doesn't take before it asks; this guards the module's own call.
         if ([screen isKindOfClass:UINavigationController.class]) {
             rejection([ANNErrorTexts columnIsStack:fromId column:column], nil);
             return;
         }
         // In place, as a column of UIKit apps changes; UIKit animates a column it brings on top.
         [(UINavigationController *)previous setStackChildren:@[ screen ]
+                                                    inColumn:column
                                           fromViewController:fromViewController
                                                     animated:NO
                                                   completion:^{

@@ -125,6 +125,14 @@ ANNWaitedReadiness ANNWaitedReadinessOf(UIViewController *screen) {
     [self.nodeHelper changeOwnOptions:change];
 }
 
+- (void)setUserChoice:(ANNUserChoice *)choice forKey:(NSString *)key {
+    [self.nodeHelper setUserChoice:choice forKey:key];
+}
+
+- (ANNUserChoice *)userChoiceForKey:(NSString *)key {
+    return [self.nodeHelper userChoiceForKey:key];
+}
+
 #pragma mark - Readiness
 
 - (void)setReadyHandler:(dispatch_block_t)handler forKey:(NSString *)key {

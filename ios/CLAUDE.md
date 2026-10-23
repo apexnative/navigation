@@ -27,7 +27,7 @@ Swift is not used here: apps reach the core through the public headers (`Public/
 - `Layouts/SplitView/`: The split view module, plus the core's `ANNSplitViewPresenter` and `ANNSplitViewCommands`.
 - `Layouts/Arrangement/`: The pair (iOS 27.1): `ANNArrangementViewController`, `ANNArrangementState`.
 - `TopBar/`: The bar of a screen: title, buttons, back button, large title, appearance, search, toolbar, edge effects.
-- `Options/`, `Options/Params`: One `ANN<Group>Options` class per group, the field table, the value kinds and parsers (`Bool`, `Color`, `Text`, `Image`, …).
+- `Options/`, `Options/Params`: One `ANN<Group>Options` class per group, the field table, the value kinds and parsers (`Bool`, `Color`, `Text`, `Image`, …), the images' cache and loader (`ANNOptionImages`).
 - `Animations/`: The custom transition engine: plan, animator, wait, frame driver, rules; `Elements/` and `Interpolators/`.
 - `React/`, `React/Slots/`: React views of screens and components, the surface host, the safe area view, the slot host and slot screens.
 - `Public/ApexNavigation/`: The headers apps import: `ApexNavigation.h`, `ANNAppDelegate.h`, `ANNSceneDelegate.h`.
@@ -60,24 +60,31 @@ Top-level files: `Package.swift` (SwiftPM; `headerFolders` lists every folder wh
 - System bars, orientation, direction — `Core/`: `ANNSystemUI`, `ANNSystemUIRules`, `ANNAppDirection`, `ANNNodePresenter` (the answers to UIKit)
 - Events and state — `Core/`: `ANNEventEmitter`, `ANNEventContract` (names and keys, made by `scripts/contract.mjs`), `ANNAppearanceDispatcher`, `ANNScreenAppearance`, `ANNNavigationState`; `TurboModules/`: `ANNTurboEventEmitter`
 - Options: parsing, merging, defaults — `Options/`: `ANNOptions`, `ANNOptionField`, `ANNOptionsReader`, `ANNDefaultOptions`, `ANNOptionsCache`; `Core/`: `ANNOptionsRepaint`
-- Error texts — `Contract/`: `ANNErrorTexts` (made from `src/interfaces/contract/errors.json` by `scripts/contract.mjs`); `Core/`: `ANNErrorHandler`
+- Error texts and answers — `Contract/`: `ANNErrorTexts` and `ANNCommandContract` (made from `src/interfaces/contract/errors.json` and `commands.json` by `scripts/contract.mjs`); `Core/`: `ANNErrorHandler`
 - Links — `Core/`: `ANNDeepLinkQueue`; the `getLaunchLink` method of `ANNTurboModule`
 - Key commands — `Core/`: `ANNKeyCommands`; `Layouts/Screen/`: `ANNComponentViewController`
 - Hinge, regions — `Core/`: `ANNHinge`; `Layouts/Screen/`: `ANNScreenRegions`; `Layouts/Arrangement/`: `ANNArrangementState`
 - Native screens — `Layouts/External/`: `ANNExternalViewController`, `ANNNativeScreenCalls`; `Layouts/Screen/ANNNativeScreenContext.mm`
-- Slots — `React/Slots/`: `ANNSlotHost`, `ANNSlotContainers`, `ANNSlotScreenView`, `ANNSlotComponentView`; `cpp/`
+- Slots — `React/Slots/`: `ANNSlotHost`, `ANNSlotContainers` (containers and slot views by slot id: a change goes
+  straight to the views of its id), `ANNSlotScreenView`, `ANNSlotComponentView`; `cpp/`
 
 ## Threads
 
 - **Module queue:** the layout check (`ANNLayoutReader`) and the sync getters. The check reads only stores safe from
   any thread (`ApexNavigation hasNativeScreenNamed:`, `ANNArrangementState canShowArrangements`).
 - **Main queue:** everything else. A command body starts with `ANNAssertMainQueue()`. The options of a layout are parsed
-  here (`ANNLayoutTreeOptions`, images load while they are read). `ANNEventEmitter` moves an event from another queue
+  here (`ANNLayoutTreeOptions`; an image keeps only its source). `ANNEventEmitter` moves an event from another queue
   to the main queue.
+- **The images' queue** (`ANNOptionImages`, `Options/Params`): every option image decodes there, through one cache.
+  An element that shows an image asks for it when it applies and waits for it (the first frame needs it); only a tab
+  item's new icon on the bar that shows comes later (`ANNBottomTabsPresenter`), the last build of the item winning.
 - **Sync getters** answer JS during a screen's first render: `getScreenInsets`, `getScreenRegions`,
   `getArrangementState`, `getHinge`, `getStartInfo`. They read `ANNScreenInsets`, `ANNScreenRegions`,
   `ANNArrangementState`, `ANNHinge lastValue`, written on the main queue and guarded by `@synchronized`.
   `ANNReloadCoordinator.generation` and `ANNEventEmitter.isCurrent` are readable from any thread.
+- **After the calls of JavaScript:** `ANNJavaScriptCalls afterCallsMadeSoFar:` runs a step on the main queue after
+  every call JavaScript made by then, by the calls' own way (the JavaScript thread, the module's queue, the main
+  queue). A push's wait ends through it, so the `mergeOptions` of its screen's first commit come first.
 
 ## Checks
 

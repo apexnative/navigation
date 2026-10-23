@@ -75,7 +75,8 @@ text the command rejects with. The reader runs on the module thread; the checks 
 already) run on main.
 
 - iOS: `ANNLayoutReader` reads the JSON into `ANNLayoutNode`; `ANNLayoutValidator` checks what shows; the options of the
-  tree are read afterwards on main by `ANNLayoutTreeOptions` (images load there).
+  tree are read afterwards on main by `ANNLayoutTreeOptions`; an image keeps only its source there and loads through
+  `ANNOptionImages` when something shows it.
 - Android: `LayoutReader` reads React Native's data straight into `LayoutNode` and calls `OptionsReader` in the same
   pass, so layout and options are read on the module thread; `LayoutChecks` holds the checks against what shows. Images
   load later, when the options apply.
@@ -83,18 +84,30 @@ already) run on main.
 ### 2.3 Options model
 
 A typed tree of groups, one class per group. Parsing is tolerant: a value of the wrong kind stays unset. One merge rule
-(`mergeOptions`) and one rule of defaults. The options a node shows with are resolved as its own, then its parents',
-then the defaults, and the result is cached per node. The cache has one invalidation point: a change of a node's own
-options and a change of the defaults. The resolved result is read-only; code that wants to change it copies it first.
-Module options groups plug into the same tree.
+(`mergeOptions`) and one rule of defaults. The options a node shows with are resolved in four layers, weakest first:
+the defaults, its parents', its own, and its user layer; the result is cached per node. The user layer keeps what the
+user chose in the native UI (a toggled bar button, the check of a single-selection menu, the search scope, the search
+tokens and the suggestions the system removed; on iOS a renamed title) apart from the own options. It goes over the
+rest by identity, a button and a menu item by their ids and a scope by its id, not as a tree merged over: a new list
+keeps the choices of the same ids, and a button, item or scope that is gone takes its choice with it. An unrelated
+`mergeOptions`, the same values sent again and `setDefaultOptions` keep a choice; a `mergeOptions` into the node that
+gives the chosen field a value other than the node had before (its own options, or where they don't set it, what its
+parents and the defaults gave) replaces it, as does one after which the button, item or scope is gone. A merge into a
+parent doesn't. The layer goes with its node. The cache has
+one invalidation point: a change of a node's own options, of its user layer, or of the defaults. A change of the
+defaults repaints only what shows; a node that is hidden takes them when it shows. The resolved result is read-only;
+code that wants to change it copies it first. Module options groups plug into the same tree.
 
 - iOS: `ANNOptions` with a field table (`+optionFields`) that gives parsing, merging, copying and `hasValue` to every
   group; `ANNOptionsReader` reads, `ANNNodeHelper` resolves (`resolveOptionsWithDefault`), `ANNOptionsCache` is the
-  generation, `ANNDefaultOptions` the defaults. Value kinds are in `Options/Params`.
+  generation, `ANNDefaultOptions` the defaults. Value kinds are in `Options/Params`. `ANNNodeHelper` also keeps the user
+  layer (`setUserChoice:forKey:`; an `ANNUserChoice` is a write by identity and a rule for the app's merge).
 - Android: `Options` is the root; each group writes `parse`, `mergeWith`, `mergeWithDefault`, `copy` and `hasValue`;
   value types are in `options/params/`, tolerant readers in `options/parsers/`. `ViewController.resolveCurrentOptions`
   caches against `OptionsCache`; `DefaultOptions` holds the defaults. A test walks the whole tree by reflection, so a
-  field that is not read, copied, merged or defaulted fails it.
+  field that is not read, copied, merged or defaulted fails it. The user layer is `UserChoices` per node, written
+  through `ViewController.changeChoices`, applied in `resolveCurrentOptions(defaultOptions)` and yielding in
+  `mergeOwnOptions`.
 
 ### 2.4 Node tree and registry
 
@@ -169,7 +182,8 @@ dark switch. The system UI has one owner per window or activity.
 - iOS: `ApexNavigation` (`bootstrapWithHost:`, `registerNativeScreen:…`, `findViewController:`), `ANNAppDelegate`,
   `ANNSceneDelegate`, the splash (`ANNSplashViewController`), reload by `ANNReloadCoordinator`. Apps import the headers
   of `ios/Public/ApexNavigation/`.
-- Android: `NavigationApplication` (React host through `ReactGateway`, native screens by name), `NavigationActivity`
+- Android: `NavigationApplication` (React host through `ReactGateway`, made on first use after the app's
+  `loadReactNative(this)` in `onCreate`; native screens by name), `NavigationActivity`
   (layers, splash hold, back, developer reload), `NavigationPackage`, edge-to-edge (`EdgeToEdgeDecision`), the splash
   (`SplashHold`, `SplashView`, `SplashTheme`). `ANN.AppLaunched` goes once per pair of an activity and a React context.
 
@@ -177,35 +191,35 @@ dark switch. The system UI has one owner per window or activity.
 
 Each rule has one owner. A feature that needs the rule calls the owner; it does not copy the rule.
 
-| Seam                        | iOS                                                                               | Android                                                                                   |
-| --------------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Way in                      | `ANNTurboModule`; every async method through `ANNCommandRunner`                   | `NavigationTurboModule`; every async method through `CommandRunner`                       |
-| Layout check                | `ANNLayoutReader` on the module queue                                             | `LayoutReader` on the module thread; `LayoutChecks` on main                               |
-| Answer                      | `ANNCommandAnswer`: state, promise, `CommandCompleted`; once                      | `CommandAnswer`: the same, through `AnswerEvents`                                         |
-| Error texts                 | `ANNErrorTexts`, made from `src/interfaces/contract/errors.json`                  | `ErrorTexts`, made from the same file                                                     |
-| Event names and keys        | `ANNEventContract`, made from the event types of `src/interfaces/`                | `EventContract`, made from the same types                                                 |
-| Registry                    | `ANNNodeRegistry`, one for the process, weak                                      | `ChildControllersRegistry`, one per `Navigator`; `Navigators` holds the activities weakly |
-| Factory                     | `ANNLayoutFactory`; `ANNSideMenuPresenter` is the one other file naming a module  | `LayoutFactory`                                                                           |
-| Options cache               | `ANNOptionsCache`, moved by the setter of `ANNNodeHelper.options` and by defaults | `OptionsCache`, moved by the `ViewController.options` setter and by `DefaultOptions.set`  |
-| Options a layout shows with | the node's `resolveOptions` (own, then the current child down)                    | `resolveShownOptions`                                                                     |
-| Appearance dispatcher       | `ANNAppearanceDispatcher`                                                         | `AppearanceDispatcher`                                                                    |
-| Navigation state            | `ANNNavigationState`: `holdUpdates`, `releaseUpdates`, `updateNow`                | `NavigationStateReporter` through `AppearanceDispatcher.StateUpdates`: `hold`, `release`  |
-| Answer id of a stack entry  | `ANNStackAnswerIdOf` in `ANNStackQueue.h`                                         | `StackController.answerIdOf`, asked by the queue through `StackQueue.Host`                |
-| Screens of an entry         | `ANNStackScreensOfEntry`                                                          | `StackController.screenIdOf`, `optionsScreen`                                             |
-| Screen readiness            | `ANNScreenReadiness`, by screen id                                                | `ScreenReadiness` and `ContentReadiness`                                                  |
-| Render wait                 | `ANNRenderWait`                                                                   | `RenderWait`                                                                              |
-| Waited screens              | `waitedComponentViewControllers`                                                  | `ParentController.waitedChildren`                                                         |
-| Waiting place               | `ANNParking`: the window, a stack's view, a preview's host view                   | the root under the current one (`RootLayerViews`), the stack's own view (`StackViews`)    |
-| Waits to show               | `ANNPendingLayers`                                                                | `WaitingLayer`, kept by `Navigator`                                                       |
-| What a node shows changed   | `ANNShownScreens`: pending layer, modal hold, system UI                           | `Navigator.shownScreensChanged`: waiting layer, parent stack's queue, modal sheet         |
-| Modal records               | `ANNModalCoordinator`, `ANNModal`                                                 | `ModalCoordinator`, `ModalRecord`                                                         |
-| Presentation gate           | `ANNPresentationGate`: every UIKit present and dismiss in the main window         | none: transitions overlap                                                                 |
-| Overlays                    | `ANNOverlayCoordinator`, a window each                                            | `OverlayCoordinator`, a layer of the activity                                             |
-| System UI owner             | `ANNSystemUI`, the rules in `ANNSystemUIRules`                                    | `SystemUiOwner` per `Navigator`; only `SystemUiWindow` writes to the window               |
-| Reload                      | `ANNReloadCoordinator`: the generation of the JavaScript                          | `ReloadCoordinator`: the generation; `ReactGateway` tells it                              |
-| Room for the bars           | `ANNScreenSafeArea`, `ANNScreenInsets`                                            | `ScreenFrame`, `ScreenSafeArea`; `ScreenFrame.topRoomOf` for a screen and a pair          |
-| A container's own move      | the container's UIKit callbacks, told to `ANNAppearanceDispatcher`                | `ShownChildren`, through the dispatcher's order                                           |
-| Back                        | `ANNStackController`, `InteractivePopGestureDelegate`, `uikitShows:` of the queue | `NavigationActivity` → `Navigator.handleBack` → `StackQueue`; `BackCallbackState`         |
+| Seam                        | iOS                                                                                                           | Android                                                                                                      |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Way in                      | `ANNTurboModule`; every async method but `preparePush` through `ANNCommandRunner`                             | `NavigationTurboModule`; every async method through `CommandRunner`                                          |
+| Layout check                | `ANNLayoutReader` on the module queue                                                                         | `LayoutReader` on the module thread; `LayoutChecks` on main                                                  |
+| Answer                      | `ANNCommandAnswer`: state, promise, `CommandCompleted`; once                                                  | `CommandAnswer`: the same, through `AnswerEvents`                                                            |
+| Error texts                 | `ANNErrorTexts`, made from `src/interfaces/contract/errors.json`                                              | `ErrorTexts`, made from the same file                                                                        |
+| Event names and keys        | `ANNEventContract`, made from the event types of `src/interfaces/`                                            | `EventContract`, made from the same types                                                                    |
+| Registry                    | `ANNNodeRegistry`, one for the process, weak                                                                  | `ChildControllersRegistry`, one per `Navigator`; `Navigators` holds the activities weakly                    |
+| Factory                     | `ANNLayoutFactory`; `ANNSideMenuPresenter` is the one other file naming a module                              | `LayoutFactory`                                                                                              |
+| Options cache               | `ANNOptionsCache`, moved by the setter of `ANNNodeHelper.options`, by `setUserChoice:forKey:` and by defaults | `OptionsCache`, moved by the `ViewController.options` setter, by `changeChoices` and by `DefaultOptions.set` |
+| Options a layout shows with | the node's `resolveOptions` (own, then the current child down)                                                | `resolveShownOptions`                                                                                        |
+| Appearance dispatcher       | `ANNAppearanceDispatcher`                                                                                     | `AppearanceDispatcher`                                                                                       |
+| Navigation state            | `ANNNavigationState`: `holdUpdates`, `releaseUpdates`, `updateNow`                                            | `NavigationStateReporter` through `AppearanceDispatcher.StateUpdates`: `hold`, `release`                     |
+| Answer id of a stack entry  | `ANNStackAnswerIdOf` in `ANNStackQueue.h`                                                                     | `StackController.answerIdOf`, asked by the queue through `StackQueue.Host`                                   |
+| Screens of an entry         | `ANNStackScreensOfEntry`                                                                                      | `StackController.screenIdOf`, `optionsScreen`                                                                |
+| Screen readiness            | `ANNScreenReadiness`, by screen id                                                                            | `ScreenReadiness` and `ContentReadiness`                                                                     |
+| Render wait                 | `ANNRenderWait`                                                                                               | `RenderWait`                                                                                                 |
+| Waited screens              | `waitedComponentViewControllers`                                                                              | `ParentController.waitedChildren`                                                                            |
+| Waiting place               | `ANNParking`: the window, a stack's view, a preview's host view                                               | the root under the current one (`RootLayerViews`), the stack's own view (`StackViews`)                       |
+| Waits to show               | `ANNPendingLayers`                                                                                            | `WaitingLayer`, kept by `Navigator`                                                                          |
+| What a node shows changed   | `ANNShownScreens`: pending layer, modal hold, system UI                                                       | `Navigator.shownScreensChanged`: waiting layer, parent stack's queue, modal sheet                            |
+| Modal records               | `ANNModalCoordinator`, `ANNModal`                                                                             | `ModalCoordinator`, `ModalRecord`                                                                            |
+| Presentation gate           | `ANNPresentationGate`: every UIKit present and dismiss in the main window                                     | none: transitions overlap                                                                                    |
+| Overlays                    | `ANNOverlayCoordinator`, a window each                                                                        | `OverlayCoordinator`, a layer of the activity                                                                |
+| System UI owner             | `ANNSystemUI`, the rules in `ANNSystemUIRules`                                                                | `SystemUiOwner` per `Navigator`; only `SystemUiWindow` writes to the window                                  |
+| Reload                      | `ANNReloadCoordinator`: the generation of the JavaScript                                                      | `ReloadCoordinator`: the generation; `ReactGateway` tells it                                                 |
+| Room for the bars           | `ANNScreenSafeArea`, `ANNScreenInsets`                                                                        | `ScreenFrame`, `ScreenSafeArea`; `ScreenFrame.topRoomOf` for a screen and a pair                             |
+| A container's own move      | the container's UIKit callbacks, told to `ANNAppearanceDispatcher`                                            | `ShownChildren`, through the dispatcher's order                                                              |
+| Back                        | `ANNStackController`, `InteractivePopGestureDelegate`, `uikitShows:` of the queue                             | `NavigationActivity` → `Navigator.handleBack` → `StackQueue`; `BackCallbackState`                            |
 
 Rules that belong to several rows:
 
@@ -321,19 +335,38 @@ Before step 5 the state goes once more if it changed since step 3, so JS `await`
 `getState()`. The answer is sent once; nothing is sent for a JavaScript that went. A command without a promise
 (`mergeOptions`) sends no state and no `CommandCompleted`.
 
-**The table.** Both platforms answer from one table: the error texts of `src/interfaces/contract/errors.json` and the
-event names and payload keys of the types in `src/interfaces/` (`Events.ts`, `ComponentEvents.ts`).
-`scripts/contract.mjs` makes `ANNErrorTexts` and `ANNEventContract` (iOS) and `ErrorTexts` and `EventContract`
-(Android) from them; the files are committed, and `scripts/check.sh` fails when one differs from its source. A new
-text or key goes into the source, never into the made files. Which text a case gives and what a command resolves with
-are behavior, kept the same by each platform's code.
+**A tab press**, the same for every source (the system bar, the iPad tab strip and sidebar, the custom row, Android's
+Material bar), through one path (`-[ANNBottomTabsController pressTabAtIndex:source:]`,
+`BottomTabsController.onTabPressed`):
+
+1. A switch of the tabs still running ends, with its `BottomTabSelected`.
+2. `BottomTabPressed { tabIndex, bottomTabsId, screenId?, wasSelected }`.
+3. Another tab: `ComponentWillAppear` of its screen; at the end of the switch `ComponentDidDisappear` of the screen
+   that was left and `ComponentDidAppear` of the new one; then `BottomTabSelected`, the left tab's `popToRootOnBlur`
+   (its `ScreenPopped`) and the navigation state, once. The selected tab again: the pop of the user's back to the
+   first screen, or a scroll to the top; with `popToRootOnPress: false` nothing. `selectTabOnPress: false`: nothing.
+4. A long press sends `BottomTabLongPressed` only.
+
+A choice from code (`bottomTabs.currentTabIndex`, `currentTabId`) and Android's back between tabs send the
+appearances and the state, without the press events.
+
+**The table.** Both platforms answer from one table: the error texts of `src/interfaces/contract/errors.json`, the
+commands with a promise in `src/interfaces/contract/commands.json` (checked against the async methods of the spec:
+whether the state and `CommandCompleted` go with each answer, and what each resolves with, written down there), and
+the event names and payload keys of the types in `src/interfaces/` (`Events.ts`, `ComponentEvents.ts`).
+`scripts/contract.mjs` makes `ANNErrorTexts`, `ANNCommandContract` and `ANNEventContract` (iOS) and `ErrorTexts`,
+`CommandContract` and `EventContract` (Android) from them; the files are committed, and `scripts/check.sh` fails when
+one differs from its source. A text, a key or a command's list is never written by hand. Which text a case gives and
+what a command resolves with are behavior, kept by each platform's code (the resolve values are not checked by the
+table): the same on both platforms, apart from what section 6 lists.
 
 **Errors.** A command that fails on the native side rejects its promise with a text from the error table; JS adds
 `[navigation] <command>:`. The check rejects before a node exists; a failure in the body rejects with `could not
 <what>: <reason>`; a failure in a step that runs later (a ready handler, a timer, the end of a transition) is caught by
 the owner's guard and rejects the command too. On iOS an answer that goes away unanswered while its JavaScript runs
 rejects `could not run '<command>': the native core let it go without an answer`, so a path that forgets to answer
-never leaves the promise waiting. A command without a promise writes one line to the log. An exception never ends the app.
+never leaves the promise waiting. A command without a promise writes one line to the log, `[ApexNavigation]
+<command>: <text>` (a warning on iOS, `Log.e` on Android). An exception never ends the app.
 
 ## 6. Where the platforms differ on purpose
 
@@ -358,8 +391,16 @@ themselves.
   back has something to do. JS tells Android whether it listens (`setBackListeners`).
 - **Events.** iOS sends through the module `ANNTurboEventEmitter`; Android through the device event emitter of the
   React context, and can send without an activity.
-- **Options reading.** iOS reads a tree's options on main (images load there); Android reads layout and options on the
-  module thread and loads images when the options apply.
+- **Options reading.** iOS reads a tree's options on main; Android reads layout and options on the module thread. So
+  an unreadable option rejects on Android before the checks of the body (the screen isn't shown, isn't in a stack, the
+  id shows already); on iOS after them. Both load an option's image through one cache when it shows (iOS
+  `ANNOptionImages`, Android `OptionImages`): at once where the first frame needs it (the top bar before a push, a
+  tab's first icon, a new FAB), off the main thread for a file of the app where the view takes it when it is ready (a
+  tab's changed icon; on Android also the FAB's).
+- **Platform-only checks and logs.** Only Android rejects more than 5 tabs (`tooManyTabs`: its tab bar shows at most
+  5); only iOS rejects a pair before iOS 27.1 (`pairUnsupported`). Only Android logs a failed `preparePush`, which iOS
+  answers with `null`. Only iOS has `notAnswered`. A command whose promise resolves with nothing gives JS `undefined`
+  on iOS and `null` on Android (`setColumnShown`).
 - **Prepared push.** `preparePush` lays a screen out before React renders it, so a push can start in the frame the
   content mounts. Android does it (`PreparedPushes`); iOS answers null and the push goes the usual way.
 - **Pair and hinge.** The pair is `UIArrangementViewController` on iOS 27.1 and later (built with that SDK; before it
@@ -378,5 +419,7 @@ themselves.
   per main package; coordinators and rules run with fakes. iOS has no unit-test target; the Showcase scenarios check it.
 
 Native code on both platforms never touches React Native's views (their subviews, their layout, their frames): Fabric
-owns and recycles them. Slots are moved through `SlotContainers`, and the C++ of `ANNSlot` and `ANNSafeAreaView` in
-`ios/cpp/` is built by both platforms (`android/src/main/jni/CMakeLists.txt`).
+owns and recycles them. Slots are moved through `SlotContainers`, which keeps the containers and the slot views by slot
+id: a change of the container of an id goes straight to the slot views under it (a map of weak views, kept on mount,
+recycle and unmount), never to every slot. The C++ of `ANNSlot` and `ANNSafeAreaView` in `ios/cpp/` is built by both
+platforms (`android/src/main/jni/CMakeLists.txt`).

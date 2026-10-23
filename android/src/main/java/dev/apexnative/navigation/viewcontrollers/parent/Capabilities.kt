@@ -41,11 +41,18 @@ interface KeepsStatusBarRoom
 /** A node that shows screens in its columns (the split view): `showInColumn` and `setColumnShown` go to it. */
 interface ShowsColumns {
     /**
-     * Shows [screen] in the column after the first one, in place of what it shows; [listener] once it shows, or with
-     * the error reason, which names [from], the screen the command comes from. False when the node doesn't take it now
-     * (its compact layout shows): the core pushes the screen over [from] instead.
+     * Shows [screen] in [column], in place of what it shows; [listener] once it shows, or with the error reason, which
+     * names [from], the screen the command comes from. [goesInStack] says whether [screen]'s layout is what a stack
+     * takes (a screen, a native screen, a pair), not a container. False when the node doesn't take it now (its compact
+     * layout shows): the core pushes the screen over [from] instead.
      */
-    fun showScreen(screen: ViewController<*>, from: ViewController<*>, listener: CommandListener): Boolean
+    fun showScreen(
+        screen: ViewController<*>,
+        column: String,
+        goesInStack: Boolean,
+        from: ViewController<*>,
+        listener: CommandListener,
+    ): Boolean
 
     /** Shows or hides [column]; [done] once the columns have stopped moving. */
     fun setColumnShown(column: String, shown: Boolean, done: Runnable)

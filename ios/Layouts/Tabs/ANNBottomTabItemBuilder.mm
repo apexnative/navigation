@@ -67,6 +67,17 @@ static void ANNSetTitleAttributes(UITabBarItemStateAppearance *state, UIColor *c
     return icon ? ANNRaster(icon, color) : nil;
 }
 
++ (NSArray<Image *> *)rastersOf:(ANNBottomTabOptions *)tab {
+    NSMutableArray<Image *> *rasters = [NSMutableArray new];
+    if (!ANNSymbol(tab.sfSymbol) && tab.icon.source) {
+        [rasters addObject:tab.icon];
+    }
+    if (!ANNSymbol(tab.sfSelectedSymbol) && tab.selectedIcon.source) {
+        [rasters addObject:tab.selectedIcon];
+    }
+    return rasters;
+}
+
 + (UIColor *)selectedIconColorOf:(ANNBottomTabOptions *)tab {
     return [tab.selectedIconColor withDefault:nil] ?: [tab.iconColor withDefault:nil];
 }

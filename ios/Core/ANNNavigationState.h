@@ -24,11 +24,15 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)releaseUpdates;
 
 /// The state now, sent when it changed: at the end of a transition, at once after a tab chosen from code. A walk that
-/// throws logs one line and sends nothing, so its caller always goes on.
+/// throws logs one line, `[ApexNavigation] <commandName>: could not report the navigation state: <reason>` (as on
+/// Android; `transition` without a command), and sends nothing, so its caller always goes on.
++ (void)updateNowFor:(nullable NSString *)commandName;
+
+/// `updateNowFor:` without a command.
 + (void)updateNow;
 
-/// A command is about to answer: when what shows changed, the new state goes now, before the promise.
-+ (void)reportBeforeAnswer;
+/// The command `commandName` is about to answer: when what shows changed, the new state goes now, before the promise.
++ (void)reportBeforeAnswerOf:(NSString *)commandName;
 
 /// Forgets the last state sent: the next one goes even if it is the same (a new bundle, `AppLaunched`).
 + (void)reset;

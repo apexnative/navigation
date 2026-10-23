@@ -8,11 +8,13 @@
 
 using namespace facebook::react;
 
+@interface ANNSlotComponentView () <ANNSlotView>
+@end
+
 @implementation ANNSlotComponentView {
     // The React children live here. It waits hidden inside the slot, then moves into the container.
     ANNSlotContentView *_contentView;
     ANNSlotShadowNode::ConcreteState::Shared _state;
-    BOOL _observing;
     // The layout that measures the content was asked for once.
     BOOL _measureAsked;
 }
@@ -33,19 +35,8 @@ using namespace facebook::react;
     return self;
 }
 
-- (void)dealloc {
-    [NSNotificationCenter.defaultCenter removeObserver:self];
-}
-
 - (void)updateProps:(const Props::Shared &)props oldProps:(const Props::Shared &)oldProps {
     [super updateProps:props oldProps:oldProps];
-    if (!_observing) {
-        _observing = YES;
-        [NSNotificationCenter.defaultCenter addObserver:self
-                                               selector:@selector(containerDidChange:)
-                                                   name:ANNSlotContainerDidChangeNotification
-                                                 object:nil];
-    }
     [self attachContent];
 }
 
@@ -54,13 +45,23 @@ using namespace facebook::react;
     [self attachContent];
 }
 
-- (void)containerDidChange:(NSNotification *)notification {
-    if ([notification.object isEqual:self.nativeId]) {
+#pragma mark - ANNSlotView
+
+- (void)slotContainerDidChange:(NSString *)slotId {
+    if ([slotId isEqualToString:self.nativeId]) {
         [self attachContent];
     }
 }
 
+#pragma mark - Content
+
 - (void)attachContent {
+    // The view hears the changes of the container under the slot id it has now, and no other.
+    if (self.nativeId != nil) {
+        [ANNSlotContainers registerSlotView:self forSlotId:self.nativeId];
+    } else {
+        [ANNSlotContainers unregisterSlotView:self];
+    }
     UIView *container = self.nativeId ? [ANNSlotContainers containerForSlotId:self.nativeId] : nil;
     UIView *target = container ?: self;
     if (_contentView.superview != target) {
@@ -108,15 +109,21 @@ using namespace facebook::react;
     return nil;
 }
 
-// A recycled slot waits for another screen: it stops listening and drops the old screen's state.
+// A recycled slot waits for another screen: it leaves its slot id and drops the old screen's state. Its new props put
+// it under the new id.
 - (void)prepareForRecycle {
     [super prepareForRecycle];
-    [NSNotificationCenter.defaultCenter removeObserver:self];
-    _observing = NO;
+    [ANNSlotContainers unregisterSlotView:self];
     _measureAsked = NO;
     _state.reset();
     [_contentView removeFromSuperview];
     _contentView.hidden = YES;
+}
+
+// An unmounted slot that Fabric doesn't keep for reuse leaves its slot id too.
+- (void)invalidate {
+    [super invalidate];
+    [ANNSlotContainers unregisterSlotView:self];
 }
 
 @end

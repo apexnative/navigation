@@ -15,9 +15,10 @@ typedef NS_ENUM(NSInteger, SearchBarPlacement) {
     SearchBarPlacementIntegratedCentered,
 };
 
-/// `topBar.searchBar` (`OptionsSearchBar`): the search of a screen. `ANNSearchPresenter` applies it. The scope, the
-/// tokens and the suggestions are written back by the search as the user changes them (`changeOwnOptions:`), so they
-/// stay when the options apply again.
+/// `topBar.searchBar` (`OptionsSearchBar`): the search of a screen. `ANNSearchPresenter` applies it. The scope the user
+/// picks, the tokens the user deletes or brings back and the suggestions UIKit removes go into the screen's user layer
+/// (`setUserChoice:forKey:`), not into these options: they stay when the options apply again and through a
+/// `mergeOptions` that sends the same values, and give way when a merge changes the field.
 @interface ANNSearchBarOptions : ANNOptions
 
 @property(nonatomic, strong) Bool *visible;

@@ -439,9 +439,10 @@ class Navigator(
     }
 
     /**
-     * The activity is destroyed: every layer goes, with the events of a destroy; a `setRoot` on its way resolves with
-     * `''` (JavaScript sets its root again in the next activity), a modal's or an overlay's show and the commands that
-     * wait for a modal with their roots' ids. Main thread only.
+     * The activity is destroyed: every layer goes, with the events of a destroy; a `setRoot` whose root still waited
+     * resolves with `''` (JavaScript sets its root again in the next activity), one whose root showed resolves with
+     * its id, and a modal's or an overlay's show and the commands that wait for a modal resolve with their roots' ids.
+     * Main thread only.
      */
     internal fun destroyWithActivity() {
         destroyLayers(answerPending = true)

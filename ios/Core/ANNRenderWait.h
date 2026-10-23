@@ -5,7 +5,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// What content a render wait waits for.
 typedef NS_ENUM(NSInteger, ANNRenderWaitContent) {
-    /// No content: the bar components alone (a push without `waitForRender`).
+    /// No content: the bar components alone.
     ANNRenderWaitContentNone,
     /// Each screen of `screens` whose React content isn't ready, by its own ready handler (a root's screens). The limit
     /// marks ready the screens still waited.
@@ -58,6 +58,18 @@ typedef NS_ENUM(NSInteger, ANNRenderWaitBar) {
 /// area view says it) counts as ready; a screen whose safe area view spoke waits for its signal. Off by default (a root
 /// has none).
 @property(nonatomic) BOOL unknownContentRule;
+
+/// The content phase ends only once every call JavaScript made by then is applied on the main queue
+/// (`ANNJavaScriptCalls`): the options a screen merges in the commit that mounted it are there before the owner's next
+/// step. Also when the content is there already as the wait starts or takes its screens again (the commit that mounted
+/// it may have run just now): such a phase ends after `start`, through `protect`. Screens without React content (a
+/// native screen) end the phase at once. The limit still ends the phase meanwhile. Off by default.
+@property(nonatomic) BOOL settlesThroughJavaScript;
+
+/// With `ANNRenderWaitBarAfterContent`, the bar phase that follows the content phase counts its limits from the wait's
+/// start, not from its own: the time the content took comes off each kind's limit, and a kind past it by then waits no
+/// more. A bar phase that starts again (`retakeScreens:`) counts from then, as without it. Off by default.
+@property(nonatomic) BOOL barLimitsFromStart;
 
 /// Runs inside `start`, after the ready handlers are set and before the readiness test (the stack parks and renders
 /// its entry there). A ready handler that runs inside it is left to the test after it.

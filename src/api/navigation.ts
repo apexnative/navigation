@@ -55,7 +55,10 @@ export interface AppNavigation {
   switchTo<const Layout extends Exclude<RootLayout, string>>(
     layout: Layout & NoInfer<CheckedScreens<UsesOfRoot<Layout>, RegisteredScreens>>
   ): Promise<void>;
-  /** Shows a screen in the stack of the screen the user sees; resolves with the id of the screen shown. */
+  /**
+   * Shows a screen in the stack of the screen the user sees; resolves with the id of the screen shown (for a pair, the
+   * pair's id).
+   */
   push<Name extends ScreenName>(name: Name, ...args: ShowArgs<Name, PushConfig>): Promise<string>;
   /** Goes back in the stack of the screen the user sees; see `useNavigation().pop`. */
   pop(): Promise<string>;

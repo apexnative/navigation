@@ -82,10 +82,14 @@ internal data class LayoutNode(
         private val COLUMN_NAMES = setOf(PRIMARY, SECONDARY, SUPPLEMENTARY, COMPACT, INSPECTOR)
         private val COLUMNS_WITHOUT_NAMES = listOf(PRIMARY, SECONDARY)
 
-        /** The column of the child at [index] of a split view with [columns]; none for a child without one. */
+        /**
+         * The column of the child at [index] of a split view with [columns]; none for a child without one, and none
+         * for a repeat of a name an earlier child has (the first takes the column), as on iOS.
+         */
         internal fun columnName(columns: List<String>, index: Int): String? {
             val names = columns.ifEmpty { COLUMNS_WITHOUT_NAMES }
-            return names.getOrNull(index)?.takeIf { it in COLUMN_NAMES }
+            val name = names.getOrNull(index)?.takeIf { it in COLUMN_NAMES } ?: return null
+            return name.takeIf { names.indexOf(it) == index }
         }
     }
 }

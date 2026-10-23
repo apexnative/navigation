@@ -60,7 +60,7 @@ static NSUInteger ANNAppLaunchedBundle;
         return;
     }
     ANNAppLaunchedPending = NO;
-    [eventEmitter sendIfListened:ANNEventContract.AppLaunched.event body:nil];
+    [eventEmitter sendIfListened:ANNEventContract.AppLaunched.event body:@{}];
 }
 
 + (void)eventEmitterListensToAppLaunched:(ANNTurboEventEmitter *)eventEmitter {
@@ -69,7 +69,7 @@ static NSUInteger ANNAppLaunchedBundle;
         return;
     }
     ANNAppLaunchedPending = NO;
-    [eventEmitter sendIfListened:ANNEventContract.AppLaunched.event body:nil];
+    [eventEmitter sendIfListened:ANNEventContract.AppLaunched.event body:@{}];
 }
 
 // Only an `AppLaunched` of the module's own JavaScript or an older one: the module is made while its bundle runs,

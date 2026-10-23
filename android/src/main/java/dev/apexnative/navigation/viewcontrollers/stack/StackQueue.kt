@@ -52,8 +52,12 @@ private typealias Node = ViewController<*>
  *
  * Its waits for a screen to render are the core's one wait ([RenderWait]), on the screen it pushes or sets as the top;
  * the readiness signals reach it through [deliver] (the stack posts them to the next turn of the main loop: a signal
- * that comes inside a layout pass or a view's attach moves no view of the container there). A push or a
- * `setStackRoot` with elements waits for its targets after that, a wait like the others: a cut or a replace during it
+ * that comes inside a layout pass or a view's attach moves no view of the container there). A push of a screen with
+ * React content waits for its first mount: [PUSH_WAIT_MILLIS] at most without `waitForRender`, as long as it takes
+ * with `true`, not at all with `false`; its signal reaches the wait through [afterCalls], behind the calls JavaScript
+ * made in the commit of that mount (its `mergeOptions`), so the transition starts with the options of that commit —
+ * content mounted already goes that way too. A push or a `setStackRoot` with elements waits for its targets after
+ * that, a wait like the others, within what is left of its limit without `waitForRender`: a cut or a replace during it
  * interrupts the push, which moves no view into a layer.
  *
  * The transition is the screens' own when the options say so (`AnimationRules.stackIsOwn`): the display plays each
@@ -66,6 +70,11 @@ internal class StackQueue(
     private val scheduler: AppearanceDispatcher.Scheduler,
     private val host: Host,
     private val deliver: (() -> Unit) -> Unit = { it() },
+    /**
+     * How the mount of a pushed screen reaches the push's wait: on the main thread behind every call JavaScript made
+     * before it (the stack: `PendingCalls`, on a later turn of the main loop); at once by default.
+     */
+    private val afterCalls: (() -> Unit) -> Unit = { it() },
 ) {
     /** What the queue tells the stack. */
     interface Host {
@@ -104,10 +113,10 @@ internal class StackQueue(
         fun operationEnded(topSettled: Boolean)
 
         /**
-         * Whether [node] is a React screen with a root of its own, which a push prepares when its switch is on
-         * ([StackSwitches.preparesOwnRootPushes]).
+         * Whether [node] shows React content whose first mount its push waits for: a React screen (a root of its own or
+         * a slot), or an entry that shows one. A native screen has none: its push starts at once.
          */
-        fun isOwnRootScreen(node: Node): Boolean = false
+        fun hasReactContent(node: Node): Boolean = false
 
         /** One line for the log: a failure that has no command to answer. */
         fun log(text: String) = Unit
@@ -427,11 +436,12 @@ internal class StackQueue(
         val node = op.node
         val push = resolved(node).animations.push
         op.awaitsTargets = awaitsTargets(push, !push.enabled.isFalse)
+        // A prepared screen rendered before its push; `false`, and a node without React content, start at once.
         val wait = when {
             op.prepared -> Wait.Prepared
             push.waitForRender.isTrue -> Wait.Content
-            StackSwitches.preparesOwnRootPushes && host.isOwnRootScreen(node) -> Wait.Limited
-            else -> Wait.None
+            push.waitForRender.isFalse || !host.hasReactContent(node) -> Wait.None
+            else -> Wait.Limited
         }
         if (wait == Wait.None) return if (op.awaitsTargets) awaitTargets(op) else beginPush(op)
         waiting = op
@@ -439,18 +449,37 @@ internal class StackQueue(
             Wait.Prepared -> awaitPrepared(op)
             Wait.Content -> {
                 // Then the components of the bar drawn in advance, 0.5 s at most after the content (a title or a
-                // background with its own `waitForRender: false` not).
+                // background with its own `waitForRender: false` not). React content mounted already goes behind the
+                // calls too; a native screen starts at once.
                 display.placeWaiting(node)
-                awaitContent(op, node, limit = null, bar = RenderWait.Bar.AfterContent)
+                awaitContent(
+                    op,
+                    node,
+                    limit = null,
+                    bar = RenderWait.Bar.AfterContent,
+                    deliver = afterCalls,
+                    deliversReady = host.hasReactContent(node),
+                )
             }
             else -> {
+                // The screen renders hidden under the top, its signal (or its content mounted already) behind the
+                // calls; the bar's components don't count. The 0.5 s hold for the content and the targets together.
                 display.placeWaiting(node)
-                awaitContent(op, node, limit = OWN_ROOT_WAIT_MILLIS, bar = RenderWait.Bar.None)
+                op.cancelLimit = scheduler.schedule(PUSH_WAIT_MILLIS) { op.overLimit = true }
+                awaitContent(
+                    op,
+                    node,
+                    limit = PUSH_WAIT_MILLIS,
+                    bar = RenderWait.Bar.None,
+                    deliver = afterCalls,
+                    deliversReady = true,
+                )
             }
         }
     }
 
     private fun beginPush(op: PushOp) {
+        op.cancelLimit?.invoke()
         val node = op.node
         val covered = shownList.lastOrNull()
         // The views first: a failure here leaves the lists as they were.
@@ -505,6 +534,7 @@ internal class StackQueue(
 
     // Off screen or without a view: at once, without a transition; the top appears when the stack shows.
     private fun pushAtOnce(op: PushOp) {
+        op.cancelLimit?.invoke()
         val node = op.node
         val covered = shownList.lastOrNull()
         if (display.hasView) {
@@ -533,6 +563,7 @@ internal class StackQueue(
         if (op.done) return
         op.done = true
         if (waiting === op) stopWaiting(op)
+        op.cancelLimit?.invoke()
         queued.remove(op)
         val node = op.node
         entryList.remove(node)
@@ -799,8 +830,16 @@ internal class StackQueue(
 
     // The one wait (RenderWait) for [screen], the node the operation brings: at [limit] the content not ready counts
     // as mounted; without one, `waitForRender: true` waits as long as it takes, except for content the readiness store
-    // knows nothing of after 1 s, which counts as ready (the same rule as iOS).
-    private fun awaitContent(op: Op, screen: Node, limit: Long?, bar: RenderWait.Bar) {
+    // knows nothing of after 1 s, which counts as ready (the same rule as iOS). A push's signals come through
+    // [afterCalls] ([deliver]); with [deliversReady], so does content ready at the start.
+    private fun awaitContent(
+        op: Op,
+        screen: Node,
+        limit: Long?,
+        bar: RenderWait.Bar,
+        deliver: (() -> Unit) -> Unit = this.deliver,
+        deliversReady: Boolean = false,
+    ) {
         val wait = RenderWait(
             readiness = readiness,
             scheduler = scheduler,
@@ -808,6 +847,7 @@ internal class StackQueue(
             bar = bar,
             countsUnknownContent = true,
             deliver = deliver,
+            deliversReadyContent = deliversReady,
             step = { work -> step(op) { work() } },
             onEnd = { endWait(op) },
         )
@@ -828,15 +868,32 @@ internal class StackQueue(
         step(op) { wait.retake(RenderWait.waitedScreens(node)) }
     }
 
+    // The prepared screen's slot mounts (or the display's limit passes), then its transition starts behind the calls
+    // JavaScript made before ([afterCalls]): a commit that came after the push (its JavaScript's own limit) brings its
+    // `mergeOptions` first. The same 0.5 s from the start hold for both: the transition starts then anyway.
     private fun awaitPrepared(op: PushOp) {
         val token = Any()
         op.waitToken = token
         val node = op.node
+        val still = { !destroyed && !op.done && op.waitToken === token && waiting === op && op.isCurrent() }
+        var mounted = false
+        val markMounted = {
+            if (!mounted && !readiness.isReady(node)) readiness.markReady(node)
+            mounted = true
+        }
+        val start = { step(op) { if (still()) endWait(op) } }
+        op.cancelCap = scheduler.schedule(PUSH_WAIT_MILLIS) {
+            step(op) {
+                if (!still()) return@step
+                markMounted()
+                endWait(op)
+            }
+        }
         display.awaitPrepared(
             node,
-            waiting = { !destroyed && !op.done && op.waitToken === token && waiting === op && op.isCurrent() },
-            mounted = { step(op) { if (!readiness.isReady(node)) readiness.markReady(node) } },
-            start = { step(op) { if (waiting === op) endWait(op) } },
+            waiting = still,
+            mounted = { step(op) { markMounted() } },
+            start = { afterCalls(start) },
         )
     }
 
@@ -865,7 +922,8 @@ internal class StackQueue(
         val token = Any()
         op.waitToken = token
         val still = { !destroyed && !op.done && op.waitToken === token && waiting === op && op.isCurrent() }
-        // Without `waitForRender` a `setStackRoot`'s 0.5 s holds for its content and its targets together.
+        // Without `waitForRender` the 0.5 s of a `setStackRoot` and of a push of React content hold for the content
+        // and the targets together.
         val from = currentChild
         op.stopTargets = display.awaitTargets(animation, from, to, { still() && !op.overLimit }) {
             step(op) { if (still()) endWait(op) }
@@ -874,6 +932,8 @@ internal class StackQueue(
 
     private fun stopWaiting(op: Op) {
         if (waiting === op) waiting = null
+        op.cancelCap?.invoke()
+        op.cancelCap = null
         op.waitToken = null
         op.wait?.cancel()
         op.wait = null
@@ -1218,9 +1278,12 @@ internal class StackQueue(
         // It waits for its elements' targets after its content; what stops that wait.
         var awaitsTargets = false
         var stopTargets: (() -> Unit)? = null
-        // The limit of a `setStackRoot` without `waitForRender` passed: its targets get nothing of it any more.
+        // The limit of a `setStackRoot` or a push without `waitForRender` passed: its targets get nothing of it any
+        // more.
         var overLimit = false
         var cancelLimit: (() -> Unit)? = null
+        // The limit of a prepared push's wait, which ends with the wait.
+        var cancelCap: (() -> Unit)? = null
         // Its screen came by an animation of its own: it stays at that animation's end values.
         var keepsEnd = false
         // The listener of a module heard its answer: it hears one only.
@@ -1295,20 +1358,13 @@ internal class StackQueue(
         /** How long a lower screen stays placed in the container to make its content, at most. */
         const val LOWER_SCREEN_MILLIS = 500L
 
-        /** How long the push of a screen with its own root waits for its content, with the switch on. */
-        const val OWN_ROOT_WAIT_MILLIS = 500L
+        /**
+         * How long a push waits for its screen's first mount without `waitForRender`, and a prepared push for its slot
+         * and the calls before it.
+         */
+        const val PUSH_WAIT_MILLIS = 500L
 
         // The alpha an arriving screen shows with: its own at rest, never the 0 of its wait.
         private const val ARRIVING_ALPHA = 1f
     }
-}
-
-/**
- * The internal switches of the stack. [preparesOwnRootPushes]: the push of a React screen with a root of its own starts
- * its surface hidden in the stack at its size and insets, and starts its transition once the content rendered, 0.5 s at
- * most. Off by default («б»: the push starts at once); it is measured at the end on a phone.
- */
-internal object StackSwitches {
-    @Volatile
-    var preparesOwnRootPushes = false
 }

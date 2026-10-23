@@ -8,10 +8,20 @@ type Fields = Record<string, unknown>;
 /**
  * The options as the native side reads them: colors in the format of the platform, images resolved, and every
  * component in them with an id of its own (its props stay in JavaScript). Options come in their own form only:
- * animations with `enter` and `exit`, `searchBar` and `interpolation` as objects.
+ * animations with `enter` and `exit`, `searchBar` and `interpolation` as objects. `owner` is the id of the node the
+ * options are for, or `'defaultOptions'`: a component without an id of its own gets one made of the owner, its place
+ * in the options and its name, the same for every `mergeOptions` of the node, so the native side keeps the mounted
+ * component and only its props change. Without an owner each conversion gives it a new one.
  */
-export function toNativeOptions<T>(options: T): T {
-  return convert(options) as T;
+export function toNativeOptions<T>(options: T, owner?: string): T {
+  return convert(options, undefined, { owner, path: '' }) as T;
+}
+
+// Where a value is in the options being converted: the node they are for, and the path to the value
+// (`topBar.rightButtons[0].component`).
+interface Place {
+  owner: string | undefined;
+  path: string;
 }
 
 /**
@@ -35,11 +45,16 @@ function isGroup(value: unknown): value is Fields {
   return isFields(value) && !Array.isArray(value);
 }
 
-function convert(value: unknown, key?: string): unknown {
+function convert(value: unknown, key: string | undefined, place: Place): unknown {
   if (key !== undefined && isColor(key)) return nativeColor(value);
   if (key !== undefined && isImage(key)) return nativeImage(value);
   if (Array.isArray(value)) {
-    const items = value.map((item) => convert(item));
+    // An item is known by its id where it has one (a button, a suggestion), so a component keeps its root when the
+    // list around it changes; by its place in the list otherwise.
+    const items = value.map((item, index) => {
+      const id = isFields(item) && typeof item.id === 'string' && item.id ? item.id : index;
+      return convert(item, undefined, { ...place, path: `${place.path}[${id}]` });
+    });
     if (key?.endsWith('Buttons') || key === 'buttons') items.forEach(noteButtonRoot);
     return key?.endsWith('Buttons') ? items.map(takeButtonProps) : items;
   }
@@ -47,9 +62,12 @@ function convert(value: unknown, key?: string): unknown {
   const result: Fields = {};
   for (const [name, item] of Object.entries(withSymbols(value))) {
     // The props of a component are its own, not options.
-    result[name] = name === 'passProps' ? item : convert(item, name);
+    const path = place.path ? `${place.path}.${name}` : name;
+    result[name] = name === 'passProps' ? item : convert(item, name, { ...place, path });
   }
-  return key === 'component' || key === 'resultsComponent' ? takeComponentProps(result) : result;
+  return key === 'component' || key === 'resultsComponent'
+    ? takeComponentProps(result, place)
+    : result;
 }
 
 function isColor(key: string): boolean {
@@ -105,11 +123,19 @@ function isFields(value: unknown): value is Fields {
   return typeof value === 'object' && value !== null;
 }
 
-// A component in the options gets an id; the native side creates it with that id, and its props wait here.
-function takeComponentProps({ passProps, ...component }: Fields): Fields {
-  const componentId = (component.id as string | undefined) || nextId('CustomComponent');
+// A component in the options gets an id; the native side creates it with that id, and its props wait here. Without
+// an id of its own it is the owner's, the place of the component (`topBar.title`, `topBar.rightButtons[Save]` by the
+// button's id, `topBar.searchBar.resultsComponent`) and its name: another name there is another component.
+function takeComponentProps({ passProps, ...component }: Fields, place: Place): Fields {
+  const componentId = (component.id as string | undefined) || componentIdAt(place, component.name);
   if (passProps) setProps(componentId, passProps as object);
   return { ...component, componentId };
+}
+
+function componentIdAt({ owner, path }: Place, name: unknown): string {
+  if (owner === undefined) return nextId('CustomComponent');
+  const at = path.endsWith('.component') ? path.slice(0, -'.component'.length) : path;
+  return `${owner}/${at}/${String(name)}`;
 }
 
 // The component of a bar button (the top bar's `*Buttons`, the toolbar's `buttons`) is a root the native side only

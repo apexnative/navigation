@@ -39,10 +39,10 @@ internal class CommandAnswer(
     fun resolve(value: Any?) {
         if (!canAnswer) return
         isAnswered = true
-        if (commandName in STATE_COMMANDS) guarded("report the navigation state") { events.beforeAnswer() }
+        if (commandName in CommandContract.STATE) guarded("report the navigation state") { events.beforeAnswer() }
         promise.resolve(value)
         val commandId = commandId
-        if (commandName in COMPLETED_COMMANDS && commandId != null) {
+        if (commandName in CommandContract.COMPLETED && commandId != null) {
             guarded("send ANN.CommandCompleted") { events.commandCompleted(commandName, commandId, clock()) }
         }
     }
@@ -64,28 +64,6 @@ internal class CommandAnswer(
         } catch (e: Throwable) {
             log("[ApexNavigation] $commandName: ${ErrorTexts.couldNot(what, ErrorTexts.reasonOf(e))}")
         }
-    }
-
-    companion object {
-        // The commands that send `ANN.CommandCompleted` (EVT-CommandCompleted).
-        val COMPLETED_COMMANDS = setOf(
-            "setRoot",
-            "push",
-            "pop",
-            "popTo",
-            "popToRoot",
-            "setStackRoot",
-            "showInColumn",
-            "showModal",
-            "dismissModal",
-            "dismissAllModals",
-            "showOverlay",
-            "dismissOverlay",
-            "dismissAllOverlays",
-        )
-
-        // The commands whose answer comes after the navigation state: those and `setColumnShown`.
-        val STATE_COMMANDS = COMPLETED_COMMANDS + "setColumnShown"
     }
 }
 

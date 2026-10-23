@@ -3,32 +3,49 @@ package dev.apexnative.navigation
 import android.app.Application
 import android.util.Log
 import com.facebook.react.ReactApplication
-import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint
-import com.facebook.react.soloader.OpenSourceMergedSoMapping
 import com.facebook.soloader.SoLoader
 import dev.apexnative.navigation.nativescreen.NativeScreenCreator
 import dev.apexnative.navigation.react.ReactGateway
 import dev.apexnative.navigation.utils.NavigationLog
 
 /**
- * The application class of an app with the navigation: it loads React Native itself (the app doesn't call
- * `loadReactNative`), keeps one React host for every screen ([reactGateway]) and the native screens by name. The app
- * gives the host (`reactHost`) and registers its native screens in its `onCreate`, after this one.
+ * The application class of an app with the navigation: it keeps one React host for every screen ([reactGateway]) and
+ * the native screens by name. The app gives the host (`reactHost`) and loads React Native in its `onCreate` as the
+ * React Native template does, so the load follows the app's Gradle settings (the New Architecture, edge-to-edge):
+ *
+ * ```kotlin
+ * override fun onCreate() {
+ *     super.onCreate()
+ *     loadReactNative(this)
+ *     registerNativeScreen("Profile") { activity, context -> ProfileView(activity, context) }
+ * }
+ * ```
+ *
+ * The gateway, and with it the host, is made the first time something needs it (the first activity), after the app's
+ * `onCreate` loaded React Native.
  */
 abstract class NavigationApplication : Application(), ReactApplication {
     // Written on the main thread as the app registers, read on the module thread by the layout checks: under its lock.
     private val nativeScreens = LinkedHashMap<String, NativeScreenCreator>()
 
-    /** The app's React host as the navigation runs it. */
-    lateinit var reactGateway: ReactGateway
-        private set
+    // Made once, by the first activity ([reactGateway]); [reactGatewayOrNull] only reads it.
+    private val gateway: Lazy<ReactGateway> = lazy {
+        check(SoLoader.isInitialized()) {
+            "NavigationApplication needs React Native loaded first: call loadReactNative(this) in onCreate, " +
+                "as the React Native template does"
+        }
+        createReactGateway()
+    }
+
+    /**
+     * The app's React host as the navigation runs it, made when it is first asked for (the first activity's
+     * `onCreate`). React Native must be loaded by then: the app calls `loadReactNative(this)` in its `onCreate`.
+     */
+    val reactGateway: ReactGateway by gateway
 
     override fun onCreate() {
         super.onCreate()
         instance = this
-        SoLoader.init(this, OpenSourceMergedSoMapping)
-        DefaultNewArchitectureEntryPoint.load()
-        reactGateway = createReactGateway()
         registerGeneratedScreens()
     }
 
@@ -57,9 +74,13 @@ abstract class NavigationApplication : Application(), ReactApplication {
     internal fun isNativeScreenRegistered(name: String): Boolean =
         synchronized(nativeScreens) { nativeScreens.containsKey(name) }
 
-    /** [reactGateway] once `onCreate` made it. */
+    /**
+     * [reactGateway] once the first activity made it; none before. It never makes it: its callers (the log, the
+     * events, a React root) may run first, also off the main thread, and the app's `reactHost` isn't theirs to make.
+     * Any thread.
+     */
     internal val reactGatewayOrNull: ReactGateway?
-        get() = if (::reactGateway.isInitialized) reactGateway else null
+        get() = if (gateway.isInitialized()) gateway.value else null
 
     // The list of `npx apex-navigation codegen`, found by its name: an app without native screens has none.
     private fun registerGeneratedScreens() {

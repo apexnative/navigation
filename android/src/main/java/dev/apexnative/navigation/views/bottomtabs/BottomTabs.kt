@@ -228,13 +228,15 @@ class BottomTabs(context: Context) : BottomNavigationView(MaterialTheme.context(
         applyLongPressesAgain()
     }
 
-    fun setIcon(index: Int, icon: Drawable) {
+    /** Null: the item has no icon. */
+    fun setIcon(index: Int, icon: Drawable?) {
         val item = items.getOrNull(index) ?: return
         if (item.icon == icon) return
         updateIcon(index, item.copy(icon = icon))
     }
 
-    fun setSelectedIcon(index: Int, icon: Drawable) {
+    /** Null: the item shows its icon when selected too. */
+    fun setSelectedIcon(index: Int, icon: Drawable?) {
         val item = items.getOrNull(index) ?: return
         if (item.selectedIcon == icon) return
         updateIcon(index, item.copy(selectedIcon = icon))

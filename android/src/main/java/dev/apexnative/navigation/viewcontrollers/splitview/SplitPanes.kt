@@ -1,6 +1,8 @@
 package dev.apexnative.navigation.viewcontrollers.splitview
 
 import android.content.Context
+import android.view.View
+import android.view.ViewGroup
 import android.view.WindowInsets
 import androidx.core.graphics.Insets
 import androidx.core.view.WindowInsetsCompat
@@ -13,6 +15,27 @@ import androidx.slidingpanelayout.widget.SlidingPaneLayout
 class SplitPanes(context: Context) : SlidingPaneLayout(context) {
     /** The panes are side by side. */
     var isSideBySide = false
+
+    /**
+     * Puts [next] in the place of the pane [old], with the structure and the params [old] had. The library wraps the
+     * second view it is given in a view of its own that holds back touches (`addView` with one child there), and its
+     * `removeView` takes that wrapper away: a plain remove and add would wrap a new primary pane, or give a new
+     * secondary one the wrapper's params, and lose its width and weight. So the secondary pane's content changes
+     * inside the wrapper, and a new primary pane goes in before the old one leaves, while two children are there.
+     */
+    internal fun replacePane(old: View, next: View) {
+        val holder = old.parent as? ViewGroup ?: return
+        val params = old.layoutParams
+        if (holder === this) {
+            // A copy: the width that `splitView.width` changes later is the new pane's own.
+            addView(next, indexOfChild(old), if (params is LayoutParams) LayoutParams(params) else params)
+            removeView(old)
+        } else {
+            val index = holder.indexOfChild(old)
+            holder.removeView(old)
+            holder.addView(next, index, params)
+        }
+    }
 
     override fun dispatchApplyWindowInsets(insets: WindowInsets): WindowInsets {
         if (!isSideBySide) return super.dispatchApplyWindowInsets(insets)

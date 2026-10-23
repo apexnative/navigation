@@ -6,6 +6,7 @@ import android.view.ViewGroup
 import dev.apexnative.navigation.options.DefaultOptions
 import dev.apexnative.navigation.options.Options
 import dev.apexnative.navigation.options.OptionsCache
+import dev.apexnative.navigation.options.UserChoices
 import dev.apexnative.navigation.options.params.Bool
 import dev.apexnative.navigation.options.params.NullBool
 import dev.apexnative.navigation.react.CommandListener
@@ -30,17 +31,21 @@ abstract class ViewController<V : ViewGroup>(
     var initialOptions: Options,
 ) {
     /**
-     * The node's own options: those it was made with, with every `mergeOptions` and every user's choice over them.
-     * Writing them is one of the two places the options change ([OptionsCache]): the setter takes away the one-shot
-     * options, keeps the object (a stripped copy when it has a one-shot option: the caller's object never changes), and
-     * makes every resolved result stale. Don't change the object in place: [changeOptions] or [mergeOptions] write a
-     * changed copy.
+     * The node's own options: those it was made with, with every `mergeOptions` over them; what the user chose in the
+     * native UI is not here but in [choices]. Writing them is one of the places the options change ([OptionsCache]):
+     * the setter takes away the one-shot options, keeps the object (a stripped copy when it has a one-shot option: the
+     * caller's object never changes), and makes every resolved result stale. Don't change the object in place:
+     * [changeOptions] or [mergeOptions] write a changed copy.
      */
     var options: Options = initialOptions.copy().also(Options::clearOneShotOptions)
         set(value) {
             field = if (value.hasOneShotOptions()) value.copy().also(Options::clearOneShotOptions) else value
             OptionsCache.optionsChanged()
         }
+
+    // The user layer: what the user chose in the native UI (a menu's check, a search scope), over the node's own
+    // options as they resolve ([changeChoices]).
+    private val choices = UserChoices()
 
     /**
      * The JavaScript the node was made for (`ReloadCoordinator`): the events of the node and its screens reach only
@@ -156,9 +161,9 @@ abstract class ViewController<V : ViewGroup>(
     }
 
     /**
-     * The node's options over those of the layouts around it, without the default options: the parents' resolution,
-     * then the node's own. A new object at each call, which the caller may change. For a layout of nodes this is not
-     * what it shows with: that is [resolveShownOptions].
+     * The node's options over those of the layouts around it, without the default options and without the user layer
+     * ([changeChoices]): the parents' resolution, then the node's own. A new object at each call, which the caller may
+     * change. For a layout of nodes this is not what it shows with: that is [resolveShownOptions].
      */
     open fun resolveCurrentOptions(): Options {
         val resolved = parent?.resolveChildOptions(this) ?: Options()
@@ -166,21 +171,21 @@ abstract class ViewController<V : ViewGroup>(
     }
 
     /**
-     * The node's options over those of the layouts around it and [defaultOptions]: what it shows with. With the app's
-     * default options ([DefaultOptions.current]) the result is kept and given again while no options changed
-     * ([OptionsCache]) and the layouts around the node and its current children are the same: it is read-only, whoever
-     * changes it copies it first. Main thread only.
+     * The node's options over those of the layouts around it and [defaultOptions], with the user layer over them
+     * ([changeChoices]): what it shows with. With the app's default options ([DefaultOptions.current]) the result is
+     * kept and given again while no options changed ([OptionsCache]) and the layouts around the node and its current
+     * children are the same: it is read-only, whoever changes it copies it first. Main thread only.
      *
      * For a layout of nodes (a stack, tabs, a side menu) it is the layout's own options over those around it, without
      * any child's: not what the layout shows with, which [resolveShownOptions] gives.
      */
     open fun resolveCurrentOptions(defaultOptions: Options): Options {
-        if (defaultOptions !== DefaultOptions.current) return resolveCurrentOptions().withDefaultOptions(defaultOptions)
+        if (defaultOptions !== DefaultOptions.current) return withChoices(defaultOptions)
         val generation = OptionsCache.generation
         val along = resolvedAlong()
         val kept = resolved
         if (kept != null && resolvedGeneration == generation && sameNodes(along, resolvedAlong)) return kept
-        val result = resolveCurrentOptions().withDefaultOptions(defaultOptions)
+        val result = withChoices(defaultOptions)
         resolved = result
         resolvedGeneration = generation
         resolvedAlong = along.map(::WeakReference)
@@ -195,6 +200,10 @@ abstract class ViewController<V : ViewGroup>(
      * way. Main thread only.
      */
     open fun resolveShownOptions(defaultOptions: Options): Options = resolveCurrentOptions(defaultOptions)
+
+    // The resolution in its order: the defaults, the parents, the node's own options, then the user layer over them.
+    private fun withChoices(defaultOptions: Options): Options =
+        choices.applyTo(resolveCurrentOptions().withDefaultOptions(defaultOptions))
 
     // The layouts around this node, nearest first, then its current children down the visible chain.
     private fun resolvedAlong(): List<ViewController<*>> {
@@ -216,9 +225,9 @@ abstract class ViewController<V : ViewGroup>(
         nodes.size == kept.size && nodes.indices.all { nodes[it] === kept[it].get() }
 
     /**
-     * Changes the node's own options: [change] gets a copy, which is stored ([options]). A presenter or a module that
-     * writes a user's choice into the options (a menu's checkmark, a search scope, tokens, a toggled button) does it
-     * this way; a button menu keeps its own shared `checked` (`ButtonMenuOptions`).
+     * Changes the node's own options: [change] gets a copy, which is stored ([options]). It is for the library's own
+     * bookkeeping of a merge (a side color written into the node's buttons, the back button's visibility); what the
+     * user chose goes through [changeChoices].
      */
     fun changeOptions(change: (Options) -> Unit) {
         val copy = options.copy()
@@ -227,13 +236,39 @@ abstract class ViewController<V : ViewGroup>(
     }
 
     /**
+     * Changes the node's user layer: what the user chose in the native UI (a single-selection menu's check, a search
+     * scope). It goes over the node's own options as they resolve, by the ids of the buttons, items and scopes, and
+     * stays through an unrelated `mergeOptions`, the same values sent again and `setDefaultOptions`; a merge that
+     * changes the chosen field takes it away ([mergeOwnOptions]). Every resolved result is stale after it
+     * ([OptionsCache]).
+     */
+    internal fun changeChoices(change: (UserChoices) -> Unit) {
+        change(choices)
+        OptionsCache.optionsChanged()
+    }
+
+    /**
+     * [delta] of a `mergeOptions` goes over the node's own options ([options]); a choice of the user layer whose field
+     * the merge changes, or whose button, item or scope it took away, leaves, so the app's value shows
+     * (`UserChoices.yieldTo`). Every `mergeOptions` into a node writes its own options this way.
+     */
+    protected fun mergeOwnOptions(delta: Options) {
+        val own = options
+        val before = if (choices.isEmpty) null else resolveCurrentOptions().withDefaultOptions(DefaultOptions.current)
+        options = own.copy().mergeWith(delta)
+        before ?: return
+        val after = resolveCurrentOptions().withDefaultOptions(DefaultOptions.current)
+        if (choices.yieldTo(delta, own, before, after)) OptionsCache.optionsChanged()
+    }
+
+    /**
      * `mergeOptions` with the node's id (`mergeOptions`): [options] go over its own and stay there (one-shot options
-     * not kept); what shows applies them ([applyMergedOptions], when the view shows; otherwise as it appears); the
-     * layouts around it apply their part (`ParentController.mergeChildOptions`, each passes it on). [options] still
-     * carry the one-shot options to them. Containers that hand the merge to a child override it.
+     * not kept, [mergeOwnOptions]); what shows applies them ([applyMergedOptions], when the view shows; otherwise as it
+     * appears); the layouts around it apply their part (`ParentController.mergeChildOptions`, each passes it on).
+     * [options] still carry the one-shot options to them. Containers that hand the merge to a child override it.
      */
     open fun mergeOptions(options: Options) {
-        this.options = this.options.copy().mergeWith(options)
+        mergeOwnOptions(options)
         if (isViewShown) applyMergedOptions(options)
         performOnParentController { it.mergeChildOptions(options, this) }
     }

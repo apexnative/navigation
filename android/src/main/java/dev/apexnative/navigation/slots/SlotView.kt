@@ -86,7 +86,6 @@ class SlotView(reactContext: ThemedReactContext) : ReactViewGroup(reactContext) 
     init {
         content.visibility = INVISIBLE
         addView(content)
-        SlotContainers.listen(this)
     }
 
     override fun setId(id: Int) {
@@ -100,7 +99,9 @@ class SlotView(reactContext: ThemedReactContext) : ReactViewGroup(reactContext) 
     }
 
     fun attachContent() {
-        val id = slotId ?: return
+        // The view hears the changes of the container under the id it has now, and no other.
+        val id = slotId ?: return SlotContainers.unregister(this)
+        SlotContainers.register(id, this)
         val container = SlotContainers.get(id)
         val target: ViewGroup = container ?: this
         if (content.parent !== target) {
@@ -135,7 +136,7 @@ class SlotView(reactContext: ThemedReactContext) : ReactViewGroup(reactContext) 
     }
 
     fun drop() {
-        SlotContainers.stopListening(this)
+        SlotContainers.unregister(this)
         (content.parent as? ViewGroup)?.removeView(content)
     }
 }
