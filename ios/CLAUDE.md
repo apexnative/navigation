@@ -65,7 +65,8 @@ Top-level files: `Package.swift` (SwiftPM; `headerFolders` lists every folder wh
 - Key commands — `Core/`: `ANNKeyCommands`; `Layouts/Screen/`: `ANNComponentViewController`
 - Hinge, regions — `Core/`: `ANNHinge`; `Layouts/Screen/`: `ANNScreenRegions`; `Layouts/Arrangement/`: `ANNArrangementState`
 - Native screens — `Layouts/External/`: `ANNExternalViewController`, `ANNNativeScreenCalls`; `Layouts/Screen/ANNNativeScreenContext.mm`
-- Slots — `React/Slots/`: `ANNSlotHost`, `ANNSlotContainers`, `ANNSlotScreenView`, `ANNSlotComponentView`; `cpp/`
+- Slots — `React/Slots/`: `ANNSlotHost`, `ANNSlotContainers` (containers and slot views by slot id: a change goes
+  straight to the views of its id), `ANNSlotScreenView`, `ANNSlotComponentView`; `cpp/`
 
 ## Threads
 

@@ -400,5 +400,7 @@ themselves.
   per main package; coordinators and rules run with fakes. iOS has no unit-test target; the Showcase scenarios check it.
 
 Native code on both platforms never touches React Native's views (their subviews, their layout, their frames): Fabric
-owns and recycles them. Slots are moved through `SlotContainers`, and the C++ of `ANNSlot` and `ANNSafeAreaView` in
-`ios/cpp/` is built by both platforms (`android/src/main/jni/CMakeLists.txt`).
+owns and recycles them. Slots are moved through `SlotContainers`, which keeps the containers and the slot views by slot
+id: a change of the container of an id goes straight to the slot views under it (a map of weak views, kept on mount,
+recycle and unmount), never to every slot. The C++ of `ANNSlot` and `ANNSafeAreaView` in `ios/cpp/` is built by both
+platforms (`android/src/main/jni/CMakeLists.txt`).

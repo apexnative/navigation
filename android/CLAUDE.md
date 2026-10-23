@@ -112,7 +112,8 @@ top-level folder. Main thread only, unless a line says otherwise.
 - Hinge and regions: `react/Hinge.kt`, `react/ScreenRegions.kt`, `react/ScreenInsets.kt`, `utils/WindowFolds.kt`.
 - Native screens: `nativescreen/NativeScreenContext.kt`, `NativeScreenCalls.kt`, `NativeScreenCreator.kt`;
   `viewcontrollers/externalcomponent/`.
-- Slots: `slots/SlotHost.kt`, `SlotView.kt`, `SlotScreenView.kt`, `SlotContainers.kt`, `SlotViewManager.kt`.
+- Slots: `slots/SlotHost.kt`, `SlotView.kt`, `SlotScreenView.kt`, `SlotContainers.kt` (containers and slot views by
+  slot id: a change goes straight to the views of its id, `SlotViews.kt`), `SlotViewManager.kt`.
 - Safe area: `safearea/SafeAreaView.kt`, `SafeAreaViewManager.kt`; `viewcontrollers/component/ScreenReadiness.kt`;
   `react/ScreenInsets.kt`.
 - The C++ of `ANNSlot`, `ANNSafeAreaView`: `android/src/main/jni/CMakeLists.txt`, `ApexNavigationSpec.h`; sources in
