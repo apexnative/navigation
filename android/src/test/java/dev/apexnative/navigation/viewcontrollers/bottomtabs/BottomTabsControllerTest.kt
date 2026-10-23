@@ -15,6 +15,7 @@ import dev.apexnative.navigation.react.CommandListener
 import dev.apexnative.navigation.react.events.DispatcherFixture
 import dev.apexnative.navigation.react.events.EventJournal
 import dev.apexnative.navigation.react.events.FakeContent
+import dev.apexnative.navigation.react.events.NavigationStateReporter
 import dev.apexnative.navigation.viewcontrollers.child.ChildControllersRegistry
 import dev.apexnative.navigation.viewcontrollers.component.RenderWait
 import dev.apexnative.navigation.viewcontrollers.component.ScreenReadiness
@@ -179,8 +180,19 @@ class BottomTabsControllerTest {
         val sent = events()
         assertEquals(listOf("didDisappear:A1", "didAppear:B1"), sent.take(2))
         assertTrue("tabSelected:$TABS:1:0" in sent)
-        assertEquals("will:C1", sent.last())
+        assertEquals(listOf("will:C1", "stateNow"), sent.takeLast(2))
         assertEquals(2, tabs.selectedIndex)
+    }
+
+    // `selectTab` resolves on this state: the command after it acts in the new tab, not in the one still fading out.
+    @Test
+    fun aChoiceFromCodeOnScreenSendsTheStateAtTheStartOfTheFade() {
+        val tabs = fading()
+        tabs.mergeOptions(options { bottomTabs.currentTabIndex = Fraction(2.0) })
+        assertEquals(listOf("will:C1", "stateNow"), events())
+        assertEquals(NavigationStateReporter.State("C1", "C1", 2), NavigationStateReporter.stateOf(tabs))
+        fades.single()()
+        assertEquals(listOf("didDisappear:A1", "didAppear:C1", "stateNeeded", "stateNow"), events())
     }
 
     @Test
@@ -330,11 +342,11 @@ class BottomTabsControllerTest {
     // From code.
 
     @Test
-    fun aChoiceFromCodeSendsNoPressEventsAndTheStateAtTheEnd() {
+    fun aChoiceFromCodeSendsNoPressEventsAndTheStateAtOnce() {
         val tabs = shown()
         tabs.mergeOptions(options { bottomTabs.currentTabIndex = Fraction(2.0) })
         assertEquals(
-            listOf("will:C1", "didDisappear:A1", "didAppear:C1", "stateNeeded", "stateNow"),
+            listOf("will:C1", "stateNow", "didDisappear:A1", "didAppear:C1", "stateNeeded", "stateNow"),
             events(),
         )
         assertEquals(2, tabs.selectedIndex)

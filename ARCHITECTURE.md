@@ -352,7 +352,8 @@ Material bar), through one path (`-[ANNBottomTabsController pressTabAtIndex:sour
 4. A long press sends `BottomTabLongPressed` only.
 
 A choice from code (`bottomTabs.currentTabIndex`, `currentTabId`) and Android's back between tabs send the
-appearances and the state, without the press events.
+appearances and the state, without the press events. The state goes at once, at the start of the switch, so
+`selectTab`, which waits for it, resolves before the next command and that command acts in the new tab.
 
 **The table.** Both platforms answer from one table: the error texts of `src/interfaces/contract/errors.json`, the
 commands with a promise in `src/interfaces/contract/commands.json` (checked against the async methods of the spec:
