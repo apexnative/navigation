@@ -24,7 +24,7 @@ On iOS the back button of Details reads "Inbox". This page answers:
 
 1. [The ways back](#ways) on each platform.
 2. [The back button](#back-button): [its title](#title) and [its look](#look).
-3. [The swipe back](#swipe) of iOS, and [the system back](#system-back) of Android.
+3. [The swipe back](#swipe) of both platforms, and [the system back](#system-back) of Android.
 4. [How to keep the user on a screen](#prevent) with unsaved changes.
 
 ## The ways back {#ways}
@@ -96,7 +96,7 @@ export const MapScreen = defineScreen({
 | `'edge'` | From the edge only: a swipe on the content stays with the content. |
 | `false` | Off. The back button still works. |
 
-<Os name="Android" /> The system back swipes from either edge; the app doesn't change it. On Android 14+ the swipe shows the pop before the user lets go: the screen shrinks and follows the finger, the screen under it shows behind it, dimmed, and the user can still stop halfway and stay (see [the preview of a pop](#pop-preview)). On Android 13 and older the screen pops when the swipe ends.
+<Os name="Android" /> The swipe is the system's back, from either edge, and `popGesture` doesn't apply to it. On Android 14+ it shows the pop before the user lets go: both screens shrink, the screen under comes in behind a dim, and the screen on top follows the finger. The user can stop halfway and stay, as on iOS. On Android 13 and older the screen pops when the swipe ends. When the preview shows and when it doesn't: [the preview of a pop](#pop-preview).
 
 ## The system back of Android {#system-back}
 
