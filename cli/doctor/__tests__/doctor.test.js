@@ -228,6 +228,45 @@ describe('doctor', () => {
     expect(find('Back animation')).toMatchObject({ status: 'warn', fix: { run: 'setup' } });
   });
 
+  it('warns when the main activity leaves out a config change', async () => {
+    const manifest = 'android/app/src/main/AndroidManifest.xml';
+    const without = makeApp({
+      setUp: true,
+      edit: (root) => {
+        const file = path.join(root, manifest);
+        const text = fs.readFileSync(file, 'utf8');
+        fs.writeFileSync(
+          file,
+          text.replace(
+            /android:configChanges="[^"]*"/,
+            'android:configChanges="keyboard|orientation"'
+          )
+        );
+      },
+    });
+    expect((await check(without)).find('Config changes')).toMatchObject({
+      status: 'warn',
+      detail: expect.stringContaining('screenSize, smallestScreenSize, screenLayout, uiMode'),
+      fix: {
+        label:
+          'Set android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode" on the main activity',
+      },
+    });
+    const none = makeApp({
+      setUp: true,
+      edit: (root) => {
+        const file = path.join(root, manifest);
+        const text = fs.readFileSync(file, 'utf8');
+        fs.writeFileSync(file, text.replace(/\s*android:configChanges="[^"]*"/, ''));
+      },
+    });
+    expect((await check(none)).find('Config changes')).toMatchObject({
+      status: 'warn',
+      detail: expect.stringContaining('orientation, screenSize'),
+    });
+    expect((await check(makeApp({ setUp: true }))).find('Config changes')).toBeUndefined();
+  });
+
   it("doesn't need the app's theme", async () => {
     const noTheme = makeApp({
       setUp: true,
