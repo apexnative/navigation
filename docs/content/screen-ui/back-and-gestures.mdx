@@ -81,7 +81,7 @@ export const Navigation = createNavigation({
 
 <Os name="iOS" /> A swipe from the left edge goes back, following the finger: the user can stop halfway and stay. On iOS 26 a swipe from anywhere on the content does the same. Content that swipes sideways itself, such as a carousel or a map, can clash with it, so a screen can narrow the swipe:
 
-<DeviceVideo name="swipe-back" devices={['ios']} />
+<DeviceVideo name="swipe-back" devices={['ios', 'android']} />
 
 ```ts
 export const MapScreen = defineScreen({
@@ -96,7 +96,7 @@ export const MapScreen = defineScreen({
 | `'edge'` | From the edge only: a swipe on the content stays with the content. |
 | `false` | Off. The back button still works. |
 
-<Os name="Android" /> The system back swipes from either edge; the app doesn't change it.
+<Os name="Android" /> The system back swipes from either edge; the app doesn't change it. On Android 14+ the swipe shows the pop before the user lets go: the screen shrinks and follows the finger, the screen under it shows behind it, dimmed, and the user can still stop halfway and stay (see [the preview of a pop](#pop-preview)). On Android 13 and older the screen pops when the swipe ends.
 
 ## The system back of Android {#system-back}
 
