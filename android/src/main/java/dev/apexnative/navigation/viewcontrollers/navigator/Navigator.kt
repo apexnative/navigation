@@ -147,6 +147,17 @@ class Navigator(
     fun canHandleBack(): Boolean = modals.canHandleBack() ?: (root?.canHandleBack() == true)
 
     /**
+     * Whether back stays in the app also when the navigation has nothing to do: the layout back acts on — the top
+     * modal's, else the root — shows a screen with `hardwareBackButton.systemAnimation: false`. The system then doesn't
+     * play its animation of going home, and the press does the activity's own back ([handleBack] is false). The back
+     * callback asks it with [canHandleBack] (`BackCallbackState`).
+     */
+    fun keepsBackFromSystem(): Boolean {
+        val layout = modals.backTargetRoot() ?: root ?: return false
+        return layout.resolveShownOptions(DefaultOptions.current).hardwareBackButton.systemAnimation.isFalse
+    }
+
+    /**
      * The navigation's step of back, after JavaScript's listeners didn't take it: the top modal first (its content,
      * else it closes or holds), else the root does the first thing it can (a stack's top leaves or holds, an open side
      * menu closes, a pane closes); [listener] hears the end. False when it has nothing to do: the activity does its own

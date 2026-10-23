@@ -36,7 +36,7 @@ class TreeGroupsTest {
             "ModalContentSizeOptions", "ModalPopoverOptions", "OverlayOptions", "SideMenuOptions",
             "SideMenuSideOptions", "SplitViewGroupOptions", "SplitViewColumnOptions", "SplitViewInspectorOptions",
             "LayoutOptions", "StatusBarOptions", "NavigationBarOptions", "AnimationsOptions",
-            "StackPushAnimationOptions", "StackAnimationOptions", "SetStackRootAnimationOptions",
+            "StackPushAnimationOptions", "StackPopAnimationOptions", "SetStackRootAnimationOptions",
             "EnterExitAnimationOptions", "TopBarEnterExitAnimationOptions", "BottomTabsEnterExitAnimationOptions",
             "ModalAnimationOptions", "ScreenAnimationOptions", "TopBarAnimationOptions",
             "BottomTabsAnimationOptions", "PropertyAnimationOptions", "InterpolationOptions", "SharedElements",

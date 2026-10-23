@@ -406,6 +406,20 @@ export interface StackPushAnimationOptions extends StackAnimationOptions {
 }
 
 /**
+ * The animation of a pop, read from the screen that goes. As {@link StackAnimationOptions}, with the preview of the
+ * back gesture on Android.
+ */
+export interface StackPopAnimationOptions extends StackAnimationOptions {
+  /**
+   * (Android 14+) Whether the back gesture on a pushed screen previews its pop as the user swipes: the screen shrinks
+   * and follows the finger, the screen under it shows behind. `false` pops the screen when the gesture is released,
+   * as on Android 13 and older; back still pops it. iOS ignores it: its swipe back is UIKit's.
+   * @default true
+   */
+  preview?: boolean;
+}
+
+/**
  * The animation of `setStackRoot`, read from the new top screen. As {@link StackAnimationOptions}: without an animation
  * of its own, iOS plays the push animation of the new top screen or UIKit's transition, and Android plays a fade
  * through. With `enabled: false` the screens are set at once; (Android) the command doesn't wait for the new screens to
@@ -468,8 +482,11 @@ export interface ModalAnimationOptions extends EnterExitAnimationOptions {
 export interface AnimationOptions {
   /** The push of a screen, read from the screen that comes. */
   push?: StackPushAnimationOptions;
-  /** The pop of a screen, also `popTo` and `popToRoot`, read from the screen that goes. A swipe back is always the system's. */
-  pop?: StackAnimationOptions;
+  /**
+   * The pop of a screen, also `popTo` and `popToRoot`, read from the screen that goes. The swipe back of iOS is
+   * UIKit's; the back gesture of Android previews the pop (`preview`).
+   */
+  pop?: StackPopAnimationOptions;
   /** The replacing of the screens of a stack, read from the new top screen. */
   setStackRoot?: SetStackRootAnimationOptions;
   /**

@@ -37,6 +37,7 @@ object OptionsFixture {
             "bottomTabsOnPress", "previous",
             "popStackOnPress", true,
             "dismissModalOnPress", true,
+            "systemAnimation", false,
         ),
         "fab", fab(),
         "keyCommands", JavaOnlyArray.of(
@@ -476,7 +477,7 @@ object OptionsFixture {
 
     fun animations(): JavaOnlyMap = JavaOnlyMap.of(
         "push", stackAnimation().apply { putMap("zoom", zoom()) },
-        "pop", stackAnimation(),
+        "pop", stackAnimation().apply { putBoolean("preview", false) },
         "setStackRoot", stackAnimation().apply { putBoolean("asPush", true) },
         "setRoot", JavaOnlyMap.of("enter", screenAnimation(), "exit", screenAnimation()),
         "showModal", modalAnimation(),

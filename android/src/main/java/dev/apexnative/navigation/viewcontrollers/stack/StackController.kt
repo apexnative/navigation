@@ -270,8 +270,8 @@ class StackController(
 
     /**
      * The default pop of the top is what back does now and it can be previewed: two entries or more, nothing running
-     * or waiting, no open search, the top doesn't hold back and pops with the default transition, the screen under it
-     * has its view, and the stack shows.
+     * or waiting, no open search, the top doesn't hold back, pops with the default transition and doesn't turn the
+     * preview off (`animations.pop.preview: false`), the screen under it has its view, and the stack shows.
      */
     override fun stackPoppedByBack(): StackController? {
         if (topBar.isSearchOpen() || !queue.isAtRest) return null
@@ -282,9 +282,8 @@ class StackController(
         if (!queue.isRendered(target) || backGesture != null) return null
         val options = resolvedOf(top)
         val pop = options.animations.pop
-        if (options.hardwareBackButton.popStackOnPress.isFalse || pop.enabled.isFalse || AnimationRules.stackIsOwn(pop)) {
-            return null
-        }
+        if (options.hardwareBackButton.popStackOnPress.isFalse || pop.enabled.isFalse) return null
+        if (pop.preview.isFalse || AnimationRules.stackIsOwn(pop)) return null
         val display = queue.display
         return this.takeIf { display.isOnScreen && display.canAnimate }
     }

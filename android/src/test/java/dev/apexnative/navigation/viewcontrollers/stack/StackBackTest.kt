@@ -1,14 +1,20 @@
 package dev.apexnative.navigation.viewcontrollers.stack
 
 import androidx.activity.OnBackPressedCallback
+import dev.apexnative.navigation.layout.LayoutNode
+import dev.apexnative.navigation.layout.LayoutType
+import dev.apexnative.navigation.layout.RootLayout
 import dev.apexnative.navigation.options.ButtonOptions
 import dev.apexnative.navigation.options.Options
 import dev.apexnative.navigation.options.params.Bool
 import dev.apexnative.navigation.options.params.Text
+import dev.apexnative.navigation.react.CommandAnswer
 import dev.apexnative.navigation.react.CommandRunner
 import dev.apexnative.navigation.react.FakeEvents
 import dev.apexnative.navigation.react.FakePromise
 import dev.apexnative.navigation.react.Journal
+import dev.apexnative.navigation.react.ReloadCoordinator
+import dev.apexnative.navigation.viewcontrollers.component.ScreenReadiness
 import dev.apexnative.navigation.viewcontrollers.navigator.BackCallbackState
 import dev.apexnative.navigation.viewcontrollers.navigator.Navigator
 import dev.apexnative.navigation.viewcontrollers.parent.ReturnsScreenFromColumn
@@ -17,6 +23,7 @@ import dev.apexnative.navigation.viewcontrollers.viewcontroller.ViewController
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -96,6 +103,30 @@ class StackBackTest {
         h.start(h.screen("A"))
         assertTrue(h.back())
         assertSame(h.stack, columns.asked)
+    }
+
+    // The preview of a pop during the back gesture.
+
+    @Test
+    fun aBackGesturePreviewsTheDefaultPop() {
+        val a = h.screen("A")
+        h.start(a)
+        a.view
+        h.push(h.screen("B"))
+        h.display.finishAll()
+        assertSame(h.stack, h.stack.stackPoppedByBack())
+    }
+
+    @Test
+    fun previewFalseOfThePopLeavesTheGestureWithoutAPreview() {
+        val a = h.screen("A")
+        h.start(a)
+        a.view
+        h.push(h.screen("B", options = h.options { animations.pop.preview = Bool(false) }))
+        h.display.finishAll()
+        assertNull(h.stack.stackPoppedByBack())
+        // Back still pops it, on the gesture's release.
+        assertTrue(h.stack.canHandleBack())
     }
 
     // The back arrow.
@@ -205,6 +236,55 @@ class StackBackTest {
             assertFalse(callback.isEnabled)
         } finally {
             BackCallbackState.detach(navigator)
+        }
+    }
+
+    @Test
+    fun theCallbackIsOffOnTheOnlyScreenByDefault() {
+        assertFalse(callbackOverTheOnlyScreen(Options()))
+    }
+
+    @Test
+    fun systemAnimationFalseKeepsTheCallbackOnOverTheOnlyScreen() {
+        assertTrue(callbackOverTheOnlyScreen(Options().apply { hardwareBackButton.systemAnimation = Bool(false) }))
+    }
+
+    // Whether the back callback is enabled once a root of one React screen with [options] showed.
+    private fun callbackOverTheOnlyScreen(options: Options): Boolean {
+        val navigator = Navigator(h.activity)
+        val callback = object : OnBackPressedCallback(false) {
+            override fun handleOnBackPressed() = Unit
+        }
+        BackCallbackState.attach(navigator, callback)
+        try {
+            val journal = Journal()
+            val home = LayoutNode(
+                id = "Home1",
+                type = LayoutType.Component,
+                name = "Home",
+                options = options,
+                key = null,
+                passProps = null,
+                functions = emptyList(),
+                columns = emptyList(),
+                arrangement = null,
+                children = emptyList(),
+            )
+            val answer = CommandAnswer(
+                "setRoot",
+                "setRoot1",
+                FakePromise(journal),
+                ReloadCoordinator.generation,
+                FakeEvents(journal),
+                { 0L },
+            )
+            navigator.setRoot(RootLayout(home, emptyList(), emptyList()), answer)
+            ScreenReadiness.contentRendered("Home1")
+            assertFalse(navigator.canHandleBack())
+            return callback.isEnabled
+        } finally {
+            BackCallbackState.detach(navigator)
+            navigator.destroyWithActivity()
         }
     }
 

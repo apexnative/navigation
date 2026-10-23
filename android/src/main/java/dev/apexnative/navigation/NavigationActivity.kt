@@ -317,7 +317,9 @@ open class NavigationActivity : AppCompatActivity(), DefaultHardwareBackBtnHandl
     /**
      * Back that JavaScript's listeners didn't take: the navigation does its step first — a stack's top leaves or holds,
      * a pane closes —; with nothing to do there, the activity's own back, as without the navigation. An app may
-     * override it (e.g. `moveTaskToBack(true)`).
+     * override it (e.g. `moveTaskToBack(true)`). The callback is off for that back only: the dispatcher's own back is
+     * the activity's, not [onBackPressed]; then it is computed again, and `hardwareBackButton.systemAnimation: false`
+     * turns it on again.
      */
     override fun invokeDefaultOnBackPressed() {
         val handled = navigator?.handleBack(CommandListenerAdapter()) == true

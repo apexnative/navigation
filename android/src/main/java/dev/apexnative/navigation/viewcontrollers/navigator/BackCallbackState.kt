@@ -7,10 +7,11 @@ import java.lang.ref.WeakReference
 
 /**
  * Keeps the back callback of each navigation activity enabled only while back has something to do in the app: its
- * navigation can go back ([Navigator.canHandleBack]), or JavaScript listens to it (`BackHandler`). Otherwise the
- * callback is disabled and the system does its own back. The system plays its back animation (to the home screen, to
- * another task) only when no callback of the app is enabled as the gesture starts, and it decides that before the app
- * hears of the gesture.
+ * navigation can go back ([Navigator.canHandleBack]), the screen back acts on keeps it from the system
+ * (`hardwareBackButton.systemAnimation: false`, [Navigator.keepsBackFromSystem]), or JavaScript listens to it
+ * (`BackHandler`). Otherwise the callback is disabled and the system does its own back. The system plays its back
+ * animation (to the home screen, to another task) only when no callback of the app is enabled as the gesture starts,
+ * and it decides that before the app hears of the gesture.
  *
  * A stale "enabled" only loses that animation; a stale "disabled" would leave the app where back has to go back. So
  * the value is computed again whenever what back does can have changed: before each frame of the activity's window,
@@ -64,14 +65,14 @@ internal object BackCallbackState {
     // Enables or disables the callback when what back does changed.
     private fun update(entry: Entry) {
         val callback = entry.callback.get() ?: return
-        val enabled = jsListeners || canHandleBack(entry.navigator.get())
+        val enabled = jsListeners || takesBack(entry.navigator.get())
         if (callback.isEnabled != enabled) callback.isEnabled = enabled
     }
 
     // A layout that fails to answer leaves back to the navigation, as before: this runs before each frame, and an
     // exception here would end the app.
-    private fun canHandleBack(navigator: Navigator?): Boolean = try {
-        navigator?.canHandleBack() == true
+    private fun takesBack(navigator: Navigator?): Boolean = try {
+        navigator != null && (navigator.canHandleBack() || navigator.keepsBackFromSystem())
     } catch (e: RuntimeException) {
         if (!failureLogged) {
             failureLogged = true

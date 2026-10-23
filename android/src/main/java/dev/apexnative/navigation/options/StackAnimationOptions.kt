@@ -99,8 +99,8 @@ class BottomTabsEnterExitAnimationOptions {
 }
 
 /**
- * `StackAnimationOptions`: the animation of `pop`, and the base of `push` and `setStackRoot`; over the shared elements
- * and element transitions of [LayoutAnimation].
+ * `StackAnimationOptions`: the base of the animations of `push`, `pop` and `setStackRoot`; over the shared elements and
+ * element transitions of [LayoutAnimation].
  */
 open class StackAnimationOptions : LayoutAnimation() {
     @JvmField var enabled: Bool = NullBool()
@@ -183,6 +183,44 @@ class StackPushAnimationOptions : StackAnimationOptions() {
             val options = StackPushAnimationOptions()
             if (map == null) return options
             options.readStackPushAnimationOptions(map)
+            return options
+        }
+    }
+}
+
+/**
+ * `StackPopAnimationOptions`: the animation of `pop`, and `preview`: whether a back gesture over the stack previews the
+ * pop of its top (Android 14+); `false` pops it when the gesture is released, as on Android 13.
+ */
+class StackPopAnimationOptions : StackAnimationOptions() {
+    @JvmField var preview: Bool = NullBool()
+
+    override fun hasValue(): Boolean = super.hasValue() || preview.hasValue()
+
+    fun mergeWith(other: StackPopAnimationOptions) {
+        super.mergeWith(other)
+        if (other.preview.hasValue()) preview = other.preview
+    }
+
+    fun mergeWithDefault(defaults: StackPopAnimationOptions) {
+        super.mergeWithDefault(defaults)
+        if (!preview.hasValue()) preview = defaults.preview
+    }
+
+    override fun copy(): StackPopAnimationOptions = StackPopAnimationOptions().also { it.mergeWith(this) }
+
+    // Reads the fields of this class from [map], after those of its parent.
+    private fun readStackPopAnimationOptions(map: ReadableMap) {
+        readStackAnimationOptions(map)
+        preview = BoolParser.parse(map, "preview")
+    }
+
+    companion object {
+        @JvmStatic
+        fun parse(map: ReadableMap?): StackPopAnimationOptions {
+            val options = StackPopAnimationOptions()
+            if (map == null) return options
+            options.readStackPopAnimationOptions(map)
             return options
         }
     }

@@ -613,6 +613,7 @@
             "ScreenAnimationOptions",
             "StackAnimationOptions",
             "StackPushAnimationOptions",
+            "StackPopAnimationOptions",
             "ModalAnimationOptions",
             "EnterExitAnimationOptions",
             "ViewAnimationOptions",
