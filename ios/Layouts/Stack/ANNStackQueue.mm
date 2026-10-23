@@ -8,7 +8,6 @@
 #import "ANNErrorTexts.h"
 #import "ANNReloadCoordinator.h"
 #import "ANNRenderWait.h"
-#import "ANNScreenBars.h"
 #import "ANNTransitionPlan.h"
 #import "UIViewController+LayoutProtocol.h"
 #import <QuartzCore/QuartzCore.h>
@@ -577,30 +576,6 @@ static NSArray<UIViewController *> *ANNTopFirst(NSArray<UIViewController *> *ent
     BOOL onScreen = operation.waits && [_display stackIsOnScreen];
     __weak ANNStackQueue *weakSelf = self;
     __weak ANNStackOperation *weakOperation = operation;
-    // A screen whose large title shows large doesn't wait for its content with `waitForRender` unset: UIKit takes the
-    // place of the large title from the screen's list as the transition starts, and a list laid out before the push,
-    // out of the stack, has no room for the bar yet: the title would come only once the transition ended. Its content
-    // comes during the transition, as without the wait; the bar components still wait. An inline title waits as any
-    // screen does.
-    BOOL largeTitle =
-        !waitForRender.hasValue &&
-        ANNLargeTitleShowsLarge([ANNStackOptionsScreen(node) resolveOptionsWithDefault]);
-    if (onScreen && largeTitle) {
-        [self waitFor:operation
-                       entry:node
-                     content:ANNRenderWaitContentNone
-                       limit:0
-                unknownLimit:NO
-                         bar:ANNRenderWaitBarAfterContent
-                   barLimits:ANNPushBarLimits
-             afterJavaScript:NO
-                barFromStart:NO
-                        then:^{
-                          ANNRenderBeforeTransition(weakOperation.node, YES);
-                          [weakSelf startPushTransition:weakOperation];
-                        }];
-        return;
-    }
     if (onScreen && (!waitForRender.hasValue || waitForRender.get)) {
         BOOL bounded = !waitForRender.hasValue;
         if (bounded) {

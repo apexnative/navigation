@@ -14,10 +14,6 @@ FOUNDATION_EXPORT NSString *ANNLargeTitleDisplayMode(ANNNavigationOptions *optio
 /// A large title can show: its display mode isn't `never`.
 FOUNDATION_EXPORT BOOL ANNLargeTitleCanShow(ANNNavigationOptions *options);
 
-/// The title shows large, in its row over the content: the display mode is `always` or `automatic`. Not with `never`,
-/// nor with `inline` (iOS 17 and later), whose title stays in the bar's row.
-FOUNDATION_EXPORT BOOL ANNLargeTitleShowsLarge(ANNNavigationOptions *options);
-
 /// The screen goes under the top bar when any of these holds: `topBar.drawBehind`, `topBar.background.translucent`,
 /// `topBar.visible: false`, a large title can show, `topBar.hideOnScroll`, `topBar.searchBar.hideOnScroll`. An explicit
 /// `drawBehind: false` keeps none of the others out.

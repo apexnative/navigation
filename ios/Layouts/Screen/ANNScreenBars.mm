@@ -21,11 +21,6 @@ BOOL ANNLargeTitleCanShow(ANNNavigationOptions *options) {
     return ![ANNLargeTitleDisplayMode(options) isEqualToString:@"never"];
 }
 
-BOOL ANNLargeTitleShowsLarge(ANNNavigationOptions *options) {
-    NSString *mode = ANNLargeTitleDisplayMode(options);
-    return [mode isEqualToString:@"always"] || [mode isEqualToString:@"automatic"];
-}
-
 BOOL ANNScreenIsUnderTopBar(ANNNavigationOptions *options) {
     ANNTopBarOptions *topBar = options.topBar;
     return [topBar.drawBehind withDefault:NO] || [topBar.background.translucent withDefault:NO] ||

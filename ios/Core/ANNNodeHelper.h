@@ -99,11 +99,6 @@ FOUNDATION_EXPORT NSString *const ANNContainerReadyHandlerKey;
 /// object each call.
 - (ANNNavigationOptions *)resolveOptionsWithDefaultUncached;
 
-/// `resolveOptionsWithDefaultUncached` of the node as if `place` held it: its own layout parents, then, where they end,
-/// `place` and its parents. For a node that has no place yet and reads the options of the one it goes to
-/// (`showInColumn` before its push). Built now, never cached.
-- (ANNNavigationOptions *)resolveOptionsWithDefaultPlacedIn:(UIViewController *)place;
-
 /// The common render: the current child renders. A node that waits for its children to say "ready" (a pair) does it
 /// itself.
 - (void)render;
