@@ -2,6 +2,7 @@
 #import "ANNBackButtonPresenter.h"
 #import "ANNBarAppearance.h"
 #import "ANNComponentPresenter.h"
+#import "ANNComponentViewController.h"
 #import "ANNExternalViewController.h"
 #import "ANNLargeTitlePresenter.h"
 #import "ANNMainList.h"
@@ -1126,6 +1127,27 @@ static ANNUserChoice *ANNRenameChoice(NSString *title) {
     [_largeTitle fillTitlePlaceFrom:oldBarBottom
                                list:[[self mainList] list]
                             options:[screen resolveOptionsWithDefault]];
+}
+
+// The top of the safe area the screen takes on the stack is that of its place while it waited parked: UIKit lays it out
+// only inside the push.
+- (void)arrivesByPushOn:(UINavigationController *)navigation {
+    UIViewController *screen = _screen;
+    if (_native || ![screen isKindOfClass:ANNComponentViewController.class]) {
+        return;
+    }
+    ANNComponentViewController *component = (ANNComponentViewController *)screen;
+    ANNScreenPlace * (^placeWhileParked)(void) = component.placeWhileParked;
+    ANNScreenPlace *place = placeWhileParked ? placeWhileParked() : nil;
+    if (!place || !component.reactView.isReady) {
+        return;
+    }
+    ANNNavigationOptions *options = [screen resolveOptionsWithDefault];
+    [_largeTitle screenInPush:options
+                         list:[self followedList]
+                  inlineInRow:[self inlineInRow:options]
+                          top:place.safeArea.top
+                     stackTop:navigation.view.safeAreaInsets.top];
 }
 
 // A native screen's views are the app's: the core lays nothing into them. The band behind the title is filled where

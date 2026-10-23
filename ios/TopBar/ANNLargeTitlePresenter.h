@@ -57,6 +57,19 @@ typedef struct {
 /// goes, and the bar follows what it follows at rest.
 - (void)screenDidAppear:(ANNNavigationOptions *)options list:(nullable UIScrollView *)list;
 
+/// iOS 26: a push starts that brings the screen in with its content drawn already (it waited for it parked, out of the
+/// stack). UIKit draws the large title, for the whole transition, inside the scroll view the bar follows, and takes
+/// its place from that scroll view as the transition starts: a list below the bar clips it, a list laid out before the
+/// push may give it the room of a small title, and a title that doesn't fold into the list has nothing to follow yet.
+/// The screen's view gets the place of `screenInPop:list:inlineInRow:`, at rest at `top`, the top of the safe area the
+/// screen takes on the stack (`stackTop` the stack's own), and the bar follows it until the screen appeared, also over
+/// a main list. Called before UIKit's push.
+- (void)screenInPush:(ANNNavigationOptions *)options
+                list:(nullable UIScrollView *)list
+         inlineInRow:(BOOL)inlineInRow
+                 top:(CGFloat)top
+            stackTop:(CGFloat)stackTop;
+
 /// The screen went without appearing (a swipe back given up): the place of the title of the pop goes, and the bar
 /// follows what it followed before.
 - (void)screenDidDisappear:(ANNNavigationOptions *)options list:(nullable UIScrollView *)list;

@@ -1102,6 +1102,11 @@ static BOOL ANNIsActive(UIGestureRecognizer *recognizer) {
     if (change == ANNStackChangePush && animated) {
         lowerBarBottom = [self lowerBarBottomOf:navigation leaving:coveredTop];
     }
+    // The large title of a screen that comes with its content takes its place for the transition before UIKit's push.
+    if (change == ANNStackChangePush && animated) {
+        UIViewController *arriving = ANNStackOptionsScreen(entries.lastObject);
+        [[ANNTopBarPresenter presenterOfScreen:arriving] arrivesByPushOn:navigation];
+    }
     // The revealed screen's large title takes its place for the transition before UIKit lays the screen out for it.
     if (change == ANNStackChangePop && animated) {
         [self popReveals:entries.lastObject leaving:coveredTop on:navigation];
@@ -1428,10 +1433,28 @@ static BOOL ANNIsActive(UIGestureRecognizer *recognizer) {
 
 // The screen waits in the window at the stack's size, under UIKit's container view ( `ANNParking`): it isn't a child of
 // anything there, gets no touches, is hidden from accessibility, and its appearance is driven, so UIKit's callbacks
-// report nothing for it. Each path that ends the wait gives the view back as it was; UIKit's push of the entry
-// re-parents it in the same turn, so its departure is not ended here.
+// report nothing for it. UIKit gives such a view no safe area: its screens lay out with that of their place on top of
+// the stack meanwhile (`ANNScreenPlace`). Each path that ends the wait gives the view back as it was; UIKit's push of
+// the entry re-parents it in the same turn, so its departure is not ended here.
 - (void)stackPark:(UIViewController *)entry {
-    [_parking park:entry inView:self.shownNavigationController.view];
+    UINavigationController *navigation = self.shownNavigationController;
+    // Its screens lay out as on top of the stack, with the bar and the toolbar the entry shows there.
+    __weak UIViewController *weakEntry = entry;
+    __weak UINavigationController *weakNavigation = navigation;
+    ANNScreenPlace * (^place)(void) = ^ANNScreenPlace * {
+      UIViewController *parked = weakEntry;
+      UINavigationController *stack = weakNavigation;
+      if (!parked || !stack) {
+          return nil;
+      }
+      return [ANNScreenPlace placeOfEntry:parked
+                                  inStack:stack
+                                  options:[ANNStackOptionsScreen(parked) resolveOptionsWithDefault]];
+    };
+    for (ANNComponentViewController *screen in ANNStackScreensOfEntry(entry)) {
+        screen.placeWhileParked = place;
+    }
+    [_parking park:entry inView:navigation.view];
 }
 
 - (void)stackUnpark:(UIViewController *)entry {

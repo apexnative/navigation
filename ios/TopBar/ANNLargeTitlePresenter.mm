@@ -37,9 +37,11 @@ static UINavigationItemLargeTitleDisplayMode ANNItemModeOf(NSString *mode) {
     // The push from a lower bar whose fill is pending: the old bar's bottom in the screen's coordinates.
     BOOL _titlePlacePending;
     CGFloat _oldBarBottom;
-    // The place of the title while a pop reveals the screen, and whether the bar follows it now.
+    // The place of the title while a pop reveals the screen, and whether the bar follows it now; for a push, the bar
+    // follows it until the screen appeared, also with a main list.
     UIScrollView *_titleHost;
     BOOL _hostsTitle;
+    BOOL _hostsPushTitle;
     // The largest room the bar took over the content while the screen showed at rest: that of an expanded title.
     CGFloat _expandedRoom;
 }
@@ -99,13 +101,15 @@ static UINavigationItemLargeTitleDisplayMode ANNItemModeOf(NSString *mode) {
     if (followed != _emptyScrollView) {
         _emptyScrollView = nil;
     }
-    // The place of a pop's title holds while the title can show and no main list at the top takes it over.
+    // The place of a pop's title holds while the title can show and no main list at the top takes it over; that of a
+    // push, while the title can show.
     BOOL dropsHost = NO;
     if (_hostsTitle) {
-        if (canShow && (!collapses || !list)) {
+        if (canShow && (_hostsPushTitle || !collapses || !list)) {
             followed = _titleHost;
         } else {
             _hostsTitle = NO;
+            _hostsPushTitle = NO;
             dropsHost = YES;
         }
     }
@@ -159,6 +163,23 @@ static UINavigationItemLargeTitleDisplayMode ANNItemModeOf(NSString *mode) {
     }
 }
 
+- (void)screenInPush:(ANNNavigationOptions *)options
+                list:(UIScrollView *)list
+         inlineInRow:(BOOL)inlineInRow
+                 top:(CGFloat)top
+            stackTop:(CGFloat)stackTop {
+    if (@available(iOS 26.0, *)) {
+        UIView *screenView = _screen.viewIfLoaded;
+        if (!screenView || inlineInRow || !ANNLargeTitleCanShow(options) || top - stackTop <= 0) {
+            return;
+        }
+        [self placeTitleHostIn:screenView top:top];
+        _hostsTitle = YES;
+        _hostsPushTitle = YES;
+        [self applyCollapse:options list:list];
+    }
+}
+
 // A plain scroll view over the whole screen, at rest at its top under the bar (its content starts at `top`, where the
 // content of the screen started as it was covered): UIKit puts the title just above that start, where the bar's title
 // is at rest. It takes no touches and draws nothing itself; the core's search of the screen's list skips it.
@@ -195,6 +216,7 @@ static UINavigationItemLargeTitleDisplayMode ANNItemModeOf(NSString *mode) {
 - (void)handBackTitle:(ANNNavigationOptions *)options list:(UIScrollView *)list {
     BOOL hosted = _hostsTitle;
     _hostsTitle = NO;
+    _hostsPushTitle = NO;
     [self applyCollapse:options list:list];
     if (hosted) {
         [_titleHost removeFromSuperview];
@@ -252,6 +274,7 @@ static UINavigationItemLargeTitleDisplayMode ANNItemModeOf(NSString *mode) {
 
 - (void)removeTitleHost {
     _hostsTitle = NO;
+    _hostsPushTitle = NO;
     [_titleHost removeFromSuperview];
 }
 

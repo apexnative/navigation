@@ -88,6 +88,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// had no large title: a large title that doesn't fold into the list fills its place there until the screen appeared.
 - (void)shownFromLowerBarWithBottom:(CGFloat)oldBarBottom;
 
+/// iOS 26, a push starts that brings the screen in with its content drawn, before UIKit's push: its large title keeps
+/// a place in the screen for the whole transition (`screenInPush:` of `ANNLargeTitlePresenter`). Nothing for a screen
+/// that didn't wait parked for its content: its content comes in the push.
+- (void)arrivesByPushOn:(UINavigationController *)navigation;
+
 /// iOS 26, a pop or a swipe back starts that reveals the screen, after its will-appear and before UIKit lays it out
 /// for the transition: its large title keeps a place in the window for the whole transition. Returns whether the title
 /// is in that place.

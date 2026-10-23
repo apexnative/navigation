@@ -42,7 +42,7 @@ Top-level files: `Package.swift` (SwiftPM; `headerFolders` lists every folder wh
 - Launch, the app-facing API — `Public/ApexNavigation/`; `Core/`: `ApexNavigation.mm`, `ANNAppDelegate.mm`, `ANNSceneDelegate.mm`, `ApexNavigation+Internal.h`
 - Root, splash, reload — `Layouts/Root/`: `ANNRootCoordinator`, `ANNSplashViewController`; `Core/`: `ANNReloadCoordinator`
 - Screen: React root, slot, native screen — `Layouts/Screen/`: `ANNComponentViewController`; `React/`: `ANNReactView`, `ANNReactViewCreator`, `Slots/`; `Layouts/External/`
-- Screen: insets, background, keyboard focus — `Layouts/Screen/`: `ANNScreenInsets`, `ANNScreenSafeArea`, `ANNScreenBars`, `ANNComponentPresenter` (background, status bar blur), `ANNComponentViewController` (key commands)
+- Screen: insets, background, keyboard focus — `Layouts/Screen/`: `ANNScreenInsets`, `ANNScreenSafeArea`, `ANNScreenBars`, `ANNScreenPlace` (the safe area of a parked screen), `ANNComponentPresenter` (background, status bar blur), `ANNComponentViewController` (key commands)
 - Safe area view — `React/`: `ANNSafeAreaViewComponentView`; `Layouts/Screen/`: `ANNScreenReadiness`; `cpp/`
 - Stack: queue, commands, back, gestures — `Layouts/Stack/`: `ANNStackQueue`, `ANNStackCommands`, `ANNStackController`, `InteractivePopGestureDelegate`, `ANNStackAnimatingDelegate`
 - Top bar: title, buttons, menus, large title — `TopBar/`: `ANNTopBarPresenter`, `ANNBarButtons`, `ANNBarAppearance`, `ANNLargeTitlePresenter`, `ANNBackButtonPresenter`, `ANNTitleView`, `ANNTitleGlassView`
@@ -99,6 +99,11 @@ Top-level files: `Package.swift` (SwiftPM; `headerFolders` lists every folder wh
 
 - Native code never touches React Native's views (their subviews, their layout, their frames): Fabric owns and recycles
   them. Read them; what a transition writes (`alpha`, `transform`, a hidden flag) goes back on every path.
+- A screen parked by a wait for its content (`ANNParking`) has no parent, and UIKit gives its view no safe area: it lays
+  out with the safe area of its place (`ANNScreenPlace`, measured on a navigation controller of the core's), or its
+  list would move as the push starts and UIKit would show the large title only after the transition. On iOS 26 its
+  large title also keeps a place of the core's for the push (`arrivesByPushOn:`). Check Showcase 1.4 (with a font
+  size), every section panel and 12.6 on push, pop and swipe after any change to waits, parking or the large title.
 - Every change of a stack's children goes through its `ANNStackQueue`. The core's own calls to UIKit's navigation
   come only from there; UIKit's own pops are followed (`uikitShows:`), not fought.
 - Every UIKit present and dismiss in the main window is a step in `ANNPresentationGate`. UIKit drops a transition
