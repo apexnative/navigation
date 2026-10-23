@@ -4,6 +4,8 @@
 // package.json), or the version given as an argument. Each minor gets one issue, `React Native <minor>`, labeled
 // `react-native`; every later version of that minor (a new RC, the release, a patch) adds a comment to it. Each version
 // leaves a marker in the issue, so it is reported once. The issues of a minor the repository has moved to are closed.
+// An issue closed before that (the minor is supported while the repository still builds with the older one) stays
+// closed and still takes the later versions as comments: the minor gets no second issue.
 // `--dry-run` prints what it would do. Needs `gh` with access to the repository.
 //
 // Usage: node scripts/rn-watch.mjs [--dry-run] [version]
@@ -66,17 +68,17 @@ const issues = JSON.parse(
     '--label',
     LABEL,
     '--state',
-    'open',
+    'all',
     '--limit',
     '100',
     '--json',
-    'number,title,body,comments',
+    'number,title,state,body,comments',
   ])
 );
 
 for (const issue of issues) {
   const minor = minorOf(issue.title);
-  if (minor && !newerMinor(`${minor}.0`, current)) {
+  if (issue.state === 'OPEN' && minor && !newerMinor(`${minor}.0`, current)) {
     console.log(`#${issue.number} React Native ${minor}: the repository builds with ${current}`);
     gh(
       'issue',
@@ -102,7 +104,8 @@ if (!version) {
 }
 
 const minor = parse(version).minor;
-const issue = issues.find((item) => minorOf(item.title) === minor);
+const sameMinor = issues.filter((item) => minorOf(item.title) === minor);
+const issue = sameMinor.find((item) => item.state === 'OPEN') ?? sameMinor[0];
 const texts = issue ? [issue.body, ...issue.comments.map((comment) => comment.body)] : [];
 if (texts.some((text) => text.includes(marker(version)))) {
   console.log(`React Native ${version}: already in #${issue.number}`);
