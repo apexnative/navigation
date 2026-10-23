@@ -65,6 +65,15 @@ export function placeOf(screenId: string): ScreenPlace | undefined {
   return places.get(screenId);
 }
 
+/** The first screen of a stack, as the engine noted it; with a pair first, its primary. */
+export function firstScreenOf(stack: string): string | undefined {
+  for (const [id, place] of places) {
+    if (place.stack === stack && place.index === 0 && place.arrangement?.placement !== 'secondary')
+      return id;
+  }
+  return undefined;
+}
+
 /** Notes that a screen is the primary of a pair shown alone, where the native side shows no pairs. */
 export function noteAlone(screenId: string): void {
   alone.add(screenId);

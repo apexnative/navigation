@@ -62,8 +62,8 @@ Compose shows with a close button at the leading edge of its top bar. The settin
 
 | Setting | What it does |
 | --- | --- |
-| `closeButton` | A close button on the first screen: the system one on iOS, an icon on Android. Needs the stack. |
-| `onDismiss` | Called once the modal is gone, whatever closed it: a swipe, a command, a new root. |
+| `closeButton` | A close button on the first screen: the system one on iOS, an icon on Android. Needs the stack. A new first screen from `setStack` or `replace` in the modal's stack gets it too. |
+| `onDismiss` | Called once the modal is gone, whatever closed it: a swipe, a command, a new root. `setStack` and `replace` in the modal's stack replace its first screen and call it too. |
 | `stack` | `false`: the screen alone, without a stack and its top bar. |
 | `style`, `sheet`, `popover`, `contentSize` | How it looks: see [How a modal looks](#styles). |
 | `transition`, `options` | The animation, and the screen's options for this show. |

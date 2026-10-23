@@ -43,12 +43,13 @@ export interface ModalConfig {
   stack?: boolean;
   /**
    * A close button at the leading edge of the modal's first screen, which dismisses the modal: the system one on iOS,
-   * an icon on Android. Its id and testID are `CloseButton`. Needs the stack.
+   * an icon on Android. Its id and testID are `CloseButton`. Needs the stack. A new first screen of that stack, from
+   * `setStack` or `replace`, gets it too.
    */
   closeButton?: boolean;
   /**
-   * Called once the modal is gone, whatever dismissed it: a command, a swipe, a new root. `setStack` inside the
-   * modal replaces its first screen, and calls it too.
+   * Called once the modal is gone, whatever dismissed it: a command, a swipe, a new root. `setStack` and `replace`
+   * inside the modal replace its first screen, and call it too.
    */
   onDismiss?: () => void;
   /**
