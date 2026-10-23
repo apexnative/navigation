@@ -35,6 +35,7 @@ import dev.apexnative.navigation.splash.SplashTheme
 import dev.apexnative.navigation.splash.SplashView
 import dev.apexnative.navigation.system.SystemUiWindow
 import dev.apexnative.navigation.utils.MaterialTheme
+import dev.apexnative.navigation.viewcontrollers.navigator.BackCallbackCheck
 import dev.apexnative.navigation.viewcontrollers.navigator.BackCallbackState
 import dev.apexnative.navigation.viewcontrollers.navigator.Navigator
 import dev.apexnative.navigation.viewcontrollers.navigator.Navigators
@@ -75,6 +76,7 @@ open class NavigationActivity : AppCompatActivity(), DefaultHardwareBackBtnHandl
     private val backCallback = object : OnBackPressedCallback(false) {
         override fun handleOnBackStarted(backEvent: BackEventCompat) {
             backGesture = null
+            navigator?.let { backCheck?.atBack(it) }
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE || BackCallbackState.hasJsListeners) return
             val stack = navigator?.stackPoppedByBack() ?: return
             backGesture = stack.startBackGesture(backEvent.swipeEdge == BackEventCompat.EDGE_LEFT, backEvent.touchY)
@@ -87,9 +89,11 @@ open class NavigationActivity : AppCompatActivity(), DefaultHardwareBackBtnHandl
         override fun handleOnBackCancelled() {
             backGesture?.cancel()
             backGesture = null
+            navigator?.let(BackCallbackState::update)
         }
 
         override fun handleOnBackPressed() {
+            navigator?.let { backCheck?.atBack(it) }
             val gesture = backGesture
             backGesture = null
             if (gesture?.commit() == true) BackCallbackState.update() else passBack()
@@ -99,10 +103,12 @@ open class NavigationActivity : AppCompatActivity(), DefaultHardwareBackBtnHandl
     // The back gesture that previews a pop now; none.
     private var backGesture: StackController.BackGesture? = null
 
-    // Before each frame of the window: what back does may have changed, and the system decides at the start of a
-    // gesture whether the app takes it.
-    private val backBeforeFrame = ViewTreeObserver.OnPreDrawListener {
-        navigator?.let(BackCallbackState::update)
+    // Debug builds only: the check that what back does never changes without its trigger (BackCallbackState), sampled
+    // before frames and at back events. It only logs; release builds have neither the check nor the listener.
+    private val backCheck = if (BuildConfig.DEBUG) BackCallbackCheck() else null
+    private val backCheckBeforeFrame = ViewTreeObserver.OnPreDrawListener {
+        val navigator = navigator
+        if (navigator != null) backCheck?.sample(navigator, SystemClock.uptimeMillis())
         true
     }
     private var frameObserver: ViewTreeObserver? = null
@@ -143,7 +149,9 @@ open class NavigationActivity : AppCompatActivity(), DefaultHardwareBackBtnHandl
         SlotHost.attachIfStarted(this)
         reactGateway.onActivityCreated(this)
         onBackPressedDispatcher.addCallback(this, backCallback)
-        frameObserver = window.decorView.viewTreeObserver.also { it.addOnPreDrawListener(backBeforeFrame) }
+        if (backCheck != null) {
+            frameObserver = window.decorView.viewTreeObserver.also { it.addOnPreDrawListener(backCheckBeforeFrame) }
+        }
         // The activity's system UI: its owner remembers the theme's colors and the manifest's orientation now, before
         // anything changes them.
         navigator.systemUi.start(SystemUiWindow.of(this))
@@ -218,6 +226,8 @@ open class NavigationActivity : AppCompatActivity(), DefaultHardwareBackBtnHandl
         isNavigationResumed = true
         // The root, the modals and the overlays lay out again; nothing is sent.
         navigator?.onResume()
+        // A safety net: what back does changes on its own triggers, and the system asks the callback from here on.
+        navigator?.let(BackCallbackState::update)
         if (developerSupport() != null) reloadBroadcast.register()
         ReloadCoordinator.launchIfDue(this)
     }
@@ -239,6 +249,8 @@ open class NavigationActivity : AppCompatActivity(), DefaultHardwareBackBtnHandl
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (reactGateway.currentReactContext != null) reactGateway.host.onWindowFocusChange(hasFocus)
+        // A safety net, as at onResume: back after a dialog or another window over the activity.
+        if (hasFocus) navigator?.let(BackCallbackState::update)
     }
 
     override fun onUserLeaveHint() {
@@ -302,9 +314,11 @@ open class NavigationActivity : AppCompatActivity(), DefaultHardwareBackBtnHandl
         splashHold = null
         reloadBroadcast.release()
         navigator?.let(BackCallbackState::detach)
-        // The window's observer now, and the one the listener was added to, if they differ.
-        val observers = listOfNotNull(frameObserver, window?.peekDecorView()?.viewTreeObserver).distinct()
-        observers.forEach { if (it.isAlive) it.removeOnPreDrawListener(backBeforeFrame) }
+        // The debug check's listener: from the window's observer now, and the one it was added to, if they differ.
+        if (backCheck != null) {
+            val observers = listOfNotNull(frameObserver, window?.peekDecorView()?.viewTreeObserver).distinct()
+            observers.forEach { if (it.isAlive) it.removeOnPreDrawListener(backCheckBeforeFrame) }
+        }
         frameObserver = null
         SlotHost.detach(this)
         navigator?.destroyWithActivity()
@@ -317,7 +331,9 @@ open class NavigationActivity : AppCompatActivity(), DefaultHardwareBackBtnHandl
     /**
      * Back that JavaScript's listeners didn't take: the navigation does its step first — a stack's top leaves or holds,
      * a pane closes —; with nothing to do there, the activity's own back, as without the navigation. An app may
-     * override it (e.g. `moveTaskToBack(true)`).
+     * override it (e.g. `moveTaskToBack(true)`). The callback is off for that back only: the dispatcher's own back is
+     * the activity's, not [onBackPressed]; then it is computed again, and `hardwareBackButton.systemAnimation: false`
+     * turns it on again.
      */
     override fun invokeDefaultOnBackPressed() {
         val handled = navigator?.handleBack(CommandListenerAdapter()) == true

@@ -90,7 +90,7 @@ internal object AppearanceDispatcher {
         val appearanceRecord: ScreenAppearance?
     }
 
-    /** The navigation state (`NavigationStateReporter`): one update in this pass of the main loop, or one now. */
+    /** The navigation state ([NavigationState]): one update in this pass of the main loop, or one now. */
     interface StateUpdates {
         /**
          * Asks for one update in this pass of the main loop: the calls of one pass make one, after a DidAppear or a
@@ -98,7 +98,10 @@ internal object AppearanceDispatcher {
          */
         fun setNeedsUpdate()
 
-        /** Computes the state now and sends it when it changed: before an answer, at the end of a transition. */
+        /**
+         * Computes the state now and sends it when it changed: a command's answer, once
+         * (`CommandAnswer.reportStateNow`), the end of a user's transition, a tab chosen from code.
+         */
         fun updateNow()
 
         /**
@@ -157,33 +160,6 @@ internal object AppearanceDispatcher {
             EventEmitter.current().emitSheetDetentChanged(componentId, detent)
     }
 
-    /** The state of `NavigationStateReporter`, sent through the JavaScript that runs now, when it can be. */
-    object ReporterState : StateUpdates {
-        private val handler by lazy { Handler(Looper.getMainLooper()) }
-
-        // The one posted update of a pass of the main loop, which checks the hold when it runs.
-        private val held = StateHold(
-            post = { task -> handler.post(task) },
-            generation = { ReloadCoordinator.generation },
-        ) {
-            val emitter = EventEmitter.current()
-            if (emitter.canSend) NavigationStateReporter.updateNow(emitter)
-        }
-
-        override fun setNeedsUpdate() {
-            if (EventEmitter.current().canSend) held.setNeedsUpdate()
-        }
-
-        override fun hold() = held.hold()
-
-        override fun release() = held.release()
-
-        override fun updateNow() {
-            val emitter = EventEmitter.current()
-            if (emitter.canSend) NavigationStateReporter.updateNow(emitter)
-        }
-    }
-
     /** The main thread's loop. */
     object MainScheduler : Scheduler {
         private val handler by lazy { Handler(Looper.getMainLooper()) }
@@ -198,8 +174,8 @@ internal object AppearanceDispatcher {
     /** Where the events go: [EmitterSender]; the tests put a journal here. */
     var sender: Sender = EmitterSender
 
-    /** The navigation state the sent appearance events and transitions update: [ReporterState]; a journal in tests. */
-    var state: StateUpdates = ReporterState
+    /** The navigation state the appearance events and transitions update: [NavigationState]; a journal in tests. */
+    var state: StateUpdates = NavigationState
 
     /** The clock of the hold limit: [MainScheduler]; the tests put a clock that moves when they say. */
     var scheduler: Scheduler = MainScheduler
@@ -337,12 +313,15 @@ internal object AppearanceDispatcher {
     }
 
     /**
-     * A transition ended,: what went disappears ([hiding]), what stands appears ([showing], with its WillAppear first
+     * A transition ended: what went disappears ([hiding]), what stands appears ([showing], with its WillAppear first
      * where it wasn't asked), the navigation state goes when it changed, then [events] (the transition's own:
      * `ANN.ScreenPopped`, `ANN.ModalDismissed`, and what must follow them, like stopping the content of what went),
-     * then [answer] resolves with [value] (the promise, then `ANN.CommandCompleted`). A user's action has no answer. A
-     * state that fails is logged ([log]) and the transition goes on: [events] and the answer always come. Without
-     * [reportsState] the caller sends the state itself, later (a tab switch: after `ANN.BottomTabSelected`).
+     * then [answer] resolves with [value] (the promise, then `ANN.CommandCompleted`; no second state). The state is the
+     * answer's one state step (`CommandAnswer.reportStateNow`), which sends nothing for a JavaScript that went; a
+     * user's action has no answer, and a command answered before its transition ended had its state then: the state
+     * of the end goes all the same, unless its JavaScript went. A state that fails is logged and the transition goes
+     * on: [events] and the answer always come. Without [reportsState] the caller sends the state itself, later (a tab
+     * switch: after `ANN.BottomTabSelected`; a `setRoot` with layers: from its answer).
      */
     fun endTransition(
         hiding: List<ViewController<*>>,
@@ -360,18 +339,30 @@ internal object AppearanceDispatcher {
             holdsState = false
         }
         showing.forEach { it.onViewDidAppear() }
-        if (reportsState) reportState(answer?.commandName)
+        if (reportsState) {
+            // The state before the transition's events, once per answer: the answer's own step before its promise
+            // finds it sent. Without an answer to wait for, the dispatcher sends it; nothing for a JavaScript that
+            // went.
+            when {
+                answer == null -> reportState()
+                answer.isAnswered -> if (ReloadCoordinator.isCurrent(answer.generation)) reportState()
+                else -> answer.reportStateNow()
+            }
+        }
         events?.invoke()
         answer?.resolve(value)
     }
 
-    /** The navigation state now, when it changed; a failure is logged ([log]), nothing else stops for it. */
-    fun reportState(commandName: String? = null) {
+    /**
+     * The navigation state now, when it changed, without a command's answer (a command's goes through its answer,
+     * `CommandAnswer.reportStateNow`); a failure is logged ([log]), nothing else stops for it.
+     */
+    fun reportState() {
         try {
             state.updateNow()
         } catch (e: Throwable) {
             val reason = ErrorTexts.couldNot("report the navigation state", ErrorTexts.reasonOf(e))
-            log("[ApexNavigation] ${commandName ?: "transition"}: $reason")
+            log("[ApexNavigation] transition: $reason")
         }
     }
 

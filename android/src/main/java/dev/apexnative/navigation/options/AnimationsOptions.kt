@@ -8,7 +8,7 @@ import com.facebook.react.bridge.ReadableMap
  */
 class AnimationsOptions {
     @JvmField var push = StackPushAnimationOptions()
-    @JvmField var pop = StackAnimationOptions()
+    @JvmField var pop = StackPopAnimationOptions()
     @JvmField var setStackRoot = SetStackRootAnimationOptions()
     @JvmField var setRoot = EnterExitAnimationOptions()
     @JvmField var showModal = ModalAnimationOptions()
@@ -43,7 +43,7 @@ class AnimationsOptions {
             val options = AnimationsOptions()
             if (map == null) return options
             options.push = map.group("push") { StackPushAnimationOptions.parse(it) }
-            options.pop = map.group("pop") { StackAnimationOptions.parse(it) }
+            options.pop = map.group("pop") { StackPopAnimationOptions.parse(it) }
             options.setStackRoot = map.group("setStackRoot") { SetStackRootAnimationOptions.parse(it) }
             options.setRoot = map.group("setRoot") { EnterExitAnimationOptions.parse(it) }
             options.showModal = map.group("showModal") { ModalAnimationOptions.parse(it) }

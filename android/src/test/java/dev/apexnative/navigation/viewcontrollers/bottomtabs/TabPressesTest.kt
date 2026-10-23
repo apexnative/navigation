@@ -2,6 +2,7 @@ package dev.apexnative.navigation.viewcontrollers.bottomtabs
 
 import android.app.Activity
 import android.widget.FrameLayout
+import androidx.activity.OnBackPressedCallback
 import dev.apexnative.navigation.options.Options
 import dev.apexnative.navigation.options.params.Bool
 import dev.apexnative.navigation.react.events.DispatcherFixture
@@ -9,6 +10,8 @@ import dev.apexnative.navigation.react.events.EventJournal
 import dev.apexnative.navigation.react.events.FakeContent
 import dev.apexnative.navigation.viewcontrollers.child.ChildControllersRegistry
 import dev.apexnative.navigation.viewcontrollers.component.ScreenReadiness
+import dev.apexnative.navigation.viewcontrollers.navigator.BackCallbackState
+import dev.apexnative.navigation.viewcontrollers.navigator.Navigator
 import dev.apexnative.navigation.viewcontrollers.parent.ParentController
 import dev.apexnative.navigation.viewcontrollers.stack.FakeStackDisplay
 import dev.apexnative.navigation.viewcontrollers.stack.QueueReadiness
@@ -19,6 +22,7 @@ import dev.apexnative.navigation.viewcontrollers.viewcontroller.Presenter
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.ViewController
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Before
 import org.junit.Test
 
@@ -107,6 +111,25 @@ class TabPressesTest {
     private fun events(): List<String> = journal.toList().also { journal.clear() }
 
     // Another tab.
+
+    @Test
+    fun aTabSelectedByThePressComputesBackAgain() {
+        // No command ends here: the switch computes what back does (`bottomTabsOnPress`, the stack of the new tab).
+        val navigator = Navigator(activity)
+        val callback = object : OnBackPressedCallback(false) {
+            override fun handleOnBackPressed() = Unit
+        }
+        BackCallbackState.attach(navigator, callback)
+        try {
+            val tabs = shown(stack("Stack1", screen("A1")), stack("Stack2", screen("B1"), screen("B2")))
+            // A stale value the computation corrects: the navigation has no root, so back leaves the app.
+            callback.isEnabled = true
+            tabs.onTabPressed(1)
+            assertFalse(callback.isEnabled)
+        } finally {
+            BackCallbackState.detach(navigator)
+        }
+    }
 
     @Test
     fun anotherTabSendsPressedThenTheSwitchThenSelected() {

@@ -10,6 +10,7 @@ import dev.apexnative.navigation.NavigationActivity
 import dev.apexnative.navigation.options.DefaultOptions
 import dev.apexnative.navigation.options.Options
 import dev.apexnative.navigation.react.ArrangementStates
+import dev.apexnative.navigation.react.events.EventEmitter
 import dev.apexnative.navigation.utils.SystemUiUtils
 import dev.apexnative.navigation.utils.WindowFolds
 import dev.apexnative.navigation.viewcontrollers.child.ChildController
@@ -146,11 +147,11 @@ class ArrangementController internal constructor(
         val single = plan.layout == ArrangementPlan.Layout.SINGLE
         if (primary is ComponentViewController) {
             val state = ArrangementStates.State(PRIMARY, layout, front = overlay, hidden = false)
-            ArrangementStates.set(activity, primary.id, state, notify)
+            ArrangementStates.set(primary.id, state, notify, EventEmitter.of(primary.jsGeneration))
         }
         if (secondary is ComponentViewController) {
             val state = ArrangementStates.State(SECONDARY, layout, front = false, hidden = single)
-            ArrangementStates.set(activity, secondary.id, state, notify)
+            ArrangementStates.set(secondary.id, state, notify, EventEmitter.of(secondary.jsGeneration))
         }
     }
 

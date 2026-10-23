@@ -6,14 +6,16 @@
 #import "ANNPopoverPresenter.h"
 #import "ANNPreviewInteraction.h"
 #import "ANNReloadCoordinator.h"
+#import "ANNSlotScreenView.h"
 #import "ANNStackCommands.h"
 #import "ANNStackController.h"
 #import "ApexNavigation+Internal.h"
 #import "UIViewController+LayoutProtocol.h"
 
-// The view of a component mounts a frame or so after the command that rendered it: it is looked for this many times,
-// a frame apart.
-static const NSUInteger ANNPreviewSearchTries = 30;
+// The view of a component mounts a frame or so after the command that rendered it: it is looked for at each mount of
+// the source's content until this limit (30 frames), then the preview goes, as with a `nativeID` no view has.
+static const NSTimeInterval ANNPreviewSearchLimit = 30.0 / 60;
+// Where the source's mounts can't be heard, a frame apart.
 static const NSTimeInterval ANNPreviewSearchInterval = 1.0 / 60;
 
 // One preview from its push to its end: the tap took it, or it went.
@@ -28,7 +30,8 @@ static const NSTimeInterval ANNPreviewSearchInterval = 1.0 / 60;
 @property(nonatomic, copy) NSString *componentId;
 @property(nonatomic, copy) NSString *what;
 @property(nonatomic) NSUInteger generation;
-@property(nonatomic) NSUInteger tries;
+// The content whose mounts the search hears, while it looks.
+@property(nonatomic, weak, nullable) UIView<ANNComponentProtocol> *watched;
 @property(nonatomic) BOOL attached;
 @property(nonatomic) BOOL done;
 // The screen's unseen place in the main window, at its preview size, until UIKit takes its view for the menu.
@@ -84,7 +87,7 @@ static NSMutableDictionary<NSString *, ANNPreviewRecord *> *ANNPreviewRecords(vo
         [screen destroy];
         @throw;
     }
-    [self search:record];
+    [self startSearch:record];
 }
 
 // The screen renders as now: its view waits unseen in the main window, at the size of the preview, so that its content
@@ -110,41 +113,99 @@ static NSMutableDictionary<NSString *, ANNPreviewRecord *> *ANNPreviewRecords(vo
 
 #pragma mark - The search
 
-// Each try asks first whether the preview still lives: a source that went makes it go, a reload stops it silently.
-+ (void)search:(ANNPreviewRecord *)record {
-    if (record.done || record.attached) {
+// The view is looked for at once; else again at each mount of the source's content, where it comes with one of them,
+// and a last time at the limit, when the preview goes. Both later steps keep the generation they were made with: after
+// a reload they do nothing.
++ (void)startSearch:(ANNPreviewRecord *)record {
+    if ([self search:record last:NO]) {
         return;
     }
+    UIViewController *source = record.source;
+    // A source that is a container (a stack) is heard through the screen it shows.
+    UIView<ANNComponentProtocol> *content =
+        source.reactView ?: source.presentedComponentViewController.reactView;
+    __weak ANNPreviewRecord *weakRecord = record;
+    NSUInteger generation = record.generation;
+    // A slot screen hears only the first mount of its slot, not those deeper in it, and a container may show no React
+    // content yet: there the view is looked for on each frame until the limit.
+    if (!content || [content isKindOfClass:ANNSlotScreenView.class]) {
+        [self searchNextFrame:record];
+    } else {
+        record.watched = content;
+        [content setContentDidMount:^{
+          ANNPreviewRecord *searching = weakRecord;
+          if (searching && generation == ANNReloadCoordinator.generation) {
+              [ANNPreviewPush search:searching last:NO];
+          }
+        }
+                             forKey:[self mountKeyOf:record]];
+    }
+    int64_t delay = (int64_t)(ANNPreviewSearchLimit * NSEC_PER_SEC);
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, delay), dispatch_get_main_queue(), ^{
+      ANNPreviewRecord *searching = weakRecord;
+      if (searching && generation == ANNReloadCoordinator.generation) {
+          [ANNPreviewPush search:searching last:YES];
+      }
+    });
+}
+
+// One more search on the next frame, and so on until the view is found or the preview goes; after a reload, none.
++ (void)searchNextFrame:(ANNPreviewRecord *)record {
+    __weak ANNPreviewRecord *weakRecord = record;
+    NSUInteger generation = record.generation;
+    int64_t delay = (int64_t)(ANNPreviewSearchInterval * NSEC_PER_SEC);
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, delay), dispatch_get_main_queue(), ^{
+      ANNPreviewRecord *searching = weakRecord;
+      if (searching && generation == ANNReloadCoordinator.generation &&
+          ![ANNPreviewPush search:searching last:NO]) {
+          [ANNPreviewPush searchNextFrame:searching];
+      }
+    });
+}
+
+// YES when the search is over: the view was found, or the preview went or stopped. Each search asks first whether the
+// preview still lives: a source that went makes it go, a reload stops it silently. The last one, not finding the view,
+// makes the preview go.
++ (BOOL)search:(ANNPreviewRecord *)record last:(BOOL)last {
+    if (record.done || record.attached) {
+        return YES;
+    }
     if (record.generation != ANNReloadCoordinator.generation) {
-        return;
+        return YES;
     }
     UIViewController *source = record.source;
     if (!source || source.nodeHelper.destroyed) {
         [self gone:record];
-        return;
+        return YES;
     }
     // Read only: the view is found by its `nativeID`, and its tag is its current Fabric tag.
     UIView *view = [ANNPopoverPresenter viewWithNativeID:record.nativeID in:source.viewIfLoaded];
     if (view) {
         [self attach:record toView:view source:source];
-        return;
+        return YES;
     }
-    if (++record.tries >= ANNPreviewSearchTries) {
+    if (last) {
         [self gone:record];
-        return;
+        return YES;
     }
-    __weak ANNPreviewRecord *weakRecord = record;
-    int64_t delay = (int64_t)(ANNPreviewSearchInterval * NSEC_PER_SEC);
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, delay), dispatch_get_main_queue(), ^{
-      ANNPreviewRecord *searching = weakRecord;
-      if (searching) {
-          [ANNPreviewPush search:searching];
-      }
-    });
+    return NO;
+}
+
+// The key of the search's mount handler: one per preview, so that two previews of one source don't replace each other.
++ (NSString *)mountKeyOf:(ANNPreviewRecord *)record {
+    return [@"preview." stringByAppendingString:record.previewId];
+}
+
+// The search stops hearing the mounts: only its own handler goes.
++ (void)stopWatching:(ANNPreviewRecord *)record {
+    UIView<ANNComponentProtocol> *content = record.watched;
+    record.watched = nil;
+    [content setContentDidMount:nil forKey:[self mountKeyOf:record]];
 }
 
 + (void)attach:(ANNPreviewRecord *)record toView:(UIView *)view source:(UIViewController *)source {
     record.attached = YES;
+    [self stopWatching:record];
     __weak ANNPreviewRecord *weakRecord = record;
     BOOL (^commit)(void) = ^BOOL {
       return [ANNPreviewPush commit:weakRecord];
@@ -231,9 +292,10 @@ static NSMutableDictionary<NSString *, ANNPreviewRecord *> *ANNPreviewRecords(vo
     [record.answer reject:[ANNErrorTexts previewGone:record.previewId]];
 }
 
-// The record is done: the screen leaves its unseen place, the table forgets it.
+// The record is done: the search stops, the screen leaves its unseen place, the table forgets it.
 + (void)finish:(ANNPreviewRecord *)record {
     record.done = YES;
+    [self stopWatching:record];
     [self unpark:record];
     if (ANNPreviewRecords()[record.previewId] == record) {
         [ANNPreviewRecords() removeObjectForKey:record.previewId];
@@ -286,6 +348,7 @@ static NSMutableDictionary<NSString *, ANNPreviewRecord *> *ANNPreviewRecords(vo
     NSMutableArray<UIViewController *> *screens = [NSMutableArray new];
     for (ANNPreviewRecord *record in ANNPreviewRecords().allValues) {
         record.done = YES;
+        [self stopWatching:record];
         [self unpark:record];
         if (!record.attached) {
             [screens addObject:record.screen];

@@ -94,10 +94,6 @@ static BOOL ANNSameValue(id a, id b) {
     [ApexNavigation.eventEmitter sendNavigationStateChanged:screenId name:name tab:tab];
 }
 
-+ (void)reportBeforeAnswerOf:(NSString *)commandName {
-    [self updateNowFor:commandName];
-}
-
 + (void)reset {
     ANNAssertMainQueue();
     ANNHasLastState = NO;

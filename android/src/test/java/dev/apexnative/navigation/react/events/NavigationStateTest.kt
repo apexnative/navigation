@@ -13,10 +13,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * The state the reporter finds in a layout: the screen at the end of the current children, and the selected tab of the
- * nearest tabs it is in, with nested tabs too.
+ * The state [NavigationState] finds in a layout: the screen at the end of the current children, and the selected tab
+ * of the nearest tabs it is in, with nested tabs too.
  */
-class NavigationStateReporterTest {
+class NavigationStateTest {
     private val activity = Activity()
     private val registry = ChildControllersRegistry()
 
@@ -37,7 +37,7 @@ class NavigationStateReporterTest {
     @Test
     fun oneLevelOfTabsGivesItsSelectedTab() {
         val root = tabs("Tabs1", 1, around("Stack1", screen("Home")), around("Stack2", screen("Settings")))
-        assertEquals(NavigationStateReporter.State("Settings", null, 1), NavigationStateReporter.stateOf(root))
+        assertEquals(NavigationState.State("Settings", null, 1), NavigationState.stateOf(root))
     }
 
     @Test
@@ -50,19 +50,19 @@ class NavigationStateReporterTest {
             around("Stack3", screen("Details")),
         )
         val root = tabs("Tabs1", 0, around("SideMenu1", inner), around("Stack4", screen("Settings")))
-        assertEquals(NavigationStateReporter.State("Details", null, 2), NavigationStateReporter.stateOf(root))
+        assertEquals(NavigationState.State("Details", null, 2), NavigationState.stateOf(root))
     }
 
     @Test
     fun aScreenOutOfTabsHasNoTab() {
         val root = around("Stack1", screen("Home"))
-        assertEquals(NavigationStateReporter.State("Home", null, null), NavigationStateReporter.stateOf(root))
+        assertEquals(NavigationState.State("Home", null, null), NavigationState.stateOf(root))
     }
 
     @Test
     fun aLayoutWithoutAScreenGivesNone() {
-        val empty = NavigationStateReporter.State(null, null, null)
-        assertEquals(empty, NavigationStateReporter.stateOf(null))
-        assertEquals(empty, NavigationStateReporter.stateOf(tabs("Tabs1", 0, TestLayout(activity, registry, "Stack1"))))
+        val empty = NavigationState.State(null, null, null)
+        assertEquals(empty, NavigationState.stateOf(null))
+        assertEquals(empty, NavigationState.stateOf(tabs("Tabs1", 0, TestLayout(activity, registry, "Stack1"))))
     }
 }

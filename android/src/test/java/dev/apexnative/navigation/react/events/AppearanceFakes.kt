@@ -18,15 +18,17 @@ import dev.apexnative.navigation.viewcontrollers.viewcontroller.ScrollEventListe
  * `tabSelected:<tabsId>:<selected>:<unselected>`, `tabLongPressed:<tabsId>:<index>`, `attempted:<id>`,
  * `detent:<id>:<detent>`, `stateNeeded`, `stateNow`. The
  * appearance events also go into [payloads] as
- * `<event>:<id>:<name>:<type>`. The posted update and its hold are the core's own ([StateHold]): `stateNeeded` is the
- * posted update as it runs, at once unless [defersPosts]; while held it waits for the last release.
+ * `<event>:<id>:<name>:<type>`. The posted update and its hold are the core's own ([NavigationState.Updates]):
+ * `stateNeeded` is the posted update as it runs, at once unless [defersPosts]; while held it waits for the last
+ * release. `stateNow` is the state the dispatcher sends itself (a user's transition); a command's goes through its
+ * answer.
  */
 internal class EventJournal(
     val entries: MutableList<String> = mutableListOf(),
 ) : AppearanceDispatcher.Sender, AppearanceDispatcher.StateUpdates {
     val payloads = mutableListOf<String>()
     private val posted = mutableListOf<() -> Unit>()
-    private val held = StateHold(post = { task -> if (defersPosts) posted += task else task() }) {
+    private val held = NavigationState.Updates(post = { task -> if (defersPosts) posted += task else task() }) {
         entries += "stateNeeded"
     }
 

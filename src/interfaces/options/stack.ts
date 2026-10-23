@@ -26,6 +26,15 @@ export interface HardwareBackButtonOptions {
    * @internal
    */
   dismissModalOnPress?: boolean;
+  /**
+   * (Android) Whether back on the first screen of the app, with nothing left to go back to, plays the system's
+   * animation of going home. The system decides it as the gesture starts, so with `false` the navigation keeps the
+   * back on that screen too: the gesture shows no animation, and on release the press goes to `BackHandler` listeners,
+   * then to the activity's own back (`invokeDefaultOnBackPressed` of the app's activity, such as `moveTaskToBack`).
+   * Read from the screen back acts on; set it in the default options for the whole app. iOS ignores it.
+   * @default true
+   */
+  systemAnimation?: boolean;
 }
 
 /**

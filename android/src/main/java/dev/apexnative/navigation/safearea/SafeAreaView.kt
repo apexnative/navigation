@@ -95,8 +95,9 @@ class SafeAreaView(reactContext: ThemedReactContext) : ReactViewGroup(reactConte
         val reactContext = context as? ReactContext ?: return
         val dispatcher = UIManagerHelper.getEventDispatcher(reactContext) ?: return
         readySent = true
-        dispatcher.dispatchEvent(SafeAreaReadyEvent(UIManagerHelper.getSurfaceId(this), id))
-        screenId?.let(ScreenReadiness::laidOut)
+        val surfaceId = UIManagerHelper.getSurfaceId(this)
+        dispatcher.dispatchEvent(SafeAreaReadyEvent(surfaceId, id))
+        screenId?.let { ScreenReadiness.laidOut(it, surfaceId) }
     }
 
     // The navigation tells whether this view's screen waits: a component of a bar (title, button, background, tab)
@@ -111,12 +112,13 @@ class SafeAreaView(reactContext: ThemedReactContext) : ReactViewGroup(reactConte
     }
 
     // Once, by the screen's id: the container asks the screen's view for the layout React mounts the content without.
-    // On attach too: content added before this view was attached is signalled then.
+    // On attach too: content added before this view was attached is signalled then. The signal names this view's
+    // surface: only the root that shows it takes it as its own.
     private fun signalContent() {
         if (contentSignalled) return
         val id = screenId ?: return
         contentSignalled = true
-        ScreenReadiness.contentRendered(id)
+        ScreenReadiness.contentRendered(id, UIManagerHelper.getSurfaceId(this))
     }
 
     fun drop() {

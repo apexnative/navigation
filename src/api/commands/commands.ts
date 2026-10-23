@@ -19,7 +19,7 @@ import { stackChild, type StackEntry } from '../layout/Stack';
 import { badgeText } from '../layout/Tabs';
 import { mergeOptions } from '../../engine/mergeOptions';
 import { buildScreenOptions, type ScreenOptionsInput } from '../screens/defineScreen';
-import { coversColumn, placeOf } from '../../engine/places';
+import { coversColumn, firstScreenOf, placeOf, type ScreenPlace } from '../../engine/places';
 import { command, placeFor } from './errors';
 import type { ColumnConfig, ModalConfig, OverlayConfig, PushConfig } from './presentation';
 import { defined, modalAnimations, pushAnimations } from './transitions';
@@ -29,6 +29,10 @@ const CLOSE_BUTTON = 'CloseButton';
 
 // The modals shown by `showModal`, for the ids of their first screens.
 let modals = 0;
+
+// The stacks of the modals shown with a close button, by id: `setStack` and `replace` there give it to the new first
+// screen. A stack's id is its modal's layer.
+const closeButtonStacks = new Set<string>();
 
 // The settings of a command with the props of the screen it shows.
 type WithProps<Config> = Config & { props?: object };
@@ -115,7 +119,19 @@ export function popToRoot(fromId: string): Promise<string> {
 export function setStack(fromId: string, entries: StackEntry[]): Promise<string> {
   return command('setStack', () => {
     placeFor('setStack', fromId, { stack: true });
-    return withSlots(() => engine.setStackRoot(fromId, entries.map(stackChild)));
+    const children = entries.map(stackChild);
+    const first = children[0]?.component;
+    if (!first || !hasCloseButton(placeOf(fromId))) {
+      return withSlots(() => engine.setStackRoot(fromId, children));
+    }
+    return afterLoading([first.name], () => {
+      // The screen's own buttons stay after the close button: the options of the layout replace them.
+      const id = first.id ?? nextId('Component');
+      const own = screenOptions(first.name, first.passProps ?? {});
+      const options = withCloseButton(mergeOptions(own, first.options ?? {}), id);
+      const withButton = { component: { ...first, id, options } };
+      return withSlots(() => engine.setStackRoot(fromId, [withButton, ...children.slice(1)]));
+    });
   });
 }
 
@@ -133,11 +149,12 @@ export function replace(
     return afterLoading([name], () => {
       const { props } = config;
       const base = getActiveApp()?.presentation?.push;
-      const options = showOptions(name, props, AS_PUSH, base?.options, config.options, {
+      const id = nextId('Component');
+      let options = showOptions(name, props, AS_PUSH, base?.options, config.options, {
         app: pushAnimations(base?.transition),
         call: pushAnimations(config.transition),
       });
-      const id = nextId('Component');
+      if (hasCloseButton(placeOf(fromId))) options = withCloseButton(options, id);
       return withSlots(() =>
         engine.setStackRoot(fromId, [screenLayout(name, props, options, id)])
       ).then(() => id);
@@ -192,16 +209,25 @@ function showModalNow(name: string, config: WithProps<ModalConfig>): Promise<str
     app: modalAnimations(base.transition),
     call: modalAnimations(call.transition),
   });
-  if (settings.closeButton && settings.stack !== false)
+  // The stack gets its id here, so that the commands in it later know the modal had a close button.
+  const stackId = nextId('Stack');
+  const closeButton = settings.closeButton && settings.stack !== false;
+  if (closeButton) {
     options = withCloseButton(options, screenId);
+    closeButtonStacks.add(stackId);
+    forgetWithStack(stackId, screenId);
+  }
   if (call.onDismiss) whenScreenUnmounts(screenId, call.onDismiss);
   const screen = screenLayout(name, props, options, screenId);
   const presentation = presentationOptions(settings);
   const layout: Layout =
     settings.stack === false
       ? mergeLayoutOptions(screen, presentation)
-      : { stack: { children: [screen], options: presentation } };
-  return withSlots(() => engine.showModal(layout));
+      : { stack: { id: stackId, children: [screen], options: presentation } };
+  const shown = withSlots(() => engine.showModal(layout));
+  // A modal that never showed has no stack to remember.
+  if (closeButton) shown.catch(() => closeButtonStacks.delete(stackId));
+  return shown;
 }
 
 export function dismissModal(modalId: string): Promise<string> {
@@ -338,6 +364,21 @@ export function holdLeave(screenId: string, onAttempt: () => void): () => void {
   return () => {
     if (leaveHolds.get(screenId) === onAttempt) leaveHolds.delete(screenId);
   };
+}
+
+// Whether a screen is in the stack of a modal shown with a close button: the modal's own stack, not one in it.
+function hasCloseButton(place: ScreenPlace | undefined): boolean {
+  return place?.stack != null && place.stack === place.layer && closeButtonStacks.has(place.stack);
+}
+
+// The stack of a modal is gone with its last first screen: one that unmounts with no other first screen noted after
+// it (`setStack`, `replace` note theirs before the old one goes).
+function forgetWithStack(stackId: string, screenId: string): void {
+  whenScreenUnmounts(screenId, () => {
+    const next = firstScreenOf(stackId);
+    if (next) forgetWithStack(stackId, next);
+    else closeButtonStacks.delete(stackId);
+  });
 }
 
 /** The options with a close button first at the leading edge, which dismisses the modal of the screen. */

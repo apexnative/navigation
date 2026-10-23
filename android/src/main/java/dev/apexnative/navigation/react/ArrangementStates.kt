@@ -1,7 +1,5 @@
 package dev.apexnative.navigation.react
 
-import android.content.Context
-import com.facebook.react.ReactApplication
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.WritableMap
 import dev.apexnative.navigation.react.events.EventContract
@@ -19,11 +17,13 @@ internal object ArrangementStates {
 
     private val states = ConcurrentHashMap<String, State>()
 
-    /** Keeps the screen's state, and tells JavaScript when it changed and [notify] holds. Main thread only. */
-    fun set(context: Context, screenId: String, state: State, notify: Boolean) {
+    /**
+     * Keeps the screen's state, and tells JavaScript when it changed and [notify] holds, through [emitter], the one of
+     * the JavaScript the screen was made for: silent once it went. Main thread only.
+     */
+    fun set(screenId: String, state: State, notify: Boolean, emitter: EventEmitter) {
         if (states.put(screenId, state) == state || !notify) return
-        val reactContext = (context.applicationContext as? ReactApplication)?.reactHost?.currentReactContext ?: return
-        EventEmitter(reactContext).emitArrangementChanged(screenId, toMap(state))
+        emitter.emitArrangementChanged(screenId, toMap(state))
     }
 
     /** `{ placement, layout, front, hidden }`, empty for a screen outside a pair. Any thread. */

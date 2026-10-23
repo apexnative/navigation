@@ -25,7 +25,7 @@ top-level folder. Main thread only, unless a line says otherwise.
   `ReactView` (a React root), the stores (`ScreenInsets`, `ScreenRegions`, `ArrangementStates`, `Hinge`, `StartInfo`),
   `LaunchLink`, `ScrollEvents`.
 - `react/events/`: `AppearanceDispatcher`, `ScreenAppearance`, `EventEmitter`, `EventContract` (made by
-  `scripts/contract.mjs`), `NavigationStateReporter`, `ComponentType`.
+  `scripts/contract.mjs`), `NavigationState`, `ComponentType`.
 - `viewcontrollers/viewcontroller/`: `ViewController` (the base of every node), `Presenter`, `IReactView` (what a
   screen shows), `ScrollEventListener`.
 - `viewcontrollers/child/`, `parent/`: `ChildController` and the registry; `ParentController` (the base of layouts),
@@ -105,7 +105,7 @@ top-level folder. Main thread only, unless a line says otherwise.
 - System bars: `system/SystemUiOwner.kt`, `SystemUiLayers.kt`, `SystemUiRules.kt`, `SystemUiWindow.kt`,
   `AppDirection.kt`; `viewcontrollers/parent/ContainerBackground.kt`.
 - Events and state: `react/events/AppearanceDispatcher.kt`, `ScreenAppearance.kt`, `EventEmitter.kt`,
-  `NavigationStateReporter.kt`; `react/CommandAnswer.kt`.
+  `NavigationState.kt`; `react/CommandAnswer.kt`.
 - Options (parsing, merging): `options/Options.kt`, `OptionsReader.kt`, `OptionsCache.kt`, `DefaultOptions.kt`,
   `params/`, `parsers/`; `viewcontrollers/viewcontroller/ViewController.kt` (resolution).
 - Error texts and answers: `react/ErrorTexts.kt` and `react/CommandContract.kt`, made by `scripts/contract.mjs` from
@@ -172,6 +172,9 @@ top-level folder. Main thread only, unless a line says otherwise.
   `cancel` it on every exit.
 - A layer that waits to show must be a `WaitingLayer` and leave on every exit (show, supersede, destroy, root gone).
 - Never resolve a promise yourself: only `CommandAnswer` knows whether its JavaScript went and sends the state first.
+- An event of a screen goes to the JavaScript the screen was made for: `EventEmitter.of(node.jsGeneration)`, or an
+  emitter kept from then (it goes silent after a reload). React Native keeps one context across a reload, so a sender
+  taken from the context at event time tells the new JavaScript about a screen it never had.
 - A signal that comes inside a layout pass or a view's attach must not move views there; the stack posts readiness
   (`deliver`).
 - A step that runs later (a timer, a readiness signal, an animator's end, a user callback) runs under no runner: it
@@ -206,6 +209,10 @@ top-level folder. Main thread only, unless a line says otherwise.
 - The back gesture's preview shows the screen under the top outside any operation of the queue: it may only reveal
   it and put it back, and its release goes through `StackQueue.cut(gesture = true)`. A command that comes meanwhile
   stops it through `StackDisplay.stop`, like any transition it takes over.
+- What back does (`Navigator.canHandleBack`, `keepsBackFromSystem`) is computed on events, not before each frame: a
+  new path that changes it without a command (a gesture, an animator's end, a layout's switch) calls
+  `BackCallbackState.update`, or the system's back leaves the app where it should go back. Debug builds log a missed
+  one (`BackCallbackCheck`).
 - Without edge to edge the window resizes for the keyboard by the manifest's soft input mode, so
   `layout.adjustResize: false` goes through the system UI owner's keyboard group (`SystemUiWindow.setKeyboardCovers`),
   not through the screen's padding.

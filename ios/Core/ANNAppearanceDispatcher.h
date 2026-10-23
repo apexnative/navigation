@@ -58,11 +58,12 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// A transition ended, in this order: first a screen a transition began inside a node of `shown` that left the window
 /// and isn't one of that node's shown screens gets its `DidDisappear`; then `DidDisappear` of every screen of `hidden`,
-/// `DidAppear` of what `shown` shows, the navigation state now when it changed, `events` (the transition's own events,
+/// `DidAppear` of what `shown` shows, the navigation state now when it changed (the answer's one state step,
+/// `-[ANNCommandAnswer reportStateNow]`; nothing for a JavaScript that went), `events` (the transition's own events,
 /// `ANN.ScreenPopped` and `ANN.ModalDismissed`, and what must follow them, like stopping the content that went), then
-/// `answer` resolves with `value` (its own state step finds nothing new, then the promise, then
-/// `ANN.CommandCompleted`). A user's action passes no answer. The callbacks of UIKit that come later find the phases
-/// set and send nothing.
+/// `answer` resolves with `value` (the promise, then `ANN.CommandCompleted`; no second state). A user's action passes
+/// no answer, and its state goes all the same. The callbacks of UIKit that come later find the phases set and send
+/// nothing.
 + (void)endTransitionHiding:(NSArray<UIViewController *> *)hidden
                     showing:(NSArray<UIViewController *> *)shown
                      events:(nullable dispatch_block_t)events

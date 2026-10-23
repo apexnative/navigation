@@ -12,7 +12,6 @@ import androidx.appcompat.content.res.AppCompatResources
 import androidx.coordinatorlayout.widget.CoordinatorLayout
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
-import com.facebook.react.ReactApplication
 import dev.apexnative.navigation.options.SearchBarOptions
 import dev.apexnative.navigation.options.params.ThemeColour
 import dev.apexnative.navigation.react.events.EventEmitter
@@ -137,9 +136,6 @@ class StackSearchPresenter(
         refresh()
     }
 
-    override fun emitter(): EventEmitter? =
-        (activity.application as? ReactApplication)?.reactHost?.currentReactContext?.let { EventEmitter(it) }
-
     override fun keyboard(view: View, show: Boolean) {
         val controller = WindowCompat.getInsetsController(activity.window, view)
         if (show) controller.show(WindowInsetsCompat.Type.ime()) else controller.hide(WindowInsetsCompat.Type.ime())
@@ -150,7 +146,8 @@ class StackSearchPresenter(
             // The search of a pair of screens is its primary's: its events name that screen, which keeps the scope in
             // its user layer, where a merge that sends the same options again doesn't take it away.
             val owner = (screen as? OptionsScreen)?.optionsScreen ?: screen
-            ScreenSearch(this, owner.id, styleContext(), loadIcon) { scope ->
+            // Its events go to the JavaScript the screen was made for, and to no other.
+            ScreenSearch(this, owner.id, EventEmitter.of(owner.jsGeneration), styleContext(), loadIcon) { scope ->
                 owner.changeChoices { it.pickScope(scope) }
             }
         }

@@ -314,7 +314,7 @@ Each file and why: [What the command writes](./splash-screen#files).
 - **The settings** go into `package.json`, under `apexNavigation.splash`. An option given replaces its saved value; to drop the dark logo or color, remove `darkLogo` or `darkBackground` there and run the command again.
 - **A logo whose corners leave the circle** of Android 12's splash icon, 192 dp, gets a warning: Android cuts them. Make `--logo-width` smaller, or give the logo room around it.
 - **A file it can't change** is listed as `manual`, with the change to make: an app without `Images.xcassets` next to `Info.plist`, a manifest whose `MainActivity` and `<application>` have no theme to go over.
-- **`Info.plist` with `UILaunchScreen`** as well gets a warning: remove that dictionary, so that iOS shows the storyboard.
+- **`Info.plist` with `UILaunchScreen`** as well gets a warning: iOS shows that dictionary instead of the storyboard, so remove it.
 - **Its errors** in the JSON: `splash-settings` for a setting it can't take, `splash-image` for a logo it can't read or that doesn't fit (too tall at its width, a dark logo of other proportions), and `sharp-missing`, as for `icons`.
 
 `doctor` checks the splash in the App group:
@@ -323,7 +323,6 @@ Each file and why: [What the command writes](./splash-screen#files).
 | --- | --- |
 | Splash | The files of iOS or Android aren't made from the settings in `package.json`: changed by hand, made on one platform only, or by an older version of the command. Or the settings themselves are wrong, such as a logo that isn't there. |
 | Splash logo | The logo's corners leave Android 12's circle. |
-| Launch screen | Without settings: `Info.plist` has `UILaunchScreen` and no storyboard. iOS shows it at launch, but the navigation can only keep a storyboard on screen, so an empty window shows between it and the first screen. |
 
 Each warning names its fix, such as `npx apex-navigation splash`; `--fix` leaves these to you. What the user sees, and a splash of your own after the native one: [Splash screen](./splash-screen).
 

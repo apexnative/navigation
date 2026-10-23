@@ -116,7 +116,6 @@ class ModalCoordinatorTest {
                 "stateNeeded",
                 "didAppear:Details",
                 "stateNeeded",
-                "stateNow",
                 "state",
                 "resolve:Details",
                 "completed:showModal",
@@ -247,9 +246,8 @@ class ModalCoordinatorTest {
                 "stateNeeded",
                 "didAppear:Home",
                 "stateNeeded",
-                "stateNow",
-                "modalDismissed:Details:Details:1",
                 "state",
+                "modalDismissed:Details:Details:1",
                 "resolve:Details",
                 "completed:dismissModal",
             ),
@@ -362,9 +360,8 @@ class ModalCoordinatorTest {
             listOf(
                 "didDisappear:First",
                 "stateNeeded",
-                "stateNow",
-                "modalDismissed:First:First:1",
                 "state",
+                "modalDismissed:First:First:1",
                 "resolve:First",
                 "completed:dismissModal",
             ),
@@ -474,9 +471,8 @@ class ModalCoordinatorTest {
                 "stateNeeded",
                 "didAppear:Home",
                 "stateNeeded",
-                "stateNow",
-                "modalDismissed:Second:Second:2",
                 "state",
+                "modalDismissed:Second:Second:2",
                 "resolve:",
                 "completed:dismissAllModals",
             ),
@@ -628,6 +624,18 @@ class ModalCoordinatorTest {
         entries.clear()
         dismiss("Sheet")
         assertEquals(listOf("state", "resolve:Sheet", "completed:dismissModal"), entries)
+    }
+
+    @Test
+    fun aSheetClosedByTheUserComputesBackAgainAsItsDismissalStartsAndEnds() {
+        home()
+        shown("Sheet", sheet())
+        views.instant = true
+        host.backChanges = 0
+        // A drag down or a tap on the scrim: no command whose end would compute it.
+        views.sheets.getValue("Sheet").onClosedByUser()
+        assertEquals(2, host.backChanges)
+        assertNull(modals.canHandleBack())
     }
 
     @Test

@@ -2,7 +2,6 @@ package dev.apexnative.navigation.viewcontrollers.bottomtabs
 
 import dev.apexnative.navigation.customrow.BottomTabsCustomRowOptions
 import dev.apexnative.navigation.viewcontrollers.stack.fab.FabPlacement
-import dev.apexnative.navigation.viewcontrollers.stack.topbar.BarComponents
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -157,16 +156,6 @@ class TabsRoomTest {
         assertTrue(CustomTabRowGeometry.needsPlacing(null, place))
         assertFalse(CustomTabRowGeometry.needsPlacing(place, place.copy()))
         assertTrue(CustomTabRowGeometry.needsPlacing(place, place.copy(top = 1890)))
-    }
-
-    @Test
-    fun aCellsIdKeepsItsReadinessUntilItsLastRootStops() {
-        BarComponents.rootMade("Cell1")
-        BarComponents.rootMade("Cell1")
-        assertTrue(BarComponents.isLive("Cell1"))
-        assertFalse(BarComponents.rootStopped("Cell1"))
-        assertTrue(BarComponents.rootStopped("Cell1"))
-        assertFalse(BarComponents.isLive("Cell1"))
     }
 
     @Test

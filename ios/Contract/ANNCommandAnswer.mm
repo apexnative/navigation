@@ -10,6 +10,7 @@
 @implementation ANNCommandAnswer {
     RCTPromiseResolveBlock _resolve;
     RCTPromiseRejectBlock _reject;
+    BOOL _stateReported;
 }
 
 - (instancetype)initWithCommandName:(NSString *)commandName
@@ -51,6 +52,27 @@
     return YES;
 }
 
+- (void)reportStateNow {
+    ANNAssertMainQueue();
+    if (_stateReported) {
+        return;
+    }
+    _stateReported = YES;
+    // A step made for the JavaScript that went sends nothing, as its answer does.
+    if (!self.isCurrent) {
+        return;
+    }
+    // The command did its work: a failure of the state step costs only the state, never the events and the answer.
+    @try {
+        [ANNNavigationState updateNowFor:_commandName];
+    } @catch (NSException *exception) {
+        NSString *reason = exception.reason.length > 0 ? exception.reason : exception.name;
+        [ANNErrorHandler logFailureOf:_commandName
+                                 text:[ANNErrorTexts couldNot:@"report the navigation state"
+                                                        reason:reason]];
+    }
+}
+
 - (void)resolve:(id)value {
     if (![self takeAnswer]) {
         return;
@@ -59,18 +81,9 @@
     _resolve = nil;
     _reject = nil;
     // A command that may change what shows (`ANNCommandContract`): the state goes before the promise, so that
-    // `getState()` after `await` has the result.
-    BOOL changesWhatShows = ANNCommandReportsState(_commandName);
-    if (changesWhatShows) {
-        // The command did its work: a failure of the state step costs only the state, never the answer.
-        @try {
-            [ANNNavigationState reportBeforeAnswerOf:_commandName];
-        } @catch (NSException *exception) {
-            NSString *reason = exception.reason.length > 0 ? exception.reason : exception.name;
-            [ANNErrorHandler logFailureOf:_commandName
-                                     text:[ANNErrorTexts couldNot:@"report the navigation state"
-                                                            reason:reason]];
-        }
+    // `getState()` after `await` has the result. Sent at the end of its transition already, it goes no more.
+    if (ANNCommandReportsState(_commandName)) {
+        [self reportStateNow];
     }
     [ANNErrorHandler resolve:resolve of:_commandName value:value];
     if (_commandId && ANNCommandSendsCompleted(_commandName)) {

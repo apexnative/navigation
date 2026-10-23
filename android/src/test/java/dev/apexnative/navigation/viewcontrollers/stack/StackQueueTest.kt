@@ -10,6 +10,7 @@ import dev.apexnative.navigation.viewcontrollers.stack.StackQueueHarness.Compani
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -60,7 +61,7 @@ class StackQueueTest {
         h.assertViews("raise:B")
         assertEquals(listOf("PushIn:B:0.0:96.0", "PushCover:A:1.0:0.0"), display.starts)
         display.finishAll()
-        h.assertEvents("didDisappear:A", "didAppear:B", "stateNow", "state", "push1 resolve B", "completed:push")
+        h.assertEvents("didDisappear:A", "didAppear:B", "state", "push1 resolve B", "completed:push")
         // The covered screen leaves the container at the end, not before.
         h.assertViews("detach:A")
         assertEquals(listOf("A", "B"), h.shown())
@@ -72,7 +73,7 @@ class StackQueueTest {
         h.start(h.screen("A"))
         h.push(h.screen("B", options = h.options { animations.push.enabled = Bool(false) }))
         h.assertEvents(
-            "will:B", "didDisappear:A", "didAppear:B", "stateNow", "state", "push1 resolve B", "completed:push",
+            "will:B", "didDisappear:A", "didAppear:B", "state", "push1 resolve B", "completed:push",
         )
         assertTrue(display.starts.isEmpty())
         assertSettled()
@@ -89,7 +90,7 @@ class StackQueueTest {
         assertEquals(listOf("PopOut:B:1.0:0.0", "PopReveal:A:1.0:-96.0"), display.starts)
         display.finishAll()
         h.assertEvents(
-            "didDisappear:B", "didAppear:A", "stateNow", "popped:B", "destroyed:B", "state", "pop1 resolve B",
+            "didDisappear:B", "didAppear:A", "state", "popped:B", "destroyed:B", "pop1 resolve B",
             "completed:pop",
         )
         assertTrue(b.isDestroyed)
@@ -105,8 +106,8 @@ class StackQueueTest {
         assertEquals(listOf("PopOut:C:1.0:0.0", "PopReveal:A:1.0:-96.0"), display.starts)
         display.finishAll()
         h.assertEvents(
-            "will:A", "didDisappear:C", "didAppear:A", "stateNow", "popped:C", "popped:B", "destroyed:C",
-            "destroyed:B", "state", "pop1 resolve B", "completed:pop",
+            "will:A", "didDisappear:C", "didAppear:A", "state", "popped:C", "popped:B", "destroyed:C",
+            "destroyed:B", "pop1 resolve B", "completed:pop",
         )
         assertEquals(listOf("A"), h.entries())
         assertSettled()
@@ -119,8 +120,8 @@ class StackQueueTest {
         h.popTo(a)
         display.finishAll()
         h.assertEvents(
-            "will:A", "didDisappear:D", "didAppear:A", "stateNow", "popped:D", "popped:C", "popped:B",
-            "destroyed:D", "destroyed:C", "destroyed:B", "state", "popTo1 resolve A", "completed:popTo",
+            "will:A", "didDisappear:D", "didAppear:A", "state", "popped:D", "popped:C", "popped:B",
+            "destroyed:D", "destroyed:C", "destroyed:B", "popTo1 resolve A", "completed:popTo",
         )
         assertSettled()
     }
@@ -131,8 +132,8 @@ class StackQueueTest {
         h.popToRoot()
         display.finishAll()
         h.assertEvents(
-            "will:A", "didDisappear:C", "didAppear:A", "stateNow", "popped:C", "popped:B", "destroyed:C",
-            "destroyed:B", "state", "popToRoot1 resolve A", "completed:popToRoot",
+            "will:A", "didDisappear:C", "didAppear:A", "state", "popped:C", "popped:B", "destroyed:C",
+            "destroyed:B", "popToRoot1 resolve A", "completed:popToRoot",
         )
         assertSettled()
     }
@@ -153,8 +154,8 @@ class StackQueueTest {
         assertEquals(listOf("FadeIn:D:0.0:0.0", "FadeOut:B:1.0:0.0"), display.starts)
         display.finishAll()
         h.assertEvents(
-            "didDisappear:B", "didAppear:D", "stateNow", "popped:B", "popped:A", "destroyed:B", "destroyed:A",
-            "state", "setStackRoot1 resolve D", "completed:setStackRoot",
+            "didDisappear:B", "didAppear:D", "state", "popped:B", "popped:A", "destroyed:B", "destroyed:A",
+            "setStackRoot1 resolve D", "completed:setStackRoot",
         )
         // The lower new screen makes its content after the end, in the window.
         h.assertViews("raise:D", "remove:B", "placeLower:C", "detach:C")
@@ -170,7 +171,7 @@ class StackQueueTest {
         assertEquals(listOf("PushIn:C:0.0:96.0", "PushCover:A:1.0:0.0"), display.starts)
         display.finishAll()
         h.assertEvents(
-            "will:C", "didDisappear:A", "didAppear:C", "stateNow", "popped:A", "destroyed:A", "state",
+            "will:C", "didDisappear:A", "didAppear:C", "state", "popped:A", "destroyed:A",
             "setStackRoot1 resolve C", "completed:setStackRoot",
         )
         assertSettled()
@@ -185,8 +186,8 @@ class StackQueueTest {
         display.finishAll()
         // No ScreenPopped for the old X: JavaScript would forget the new one; it goes last.
         h.assertEvents(
-            "will:X", "didDisappear:X", "didAppear:X", "stateNow", "popped:A", "destroyed:A", "destroyed:X",
-            "state", "setStackRoot1 resolve X", "completed:setStackRoot",
+            "will:X", "didDisappear:X", "didAppear:X", "state", "popped:A", "destroyed:A", "destroyed:X",
+            "setStackRoot1 resolve X", "completed:setStackRoot",
         )
         assertTrue(old.isDestroyed)
         assertSame(new, h.registry.find("X"))
@@ -227,8 +228,8 @@ class StackQueueTest {
         assertEquals(listOf("PopOut:C:1.0:0.0", "PopReveal:A:1.0:-96.0"), display.starts)
         display.finishAll()
         h.assertEvents(
-            "will:A", "didDisappear:C", "didAppear:A", "stateNow", "popped:C", "popped:B", "destroyed:C",
-            "destroyed:B", "state", "push1 resolve A", "completed:push",
+            "will:A", "didDisappear:C", "didAppear:A", "state", "popped:C", "popped:B", "destroyed:C",
+            "destroyed:B", "push1 resolve A", "completed:push",
         )
         assertNull(h.registry.find("D"))
         assertSettled()
@@ -291,8 +292,8 @@ class StackQueueTest {
         h.assertEvents("will:B", "will:C")
         display.finishAll()
         h.assertEvents(
-            "didDisappear:A", "stateNow", "state", "push1 resolve B", "completed:push",
-            "didDisappear:B", "didAppear:C", "stateNow", "state", "push2 resolve C", "completed:push",
+            "didDisappear:A", "state", "push1 resolve B", "completed:push",
+            "didDisappear:B", "didAppear:C", "state", "push2 resolve C", "completed:push",
         )
         assertSettled()
     }
@@ -335,7 +336,7 @@ class StackQueueTest {
         assertEquals("PopOut:A:1.0:0.0", display.starts.first())
         display.finishAll()
         h.assertEvents(
-            "didDisappear:A", "didAppear:X", "stateNow", "popped:A", "destroyed:A", "state", "popTo2 resolve X",
+            "didDisappear:A", "didAppear:X", "state", "popped:A", "destroyed:A", "popTo2 resolve X",
             "completed:popTo",
         )
         assertSettled()
@@ -349,7 +350,7 @@ class StackQueueTest {
         display.finishAll()
         h.assertEvents(
             "destroyed:B", "state", "push1 resolve B", "completed:push", "will:C", "didDisappear:A", "didAppear:C",
-            "stateNow", "popped:A", "destroyed:A", "state", "setStackRoot2 resolve C", "completed:setStackRoot",
+            "state", "popped:A", "destroyed:A", "setStackRoot2 resolve C", "completed:setStackRoot",
         )
         assertSettled()
     }
@@ -525,12 +526,12 @@ class StackQueueTest {
         val e = h.screen("E")
         h.push(e, from = "D")
         h.assertEvents(
-            "didDisappear:B", "stateNow", "popped:B", "popped:A", "destroyed:B", "destroyed:A", "state",
+            "didDisappear:B", "state", "popped:B", "popped:A", "destroyed:B", "destroyed:A",
             "setStackRoot1 resolve D", "completed:setStackRoot", "will:E",
         )
         assertEquals(listOf("C", "D", "E"), h.entries())
         display.finishAll()
-        h.assertEvents("didAppear:E", "stateNow", "state", "push2 resolve E", "completed:push")
+        h.assertEvents("didAppear:E", "state", "push2 resolve E", "completed:push")
         d.content.mount()
         h.pop()
         display.finishAll()
@@ -545,9 +546,9 @@ class StackQueueTest {
         h.setStackRoot(h.screen("F"))
         display.finishAll()
         h.assertEvents(
-            "didDisappear:B", "stateNow", "popped:B", "popped:A", "destroyed:B", "destroyed:A", "state",
+            "didDisappear:B", "state", "popped:B", "popped:A", "destroyed:B", "destroyed:A",
             "setStackRoot1 resolve D", "completed:setStackRoot",
-            "will:F", "didAppear:F", "stateNow", "popped:D", "popped:C", "destroyed:D", "destroyed:C", "state",
+            "will:F", "didAppear:F", "state", "popped:D", "popped:C", "destroyed:D", "destroyed:C",
             "setStackRoot2 resolve F", "completed:setStackRoot",
         )
         assertSettled()
@@ -559,9 +560,9 @@ class StackQueueTest {
         h.pop()
         display.finishAll()
         h.assertEvents(
-            "didDisappear:B", "stateNow", "popped:B", "popped:A", "destroyed:B", "destroyed:A", "state",
+            "didDisappear:B", "state", "popped:B", "popped:A", "destroyed:B", "destroyed:A",
             "setStackRoot1 resolve D", "completed:setStackRoot",
-            "will:C", "didAppear:C", "stateNow", "popped:D", "destroyed:D", "state", "pop2 resolve D",
+            "will:C", "didAppear:C", "state", "popped:D", "destroyed:D", "pop2 resolve D",
             "completed:pop",
         )
         assertSettled()
@@ -596,7 +597,7 @@ class StackQueueTest {
         waitingRoot()
         h.splitSetRoot(h.screen("F"))
         h.assertEvents(
-            "didDisappear:B", "stateNow", "popped:B", "popped:A", "destroyed:B", "destroyed:A", "state",
+            "didDisappear:B", "state", "popped:B", "popped:A", "destroyed:B", "destroyed:A",
             "setStackRoot1 resolve D", "completed:setStackRoot",
             "will:F", "didAppear:F", "stateNow", "popped:D", "popped:C", "destroyed:D", "destroyed:C",
             "listener success F",
@@ -618,8 +619,8 @@ class StackQueueTest {
         h.assertViews("raise:B", "raise:C", "stop:B")
         display.finishAll()
         h.assertEvents(
-            "will:B", "will:C", "didDisappear:A", "stateNow", "state", "push1 resolve B", "completed:push",
-            "didDisappear:B", "didAppear:C", "stateNow", "state", "push2 resolve C", "completed:push",
+            "will:B", "will:C", "didDisappear:A", "state", "push1 resolve B", "completed:push",
+            "didDisappear:B", "didAppear:C", "state", "push2 resolve C", "completed:push",
         )
         h.assertViews("detach:A", "detach:B")
         assertSettled()
@@ -635,11 +636,11 @@ class StackQueueTest {
         h.clear()
         h.pop()
         // The push ends at once, without DidAppear of B or DidDisappear of A.
-        h.assertEvents("stateNow", "state", "push1 resolve B", "completed:push")
+        h.assertEvents("state", "push1 resolve B", "completed:push")
         assertEquals(listOf("PopOut:B:0.5:48.0", "PopReveal:A:1.0:0.0"), display.starts)
         display.finishAll()
         h.assertEvents(
-            "didDisappear:B", "stateNow", "popped:B", "destroyed:B", "state", "pop2 resolve B", "completed:pop",
+            "didDisappear:B", "state", "popped:B", "destroyed:B", "pop2 resolve B", "completed:pop",
         )
         assertSettled()
     }
@@ -651,8 +652,8 @@ class StackQueueTest {
         h.clear()
         h.pop()
         h.assertEvents(
-            "stateNow", "state", "push1 resolve B", "completed:push", "didDisappear:B", "stateNow", "popped:B",
-            "destroyed:B", "state", "pop2 resolve B", "completed:pop",
+            "state", "push1 resolve B", "completed:push", "didDisappear:B", "state", "popped:B",
+            "destroyed:B", "pop2 resolve B", "completed:pop",
         )
         assertTrue(display.animating.isEmpty())
         assertSettled()
@@ -666,7 +667,7 @@ class StackQueueTest {
         assertTrue(h.back())
         display.finishAll()
         h.assertEvents(
-            "stateNow", "state", "push1 resolve B", "completed:push", "didDisappear:B", "stateNow", "popped:B",
+            "state", "push1 resolve B", "completed:push", "didDisappear:B", "stateNow", "popped:B",
             "destroyed:B",
         )
         assertSettled()
@@ -682,8 +683,8 @@ class StackQueueTest {
         h.assertViews("reveal:X", "stop:B", "stop:A", "hide:A")
         display.finishAll()
         h.assertEvents(
-            "stateNow", "state", "push1 resolve B", "completed:push", "will:X", "didDisappear:B", "didDisappear:A",
-            "didAppear:X", "stateNow", "popped:B", "popped:A", "destroyed:B", "destroyed:A", "state",
+            "state", "push1 resolve B", "completed:push", "will:X", "didDisappear:B", "didDisappear:A",
+            "didAppear:X", "state", "popped:B", "popped:A", "destroyed:B", "destroyed:A",
             "popTo2 resolve X", "completed:popTo",
         )
         assertSettled()
@@ -725,8 +726,8 @@ class StackQueueTest {
         h.push(h.screen("C"), from = "A")
         display.finishAll()
         h.assertEvents(
-            "will:A", "will:C", "didDisappear:B", "stateNow", "popped:B", "destroyed:B", "state", "pop1 resolve B",
-            "completed:pop", "didDisappear:A", "didAppear:C", "stateNow", "state", "push2 resolve C",
+            "will:A", "will:C", "didDisappear:B", "state", "popped:B", "destroyed:B", "pop1 resolve B",
+            "completed:pop", "didDisappear:A", "didAppear:C", "state", "push2 resolve C",
             "completed:push",
         )
         assertSettled()
@@ -739,12 +740,12 @@ class StackQueueTest {
         h.push(h.screen("C", options = h.options { animations.push.enabled = Bool(false) }), from = "A")
         // The push answers first: it has no transition (C9).
         h.assertEvents(
-            "will:A", "will:C", "didDisappear:A", "didAppear:C", "stateNow", "state", "push2 resolve C",
+            "will:A", "will:C", "didDisappear:A", "didAppear:C", "state", "push2 resolve C",
             "completed:push",
         )
         display.finishAll()
         h.assertEvents(
-            "didDisappear:B", "stateNow", "popped:B", "destroyed:B", "state", "pop1 resolve B", "completed:pop",
+            "didDisappear:B", "state", "popped:B", "destroyed:B", "pop1 resolve B", "completed:pop",
         )
         assertSettled()
     }
@@ -759,9 +760,9 @@ class StackQueueTest {
         c.content.mount()
         display.finishAll()
         h.assertEvents(
-            "will:B", "stateNow", "state", "push1 resolve B", "completed:push", "will:C", "didDisappear:B",
-            "didDisappear:A", "didAppear:C", "stateNow", "popped:B", "popped:A", "destroyed:B", "destroyed:A",
-            "state", "setStackRoot2 resolve C", "completed:setStackRoot",
+            "will:B", "state", "push1 resolve B", "completed:push", "will:C", "didDisappear:B",
+            "didDisappear:A", "didAppear:C", "state", "popped:B", "popped:A", "destroyed:B", "destroyed:A",
+            "setStackRoot2 resolve C", "completed:setStackRoot",
         )
         assertSettled()
     }
@@ -774,9 +775,9 @@ class StackQueueTest {
         display.finishAll()
         // The end of setStackRoot stops only what it destroys: the push plays to its end.
         h.assertEvents(
-            "will:C", "will:D", "didDisappear:B", "stateNow", "popped:B", "popped:A", "destroyed:B",
-            "destroyed:A", "state", "setStackRoot1 resolve C", "completed:setStackRoot", "didDisappear:C",
-            "didAppear:D", "stateNow", "state", "push2 resolve D", "completed:push",
+            "will:C", "will:D", "didDisappear:B", "state", "popped:B", "popped:A", "destroyed:B",
+            "destroyed:A", "setStackRoot1 resolve C", "completed:setStackRoot", "didDisappear:C",
+            "didAppear:D", "state", "push2 resolve D", "completed:push",
         )
         assertSettled()
     }
@@ -787,12 +788,12 @@ class StackQueueTest {
         h.setStackRoot(h.screen("C"))
         h.setStackRoot(h.screen("F"))
         h.assertEvents(
-            "will:C", "didDisappear:B", "didAppear:C", "stateNow", "popped:B", "popped:A", "destroyed:B",
-            "destroyed:A", "state", "setStackRoot1 resolve C", "completed:setStackRoot", "will:F",
+            "will:C", "didDisappear:B", "didAppear:C", "state", "popped:B", "popped:A", "destroyed:B",
+            "destroyed:A", "setStackRoot1 resolve C", "completed:setStackRoot", "will:F",
         )
         display.finishAll()
         h.assertEvents(
-            "didDisappear:C", "didAppear:F", "stateNow", "popped:C", "destroyed:C", "state",
+            "didDisappear:C", "didAppear:F", "state", "popped:C", "destroyed:C",
             "setStackRoot2 resolve F", "completed:setStackRoot",
         )
         assertSettled()
@@ -806,9 +807,9 @@ class StackQueueTest {
         display.finishAll()
         // The setStackRoot isn't cancelled: the pop takes D over, and each ends by itself.
         h.assertEvents(
-            "will:D", "will:C", "didDisappear:A", "stateNow", "popped:A", "destroyed:A", "state",
-            "setStackRoot1 resolve D", "completed:setStackRoot", "didDisappear:D", "didAppear:C", "stateNow",
-            "popped:D", "destroyed:D", "state", "pop2 resolve D", "completed:pop",
+            "will:D", "will:C", "didDisappear:A", "state", "popped:A", "destroyed:A",
+            "setStackRoot1 resolve D", "completed:setStackRoot", "didDisappear:D", "didAppear:C", "state",
+            "popped:D", "destroyed:D", "pop2 resolve D", "completed:pop",
         )
         assertSettled()
     }
@@ -820,8 +821,8 @@ class StackQueueTest {
         h.setStackRoot(h.screen("C"))
         display.finishAll()
         h.assertEvents(
-            "will:A", "will:C", "didDisappear:B", "stateNow", "popped:B", "destroyed:B", "state", "pop1 resolve B",
-            "completed:pop", "didDisappear:A", "didAppear:C", "stateNow", "popped:A", "destroyed:A", "state",
+            "will:A", "will:C", "didDisappear:B", "state", "popped:B", "destroyed:B", "pop1 resolve B",
+            "completed:pop", "didDisappear:A", "didAppear:C", "state", "popped:A", "destroyed:A",
             "setStackRoot2 resolve C", "completed:setStackRoot",
         )
         assertSettled()
@@ -857,7 +858,7 @@ class StackQueueTest {
         h.push(h.screen("B"))
         h.splitSetRoot(h.screen("C"))
         h.assertEvents(
-            "will:B", "stateNow", "state", "push1 resolve B", "completed:push", "will:C", "didDisappear:B",
+            "will:B", "state", "push1 resolve B", "completed:push", "will:C", "didDisappear:B",
             "didDisappear:A", "didAppear:C", "stateNow", "popped:B", "popped:A", "destroyed:B", "destroyed:A",
             "listener success C",
         )
@@ -900,7 +901,7 @@ class StackQueueTest {
         hide()
         h.clear()
         h.push(h.screen("B", options = h.options { animations.push.waitForRender = Bool(true) }))
-        h.assertEvents("stateNow", "state", "push1 resolve B", "completed:push")
+        h.assertEvents("state", "push1 resolve B", "completed:push")
         h.assertViews("raise:B", "detach:A")
         show()
         h.assertEvents("will:B", "didAppear:B")
@@ -913,7 +914,7 @@ class StackQueueTest {
         hide()
         h.clear()
         h.pop()
-        h.assertEvents("stateNow", "popped:B", "destroyed:B", "state", "pop1 resolve B", "completed:pop")
+        h.assertEvents("state", "popped:B", "destroyed:B", "pop1 resolve B", "completed:pop")
         show()
         h.assertEvents("will:A", "didAppear:A")
         assertSettled()
@@ -926,7 +927,7 @@ class StackQueueTest {
         h.clear()
         h.setStackRoot(h.screen("C", ready = false))
         h.assertEvents(
-            "stateNow", "popped:B", "popped:A", "destroyed:B", "destroyed:A", "state", "setStackRoot1 resolve C",
+            "state", "popped:B", "popped:A", "destroyed:B", "destroyed:A", "setStackRoot1 resolve C",
             "completed:setStackRoot",
         )
         assertSettled()
@@ -961,9 +962,9 @@ class StackQueueTest {
         // No view is made or moved; the screens that leave get their ScreenPopped and go.
         assertTrue(h.views.isEmpty())
         h.assertEvents(
-            "stateNow", "state", "push1 resolve B", "completed:push",
-            "stateNow", "popped:B", "destroyed:B", "state", "pop2 resolve B", "completed:pop",
-            "stateNow", "popped:A", "destroyed:A", "state", "setStackRoot3 resolve C", "completed:setStackRoot",
+            "state", "push1 resolve B", "completed:push",
+            "state", "popped:B", "destroyed:B", "pop2 resolve B", "completed:pop",
+            "state", "popped:A", "destroyed:A", "setStackRoot3 resolve C", "completed:setStackRoot",
         )
         assertSettled()
     }
@@ -974,7 +975,7 @@ class StackQueueTest {
         val b = h.waiting("B")
         h.push(b)
         hide()
-        h.assertEvents("didDisappear:A", "stateNow", "state", "push1 resolve B", "completed:push")
+        h.assertEvents("didDisappear:A", "state", "push1 resolve B", "completed:push")
         assertFalse(h.journal.contains("markReady:B"))
         show()
         assertTrue(h.events().isEmpty())
@@ -991,7 +992,7 @@ class StackQueueTest {
         hide()
         h.clear()
         display.finishAll()
-        h.assertEvents("stateNow", "state", "push1 resolve B", "completed:push")
+        h.assertEvents("state", "push1 resolve B", "completed:push")
         show()
         h.assertEvents("will:B", "didAppear:B")
         assertSettled()
@@ -1155,6 +1156,38 @@ class StackQueueTest {
     }
 
     @Test
+    fun case71bBackIsComputedAsAnOperationIsAcceptedAndAsAWaitingPushBegins() {
+        // Without a frame that computes it: the entries change at the acceptance, and the screen whose options count
+        // (`hardwareBackButton.systemAnimation`) when the push that waited for it begins, after its command.
+        val real = StackQueueHarness(realHost = true)
+        real.install()
+        val navigator = Navigator(real.activity)
+        val callback = object : OnBackPressedCallback(false) {
+            override fun handleOnBackPressed() = Unit
+        }
+        BackCallbackState.attach(navigator, callback)
+        try {
+            real.start(real.screen("A"))
+            val b = real.waiting("B")
+            callback.isEnabled = true
+            real.push(b)
+            assertNotSame(b, real.queue.currentChild)
+            assertFalse("at the acceptance", callback.isEnabled)
+            callback.isEnabled = true
+            b.content.mount()
+            assertSame(b, real.queue.currentChild)
+            assertFalse("as the push begins", callback.isEnabled)
+            callback.isEnabled = true
+            assertTrue(real.back())
+            assertFalse("at the acceptance of back", callback.isEnabled)
+            real.display.finishAll()
+        } finally {
+            BackCallbackState.detach(navigator)
+            real.uninstall()
+        }
+    }
+
+    @Test
     fun case72BlurOnUnmountAtTheStartOfACutAndOfAReplace() {
         val a = h.screen("A")
         h.start(a, h.screen("B"), h.screen("C"))
@@ -1191,7 +1224,7 @@ class StackQueueTest {
         h.push(b)
         display.finishAll()
         // The content of B hasn't mounted: its appearance waits for it, the transition doesn't.
-        h.assertEvents("didDisappear:A", "stateNow", "state", "push1 resolve B", "completed:push")
+        h.assertEvents("didDisappear:A", "state", "push1 resolve B", "completed:push")
         b.content.mount()
         h.assertEvents("will:B", "didAppear:B")
         assertSettled()
@@ -1204,11 +1237,11 @@ class StackQueueTest {
         display.canAnimate = false
         h.push(h.screen("B"))
         h.assertEvents(
-            "will:B", "didDisappear:A", "didAppear:B", "stateNow", "state", "push1 resolve B", "completed:push",
+            "will:B", "didDisappear:A", "didAppear:B", "state", "push1 resolve B", "completed:push",
         )
         h.pop()
         h.assertEvents(
-            "will:A", "didDisappear:B", "didAppear:A", "stateNow", "popped:B", "destroyed:B", "state",
+            "will:A", "didDisappear:B", "didAppear:A", "state", "popped:B", "destroyed:B",
             "pop2 resolve B", "completed:pop",
         )
         assertTrue(display.starts.isEmpty())

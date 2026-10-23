@@ -87,10 +87,10 @@ dispatcher.
    `ANNStackAnimatingDelegate` give UIKit the `ANNTransitionAnimator`.
 7. **The end.** `stackWhenTransitionEnds:` fires from the transition coordinator and calls `endPush:`, which calls
    `+[ANNAppearanceDispatcher endTransitionHiding:showing:events:answer:value:]`. In this order: `ComponentDidDisappear`
-   of Home, `ComponentDidAppear` of Profile, `ANN.NavigationStateChanged` (`+[ANNNavigationState updateNow]`), the
-   transition's `events`, then `-[ANNCommandAnswer resolve:]`: the state again if it changed
-   (`reportBeforeAnswerOf:`), the promise with Profile's id, then `ANN.CommandCompleted`. `finish:` frees the queue for
-   the next operation.
+   of Home, `ComponentDidAppear` of Profile, `ANN.NavigationStateChanged` (`-[ANNCommandAnswer reportStateNow]`, the
+   answer's one state step), the transition's `events`, then `-[ANNCommandAnswer resolve:]`: the promise with
+   Profile's id, then `ANN.CommandCompleted`. A command answered without a transition's end (`setRoot` with layout
+   modals) sends its state from `resolve:`. `finish:` frees the queue for the next operation.
 
 Events go out through `ANNEventEmitter` on the main queue and reach JS through `ANNTurboEventEmitter`.
 
@@ -117,13 +117,13 @@ Each of these owns one rule. Call it; do not copy it.
 
 - `ANNCommandRunner`: The one path of every async command: generation, check, main queue, exception guard. Called by: `ANNTurboModule`.
 - `ANNLayoutReader`: The layout check, depth first, the same order and texts as Android. Module queue. Called by: The runner's check blocks.
-- `ANNCommandAnswer`: The answer: state, then promise, then `ANN.CommandCompleted`; once; silent for a JavaScript that went. Called by: Every coordinator and queue.
+- `ANNCommandAnswer`: The answer: state (one step per answer, `reportStateNow`, asked by the end of its transition or by `resolve:`), then promise, then `ANN.CommandCompleted`; once; silent for a JavaScript that went. Called by: Every coordinator and queue.
 - `ANNNodeRegistry`: Every node by id, weakly. Filled by the factory, cleared at a reload. Called by: Commands, modules, `findViewController:`.
 - `ANNLayoutFactory`: The core code that names module classes (`ANNSplitViewController`, `ANNSideMenuViewController`, `ANNArrangementViewController`); `ANNSideMenuPresenter` is the one other file that does. One maker per layout type; registers each node. Called by: Every command that shows a layout.
 - `ANNOptionsCache`: The one invalidation point of resolved options. Called by: The setters of `ANNNodeHelper.options` and of its user layer (`setUserChoice:forKey:`), and `ANNDefaultOptions`, only.
 - `ANNNodeHelper resolveOptionsWithDefault`: What a node shows with: defaults, parents' own options (each with its user layer), the node's `resolveOptions` (own, its user layer, then the current child down). Cached, read-only. Called by: Presenters, coordinators.
 - `ANNAppearanceDispatcher`: The only sender of `ComponentWillAppear`, `ComponentDidAppear`, `ComponentDidDisappear`; the end-of-transition order; the events of a node that goes. Called by: Screens, queues, coordinators.
-- `ANNNavigationState`: The visible screen and the nearest tabs it is in (the last tabs met walking down); coalesced updates, holds, the state before an answer. Called by: The dispatcher, `ANNCommandAnswer`, `ANNRootCoordinator`.
+- `ANNNavigationState`: The visible screen and the nearest tabs it is in (the last tabs met walking down); coalesced updates, holds, the state now. Called by: The dispatcher, `ANNCommandAnswer`, `ANNRootCoordinator`, `ANNModalCoordinator`, `ANNBottomTabsController`.
 - `ANNScreenReadiness`: The signals of a screen's safe area view (has one, laid out, content rendered), sticky, by screen id. Called by: `ANNSafeAreaViewComponentView`, `ANNReactView`.
 - `ANNRenderWait`: The one wait for the render of what a command shows: content, bar components, limits, the unknown-content rule. Called by: Root, stack queue, modals, overlays, `showInColumn`.
 - `ANNParking`: Where a view waits for its content unseen: the window, a stack's view, a preview's host view. Called by: Root, stack, modals, overlays, `ANNPreviewPush`.

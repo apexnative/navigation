@@ -270,8 +270,8 @@ class StackController(
 
     /**
      * The default pop of the top is what back does now and it can be previewed: two entries or more, nothing running
-     * or waiting, no open search, the top doesn't hold back and pops with the default transition, the screen under it
-     * has its view, and the stack shows.
+     * or waiting, no open search, the top doesn't hold back, pops with the default transition and doesn't turn the
+     * preview off (`animations.pop.preview: false`), the screen under it has its view, and the stack shows.
      */
     override fun stackPoppedByBack(): StackController? {
         if (topBar.isSearchOpen() || !queue.isAtRest) return null
@@ -282,9 +282,8 @@ class StackController(
         if (!queue.isRendered(target) || backGesture != null) return null
         val options = resolvedOf(top)
         val pop = options.animations.pop
-        if (options.hardwareBackButton.popStackOnPress.isFalse || pop.enabled.isFalse || AnimationRules.stackIsOwn(pop)) {
-            return null
-        }
+        if (options.hardwareBackButton.popStackOnPress.isFalse || pop.enabled.isFalse) return null
+        if (pop.preview.isFalse || AnimationRules.stackIsOwn(pop)) return null
         val display = queue.display
         return this.takeIf { display.isOnScreen && display.canAnimate }
     }
@@ -694,15 +693,20 @@ class StackController(
     private fun optionsScreen(node: ViewController<*>): ViewController<*> =
         (node as? OptionsScreen)?.optionsScreen ?: node
 
+    // What back does is computed again on each change of the queue (BackCallbackState): its entries change as an
+    // operation is accepted, the screen whose options count as its current child changes (a push that waited for its
+    // screen begins after its command), and an operation ends or rejects.
     private inner class QueueHost : StackQueue.Host {
         override fun operationAccepted() {
             backGesture?.abort()
+            BackCallbackState.update()
         }
 
         // The bar takes the options of the new top at once, also without appearance events.
         override fun currentChildChanged() {
             updateBar()
             navigator?.shownScreensChanged(this@StackController)
+            BackCallbackState.update()
         }
 
         // Before the bar takes the new top's options: the row's picture or the bar's travel, and how it shows or hides.

@@ -119,7 +119,6 @@ class NavigatorSetRootTest {
                 "will:Home1",
                 "didAppear:Home1",
                 "stateNeeded",
-                "stateNow",
                 "state",
                 "resolve:Home1",
                 "completed:setRoot",

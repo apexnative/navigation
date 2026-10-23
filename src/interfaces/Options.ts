@@ -107,6 +107,7 @@ export type {
   ScreenAnimationOptions,
   SharedElementTransition,
   StackAnimationOptions,
+  StackPopAnimationOptions,
   StackPushAnimationOptions,
   TopBarAnimationOptions,
   ViewAnimationOptions,

@@ -14,6 +14,7 @@ import dev.apexnative.navigation.react.ScreenInsets
 import dev.apexnative.navigation.react.ScreenRegions
 import dev.apexnative.navigation.react.events.AppearanceDispatcher
 import dev.apexnative.navigation.react.events.ComponentType
+import dev.apexnative.navigation.react.events.EventEmitter
 import dev.apexnative.navigation.slots.SlotScreenView
 import dev.apexnative.navigation.system.SystemUiOwner
 import dev.apexnative.navigation.viewcontrollers.child.ChildController
@@ -177,8 +178,11 @@ class ComponentViewController(
             topFree = parent?.leavesTopEdgeFree(this) == true,
             bottomFree = parent?.leavesBottomEdgeFree(this) == true,
         )
-        ScreenInsets.update(activity, id, insets, ScreenSafeArea.padding(insets, edges))
-        ScreenRegions.update(activity, id, Rect(place.left, place.top, place.right, place.bottom), windowInsets)
+        // The events of the screen go to the JavaScript it was made for, and to no other.
+        val emitter = EventEmitter.of(jsGeneration)
+        ScreenInsets.update(id, insets, ScreenSafeArea.padding(insets, edges), emitter)
+        val area = Rect(place.left, place.top, place.right, place.bottom)
+        ScreenRegions.update(activity, id, area, windowInsets, emitter)
     }
 
     // A layout asked for on the content or on a view around it: it isn't in its place yet.

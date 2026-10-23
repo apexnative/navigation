@@ -6,11 +6,11 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /// The preview of a push (`usePreview`): a push that waits for a tap on its preview. Its screen is made and renders
-/// unseen, out of the stack, its key kept; the view with `preview.nativeID` is looked for on the source screen at once
-/// and on the next frames, 30 tries in all; found, the preview module (`ANNPreviewInteraction`) shows the screen from
-/// it on a long press. A tap that commits pushes the screen without an animation and without a wait, or goes back to
-/// the entry with its key; a preview that goes without being opened destroys its screen and rejects the push. Main
-/// queue.
+/// unseen, out of the stack, its key kept; the view with `preview.nativeID` is looked for on the source screen at once,
+/// then at each mount of the source's content (on each frame for a slot screen), for at most 0.5 s; found, the preview module (`ANNPreviewInteraction`)
+/// shows the screen from it on a long press. A tap that commits pushes the screen without an animation and without a
+/// wait, or goes back to the entry with its key; a preview that goes without being opened destroys its screen and
+/// rejects the push. Main queue.
 @interface ANNPreviewPush : NSObject
 
 - (instancetype)init NS_UNAVAILABLE;

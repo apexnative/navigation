@@ -27,8 +27,15 @@ NS_ASSUME_NONNULL_BEGIN
 /// Whether the JavaScript the command came from still runs: its work goes on only then.
 @property(nonatomic, readonly) BOOL isCurrent;
 
-/// Resolves the promise: first the state goes, then the promise, then `ANN.CommandCompleted` for a command that shows
-/// or dismisses.
+/// The navigation state now, sent when it changed, once per answer: the end of the command's transition asks for it
+/// after the `DidAppear` it sends and before the transition's own events (`ANNAppearanceDispatcher`); otherwise
+/// `resolve:` asks for it before the promise. A later call sends nothing, and nothing goes for a JavaScript that went.
+/// A failure of the step is logged and costs only the state.
+- (void)reportStateNow;
+
+/// Resolves the promise: first the state, when the command changes what shows (`ANNCommandContract`) and its
+/// transition didn't send it already (`reportStateNow`), then the promise, then `ANN.CommandCompleted` for a command
+/// that shows or dismisses.
 - (void)resolve:(nullable id)value;
 
 /// Rejects the promise with the text alone: no code of the navigation.

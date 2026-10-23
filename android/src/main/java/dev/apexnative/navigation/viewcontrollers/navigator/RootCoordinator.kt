@@ -488,8 +488,8 @@ internal class RootCoordinator(
     }
 
     // The navigation state goes once, when the root is in place and its layers have shown, right before the answer:
-    // what the old root's destroy, the root's appearance and each layer ask for meanwhile waits (StateHold). Taken once
-    // per `setRoot`, before the old root goes.
+    // what the old root's destroy, the root's appearance and each layer ask for meanwhile waits (the hold of
+    // NavigationState). Taken once per `setRoot`, before the old root goes.
     private fun holdState(pending: Pending) {
         if (pending.holdsState) return
         pending.holdsState = true
