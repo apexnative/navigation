@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.0-alpha.4](https://github.com/apexnative/navigation/compare/v1.0.0-alpha.3...v1.0.0-alpha.4) (2026-10-23)
+
+
+### Bug Fixes
+
+* **ci:** keep a closed React Native issue instead of opening a second one ([#37](https://github.com/apexnative/navigation/issues/37)) ([242030c](https://github.com/apexnative/navigation/commit/242030c8559a6fe186f44781ada85d09970c8318))
+* **ios:** lay a waiting screen out in its place, so the large title comes in with it ([#41](https://github.com/apexnative/navigation/issues/41)) ([85bfaa8](https://github.com/apexnative/navigation/commit/85bfaa877d3775264c1ba1114942cf875f890f29))
+* one native contract, options as layers and pushes that wait for the first render ([#39](https://github.com/apexnative/navigation/issues/39)) ([888f21e](https://github.com/apexnative/navigation/commit/888f21eb2b3e1aec413413bbdab9546a7a8f5a6b))
+
 ## [1.0.0-alpha.3](https://github.com/apexnative/navigation/compare/v1.0.0-alpha.2...v1.0.0-alpha.3) (2026-10-22)
 
 
