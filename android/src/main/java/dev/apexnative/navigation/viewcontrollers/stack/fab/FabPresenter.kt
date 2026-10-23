@@ -172,13 +172,13 @@ internal class FabPresenter(
         alignStart = options.alignHorizontally.get("right") == "left"
         val source = source
         fab?.let { fab ->
-            applyButton(fab, options, mayWait = fab.drawable != null)
+            applyButton(fab, options, mayWait = fab.drawable != null || options.visible.isFalse)
             TestIds.apply(fab, options.testID.takeIf { it.hasValue() }?.get())
             val id = shownId.orEmpty()
             fab.setOnClickListener { press(source, id) }
         }
         menu?.let { menu ->
-            applyButton(menu.main, options, mayWait = menu.main.drawable != null)
+            applyButton(menu.main, options, mayWait = menu.main.drawable != null || options.visible.isFalse)
             TestIds.apply(menu.main, options.testID.takeIf { it.hasValue() }?.get())
             menu.scrimColor = options.scrimColor.get(activity, null)
             menu.setActions(options.actions.orEmpty().map { action ->
@@ -206,7 +206,7 @@ internal class FabPresenter(
         place()
     }
 
-    // [mayWait]: the button can take its icon when it is ready, see [Fab.applyIcon].
+    // [mayWait]: the button can take its icon when it is ready (it shows one, or it stays hidden), see [Fab.applyIcon].
     private fun applyButton(button: Fab, options: FabOptions, mayWait: Boolean) {
         val icon = options.icon.takeIf { it.hasValue() }?.get()?.ifEmpty { null }
         if (icon != null) button.applyIcon(icon, options.iconColor, mayWait)

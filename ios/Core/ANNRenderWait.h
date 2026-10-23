@@ -62,8 +62,10 @@ typedef NS_ENUM(NSInteger, ANNRenderWaitBar) {
 /// The content phase ends only once every call JavaScript made by then is applied on the main queue
 /// (`ANNJavaScriptCalls`): the options a screen merges in the commit that mounted it are there before the owner's next
 /// step. Also when the content is there already as the wait starts or takes its screens again (the commit that mounted
-/// it may have run just now): such a phase ends after `start`, through `protect`. Screens without React content (a
-/// native screen) end the phase at once. The limit still ends the phase meanwhile. Off by default.
+/// it may have run just now): such a phase ends after `start`, through `protect`, while JavaScript has a call invoker;
+/// without one (no JavaScript running) the calls are applied already and the phase ends inside `start`, as without
+/// this. Screens without React content (a native screen) end the phase at once. The limit still ends the phase
+/// meanwhile. Off by default.
 @property(nonatomic) BOOL settlesThroughJavaScript;
 
 /// With `ANNRenderWaitBarAfterContent`, the bar phase that follows the content phase counts its limits from the wait's

@@ -93,6 +93,14 @@ override fun onCreate() {
 
 More: [Android files](../start/installation#android-files).
 
+### The Android app crashes at start: React Native loads twice {#loads-twice}
+
+<Os name="Android" /> The app closes at once, and `doctor` reports `MainApplication.kt loads React Native itself … next to loadReactNative(this)`.
+
+**Why:** the application loads React Native on its own as well, with `SoLoader.init` or the New Architecture's entry point (`load()`, as apps from react-native-navigation have it), and a second load crashes the app.
+
+**Fix:** keep only `loadReactNative(this)` in `onCreate`; `npx apex-navigation setup` removes the other load. More: [Android files](../start/installation#android-files).
+
 ### doctor warns about the JDK {#jdk}
 
 <Os name="Android" /> `doctor` warns that JDK 17 is installed but another JDK is in use.

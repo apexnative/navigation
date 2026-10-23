@@ -9,7 +9,7 @@ import { whenNativeScreensReady } from './nativeScreens';
 import { commands as native } from './native';
 import { toNativeOptions } from './options';
 import { dropReactRenderMeasures } from './reactMeasures';
-import { columnOf, forgetPlace, notePlaces, placeOf, stackOfColumn } from './places';
+import { columnOf, forgetPlace, layoutsOf, notePlaces, placeOf, stackOfColumn } from './places';
 import { forgetProps } from './props';
 import {
   forgetMergedOptions,
@@ -225,7 +225,8 @@ export function push(
         from?.stack ?? null,
         (from?.index ?? 0) + 1,
         from?.menu,
-        from?.layer
+        from?.layer,
+        layoutsOf(componentId)
       );
       return whenNativeScreensReady([node], () =>
         sendPush(commandId, componentId, node, prepares, wanted, goneOut).then((shownId) => {
@@ -363,7 +364,8 @@ export function setStackRoot(componentId: string, children: Layout[]): Promise<s
           from?.stack ?? null,
           index,
           from?.menu,
-          from?.layer
+          from?.layer,
+          layoutsOf(componentId)
         )
       );
       return whenNativeScreensReady(nodes, () =>
@@ -383,7 +385,17 @@ export function showInColumn(componentId: string, column: string, layout: Layout
       showScreensFrom(componentId, node);
       const from = placeOf(componentId);
       const at = columnPlace(componentId, column);
-      notePlaces(node, from?.container ?? 'root', at.stack, at.index, from?.menu, from?.layer);
+      // In the split view of the screen it comes from, and in the column's stack.
+      const within = at.stack ? [...layoutsOf(componentId), at.stack] : layoutsOf(componentId);
+      notePlaces(
+        node,
+        from?.container ?? 'root',
+        at.stack,
+        at.index,
+        from?.menu,
+        from?.layer,
+        within
+      );
       return whenNativeScreensReady([node], () =>
         inOrder(() =>
           sendShow(goneOut, () => native.showInColumn(commandId, componentId, column, node))

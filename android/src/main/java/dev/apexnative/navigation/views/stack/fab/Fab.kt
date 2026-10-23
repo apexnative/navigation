@@ -38,8 +38,9 @@ class Fab(context: Context, val fabId: String) : FloatingActionButton(MaterialTh
 
     /**
      * The icon of the options, with its color. [mayWait]: the button can show it when it is ready (it shows an icon
-     * already, or it is hidden), so an icon the cache doesn't have loads off the main thread; the last icon asked for
-     * wins. Otherwise it loads at once. An icon that doesn't load leaves the button without an icon.
+     * already, it is hidden with `visible: false`, or it is an action of a closed menu), so an icon the cache doesn't
+     * have loads off the main thread; the last icon asked for wins. Otherwise it loads at once. An icon that doesn't
+     * load leaves the button without an icon.
      */
     fun applyIcon(icon: String, color: ThemeColour, mayWait: Boolean) {
         if (color.hasValue()) iconColor = color.get()

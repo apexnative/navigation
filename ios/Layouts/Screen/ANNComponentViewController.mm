@@ -162,6 +162,11 @@
     [ANNSystemUI setNeedsUpdate];
     [self.arrangement screenDidChangeLayout:self];
     [ANNHinge watchForScreens];
+    // A parked screen whose place gave it no safe area at all lays out with its view's own from now on.
+    if (self.placeWhileParked && ![ANNParking isUnseen:self]) {
+        self.placeWhileParked = nil;
+        [self updateRootLayout];
+    }
     // Once JavaScript heard the appearance (a driven one ends later, with its command).
     __weak ANNComponentViewController *weakSelf = self;
     [ANNAppearanceDispatcher afterDidAppearOf:self.appearance
@@ -363,11 +368,31 @@
 }
 #endif
 
+// The place the screen waits to show in, while it is parked out of it and until UIKit gives it a safe area of its
+// own there: the push lays the screen out once before that, with none, and a list laid out then at the screen's top
+// would stay the list the bar follows. A place that shows with no safe area at all hands over as the screen appears.
+- (nullable ANNScreenPlace *)parkedPlace {
+    ANNScreenPlace * (^place)(void) = self.placeWhileParked;
+    if (!place) {
+        return nil;
+    }
+    if (![ANNParking isUnseen:self] && self.parentViewController &&
+        !UIEdgeInsetsEqualToEdgeInsets(self.view.safeAreaInsets, UIEdgeInsetsZero)) {
+        self.placeWhileParked = nil;
+        return nil;
+    }
+    return place();
+}
+
 - (CGRect)rootFrameForOptions:(ANNNavigationOptions *)options {
     UIView *view = self.view;
-    BOOL fromTop = ANNScreenIsUnderTopBar(options) || ![self hasShownTopBar];
-    BOOL toBottom = ANNScreenIsUnderTabBar(options) || ![self hasShownTabBar];
-    return ANNScreenRootFrame(view.bounds, view.safeAreaInsets, fromTop, toBottom);
+    ANNScreenPlace *place = [self parkedPlace];
+    BOOL topBarShown = place ? place.showsTopBar : [self hasShownTopBar];
+    BOOL tabBarShown = place ? place.showsTabBar : [self hasShownTabBar];
+    BOOL fromTop = ANNScreenIsUnderTopBar(options) || !topBarShown;
+    BOOL toBottom = ANNScreenIsUnderTabBar(options) || !tabBarShown;
+    UIEdgeInsets safeArea = place ? place.safeArea : view.safeAreaInsets;
+    return ANNScreenRootFrame(view.bounds, safeArea, fromTop, toBottom);
 }
 
 - (void)updateRootLayout {
@@ -421,8 +446,10 @@
         self.nodeHelper.destroyed) {
         return;
     }
-    UIEdgeInsets insets =
-        ANNScreenInsetsOverRoot(content.frame, view.bounds.size, view.safeAreaInsets);
+    // A parked screen has no safe area of its own: it takes its place's.
+    ANNScreenPlace *place = [self parkedPlace];
+    UIEdgeInsets safeArea = place ? place.safeArea : view.safeAreaInsets;
+    UIEdgeInsets insets = ANNScreenInsetsOverRoot(content.frame, view.bounds.size, safeArea);
     UINavigationController *stack = [self shownNavigation];
     ANNScreenPaddingContext context = {
         .inStack = stack != nil,

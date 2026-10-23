@@ -6,6 +6,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// An image of the options: its source, read with the options, and the image, loaded when an element asks for it
 /// through the shared cache (`ANNOptionImages`). A source that doesn't load is no image: the element shows without it.
+/// A value that is a `UIImage` is that image, with no source: an element made again from an image that came already
+/// (a tab's icon loaded off the main queue) doesn't ask the cache again.
 @interface Image : Param
 
 /// The image, loaded at once when the cache doesn't have it; nil without a source and when it doesn't load.

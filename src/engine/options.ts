@@ -1,7 +1,7 @@
 import { DynamicColorIOS, Image, Platform, processColor } from 'react-native';
 import type { ColorValue, ImageSourcePropType } from 'react-native';
 import { nextId } from './ids';
-import { rememberButtonRoot, setProps } from './props';
+import { rememberButtonRoot, rememberOptionsComponent, setProps } from './props';
 
 type Fields = Record<string, unknown>;
 
@@ -135,7 +135,9 @@ function takeComponentProps({ passProps, ...component }: Fields, place: Place): 
 function componentIdAt({ owner, path }: Place, name: unknown): string {
   if (owner === undefined) return nextId('CustomComponent');
   const at = path.endsWith('.component') ? path.slice(0, -'.component'.length) : path;
-  return `${owner}/${at}/${String(name)}`;
+  const id = `${owner}/${at}/${String(name)}`;
+  rememberOptionsComponent(owner, id);
+  return id;
 }
 
 // The component of a bar button (the top bar's `*Buttons`, the toolbar's `buttons`) is a root the native side only

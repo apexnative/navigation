@@ -132,7 +132,8 @@ top-level folder. Main thread only, unless a line says otherwise.
   here; they load when the options apply, through the one cache of `utils/OptionImages` (by `ImageKey`): at once on
   main where the first frame needs them (`ImageLoader`: the top bar's buttons, menus, back button and search
   suggestions; a tab's first icon; a new FAB), on its background thread for a file or a drawable of the app where the
-  view takes them when ready (`ImageRequests`: a changed tab icon, a FAB's changed icon, the FAB menu's actions).
+  view takes them when ready (`ImageRequests`: a changed tab icon or one that didn't load, a FAB's changed icon, the
+  icon of a FAB hidden with `visible: false`, the FAB menu's actions).
 - **Main thread.** Everything else: the command body, nodes, views, events, the stores' writes. Any thread may read
   `ReloadCoordinator.generation`.
 

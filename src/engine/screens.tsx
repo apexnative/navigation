@@ -2,7 +2,7 @@ import React, { type ComponentType, useCallback, useEffect, useSyncExternalStore
 import { AppRegistry } from 'react-native';
 import type { Options } from '../interfaces/Options';
 import { forgetPlace } from './places';
-import { forgetProps, propsOf, watchProps } from './props';
+import { forgetProps, isOptionsComponent, propsOf, watchProps } from './props';
 import { forgetMergedOptions } from './rememberedOptions';
 import { hasSlot } from './slots';
 import type { NativeControllerProps } from './nativeScreens';
@@ -232,7 +232,9 @@ export function screenRoot(
           }
           if (hasSlot(componentId)) return;
           owners.delete(componentId);
-          forgetProps(componentId);
+          // A component the library named in options keeps its props for the next root under its id (the node shows
+          // it again, or another screen shows the same default): they go with the node.
+          if (!isOptionsComponent(componentId)) forgetProps(componentId);
           forgetPlace(componentId);
           forgetMergedOptions(componentId);
           unmounted?.(componentId);

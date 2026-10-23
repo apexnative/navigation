@@ -38,6 +38,8 @@ import { CardsScreen } from '../demo/CardsScreen';
 import { PeopleScreen } from '../demo/PeopleScreen';
 import { PersonScreen } from '../demo/PersonScreen';
 import { RootDemoScreen } from '../demo/RootDemoScreen';
+import { WaitForRenderDemoScreen } from '../demo/WaitForRenderDemoScreen';
+import { HeavyScreen } from '../demo/HeavyScreen';
 import { LoginDemoScreen } from '../demo/LoginDemoScreen';
 import { WelcomeDemoScreen } from '../demo/WelcomeDemoScreen';
 import { GroupFirstScreen } from '../demo/GroupFirstScreen';
@@ -145,6 +147,8 @@ export const screens = {
   Cards: CardsScreen,
   Card: CardScreen,
   RootDemo: RootDemoScreen,
+  WaitForRenderDemo: WaitForRenderDemoScreen,
+  Heavy: HeavyScreen,
   // The native screens of section 18, registered natively in AppDelegate.swift and MainApplication.kt.
   NativeProfile: nativeScreen<NativeProfileProps>('NativeProfileScreen', {
     options: (s, props) => s.title(props.name).hideBottomTabs(),

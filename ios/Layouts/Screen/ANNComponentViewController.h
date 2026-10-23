@@ -1,6 +1,7 @@
 #import "ANNArrangementScreenDelegate.h"
 #import "ANNLayoutProtocol.h"
 #import "ANNScreenAppearance.h"
+#import "ANNScreenPlace.h"
 #import "UIViewController+LayoutProtocol.h"
 #import <UIKit/UIKit.h>
 
@@ -41,6 +42,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// or the slot screen view takes its slot. The screen is ready (`readyForPresentation`) once its content is. A screen
 /// nobody rendered gets its content when UIKit first loads its view.
 - (void)render;
+
+/// Where the screen will show while it waits for its content out of it (parked by a stack's or `showInColumn`'s wait,
+/// `ANNParking`): it lays out with that place's safe area and bars (`ANNScreenPlace`), as it will once it shows there.
+/// Asked at each layout, and kept past the parking until UIKit gives the screen a safe area of its own in a parent
+/// (the push lays it out once before that, with none), or as it appears. Nil: its view's own. Set by the one that
+/// parks the screen.
+@property(nonatomic, copy, nullable) ANNScreenPlace *_Nullable (^placeWhileParked)(void);
 
 /// Applies the "under bars" rule to the root frame again, then gives the modules the insets, the padding and the
 /// regions of the screen. Nothing before the view loaded; the safe area only in a window.

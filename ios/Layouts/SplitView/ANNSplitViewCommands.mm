@@ -15,6 +15,7 @@
 #import "ANNRenderWait.h"
 #import "ANNShownScreens.h"
 #import "ANNStackCommands.h"
+#import "ANNStackController.h"
 #import "ANNStackQueue.h"
 #import "ApexNavigation+Internal.h"
 #import "UIViewController+LayoutProtocol.h"
@@ -295,6 +296,13 @@ static NSMapTable<UIViewController *, ANNColumnRecordsOfSplitView *> *ANNColumnR
         [screen setWaitForRender:YES];
     }
     if (window) {
+        __weak ANNColumnRequest *placed = request;
+        ANNScreenPlace * (^place)(void) = ^ANNScreenPlace * {
+          return [ANNSplitViewCommands placeOf:placed];
+        };
+        for (ANNComponentViewController *each in ANNStackScreensOfEntry(screen)) {
+            each.placeWhileParked = place;
+        }
         request.parking = [ANNParking new];
         [request.parking park:screen inView:window];
     }
@@ -316,6 +324,34 @@ static NSMapTable<UIViewController *, ANNColumnRecordsOfSplitView *> *ANNColumnR
     for (ANNComponentViewController *each in ANNStackScreensOfEntry(screen)) {
         [each updateRootLayout];
     }
+}
+
+// Where the parked screen will show, as far as it is known now: the column's stack (whose screens it replaces), the
+// navigation controller UIKit keeps a column that is a screen alone in, or the source's stack while the split view
+// shows as one stack. Nil without one: the screen lays out with its view's own safe area.
++ (nullable ANNScreenPlace *)placeOf:(ANNColumnRequest *)request {
+    UIViewController *screen = request.screen;
+    UIViewController *source = request.source;
+    if (!screen || !source) {
+        return nil;
+    }
+    UIViewController *splitView = ANNSplitViewOf(source);
+    UINavigationController *stack = nil;
+    if (splitView && !ANNIsCollapsedIntoCompact(splitView)) {
+        UIViewController *columnNode =
+            [(id<ANNLayoutProtocol>)splitView viewControllerOfColumn:request.column];
+        stack = [columnNode isKindOfClass:UINavigationController.class]
+                    ? (UINavigationController *)columnNode
+                    : columnNode.navigationController;
+    } else {
+        stack = [ANNStackCommands stackOf:source].shownNavigationController;
+    }
+    if (!stack) {
+        return nil;
+    }
+    return [ANNScreenPlace placeOfEntry:screen
+                                inStack:stack
+                                options:[ANNStackOptionsScreen(screen) resolveOptionsWithDefault]];
 }
 
 // The screen leaves its place and the waiting requests; UIKit ends its departure from the window here (it shows in

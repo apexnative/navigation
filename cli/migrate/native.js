@@ -162,7 +162,19 @@ function planNative(project) {
     // react-native-navigation loaded React Native itself; the navigation's application leaves it to the template's
     // loadReactNative(this), which such an app doesn't have.
     if (file === project.mainApplication && /:\s*NavigationApplication\(/.test(next)) {
-      next = withReactNativeLoaded(next) ?? next;
+      const loaded = withReactNativeLoaded(next);
+      if (loaded !== undefined) next = loaded;
+      else {
+        report.push({
+          file: path.relative(root, file),
+          line: 1,
+          step: 'native',
+          before: 'onCreate',
+          after: 'super.onCreate() then loadReactNative(this), and no load of its own',
+          what: 'React Native loads through loadReactNative(this) in onCreate: add it by hand',
+          docs: `${DOCS}#native`,
+        });
+      }
     }
     if (next !== before) {
       changes.push({

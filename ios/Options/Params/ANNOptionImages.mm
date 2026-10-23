@@ -244,12 +244,10 @@ static BOOL ANNIsFileAt(NSURL *url) {
     case ANNImageSourceKindSymbol:
         return nil;
     }
-    if (decodesAhead) {
-        UIImage *decoded = [image imageByPreparingForDisplay];
-        if (!decoded) {
-            *failure = @"its data can't be decoded";
-            return nil;
-        }
+    // An image UIKit can't prepare (16 bits a channel, CMYK) it still draws: it stays as it is then, decoded when it
+    // first shows.
+    UIImage *decoded = decodesAhead ? [image imageByPreparingForDisplay] : nil;
+    if (decoded) {
         image = decoded.CGImage ? [UIImage imageWithCGImage:decoded.CGImage
                                                       scale:image.scale
                                                 orientation:image.imageOrientation]

@@ -153,10 +153,13 @@ function withLoadCall(text) {
  * @returns {number | undefined}
  */
 function classEnd(text) {
-  // The comments blanked out, so that an index in it is one in the text.
+  // The comments and the string and character literals blanked out, so that an index in it is one in the text and a
+  // brace in a literal doesn't count.
+  const blank = (/** @type {string} */ part) => part.replace(/[^\n]/g, ' ');
   const code = text
-    .replace(/\/\*[\s\S]*?\*\//g, (comment) => comment.replace(/[^\n]/g, ' '))
-    .replace(/\/\/.*$/gm, (comment) => ' '.repeat(comment.length));
+    .replace(/\/\*[\s\S]*?\*\//g, blank)
+    .replace(/\/\/.*$/gm, blank)
+    .replace(/"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'/g, blank);
   const header = /\bclass\s+\w+\s*:[^{]*\{/.exec(code);
   if (!header) return undefined;
   let depth = 0;

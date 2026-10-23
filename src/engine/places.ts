@@ -1,6 +1,7 @@
 import type { SplitViewColumnsStackedEvent } from '../interfaces/Events';
 import type { LayoutNode } from './layout';
 import { onNativeEvent } from './native';
+import { forgetProps } from './props';
 import { screenNameOf } from './slots';
 
 // Where each screen is, noted as the engine builds the layouts of the commands: what it shows in and its place in its
@@ -51,6 +52,11 @@ const stackedSplits = new Set<string>();
 let listeningToSplitViews = false;
 // The primaries of pairs shown alone, noted as their node is built, until their place is noted.
 const alone = new Set<string>();
+// The layouts each screen shows in (its stack, pair, tabs, menu, split view, and the root of its layer), and how many
+// live screens each layout holds. A layout whose last screen went is gone, and with it the props of the components the
+// library named in its options: they stay as long as any of its screens may show them again.
+const layoutsOfScreen = new Map<string, readonly string[]>();
+const screensInLayout = new Map<string, number>();
 // The last screens that went, so a command from one of them can say so; a screen the engine never saw is not one.
 const gone = new Set<string>();
 const GONE_KEPT = 200;
@@ -69,9 +75,15 @@ export function isGone(screenId: string): boolean {
   return gone.has(screenId);
 }
 
+/** The layouts the screen shows in, outermost first: those whose screens come with it in a command go in it too. */
+export function layoutsOf(screenId: string): readonly string[] {
+  return layoutsOfScreen.get(screenId) ?? [];
+}
+
 /**
  * Notes the screens of a layout, the first of a stack at `index`. A modal or an overlay given as a whole is a layer of
- * its own; screens added to one, such as a push, take the layer of the screen they come from.
+ * its own; screens added to one, such as a push, take the layer of the screen they come from, and `within`, the
+ * layouts they show in (`layoutsOf` that screen).
  */
 export function notePlaces(
   node: LayoutNode,
@@ -79,12 +91,14 @@ export function notePlaces(
   stack: string | null = null,
   index = 0,
   menu?: ScreenPlace['menu'],
-  layer: string = container === 'root' ? 'root' : node.id
+  layer: string = container === 'root' ? 'root' : node.id,
+  within: readonly string[] = []
 ): void {
   if (node.type === 'Component' || node.type === 'ExternalComponent') {
     const name = node.data.name ?? '';
     gone.delete(node.id);
     columnOfScreen.delete(node.id);
+    noteLayouts(node.id, within);
     places.set(node.id, {
       name: screenNameOf(name),
       container,
@@ -99,7 +113,7 @@ export function notePlaces(
   } else if (node.type === 'Arrangement') {
     // One entry of its stack: both screens have its place there, and each knows the pair.
     node.children.forEach((child, childIndex) => {
-      notePlaces(child, container, stack, index, menu, layer);
+      notePlaces(child, container, stack, index, menu, layer, [...within, node.id]);
       const place = places.get(child.id);
       if (place) {
         const placement = childIndex === 0 ? 'primary' : 'secondary';
@@ -109,7 +123,7 @@ export function notePlaces(
   } else if (node.type === 'Stack') {
     columnOfStack.delete(node.id);
     node.children.forEach((child, childIndex) =>
-      notePlaces(child, container, node.id, childIndex, menu, layer)
+      notePlaces(child, container, node.id, childIndex, menu, layer, [...within, node.id])
     );
   } else if (node.type === 'SplitView') {
     // A split view sent again with its id starts anew: its columns are noted again, and it isn't one stack until the
@@ -118,7 +132,7 @@ export function notePlaces(
     const columns = node.data.columns ?? [];
     const stacks: Partial<Record<string, string>> = {};
     node.children.forEach((child, childIndex) => {
-      notePlaces(child, container, null, 0, menu, layer);
+      notePlaces(child, container, null, 0, menu, layer, [...within, node.id]);
       const column = columns[childIndex];
       if (!column) return;
       if (child.type === 'Stack') stacks[column] = child.id;
@@ -128,12 +142,46 @@ export function notePlaces(
   } else if (node.type === 'SideMenuRoot') {
     for (const part of node.children) {
       const side = MENU_PARTS[part.type];
+      const parts = [...within, node.id, part.id];
       part.children.forEach((child) =>
-        notePlaces(child, container, null, 0, side ? { id: node.id, part: side } : menu, layer)
+        notePlaces(
+          child,
+          container,
+          null,
+          0,
+          side ? { id: node.id, part: side } : menu,
+          layer,
+          parts
+        )
       );
     }
   } else {
-    node.children.forEach((child) => notePlaces(child, container, null, 0, menu, layer));
+    node.children.forEach((child) =>
+      notePlaces(child, container, null, 0, menu, layer, [...within, node.id])
+    );
+  }
+}
+
+// A screen noted again under its id (a layout sent again) leaves the layouts it was in before.
+function noteLayouts(screenId: string, within: readonly string[]): void {
+  leaveLayouts(screenId);
+  const layouts = [...new Set(within)];
+  layoutsOfScreen.set(screenId, layouts);
+  for (const layout of layouts) screensInLayout.set(layout, (screensInLayout.get(layout) ?? 0) + 1);
+}
+
+function leaveLayouts(screenId: string): void {
+  const layouts = layoutsOfScreen.get(screenId);
+  if (!layouts) return;
+  layoutsOfScreen.delete(screenId);
+  for (const layout of layouts) {
+    const count = (screensInLayout.get(layout) ?? 1) - 1;
+    if (count > 0) {
+      screensInLayout.set(layout, count);
+      continue;
+    }
+    screensInLayout.delete(layout);
+    forgetProps(layout);
   }
 }
 
@@ -198,6 +246,7 @@ export function listenToSplitViews(): void {
 
 /** The screen is gone. */
 export function forgetPlace(screenId: string): void {
+  leaveLayouts(screenId);
   places.delete(screenId);
   columnOfScreen.delete(screenId);
   gone.add(screenId);

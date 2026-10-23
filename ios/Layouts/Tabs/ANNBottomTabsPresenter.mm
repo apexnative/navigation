@@ -446,37 +446,70 @@ static id ANNValue(NSArray *list, NSUInteger index) {
     }
 }
 
+// `bottomTab` with the images that came in place of the rasters they came for: a build from it asks the cache for
+// none of them. A raster that failed stays as it was (its failure answers for a moment).
+static ANNBottomTabOptions *ANNWithIcons(ANNBottomTabOptions *bottomTab, NSArray<Image *> *rasters,
+                                         NSArray *came) {
+    ANNBottomTabOptions *built = [bottomTab copy];
+    for (NSUInteger place = 0; place < rasters.count; place++) {
+        UIImage *image = [came[place] isKindOfClass:UIImage.class] ? came[place] : nil;
+        if (!image) {
+            continue;
+        }
+        Image *raster = rasters[place];
+        if (raster == bottomTab.icon) {
+            built.icon = [[Image alloc] initWithValue:image];
+        }
+        if (raster == bottomTab.selectedIcon) {
+            built.selectedIcon = [[Image alloc] initWithValue:image];
+        }
+    }
+    return built;
+}
+
 // New raster icons of an item on the bar that shows load off the main queue when the cache doesn't have them: the item
-// takes them when they came, built again from the same options, unless it was built again first (the last build wins).
-// The first icons, and every icon while the bar is out of a window, load at once: the tab's first frame shows them.
+// takes them when they came, built again from the same options with the images that came (the cache may have let them
+// go by then: icons larger than it), unless it was built again first (the last build wins). The first icons, and every
+// icon while the bar is out of a window, load at once: the tab's first frame shows them.
 - (BOOL)loadsIconsLaterOf:(ANNBottomTabOptions *)bottomTab atIndex:(NSUInteger)index {
     if (!_tabsAreSet || !self.tabs.viewIfLoaded.window) {
         return NO;
     }
-    NSMutableArray<ANNImageSource *> *later = [NSMutableArray new];
-    for (Image *raster in [ANNBottomTabItemBuilder rastersOf:bottomTab]) {
+    NSArray<Image *> *rasters = [ANNBottomTabItemBuilder rastersOf:bottomTab];
+    BOOL later = NO;
+    for (Image *raster in rasters) {
         if ([ANNOptionImages loadsLater:raster.source]) {
-            [later addObject:raster.source];
+            later = YES;
         }
     }
-    if (!later.count) {
+    if (!later) {
         return NO;
     }
     NSObject *load = [NSObject new];
     _iconLoads[@(index)] = load;
-    __block NSUInteger pending = later.count;
+    // Every raster of the item, those the cache has too: each comes with its image, by its place in `rasters`.
+    NSMutableArray *came = [NSMutableArray arrayWithCapacity:rasters.count];
+    for (NSUInteger each = 0; each < rasters.count; each++) {
+        [came addObject:NSNull.null];
+    }
+    __block NSUInteger pending = rasters.count;
     __block BOOL asking = YES;
     __weak ANNBottomTabsPresenter *weakSelf = self;
-    for (ANNImageSource *source in later) {
-        [ANNOptionImages loadLater:source
-                              done:^(UIImage *image) {
-                                pending--;
-                                ANNBottomTabsPresenter *presenter = weakSelf;
-                                if (pending == 0 && !asking) {
-                                    [presenter iconsCame:load atIndex:index bottomTab:bottomTab];
-                                }
-                              }];
-    }
+    [rasters enumerateObjectsUsingBlock:^(Image *raster, NSUInteger place, BOOL *stop) {
+      [ANNOptionImages loadLater:raster.source
+                            done:^(UIImage *image) {
+                              if (image) {
+                                  came[place] = image;
+                              }
+                              pending--;
+                              ANNBottomTabsPresenter *presenter = weakSelf;
+                              if (pending == 0 && !asking) {
+                                  [presenter iconsCame:load
+                                               atIndex:index
+                                             bottomTab:ANNWithIcons(bottomTab, rasters, came)];
+                              }
+                            }];
+    }];
     asking = NO;
     if (pending == 0) {
         // A load ended while the others were asked for: the cache has them all now.
