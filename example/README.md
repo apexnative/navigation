@@ -1,8 +1,9 @@
 # Showcase
 
 The app that checks the library, section by section, on the new API. A section is a control panel: its options in
-groups, each group a file. Pick the values, press Push or Modal, and the Details screen shows with them; on Details
-the same groups change the options while it shows. The panel shows the code of what it runs.
+groups, each group a file. Pick the values, press Push or Modal, and the Details screen shows with them: the values
+of the open groups, so a closed group changes nothing. On Details the same groups change the options while it shows.
+The panel shows the code of what it runs.
 
 ## Run it
 

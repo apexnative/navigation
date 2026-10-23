@@ -3,6 +3,7 @@ import { Platform, StyleSheet, View } from 'react-native';
 import { defineScreen } from '@apexnative/navigation';
 import { barFonts } from '../app/barFonts';
 import { findSection } from '../sections';
+import type { ControlValues } from '../sections/controls';
 import { sectionControls, type Section } from '../sections/scenario';
 import {
   Button,
@@ -46,15 +47,17 @@ function Panel({ section, focus }: { section: Section; focus?: string }) {
         focus ?? section.scenarios.find((scenario) => !isOtherPlatform(scenario.platform))?.id,
       ])
   );
-  const options = buildOptions(sectionControls(section), values);
+  // Only the open groups set options: a style picked in one group doesn't change what another group shows.
+  const applied = openValues(section, open, values);
+  const options = buildOptions(sectionControls(section), applied);
   const tabOptions = splitTabOptions(options.bottomTab);
-  const push = () => openDetails(section, values, 'push');
-  const modal = () => openDetails(section, values, 'modal');
-  const list = () => openDetails(section, values, 'list');
+  const push = () => openDetails(section, applied, 'push');
+  const modal = () => openDetails(section, applied, 'modal');
+  const list = () => openDetails(section, applied, 'list');
   const demos = {
-    tabs: () => openTabsDemo(section, values),
-    sideMenu: () => openSideMenuDemo(section, values),
-    splitView: () => openSplitViewDemo(section, values),
+    tabs: () => openTabsDemo(section, applied),
+    sideMenu: () => openSideMenuDemo(section, applied),
+    splitView: () => openSplitViewDemo(section, applied),
   };
   const show = section.demo ? demos[section.demo] : modal;
   const mode: PanelMode = section.runsOnly
@@ -121,6 +124,20 @@ function Panel({ section, focus }: { section: Section; focus?: string }) {
       )}
     </View>
   );
+}
+
+/** The values of the controls of the open groups; an option in an open group and a closed one counts. */
+function openValues(
+  section: Section,
+  open: ReadonlySet<string | undefined>,
+  values: ControlValues
+): ControlValues {
+  const paths = new Set(
+    section.scenarios
+      .filter((scenario) => open.has(scenario.id))
+      .flatMap((scenario) => Object.keys(scenario.controls ?? {}))
+  );
+  return Object.fromEntries(Object.entries(values).filter(([path]) => paths.has(path)));
 }
 
 /** The platforms of a section's scenarios: both, unless every scenario is of one. */

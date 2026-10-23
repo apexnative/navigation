@@ -18,7 +18,10 @@ function RootDemo() {
           title="Back from the bottom"
           onPress={() => navigation.switchTo(Root(roots.showcase).transition('slideUp'))}
         />
-        <Button title="Back at once" onPress={() => navigation.switchTo('showcase')} />
+        <Button
+          title="Back at once"
+          onPress={() => navigation.switchTo(Root(roots.showcase).transition('none'))}
+        />
       </Card>
     </Screen>
   );
