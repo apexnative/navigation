@@ -181,7 +181,7 @@ A screen can come in before its React content has drawn, or wait for it. Coming 
 
 | | By default |
 | --- | --- |
-| Push | Waits for the screen's first mount, half a second at most, so it comes in drawn, with what it set as it rendered (a title from `useScreenOptions`) already in its bar. A native screen comes in at once. <Os name="iOS" /> The components of the bar wait too, each to its own limit from the start of the wait. <Os name="Android" /> The components of the bar draw as the screen comes in; with `appProvider` the screen is rendered before the push starts ([below](#wait-one-tree)). |
+| Push | Waits for the screen's first mount, half a second at most, so it comes in drawn, with what it set as it rendered (a title from `useScreenOptions`) already in its bar. A native screen comes in at once. <Os name="iOS" /> The components of the bar wait too, each to its own limit from the start of the wait; a screen with a large title doesn't wait for its content (UIKit would show its large title only once the transition ended), only `waitForRender: true` makes it wait. <Os name="Android" /> The components of the bar draw as the screen comes in; with `appProvider` the screen is rendered before the push starts ([below](#wait-one-tree)). |
 | <Os name="Android" /> modal | Waits for the content and the components of the bar, half a second at most, so the screen comes in drawn. |
 
 `waitForRender` of an animation changes it. `true` waits as long as it takes; `false` comes in at once, the content drawing as it comes (a push on Android with `appProvider` [still renders the screen first](#wait-one-tree)):

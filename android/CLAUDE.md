@@ -152,6 +152,9 @@ top-level folder. Main thread only, unless a line says otherwise.
 
 ## Pitfalls
 
+- The large title moves with its screen on a push, a pop and the back gesture, on both platforms: it is there in the
+  transition's first frame, never only after it (Showcase 1.4 and every section panel: check push, pop and back after
+  any change to stack transitions, waits, prepared pushes or the large title).
 - Native code never touches React Native's views (their children, their layout): Fabric owns and recycles them. Move
   content through `SlotContainers` and `SlotView`, and find views by `nativeID` only through React Native's own search
   or its tag (`ReactR.id.view_tag_native_id`); a transition's elements in one walk per screen (`TransitionViews`).

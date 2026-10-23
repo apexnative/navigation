@@ -81,7 +81,9 @@ dispatcher.
    (their limits from the wait's start when unset, from the content's end with `true`; the screen is parked unseen in
    the stack's view by `ANNParking`, `stackPark:`); the content's end, content there already too, waits for the calls
    JavaScript made by then (`ANNJavaScriptCalls`: the JavaScript thread, the module's queue, the main queue), so the
-   options of the screen's first commit are in the bar; with `false` nothing. Then it renders the node, drives the appearance of Home and Profile (`+[ANNAppearanceDispatcher driveAppearanceOf:]`), and calls
+   options of the screen's first commit are in the bar; with `false` nothing. A screen with a large title waits
+   unset only for its bar components and renders right before the push: UIKit takes the large title's place from a list
+   laid out before the push, and a parked list has no room for the bar (the title would come after the transition). Then it renders the node, drives the appearance of Home and Profile (`+[ANNAppearanceDispatcher driveAppearanceOf:]`), and calls
    `+[ANNAppearanceDispatcher beginTransitionShowing:]`. Profile's `ComponentWillAppear` is sent now (held until its
    content mounted, 0.5 s at most). `stackChange:` pushes in UIKit; with an own animation `ANNTransitionPlan` and
    `ANNStackAnimatingDelegate` give UIKit the `ANNTransitionAnimator`.

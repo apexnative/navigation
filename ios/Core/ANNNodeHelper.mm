@@ -256,6 +256,21 @@ static BOOL ANNUserLayersLeftOut = NO;
     return [self resolveOfNode:node parents:parents];
 }
 
+- (ANNNavigationOptions *)resolveOptionsWithDefaultPlacedIn:(UIViewController *)place {
+    UIViewController *node = _node;
+    if (!node) {
+        return [self resolveOptions];
+    }
+    NSMutableArray<UIViewController *> *parents = [NSMutableArray new];
+    for (UIViewController *parent = node.layoutParent; parent; parent = parent.layoutParent) {
+        [parents addObject:parent];
+    }
+    for (UIViewController *parent = place; parent; parent = parent.layoutParent) {
+        [parents addObject:parent];
+    }
+    return [self resolveOfNode:node parents:parents];
+}
+
 // Built on copies: the defaults never go into a node's own options. Each parent's user layer goes over its own
 // options; a node without a current child writes its own layer once more at the end, for the lists it takes from its
 // parents or the defaults (a toggle of a button of the stack's). Writing a choice twice gives the same result.

@@ -99,6 +99,13 @@ Top-level files: `Package.swift` (SwiftPM; `headerFolders` lists every folder wh
 
 - Native code never touches React Native's views (their subviews, their layout, their frames): Fabric owns and recycles
   them. Read them; what a transition writes (`alpha`, `transform`, a hidden flag) goes back on every path.
+- The large title moves with its screen on a push, a pop and the swipe back: it is there in the transition's first
+  frame, never only after it (Showcase 1.4 and every section panel: check push, pop and swipe after any change to
+  stack transitions, waits or the large title). UIKit takes the large title's place from the screen's list as the
+  transition starts: a screen whose list was laid out before the push, out of the stack (parked by a wait for its
+  content, `ANNParking`), has no room for the bar there and shows its title only once the transition ended. So a push
+  of a screen with a large title doesn't wait for its content unless `waitForRender: true` asks for it
+  (`-[ANNStackQueue startPush:]`, `showInColumn`).
 - Every change of a stack's children goes through its `ANNStackQueue`. The core's own calls to UIKit's navigation
   come only from there; UIKit's own pops are followed (`uikitShows:`), not fought.
 - Every UIKit present and dismiss in the main window is a step in `ANNPresentationGate`. UIKit drops a transition

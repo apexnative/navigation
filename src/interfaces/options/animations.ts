@@ -358,7 +358,8 @@ export interface StackAnimationOptions {
    * of its own; on a push the options the screen sets as it renders for the first time (`useScreenOptions`, such as
    * its title) are in its bar from the first frame. `true` waits as long as it takes, `false` starts at once, the
    * content drawing as it comes ((Android) a push with `appProvider` still renders the screen first). (iOS) The
-   * components of the bar are waited for too, each to its own limit.
+   * components of the bar are waited for too, each to its own limit; a screen with a large title is not waited for
+   * unless this is `true` (UIKit would show its large title only after the transition).
    */
   waitForRender?: boolean;
   /**

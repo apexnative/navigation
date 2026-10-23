@@ -13,8 +13,10 @@
 #import "ANNParking.h"
 #import "ANNPendingLayers.h"
 #import "ANNRenderWait.h"
+#import "ANNScreenBars.h"
 #import "ANNShownScreens.h"
 #import "ANNStackCommands.h"
+#import "ANNStackController.h"
 #import "ANNStackQueue.h"
 #import "ApexNavigation+Internal.h"
 #import "UIViewController+LayoutProtocol.h"
@@ -201,7 +203,8 @@ static NSMapTable<UIViewController *, ANNColumnRecordsOfSplitView *> *ANNColumnR
 // as it takes (with the rule for content nobody knows of), then the bar components; `false` for nothing; nothing either
 // while the source's place isn't seen. The content's end waits for the calls JavaScript made by then, so that the
 // options of the screen's first commit are applied before it shows. Read from the screen's own options over the
-// defaults: it has no place yet. The screen waits unseen in the source's window, as a layer that waits to show.
+// defaults: it has no place yet (the large title, from those of the place it goes to). With content, the screen waits
+// unseen in the source's window, as a layer that waits to show.
 + (void)startWaitOf:(ANNColumnRequest *)request {
     UIViewController *screen = request.screen;
     Bool *waitForRender = [screen resolveOptionsWithDefault].animations.push.waitForRender;
@@ -213,21 +216,25 @@ static NSMapTable<UIViewController *, ANNColumnRecordsOfSplitView *> *ANNColumnR
         return;
     }
     BOOL bounded = !waitForRender.hasValue;
+    // A screen whose large title shows large waits only for its bar components, as a stack's push does: a list laid
+    // out before it shows has no room for the bar, and UIKit would show the large title only after the transition. It
+    // isn't parked then: it makes its content right before it shows (`ended`).
+    BOOL content = !(bounded && ANNLargeTitleShowsLarge([self placedOptionsOf:request]));
     __weak UIViewController *weakScreen = screen;
     NSArray<UIViewController *> * (^screens)(void) = ^NSArray<UIViewController *> * {
       UIViewController *waited = weakScreen;
       return waited ? waited.waitedComponentViewControllers : @[];
     };
     ANNRenderWait *wait =
-        [[ANNRenderWait alloc] initWithContent:ANNRenderWaitContentNode
-                                          node:screen
+        [[ANNRenderWait alloc] initWithContent:content ? ANNRenderWaitContentNode : ANNRenderWaitContentNone
+                                          node:content ? screen : nil
                                        screens:screens
                                          limit:bounded ? ANNColumnRenderLimit : 0
                                            bar:ANNRenderWaitBarAfterContent
                                      barLimits:ANNColumnBarLimits];
     wait.unknownContentRule = !bounded;
-    wait.settlesThroughJavaScript = YES;
-    wait.barLimitsFromStart = bounded;
+    wait.settlesThroughJavaScript = content;
+    wait.barLimitsFromStart = bounded && content;
     __weak ANNColumnRequest *weakRequest = request;
     wait.canEnd = ^BOOL {
       ANNColumnRequest *waiting = weakRequest;
@@ -249,12 +256,14 @@ static NSMapTable<UIViewController *, ANNColumnRecordsOfSplitView *> *ANNColumnR
           [ANNSplitViewCommands readyOf:ready];
       }
     };
-    wait.setUp = ^{
-      ANNColumnRequest *waiting = weakRequest;
-      if (waiting) {
-          [ANNSplitViewCommands park:waiting];
-      }
-    };
+    if (content) {
+        wait.setUp = ^{
+          ANNColumnRequest *waiting = weakRequest;
+          if (waiting) {
+              [ANNSplitViewCommands park:waiting];
+          }
+        };
+    }
     request.wait = wait;
     request.starting = YES;
     @try {
@@ -262,6 +271,27 @@ static NSMapTable<UIViewController *, ANNColumnRecordsOfSplitView *> *ANNColumnR
     } @finally {
         request.starting = NO;
     }
+}
+
+// The options the screen will show with in the place it goes to, as far as it is known now: under the column's stack
+// (the split view, for a column that is a screen alone), or under the source's stack while the split view shows as one
+// stack, as a stack reads a push's options (its parent fallback is set before `startPush:`). Without a place, its own
+// over the defaults.
++ (ANNNavigationOptions *)placedOptionsOf:(ANNColumnRequest *)request {
+    UIViewController *screen = ANNStackOptionsScreen(request.screen);
+    UIViewController *source = request.source;
+    UIViewController *splitView = ANNSplitViewOf(source);
+    UIViewController *place = nil;
+    if (splitView && !ANNIsCollapsedIntoCompact(splitView)) {
+        UIViewController *columnNode =
+            [(id<ANNLayoutProtocol>)splitView viewControllerOfColumn:request.column];
+        place = [columnNode isKindOfClass:UINavigationController.class] ? columnNode : splitView;
+    } else if (source) {
+        place = [ANNStackCommands stackOf:source];
+    }
+    ANNNavigationOptions *placed =
+        place ? [screen.nodeHelper resolveOptionsWithDefaultPlacedIn:place] : nil;
+    return placed ?: [screen resolveOptionsWithDefault];
 }
 
 + (void)render:(ANNColumnRequest *)request {
