@@ -7,7 +7,7 @@ static const CGFloat ANNBarButtonSlotHeight = 44;
 static const CGFloat ANNBarButtonSlotMinimumWidth = 44;
 static const CGFloat ANNBarButtonWidthTolerance = 0.5;
 
-// The slot of iOS 26's bar: unless the app keeps the earlier design (`UIDesignRequiresCompatibility`).
+// The slot of iOS 26's bar: unless UIKit keeps the earlier design for the app (`ANNTabsDesign`).
 static BOOL ANNUsesSlotConstraints(void) {
     return ANNTabsDesign.isGlass;
 }

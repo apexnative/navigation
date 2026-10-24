@@ -717,8 +717,9 @@ static ANNBottomTabOptions *ANNWithIcons(ANNBottomTabOptions *bottomTab, NSArray
                     warned = YES;
                     RCTLogWarn(
                         @"[ApexNavigation] bottomTabs.backgroundColor is ignored with Liquid "
-                        @"Glass (iOS 26). It applies with UIDesignRequiresCompatibility and on "
-                        @"earlier iOS versions.");
+                        @"Glass (iOS 26). It applies before iOS 26 and where UIKit keeps the "
+                        @"earlier design for UIDesignRequiresCompatibility (iOS 26; iOS 27 only "
+                        @"for an app built with an SDK before iOS 27).");
                 }
             }
         }

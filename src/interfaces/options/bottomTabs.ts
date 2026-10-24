@@ -190,8 +190,9 @@ export interface OptionsBottomTabs {
   drawBehind?: boolean;
   /**
    * The background color of the bar; `null` gives the default one. On Android the default is the surface color of the
-   * Material 3 theme. Before iOS 26 (and with `UIDesignRequiresCompatibility`) the bar is opaque with the color, or
-   * system opaque without it, and a transparent color makes it transparent. On iOS 26 with glass the color is ignored
+   * Material 3 theme. Before iOS 26, and in the compatibility mode (`UIDesignRequiresCompatibility` in Info.plist: iOS 26, and iOS 27
+   * only for an app built with an SDK before iOS 27), the bar is opaque with the color, or system opaque without it,
+   * and a transparent color makes it transparent. On iOS 26 and later with glass the color is ignored
    * with one warning, since the system has no color for glass, while a transparent color gives a transparent bar. The
    * theme color `bar` is its default option.
    */
@@ -398,7 +399,7 @@ export interface OptionsBottomTab {
   selectedFontSize?: number;
   /**
    * (iOS) The insets of the icon. Each side is independent. They apply before iOS 26 only; iOS 26 and the compatibility
-   * mode ignore them, and so does a system role before iOS 18.
+   * mode (see `backgroundColor`) ignore them, and so does a system role before iOS 18.
    */
   iconInsets?: IconInsets;
   /**

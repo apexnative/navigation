@@ -1,4 +1,5 @@
 #import "UITabBar+utils.h"
+#import "ANNTabsDesign.h"
 #import "UIView+Utils.h"
 #import <React/RCTLog.h>
 #import <objc/runtime.h>
@@ -38,14 +39,10 @@ static void ANNTabBarButtonLayoutSubviews(UIView *button, SEL _cmd) {
     badge.center = CGPointMake(badge.center.x, badge.center.y + offset);
 }
 
-// The design of iOS 26 centers the icon of an item without a title itself; in its compatibility
-// mode (UIDesignRequiresCompatibility) the tab bar is drawn as before.
+// The design of iOS 26 centers the icon of an item without a title itself; the design before it
+// (before iOS 26, and the compatibility mode where UIKit keeps it) keeps the title's room.
 static BOOL ANNTabBarButtonsKeepTitleRoom(void) {
-    if (@available(iOS 26.0, *)) {
-        return [[NSBundle.mainBundle objectForInfoDictionaryKey:@"UIDesignRequiresCompatibility"]
-            boolValue];
-    }
-    return YES;
+    return !ANNTabsDesign.isGlass;
 }
 
 // Once for the app; the buttons of other tab bars keep the layout of UIKit. No public API does this: in the
