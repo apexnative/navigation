@@ -45,7 +45,7 @@ The platform draws the bar: `UINavigationBar` on <Os name="iOS" />, with Liquid 
 
 ## The glass design and the compatibility mode {#glass-design}
 
-On <Os name="iOS" /> the look of iOS 26 (Liquid Glass) is *the glass design*, and this page and [the bar buttons](./bar-buttons) call it that. An app in the compatibility mode (`UIDesignRequiresCompatibility = YES` in Info.plist) doesn't get it: the mode applies on iOS 26, and on iOS 27 only to an app built with an SDK before iOS 27. There the bar looks and behaves as before iOS 26: a title with a subtitle as two lines, no capsules (`title.glass`, `sharesBackground` and `hideSharedBackground` do nothing), `style: 'prominent'` is a bold Done button, the back button shows the title of the screen below, `background.color` gives an opaque bar, and a large title is drawn in the bar. [The bottom tabs](../containers/tabs) follow the same mode.
+On <Os name="iOS" /> the look of iOS 26 (Liquid Glass) is *the glass design*, and this page and [the bar buttons](./bar-buttons) call it that. An app in the compatibility mode (`UIDesignRequiresCompatibility = YES` in Info.plist) doesn't get it: the mode applies on iOS 26, and on iOS 27 only to an app built with an SDK before iOS 27. There the bar looks and behaves as before iOS 26: a title with a subtitle as two lines only when no large title can show (with a large title the subtitle shows nowhere), no capsules (`title.glass`, `hideSharedBackground` and `group` do nothing), `style: 'prominent'` is a bold Done button, the back button shows the title of the screen below, `background.color` gives an opaque bar, and a large title is drawn in the bar. [The bottom tabs](../containers/tabs) follow the same mode.
 
 ## The title {#title}
 
