@@ -1,5 +1,5 @@
 #import "ANNSafeAreaViewComponentView.h"
-#import "ANNScreenInsets.h"
+#import "ANNScreenEnvironment.h"
 #import "ANNScreenReadiness.h"
 #import "../cpp/react/renderer/components/ApexNavigationSpec/ANNSafeAreaViewComponentDescriptor.h"
 #import <React/RCTConversions.h>
@@ -72,11 +72,11 @@ using namespace facebook::react;
         return;
     }
     if (_screenId != nil) {
-        [ANNScreenInsets removePaddingListener:self forScreenId:_screenId];
+        [ANNScreenEnvironment removePaddingListener:self forScreenId:_screenId];
     }
     _screenId = screenId;
     if (screenId != nil) {
-        [ANNScreenInsets addPaddingListener:self forScreenId:screenId];
+        [ANNScreenEnvironment addPaddingListener:self forScreenId:screenId];
     }
 }
 
@@ -91,7 +91,7 @@ using namespace facebook::react;
     if (_state == nullptr || _screenId == nil) {
         return;
     }
-    UIEdgeInsets padding = [ANNScreenInsets paddingForScreenId:_screenId];
+    UIEdgeInsets padding = [ANNScreenEnvironment paddingForScreenId:_screenId];
     EdgeInsets insets{.left = (Float)padding.left,
                       .top = (Float)padding.top,
                       .right = (Float)padding.right,

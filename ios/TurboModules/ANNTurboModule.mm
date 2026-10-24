@@ -22,8 +22,7 @@
 #import "ANNPreviewInteraction.h"
 #import "ANNPreviewPush.h"
 #import "ANNRootCoordinator.h"
-#import "ANNScreenInsets.h"
-#import "ANNScreenRegions.h"
+#import "ANNScreenEnvironment.h"
 #import "ANNSlotHost.h"
 #import "ANNSplitViewCommands.h"
 #import "ANNSystemUI.h"
@@ -529,18 +528,18 @@ RCT_EXPORT_MODULE(ANNTurboModule)
 
 #pragma mark - Questions answered at once
 
-// The stores are written on the main queue and read here under their own locks: JavaScript reads them during a
-// screen's first render, so the answer never waits for the main queue.
+// The screen's environment is written on the main queue and read here under its lock (the hinge under its own):
+// JavaScript reads it during a screen's first render, so the answer never waits for the main queue.
 - (NSDictionary *)getArrangementState:(NSString *)componentId {
-    return [ANNArrangementState stateForScreenId:componentId] ?: @{};
+    return [ANNScreenEnvironment arrangementForScreenId:componentId] ?: @{};
 }
 
 - (NSDictionary *)getScreenInsets:(NSString *)componentId {
-    return [ANNScreenInsets insetsForScreenId:componentId] ?: @{};
+    return [ANNScreenEnvironment insetsForScreenId:componentId] ?: @{};
 }
 
 - (NSDictionary *)getScreenRegions:(NSString *)componentId {
-    NSDictionary *regions = [ANNScreenRegions regionsForScreenId:componentId];
+    NSDictionary *regions = [ANNScreenEnvironment regionsForScreenId:componentId];
     const auto &keys = ANNEventContract.ScreenRegionsChanged;
     return regions ?: @{keys.division : @[], keys.occlusion : @[]};
 }

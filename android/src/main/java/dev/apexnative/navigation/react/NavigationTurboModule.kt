@@ -236,11 +236,11 @@ class NavigationTurboModule(reactContext: ReactApplicationContext) : NativeANNTu
         check = {},
     ) { _, answer -> navigator().stackCommands.setColumnShown(componentId, column, shown, answer) }
 
-    override fun getArrangementState(componentId: String): WritableMap = ArrangementStates.get(componentId)
+    override fun getArrangementState(componentId: String): WritableMap = ScreenEnvironment.getArrangementState(componentId)
 
-    override fun getScreenInsets(componentId: String): WritableMap = ScreenInsets.get(componentId)
+    override fun getScreenInsets(componentId: String): WritableMap = ScreenEnvironment.getScreenInsets(componentId)
 
-    override fun getScreenRegions(componentId: String): WritableMap = ScreenRegions.get(componentId)
+    override fun getScreenRegions(componentId: String): WritableMap = ScreenEnvironment.getScreenRegions(componentId)
 
     // With the activity the user sees, if there is one; the hinge remembers it and goes on with the next activity
     // (`Hinge.attach`).

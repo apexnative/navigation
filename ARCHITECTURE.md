@@ -220,7 +220,7 @@ Each rule has one owner. A feature that needs the rule calls the owner; it does 
 | Overlays                    | `ANNOverlayCoordinator`, a window each                                                                        | `OverlayCoordinator`, a layer of the activity                                                                |
 | System UI owner             | `ANNSystemUI`, the rules in `ANNSystemUIRules`                                                                | `SystemUiOwner` per `Navigator`; only `SystemUiWindow` writes to the window                                  |
 | Reload                      | `ANNReloadCoordinator`: the generation of the JavaScript                                                      | `ReloadCoordinator`: the generation; `ReactGateway` tells it                                                 |
-| Room for the bars           | `ANNScreenSafeArea`, `ANNScreenInsets`                                                                        | `ScreenFrame`, `ScreenSafeArea`; `ScreenFrame.topRoomOf` for a screen and a pair                             |
+| Room for the bars           | `ANNScreenSafeArea`, `ANNScreenEnvironment`                                                                   | `ScreenFrame`, `ScreenSafeArea`; `ScreenFrame.topRoomOf` for a screen and a pair                             |
 | A container's own move      | the container's UIKit callbacks, told to `ANNAppearanceDispatcher`                                            | `ShownChildren`, through the dispatcher's order                                                              |
 | Back                        | `ANNStackController`, `InteractivePopGestureDelegate`, `uikitShows:` of the queue                             | `NavigationActivity` → `Navigator.handleBack` → `StackQueue`; `BackCallbackState`                            |
 
@@ -303,10 +303,13 @@ defaults or the theme change.
 **Option groups.** iOS: a subclass of `ANNOptions` overrides `initWithDict:`, `mergeOptions:` and `hasValue`. Android: a
 class with `parse`, `mergeWith`, `mergeWithDefault`, `copy` and `hasValue`, added to `Options`.
 
-**Stores.** Insets, regions, the pair's state, the hinge and the start info (`ANNScreenInsets`, `ANNScreenRegions`,
-`ANNArrangementState`, `ANNHinge`; `ScreenInsets`, `ScreenRegions`, `ArrangementStates`, `Hinge`, `StartInfo`) are
-written by the core on the main thread and read by the sync getters from any thread, behind `@synchronized` on iOS and
-`ConcurrentHashMap` or `@Volatile` on Android. They are cleared with their screens and on reload.
+**Stores.** What JavaScript reads of a screen's place (its insets and the padding of its safe area view, its
+reserved regions, its arrangement in a pair) is one record per screen id (`ANNScreenEnvironment`;
+`ScreenEnvironment`), cleared with one call when the screen goes. The hinge and the start info have their own
+(`ANNHinge`; `Hinge`, `StartInfo`). All of them are written by the core on the main thread and read by the sync
+getters from any thread, behind `@synchronized` on iOS and a `ConcurrentHashMap` of immutable records or `@Volatile`
+on Android. They are cleared with their screens and, on iOS, on reload. The padding listeners of a screen's safe area
+views live in its environment, on the main thread, and outlast its record while a view keeps the id.
 
 **Core code in a module's folder.** Two classes live in a module folder and are core: iOS `ANNSplitViewPresenter`
 and `ANNSplitViewCommands` in `ios/Layouts/SplitView/`, Android `SplitViewPresenter` in `viewcontrollers/splitview/`

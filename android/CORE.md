@@ -10,7 +10,7 @@ otherwise.
 ```
 JS ─ ANNTurboModule (codegen NativeANNTurboModuleSpec)
  │      sync getters answer on the JS thread from stores the main thread fills
- │      (ScreenInsets, ScreenRegions, ArrangementStates, Hinge, StartInfo)
+ │      (ScreenEnvironment, Hinge, StartInfo)
  ▼ module thread
 react/NavigationTurboModule      one override per method
  │  layout/LayoutReader ► options/OptionsReader     the whole layout read and checked, its options read
@@ -209,9 +209,9 @@ Modules are the feature classes that plug into the core through its contract (th
   (`SlotHost`, `SlotView`, `SlotContainers`), safe area (`SafeAreaView`), native screens (`nativescreen/`), splash
   (`splash/`), animations (`FadeThrough`, `SystemTransition`, `TransitionTargets`, three element animators), utils
   (`MaterialTheme`, `NavigationLog`, `awaitBarComponents`, `whenDrawn`).
-- **Stores and singletons:** regions (`Hinge`, `ScreenInsets`, `ScreenRegions`, `WindowFolds`), pair state
-  (`ArrangementStates`), links (`LaunchLink`, `StartInfo`), events (`NavigationState`), commands
-  (`BackCallbackState`), stack (`PreparedFrame`).
+- **Stores and singletons:** a screen's environment (`ScreenEnvironment`: its insets and padding, its regions as
+  `ScreenRegions` measures them, its pair state), the window (`Hinge`, `WindowFolds`), links (`LaunchLink`,
+  `StartInfo`), events (`NavigationState`), commands (`BackCallbackState`), stack (`PreparedFrame`).
 
 How they plug in:
 
@@ -235,5 +235,8 @@ How they plug in:
 - **Core code in a module's folder:** `viewcontrollers/splitview/SplitViewPresenter.kt`, `slots/SlotScreenView.kt`,
   and in `views/animations/` and `views/element/` everything except the files named above.
 - **Stores** are written on the main thread by the core and read from any thread; they are cleared with their nodes and on
-  reload. Their events, and the search's, go through the emitter of the JavaScript the screen was made for
+  reload. A screen's environment is one immutable record per id in `ScreenEnvironment` (insets for JavaScript, padding,
+  regions, pair state), replaced at once; the screen's node clears it with one `remove` when it is destroyed, unless a
+  later node has its id; the padding listeners of its safe area views stay until the views stop. Their events, and
+  the search's, go through the emitter of the JavaScript the screen was made for
   (`EventEmitter.of(node.jsGeneration)`); the hinge keeps the `EventEmitter.current()` of the call that turned it on.

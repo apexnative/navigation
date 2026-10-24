@@ -1,5 +1,5 @@
 #import "ANNSearchResultsViewController.h"
-#import "ANNScreenInsets.h"
+#import "ANNScreenEnvironment.h"
 
 @implementation ANNSearchResultsViewController {
     NSString *_componentId;
@@ -30,10 +30,10 @@
     [super viewDidLayoutSubviews];
     _reactView.frame = self.view.bounds;
     if (_componentId) {
-        [ANNScreenInsets setInsets:self.view.safeAreaInsets
-                           padding:UIEdgeInsetsZero
-                       forScreenId:_componentId
-                      eventEmitter:_eventEmitter];
+        [ANNScreenEnvironment setInsets:self.view.safeAreaInsets
+                                padding:UIEdgeInsetsZero
+                            forScreenId:_componentId
+                           eventEmitter:_eventEmitter];
     }
 }
 

@@ -9,7 +9,7 @@ import androidx.window.layout.WindowMetricsCalculator
 import dev.apexnative.navigation.NavigationActivity
 import dev.apexnative.navigation.options.DefaultOptions
 import dev.apexnative.navigation.options.Options
-import dev.apexnative.navigation.react.ArrangementStates
+import dev.apexnative.navigation.react.ScreenEnvironment
 import dev.apexnative.navigation.react.events.EventEmitter
 import dev.apexnative.navigation.utils.SystemUiUtils
 import dev.apexnative.navigation.utils.WindowFolds
@@ -146,12 +146,14 @@ class ArrangementController internal constructor(
         val overlay = plan.layout == ArrangementPlan.Layout.OVERLAY
         val single = plan.layout == ArrangementPlan.Layout.SINGLE
         if (primary is ComponentViewController) {
-            val state = ArrangementStates.State(PRIMARY, layout, front = overlay, hidden = false)
-            ArrangementStates.set(primary.id, state, notify, EventEmitter.of(primary.jsGeneration))
+            val state = ScreenEnvironment.Arrangement(PRIMARY, layout, front = overlay, hidden = false)
+            val changes = ScreenEnvironment.changesOf(EventEmitter.of(primary.jsGeneration))
+            ScreenEnvironment.setArrangement(primary.id, state, notify, changes)
         }
         if (secondary is ComponentViewController) {
-            val state = ArrangementStates.State(SECONDARY, layout, front = false, hidden = single)
-            ArrangementStates.set(secondary.id, state, notify, EventEmitter.of(secondary.jsGeneration))
+            val state = ScreenEnvironment.Arrangement(SECONDARY, layout, front = false, hidden = single)
+            val changes = ScreenEnvironment.changesOf(EventEmitter.of(secondary.jsGeneration))
+            ScreenEnvironment.setArrangement(secondary.id, state, notify, changes)
         }
     }
 
@@ -244,9 +246,9 @@ class ArrangementController internal constructor(
         // The stack keeps the bar's title, buttons and search by the view of its screen on top: they go with the pair.
         if (!isDestroyed && peekView() != null) performOnParentController { it.onChildDestroyed(this) }
         folds?.removeListener(onFoldsChanged)
-        ArrangementStates.remove(primary.id)
-        ArrangementStates.remove(secondary.id)
         shownChildren.containerDisappeared()
+        // The screens go with the pair: each clears its own environment, its arrangement too, unless its id is
+        // another's now.
         super.destroy()
     }
 

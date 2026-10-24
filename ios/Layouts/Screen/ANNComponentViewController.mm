@@ -1,9 +1,7 @@
 #import "ANNComponentViewController.h"
 #import "ANNAppearanceDispatcher.h"
-#import "ANNArrangementState.h"
 #import "ANNBottomTabsController.h"
 #import "ANNComponentPresenter.h"
-#import "ANNEventContract.h"
 #import "ANNHinge.h"
 #import "ANNKeyCommands.h"
 #import "ANNNodeRegistry.h"
@@ -11,7 +9,7 @@
 #import "ANNPendingLayers.h"
 #import "ANNPreviewPush.h"
 #import "ANNScreenBars.h"
-#import "ANNScreenInsets.h"
+#import "ANNScreenEnvironment.h"
 #import "ANNScreenReadiness.h"
 #import "ANNScreenRegions.h"
 #import "ANNScreenSafeArea.h"
@@ -432,7 +430,7 @@
     return UIRectEdgeNone;
 }
 
-// The insets and the padding of a React screen or a slot screen go to the module, which keeps them, gives JavaScript
+// The insets and the padding of a React screen or a slot screen go to the store, which keeps them, gives JavaScript
 // what still covers the content and tells only of changes; the regions in the same pass. Only in a window and with an
 // id; never after the destroy, which removed them (a late layout would bring them back), nor for the JavaScript that
 // went (an old screen held after a reload: the new JavaScript may give its id to a new screen).
@@ -460,15 +458,15 @@
         .verticalBarSide = [self verticalBarSide],
     };
     UIEdgeInsets padding = ANNScreenPadding(insets, options, context);
-    [ANNScreenInsets setInsets:insets
-                       padding:padding
-                   forScreenId:componentId
-                  eventEmitter:eventEmitter];
+    [ANNScreenEnvironment setInsets:insets
+                            padding:padding
+                        forScreenId:componentId
+                       eventEmitter:eventEmitter];
     [self updateRegions];
 }
 
 // The regions in the same pass, and on the next turn after a change of the hinge's state (`hingeDidChange:`). Nil
-// before iOS 27.1: nothing to keep. An empty first result is not sent.
+// before iOS 27.1: nothing to keep. The store neither keeps nor sends an empty first result.
 - (void)updateRegions {
     UIView<ANNComponentProtocol> *content = _reactView;
     NSString *componentId = self.layoutInfo.componentId;
@@ -483,12 +481,7 @@
     if (!regions) {
         return;
     }
-    const auto &keys = ANNEventContract.ScreenRegionsChanged;
-    BOOL empty = [regions[keys.division] count] == 0 && [regions[keys.occlusion] count] == 0;
-    if (empty && ![ANNScreenRegions regionsForScreenId:componentId]) {
-        return;
-    }
-    [ANNScreenRegions setRegions:regions forScreenId:componentId eventEmitter:eventEmitter];
+    [ANNScreenEnvironment setRegions:regions forScreenId:componentId eventEmitter:eventEmitter];
 }
 
 - (void)hingeDidChange:(NSNotification *)notification {
@@ -690,9 +683,7 @@
     // its destroy, as at a reload) keeps it.
     NSString *componentId = self.layoutInfo.componentId;
     if (componentId && ![ANNNodeRegistry nodeForComponentId:componentId]) {
-        [ANNScreenInsets removeScreenId:componentId];
-        [ANNScreenRegions removeScreenId:componentId];
-        [ANNArrangementState removeScreenId:componentId];
+        [ANNScreenEnvironment removeScreenId:componentId];
         [ANNScreenReadiness removeScreenId:componentId];
     }
 }

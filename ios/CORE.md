@@ -151,7 +151,7 @@ the stores. By area:
   `ANNArrangementViewController`; `UITabBar+utils`, `ANNBottomTabsAccessoryView`.
 - **Modals:** `ANNSheetPresenter`, `ANNPopoverPresenter`, `ANNModalSizePresenter`, `ANNModalHostViewComponentView`;
   `ANNOverlayWindow`.
-- **Screen and bar:** `ANNPreviewInteraction`, `ANNScreenInsets`, `ANNScreenRegions`, `ANNNativeScreenContext`,
+- **Screen and bar:** `ANNPreviewInteraction`, `ANNScreenEnvironment`, `ANNScreenRegions`, `ANNNativeScreenContext`,
   `ANNNativeScreenCalls`, `ANNSearchPresenter`, `ANNSearchResultsViewController`; options `ANNMenuOptions`,
   `ANNToolbarOptions`, `ANNSheetOptions`, `ANNPopoverOptions`, `ANNBottomTabsAccessoryOptions`.
 - **React and C++:** `React/Slots/`, `ANNSafeAreaViewComponentView`, the Fabric files of `cpp/`.
@@ -175,8 +175,10 @@ What a module uses of the core:
 - **The presenter hooks** of `ANNNodePresenter`: `applyOptions:`, `mergeOptions:resolvedOptions:`,
   `applyDefaultOptionsChange:`, `descendantWillAppear:`, `mergeChildOptions:`, `optionsForParent:`, and the answers to
   UIKit (status bar, orientations, home indicator, deferred edges).
-- **The stores** a module writes on the main queue and JS reads from any thread: `ANNScreenInsets`,
-  `ANNScreenRegions`, `ANNArrangementState`; and the signals `ANNScreenReadiness`, `ANNSlotContainers`.
+- **The stores** a module writes on the main queue and JS reads from any thread: `ANNScreenEnvironment`, one record
+  per screen id (insets and padding, regions, arrangement) under one lock, cleared with one call when the screen goes
+  (`removeScreenId:`, only once no node holds the id) and at a reload (`removeAll`); and the signals
+  `ANNScreenReadiness`, `ANNSlotContainers`.
 - **A module's options group** subclasses `ANNOptions` and overrides `initWithDict:`, `mergeOptions:` and `hasValue`.
 
 Core code that lives in a module's folder: `ANNSplitViewPresenter` (turns `splitView.*` into calls of
