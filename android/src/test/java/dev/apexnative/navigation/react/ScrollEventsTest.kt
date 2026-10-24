@@ -1,66 +1,102 @@
 package dev.apexnative.navigation.react
 
+import android.app.Activity
+import android.widget.HorizontalScrollView
+import android.widget.ScrollView
+import com.facebook.react.views.scroll.ScrollEventType
+import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-/** The fields of React Native's scroll event, looked up under both spellings and read as floats. */
+/**
+ * React Native's scroll listener as the screens hear it: each kind of event, the reading's fields, nothing from a
+ * horizontal scroll view, and only the handlers listening now.
+ */
 class ScrollEventsTest {
-    // As React Native 0.87 has them: no prefix, floats.
-    @Suppress("unused")
-    private class Current {
-        private val scrollY: Float = 120.5f
-        private val yVelocity: Float = -3.25f
+    private val activity = Activity()
+
+    // A vertical scroll view with its tag; the JVM's stub views have no scroll, so the offset reads 0.
+    private class Vertical(context: Activity, private val tag: Int) : ScrollView(context) {
+        override fun getId(): Int = tag
     }
 
-    // As earlier versions have them: the `m` prefix, an int offset and a double speed.
-    @Suppress("unused")
-    private class Earlier {
-        private val mScrollY: Int = 240
-        private val mYVelocity: Double = 1.5
+    private class Horizontal(context: Activity, private val tag: Int) : HorizontalScrollView(context) {
+        override fun getId(): Int = tag
     }
 
-    // A field with the name but not a number, and one boxed number.
-    @Suppress("unused")
-    private class Odd {
-        private val scrollY: String = "120"
-        private val mScrollY: Long? = 7L
+    private val stops = mutableListOf<() -> Unit>()
+
+    @After
+    fun stopListening() {
+        stops.forEach { it() }
     }
 
-    private fun offsetOf(target: Any): Float? {
-        val field = ScrollEvents.declaredField(target.javaClass, listOf("scrollY", "mScrollY"), ScrollEvents::isNumeric)
-            ?: return null
-        return ScrollEvents.readFloat(field, target)
-    }
-
-    private fun velocityOf(target: Any): Float? {
-        val names = listOf("yVelocity", "mYVelocity")
-        val field = ScrollEvents.declaredField(target.javaClass, names, ScrollEvents::isNumeric) ?: return null
-        return ScrollEvents.readFloat(field, target)
+    private fun listen(handler: (ScrollEvents.Reading) -> Unit) {
+        stops += ScrollEvents.listen(handler)
     }
 
     @Test
-    fun theCurrentFloatFieldsAreRead() {
-        val target = Current()
-        assertEquals(120.5f, offsetOf(target))
-        assertEquals(-3.25f, velocityOf(target))
+    fun everyKindOfEventMapsToItsKind() {
+        val expected = mapOf(
+            ScrollEventType.BEGIN_DRAG to ScrollEvents.Kind.BeginDrag,
+            ScrollEventType.END_DRAG to ScrollEvents.Kind.EndDrag,
+            ScrollEventType.SCROLL to ScrollEvents.Kind.Scroll,
+            ScrollEventType.MOMENTUM_BEGIN to ScrollEvents.Kind.MomentumBegin,
+            ScrollEventType.MOMENTUM_END to ScrollEvents.Kind.MomentumEnd,
+        )
+        assertEquals(ScrollEventType.entries.toSet(), expected.keys)
+        expected.forEach { (type, kind) -> assertEquals(kind, ScrollEvents.kindOf(type)) }
     }
 
     @Test
-    fun theEarlierNamesAndAnyNumericTypeAreRead() {
-        val target = Earlier()
-        assertEquals(240f, offsetOf(target))
-        assertEquals(1.5f, velocityOf(target))
+    fun aVerticalScrollViewGivesItsTagOffsetAndSpeed() {
+        val reading = ScrollEvents.read(Vertical(activity, 42), ScrollEventType.END_DRAG, -3.5f)
+        assertNotNull(reading)
+        requireNotNull(reading)
+        assertEquals(42, reading.viewTag)
+        assertEquals(ScrollEvents.Kind.EndDrag, reading.kind)
+        assertEquals(0f, reading.offsetY)
+        assertEquals(-3.5f, reading.velocityY)
     }
 
     @Test
-    fun aFieldThatIsNoNumberIsPassedOver() {
-        // `scrollY` is text: the next spelling, a boxed number, is taken.
-        assertEquals(7f, offsetOf(Odd()))
+    fun aHorizontalScrollViewGivesNothing() {
+        assertNull(ScrollEvents.read(Horizontal(activity, 42), ScrollEventType.SCROLL, 0f))
+        assertNull(ScrollEvents.read(Horizontal(activity, 42), ScrollEventType.BEGIN_DRAG, 0f))
     }
 
     @Test
-    fun noFieldUnderEitherName() {
-        assertNull(ScrollEvents.declaredField(Any::class.java, listOf("scrollY", "mScrollY"), ScrollEvents::isNumeric))
+    fun noViewOrNoKindGivesNothing() {
+        assertNull(ScrollEvents.read(null, ScrollEventType.SCROLL, 0f))
+        assertNull(ScrollEvents.read(Vertical(activity, 42), null, 0f))
+    }
+
+    @Test
+    fun onlyTheHandlersListeningNowHear() {
+        val first = mutableListOf<Int>()
+        val second = mutableListOf<Int>()
+        val stopFirst = ScrollEvents.listen { first += it.viewTag }
+        listen { second += it.viewTag }
+        ScrollEvents.hear(Vertical(activity, 1), ScrollEventType.SCROLL, 0f)
+        stopFirst()
+        ScrollEvents.hear(Vertical(activity, 2), ScrollEventType.SCROLL, 0f)
+        ScrollEvents.hear(Horizontal(activity, 3), ScrollEventType.SCROLL, 0f)
+        assertEquals(listOf(1), first)
+        assertEquals(listOf(1, 2), second)
+    }
+
+    @Test
+    fun stoppingTwiceIsHarmless() {
+        val heard = mutableListOf<Int>()
+        val handler: (ScrollEvents.Reading) -> Unit = { heard += it.viewTag }
+        val stop = ScrollEvents.listen(handler)
+        listen(handler)
+        stop()
+        stop()
+        // The same handler listening a second time still hears: a stop takes away only its own listening.
+        ScrollEvents.hear(Vertical(activity, 5), ScrollEventType.SCROLL, 0f)
+        assertEquals(listOf(5), heard)
     }
 }
