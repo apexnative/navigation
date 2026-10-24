@@ -24,7 +24,7 @@ static UIView *ANNBackgroundHostOf(UINavigationBar *bar) {
         for (UIView *subview in bar.subviews) {
             [names addObject:NSStringFromClass(subview.class)];
         }
-        RCTLogInfo(@"[ApexNavigation] the bar has no view named …BarBackground, so a background "
+        RCTLogWarn(@"[ApexNavigation] the bar has no view named …BarBackground, so a background "
                    @"component goes on the bar itself at index 1; its views: %@",
                    [names componentsJoinedByString:@", "]);
     }
