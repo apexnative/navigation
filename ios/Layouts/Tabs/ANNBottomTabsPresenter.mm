@@ -68,6 +68,9 @@ static id ANNValue(NSArray *list, NSUInteger index) {
     UITraitCollection *_appliedBarTraits;
     BOOL _tabsAreSet;
     BOOL _titlesHidden;
+    // A dot that shows was placed while its button had no window (the tabs under a full-screen modal): it hides then,
+    // and the next layout in the window places it, whatever the check of the buttons says.
+    BOOL _dotsWaitForWindow;
     // The bar's look: its options, and the background and border every item's look starts from.
     ANNBottomTabsOptions *_barOptions;
     UITabBarAppearance *_base;
@@ -594,6 +597,7 @@ static ANNBottomTabOptions *ANNWithIcons(ANNBottomTabOptions *bottomTab, NSArray
     if (anyDot) {
         [bar layoutIfNeeded];
     }
+    BOOL waitsForWindow = NO;
     for (NSUInteger index = 0; index < tabs.layoutTabs.count; index++) {
         ANNTabDotView *view = ANNValue(_dotViews, index);
         if (!view) {
@@ -607,8 +611,11 @@ static ANNBottomTabOptions *ANNWithIcons(ANNBottomTabOptions *bottomTab, NSArray
         }
         UITabBarItem *item = tabs.layoutTabs[index].tabBarItem;
         BOOL inBar = [bar.items indexOfObjectIdenticalTo:item] != NSNotFound;
-        [view placeOverButton:inBar ? [bar viewOfItem:item] : nil inBar:bar];
+        UIView *button = inBar ? [bar viewOfItem:item] : nil;
+        waitsForWindow = waitsForWindow || (inBar && !button.window);
+        [view placeOverButton:button inBar:bar];
     }
+    _dotsWaitForWindow = waitsForWindow;
 }
 
 #pragma mark - testID (`bottomTab.testID`, `bottomTabs.moreTestID`)
@@ -1083,16 +1090,18 @@ static ANNBottomTabOptions *ANNWithIcons(ANNBottomTabOptions *bottomTab, NSArray
 }
 
 // The `testID`s and the dots go on the buttons again only when the bar has other buttons than they were applied to,
-// another size or other traits; a merge and a rebuilt item apply them at once.
+// another size or other traits; a merge and a rebuilt item apply them at once. A dot placed out of the window waits
+// for the next layout.
 - (void)tabsDidLayOut {
     if (!_tabsAreSet) {
         return;
     }
     [self updateHiddenTitles];
-    if ([self barChangedSinceApplied]) {
-        if (!ANNTabsDesign.isGlass) {
-            [self placeDots];
-        }
+    BOOL changed = [self barChangedSinceApplied];
+    if ((changed || _dotsWaitForWindow) && !ANNTabsDesign.isGlass) {
+        [self placeDots];
+    }
+    if (changed) {
         [self applyButtonTestIDs];
     }
     [_row layOutInTabs];
