@@ -6,6 +6,9 @@
 
 using namespace facebook::react;
 
+@interface ANNSafeAreaViewComponentView () <ANNScreenPaddingListener>
+@end
+
 @implementation ANNSafeAreaViewComponentView {
     ANNSafeAreaViewShadowNode::ConcreteState::Shared _state;
     NSString *_screenId;
@@ -22,21 +25,13 @@ using namespace facebook::react;
     if (self = [super initWithFrame:frame]) {
         static const auto defaultProps = std::make_shared<const ANNSafeAreaViewProps>();
         _props = defaultProps;
-        [NSNotificationCenter.defaultCenter addObserver:self
-                                               selector:@selector(paddingDidChange:)
-                                                   name:ANNScreenSafeAreaPaddingDidChangeNotification
-                                                 object:nil];
     }
     return self;
 }
 
-- (void)dealloc {
-    [NSNotificationCenter.defaultCenter removeObserver:self];
-}
-
 - (void)updateProps:(const Props::Shared &)props oldProps:(const Props::Shared &)oldProps {
     const auto &newProps = static_cast<const ANNSafeAreaViewProps &>(*props);
-    _screenId = RCTNSStringFromStringNilIfEmpty(newProps.screenId);
+    [self listenToScreenId:RCTNSStringFromStringNilIfEmpty(newProps.screenId)];
     // The screen's readiness comes from this view, never from its root's children.
     if (_screenId != nil) {
         [ANNScreenReadiness screenHasSafeAreaView:_screenId];
@@ -70,10 +65,25 @@ using namespace facebook::react;
     [self applyPadding];
 }
 
-- (void)paddingDidChange:(NSNotification *)notification {
-    if ([notification.object isEqual:_screenId]) {
-        [self applyPadding];
+// The view hears the padding changes of its screen only. It listens before it applies the padding it has, at each
+// props, so a change between the two can't be missed.
+- (void)listenToScreenId:(nullable NSString *)screenId {
+    if ((screenId == nil && _screenId == nil) || [screenId isEqualToString:_screenId]) {
+        return;
     }
+    if (_screenId != nil) {
+        [ANNScreenInsets removePaddingListener:self forScreenId:_screenId];
+    }
+    _screenId = screenId;
+    if (screenId != nil) {
+        [ANNScreenInsets addPaddingListener:self forScreenId:screenId];
+    }
+}
+
+#pragma mark - ANNScreenPaddingListener
+
+- (void)screenPaddingDidChange {
+    [self applyPadding];
 }
 
 // The padding of the screen goes to the state, which lays the view out with it.
@@ -144,7 +154,8 @@ using namespace facebook::react;
 - (void)prepareForRecycle {
     [super prepareForRecycle];
     _state.reset();
-    _screenId = nil;
+    // A recycled view gets its next screen's id with its next props.
+    [self listenToScreenId:nil];
     _readySent = NO;
     _contentRenderedSent = NO;
     _contentRendered = NO;
