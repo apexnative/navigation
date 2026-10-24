@@ -41,6 +41,23 @@ static BOOL ANNIsIOS26(void) {
     return NO;
 }
 
+// The same look: the item's appearance is the one set last, or one equal to it.
+static BOOL ANNSameAppearance(UINavigationBarAppearance *a, UINavigationBarAppearance *b) {
+    return a == b || [a isEqual:b];
+}
+
+// The traits a look's colors and fonts resolve with: the style, the contrast, the elevation (the 1×1 background is
+// drawn with them) and the text size.
+static NSArray *ANNLookTraitsOf(UITraitCollection *traits) {
+    if (!traits) {
+        return @[];
+    }
+    return @[
+        @(traits.userInterfaceStyle), @(traits.accessibilityContrast), @(traits.userInterfaceLevel),
+        traits.preferredContentSizeCategory ?: @""
+    ];
+}
+
 static BOOL ANNHasComponentName(ANNComponentOptions *component) {
     return [component.name withDefault:nil].length > 0 &&
            [component.componentId withDefault:nil].length > 0;
@@ -110,6 +127,10 @@ static ANNUserChoice *ANNRenameChoice(NSString *title) {
     NSUInteger _pinToken;
     // A pop's band under the title keeps the bar's look as it is (the screen leaves for one without a band of its own).
     BOOL _bandKeepsLook;
+    // What the last look was filled from, and the two appearances the item held right after it.
+    NSArray *_lookInputs;
+    UINavigationBarAppearance *_lookStandard;
+    UINavigationBarAppearance *_lookEdge;
 }
 
 - (instancetype)initWithScreen:(UIViewController *)screen {
@@ -367,26 +388,64 @@ static ANNUserChoice *ANNRenameChoice(NSString *title) {
 
 #pragma mark - The look
 
+// Several callers ask for the look along one appearance (the screen's, a merge, the band and the pin of iOS 26): it
+// is filled only when what the fill reads changed or the item holds another look, and set only when it differs from
+// the item's. A look set again makes UIKit lay the bar out anew, and on iOS 26 copy it into the stack's bar.
 - (void)applyLook:(ANNNavigationOptions *)options {
     UIViewController *screen = _screen;
     UINavigationItem *item = screen.navigationItem;
+    UITraitCollection *traits =
+        screen.viewIfLoaded.window.traitCollection ?: screen.traitCollection;
+    ANNBarAppearanceContext context = [self appearanceContextOf:options];
+    UITraitCollection *pinned = ANNIsIOS26() ? _pinnedTraits : nil;
+    NSArray *inputs = [self lookInputsOf:options context:context traits:traits pinned:pinned];
+    if (_lookInputs && ANNOptionValuesSame(_lookInputs, inputs) &&
+        ANNSameAppearance(item.standardAppearance, _lookStandard) &&
+        ANNSameAppearance(item.scrollEdgeAppearance, _lookEdge)) {
+        return;
+    }
     // The screen's own looks, filled whole and set again (the item copies them).
     UINavigationBarAppearance *standard =
         [item.standardAppearance copy] ?: [UINavigationBarAppearance new];
     UINavigationBarAppearance *edge =
         [item.scrollEdgeAppearance copy] ?: [UINavigationBarAppearance new];
-    UITraitCollection *traits =
-        screen.viewIfLoaded.window.traitCollection ?: screen.traitCollection;
     [ANNBarAppearance fillStandard:standard
                         scrollEdge:edge
                        withOptions:options
-                           context:[self appearanceContextOf:options]
+                           context:context
                             traits:traits];
-    if (_pinnedTraits && ANNIsIOS26()) {
-        [self pinTitleColorsOf:standard edge:edge options:options traits:_pinnedTraits];
+    if (pinned) {
+        [self pinTitleColorsOf:standard edge:edge options:options traits:pinned];
     }
-    item.standardAppearance = standard;
-    item.scrollEdgeAppearance = edge;
+    if (!ANNSameAppearance(item.standardAppearance, standard)) {
+        item.standardAppearance = standard;
+    }
+    if (!ANNSameAppearance(item.scrollEdgeAppearance, edge)) {
+        item.scrollEdgeAppearance = edge;
+    }
+    _lookInputs = inputs;
+    _lookStandard = item.standardAppearance;
+    _lookEdge = item.scrollEdgeAppearance;
+}
+
+// What `fillStandard:scrollEdge:withOptions:context:traits:` and the pin read: the bar's options by value, the
+// image the back button's icon loads (a file written again at its path is another image), the context, the traits.
+- (NSArray *)lookInputsOf:(ANNNavigationOptions *)options
+                  context:(ANNBarAppearanceContext)context
+                   traits:(UITraitCollection *)traits
+                   pinned:(nullable UITraitCollection *)pinned {
+    ANNTopBarOptions *topBar = options.topBar;
+    Image *backIcon = topBar.backButton.icon;
+    ANNImageSource *source = backIcon.source;
+    BOOL loads = backIcon.hasValue && !(source && source.kind == ANNImageSourceKindSymbol);
+    id backImage = loads ? [backIcon withDefault:nil] : nil;
+    return @[
+        topBar.background, topBar.scrollEdgeAppearance, topBar.noBorder, topBar.borderColor,
+        topBar.title.font, topBar.title.color, topBar.largeTitle.font, topBar.largeTitle.color,
+        topBar.backButton, backImage ?: NSNull.null, @(context.transparentEdge),
+        @(context.largeTitleNeedsBackground), ANNLookTraitsOf(traits),
+        pinned ? ANNLookTraitsOf(pinned) : NSNull.null
+    ];
 }
 
 // The title colors resolved for `traits`: fixed colors that don't follow the glass's style.

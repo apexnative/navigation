@@ -45,7 +45,8 @@ typedef struct {
 /// (a clear color is a clear bar). The one rule for the bar, its color in the list and the top edge effect.
 + (nullable UIColor *)solidColorOf:(nullable Color *)color traits:(UITraitCollection *)traits;
 
-/// A 1×1 image of `color` resolved for `traits`.
+/// A 1×1 image of `color` resolved for `traits`, with a variant for each style: the same image for the same resolved
+/// colors, so a look filled again equals the one before (as the back button's tinted arrow).
 + (UIImage *)imageOfColor:(UIColor *)color traits:(UITraitCollection *)traits;
 
 @end
