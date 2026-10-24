@@ -4,11 +4,11 @@
 
 /**
  * The button of an item in the tab bar. UIKit has no public API for it: this reads the private
- * `view` of the item, and is nil when UIKit has no such view (or the item none).
+ * `view` of the item, the core's one private read of the bar, and is nil when the item has no
+ * button (out of the bar, or before its layout). When UIKit has no such key any more, DEBUG logs it
+ * once.
  */
 - (UIView *)viewOfItem:(UITabBarItem *)item;
-
-- (UIView *)tabBarItemViewAtIndex:(NSUInteger)index;
 
 - (void)removeTabBarItemTitles;
 
