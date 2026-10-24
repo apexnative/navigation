@@ -113,6 +113,13 @@ internal class ModalSheet(
             }
         })
         scrim.setOnTouchListener { _, event -> taps.onTouchEvent(event) }
+        // The sheet keeps a touch that lands on it and no view in it takes (its bar, an empty part), as Material's
+        // BottomSheetDialog does: else the touch falls to the scrim under it, and a tap there closes a dimmed sheet;
+        // past an undimmed scrim it reaches the behavior, which takes the sheet into its drag state at the touch's
+        // down, before any move. The back gesture starts with such a touch, and a sheet in the drag state has no
+        // preview. A drag that starts there still moves the sheet: the behavior takes it past the touch slop, as from
+        // the views in it.
+        container.setOnTouchListener { _, _ -> true }
         container.clipToOutline = true
         container.outlineProvider = object : ViewOutlineProvider() {
             // The bottom corners are under the screen's bottom: only the top ones round.
