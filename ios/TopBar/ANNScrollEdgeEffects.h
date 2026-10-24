@@ -9,8 +9,8 @@ NS_ASSUME_NONNULL_BEGIN
 /// of the screen's view down to 16 levels, outside hidden views (`display: none`), not inside a list that scrolls
 /// vertically (its rows) or a text view; a scroll view that doesn't (a pager, a carousel) is looked into for its
 /// lists. The screen remembers the lists it set and gives them the system values back when it leaves, at its destroy
-/// and when they leave its view (only when out of every view: in another one they may be another screen's). Before
-/// iOS 26 nothing. Main queue.
+/// and when they leave its view for no screen (Fabric's pool; in another screen they may be that screen's already).
+/// Before iOS 26 nothing. Main queue.
 @interface ANNScrollEdgeEffects : NSObject
 
 - (instancetype)initWithScreenView:(UIView *)screenView;

@@ -128,16 +128,27 @@ static ANNEdgeEffect ANNEdgeEffectOf(ANNScrollEdgeEffectOptions *effect,
     }
 }
 
-// A list React took out of the screen is no longer the screen's: out of every view (in the pool Fabric recycles its
-// views from, shared by every surface) it gets the system values, so it comes clean into the screen that takes it;
-// in another view it may belong to another screen already, which set its values: it is only forgotten.
+// Whether `view` is in some screen: one of its views is the view of a view controller, in a window or not. A list in
+// Fabric's pool is not: its component view (the list's own superview) has no superview there.
+static BOOL ANNIsInAScreen(UIView *view) {
+    for (UIView *ancestor = view; ancestor; ancestor = ancestor.superview) {
+        if ([ancestor.nextResponder isKindOfClass:UIViewController.class]) {
+            return YES;
+        }
+    }
+    return NO;
+}
+
+// A list React took out of the screen is no longer the screen's: outside every screen (in the pool Fabric recycles
+// its views from, shared by every surface) it gets the system values, so it comes clean into the screen that takes it;
+// in another screen it may be that screen's already, which set its values: it is only forgotten.
 - (void)dropListsOutside:(nullable UIView *)screenView {
     for (UIScrollView *kept in _lists.allObjects) {
         if (screenView && [kept isDescendantOfView:screenView]) {
             continue;
         }
         if (@available(iOS 26.0, *)) {
-            if (!kept.superview) {
+            if (!ANNIsInAScreen(kept)) {
                 [ANNScrollEdgeEffects resetList:kept];
             }
         }

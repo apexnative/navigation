@@ -820,10 +820,10 @@ export interface OptionsScrollEdge {
  * (`display: none`). A list inside another vertical list gets none (UIKit draws no edge effect there); a scroll view
  * that doesn't scroll vertically, like a pager, is searched for its lists. A list nested very deep in the screen's
  * views may not get it. After React mounts, the main list of the screen gets it; a list mounted later gets it at the
- * next appearance or `mergeOptions`. The lists get the system effect back when the screen leaves or is destroyed, and
- * a list that leaves the screen gets it back too. Under a bar with `background.color` or `background.component` there
- * is no effect at the top unless the screen sets one for the top or for all edges. Before iOS 26 and on Android it
- * does nothing.
+ * next appearance, or at a `mergeOptions` of `scrollEdgeEffect` or of the bar's background. The lists get the system
+ * effect back when the screen leaves or is destroyed, and a list React removes from the screen gets it back too. Under
+ * a bar with `background.color` or `background.component` there is no effect at the top unless the screen sets one for
+ * the top or for all edges. Before iOS 26 and on Android it does nothing.
  */
 export interface OptionsScrollEdgeEffect {
   /** Whether the effect is hidden on all four edges. The value of an edge beats it. */
