@@ -12,9 +12,6 @@
 
 // The dot of a tab before iOS 26: its default size and color.
 static const CGFloat ANNDotDefaultSize = 6;
-// A button not there yet gets its `testID` again this often, at most this many times (`bottomTab.testID`).
-static const NSTimeInterval ANNTestIDRetryInterval = 0.15;
-static const NSUInteger ANNTestIDRetries = 5;
 
 // A picture of `color` (both of its styles when it is dynamic): the bar's 1×1 background and the border's line.
 static UIImage *ANNImageOfColor(UIColor *color, CGSize size) {
@@ -63,6 +60,12 @@ static id ANNValue(NSArray *list, NSUInteger index) {
     NSMutableArray<NSNumber *> *_roleItems;
     // The identifiers the buttons had before the core gave them a `testID`, to give back.
     NSMapTable<UIView *, NSString *> *_buttonIds;
+    // What the `testID`s and the dots were last applied to: the bar's items, the button of each tab and of More, the
+    // bar's size and its traits. UIKit makes the buttons anew (rotation, text size, items moving between the bar and
+    // More), and a layout that finds other buttons applies them again.
+    NSPointerArray *_appliedButtons;
+    CGSize _appliedBarSize;
+    UITraitCollection *_appliedBarTraits;
     BOOL _tabsAreSet;
     BOOL _titlesHidden;
     // The bar's look: its options, and the background and border every item's look starts from.
@@ -123,6 +126,7 @@ static id ANNValue(NSArray *list, NSUInteger index) {
     _dotViews = [NSMutableArray new];
     _roleItems = [NSMutableArray new];
     _buttonIds = [NSMapTable weakToStrongObjectsMapTable];
+    _appliedButtons = [NSPointerArray weakObjectsPointerArray];
     _accessoryViews = [NSMutableDictionary new];
     _colorImages = [NSMutableDictionary new];
     _iconLoads = [NSMutableDictionary new];
@@ -251,7 +255,7 @@ static id ANNValue(NSArray *list, NSUInteger index) {
         [_row applyOptions:resolvedOptions.bottomTabs.customRow];
     }
     [self applyAccessoryOf:resolvedOptions animated:NO];
-    [self applyButtonTestIDsWithRetries:ANNTestIDRetries];
+    [self applyButtonTestIDs];
 }
 
 #pragma mark - ANNNodePresenter
@@ -315,7 +319,7 @@ static id ANNValue(NSArray *list, NSUInteger index) {
     }
     [self buildItemAtIndex:index bottomTab:bottomTab updatesBadgeAndDot:badgeAndDot];
     [self updateCells];
-    [self applyButtonTestIDsWithRetries:mergeOptions.testID.hasValue ? ANNTestIDRetries : 0];
+    [self applyButtonTestIDs];
 }
 
 // The whole item from `bottomTab`; the badge and the dot from it only with `updatesBadgeAndDot`.
@@ -608,43 +612,27 @@ static ANNBottomTabOptions *ANNWithIcons(ANNBottomTabOptions *bottomTab, NSArray
 
 #pragma mark - testID (`bottomTab.testID`, `bottomTabs.moreTestID`)
 
-// Each tab's button carries its `testID`; a button not there yet gets it again after 0.15 s, at most 5 times; a
-// removed `testID` gives the button its identifier back.
-- (void)applyButtonTestIDsWithRetries:(NSUInteger)retries {
+// Each tab's button carries its `testID`; a removed `testID` gives the button its identifier back. A button not
+// there yet gets it at the layout that finds it (`tabsDidLayOut`).
+- (void)applyButtonTestIDs {
     ANNBottomTabsController *tabs = self.tabs;
     UITabBar *bar = tabs.tabBar;
     if (!tabs || !bar) {
         return;
     }
-    BOOL missing = NO;
     for (NSUInteger index = 0; index < tabs.layoutTabs.count; index++) {
         UITabBarItem *item = tabs.layoutTabs[index].tabBarItem;
-        NSString *testID = item.accessibilityIdentifier;
         UIView *button = [bar viewOfItem:item];
-        if (!button) {
-            missing = missing || testID.length > 0;
-            continue;
+        if (button) {
+            [self setTestID:item.accessibilityIdentifier ofButton:button];
         }
-        [self setTestID:testID ofButton:button];
     }
     if (tabs.layoutTabs.count > 5) {
-        NSString *moreTestID = [_barOptions.moreTestID withDefault:nil];
         UIView *button = [bar viewOfItem:tabs.moreNavigationController.tabBarItem];
         if (button) {
-            [self setTestID:moreTestID ofButton:button];
-        } else {
-            missing = missing || moreTestID.length > 0;
+            [self setTestID:[_barOptions.moreTestID withDefault:nil] ofButton:button];
         }
     }
-    if (!missing || retries == 0) {
-        return;
-    }
-    __weak ANNBottomTabsPresenter *weakSelf = self;
-    dispatch_after(
-        dispatch_time(DISPATCH_TIME_NOW, (int64_t)(ANNTestIDRetryInterval * NSEC_PER_SEC)),
-        dispatch_get_main_queue(), ^{
-          [weakSelf applyButtonTestIDsWithRetries:retries - 1];
-        });
 }
 
 - (void)setTestID:(NSString *)testID ofButton:(UIView *)button {
@@ -969,7 +957,7 @@ static ANNBottomTabOptions *ANNWithIcons(ANNBottomTabOptions *bottomTab, NSArray
         [tabs updateRootLayoutOfShownScreens];
     }
     if (mergeOptions.testID.hasValue || mergeOptions.moreTestID.hasValue) {
-        [self applyButtonTestIDsWithRetries:ANNTestIDRetries];
+        [self applyButtonTestIDs];
     }
 }
 
@@ -1062,16 +1050,68 @@ static ANNBottomTabOptions *ANNWithIcons(ANNBottomTabOptions *bottomTab, NSArray
     [self updateCells];
 }
 
+// The `testID`s and the dots go on the buttons again only when the bar has other buttons than they were applied to,
+// another size or other traits; a merge and a rebuilt item apply them at once.
 - (void)tabsDidLayOut {
     if (!_tabsAreSet) {
         return;
     }
     [self updateHiddenTitles];
-    if (!ANNTabsDesign.isGlass) {
-        [self placeDots];
+    if ([self barChangedSinceApplied]) {
+        if (!ANNTabsDesign.isGlass) {
+            [self placeDots];
+        }
+        [self applyButtonTestIDs];
     }
-    [self applyButtonTestIDsWithRetries:0];
     [_row layOutInTabs];
+}
+
+// The bar's items and the button of each tab and of More, by pointer, against those last seen; no walk through the
+// buttons. An item moving between the bar and More changes the items. The tabs lay out before the bar does: a tab in
+// the bar without its button yet makes the bar lay out first.
+- (BOOL)barChangedSinceApplied {
+    ANNBottomTabsController *tabs = self.tabs;
+    UITabBar *bar = tabs.tabBar;
+    if (!tabs || !bar) {
+        return NO;
+    }
+    NSArray<UIViewController *> *layoutTabs = tabs.layoutTabs;
+    NSArray<UITabBarItem *> *barItems = bar.items;
+    NSUInteger tabCount = layoutTabs.count + (layoutTabs.count > 5 ? 1 : 0);
+    NSMutableArray *seen = [NSMutableArray arrayWithArray:barItems];
+    BOOL laidOut = NO;
+    for (NSUInteger index = 0; index < tabCount; index++) {
+        UITabBarItem *item = index < layoutTabs.count ? layoutTabs[index].tabBarItem
+                                                      : tabs.moreNavigationController.tabBarItem;
+        UIView *button = [bar viewOfItem:item];
+        if (!button && !laidOut && bar.window &&
+            [barItems indexOfObjectIdenticalTo:item] != NSNotFound) {
+            laidOut = YES;
+            [bar layoutIfNeeded];
+            button = [bar viewOfItem:item];
+        }
+        [seen addObject:button ?: NSNull.null];
+    }
+    NSUInteger count = seen.count;
+    BOOL changed = _appliedButtons.count != count;
+    for (NSUInteger index = 0; index < count && !changed; index++) {
+        id object = seen[index] == NSNull.null ? nil : seen[index];
+        changed = (__bridge void *)object != [_appliedButtons pointerAtIndex:index];
+    }
+    CGSize size = bar.bounds.size;
+    UITraitCollection *traits = bar.traitCollection;
+    changed = changed || !CGSizeEqualToSize(size, _appliedBarSize) ||
+              ![traits isEqual:_appliedBarTraits];
+    if (!changed) {
+        return NO;
+    }
+    _appliedButtons.count = 0;
+    for (id object in seen) {
+        [_appliedButtons addPointer:object == NSNull.null ? NULL : (__bridge void *)object];
+    }
+    _appliedBarSize = size;
+    _appliedBarTraits = traits;
+    return YES;
 }
 
 // The glass bar measures a title when it is set and keeps that size: a title set before the bar was ever in a window

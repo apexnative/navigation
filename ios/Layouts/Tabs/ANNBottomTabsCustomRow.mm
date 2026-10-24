@@ -126,8 +126,13 @@ static const CGFloat ANNWideRowMargin = 16;
     if (self.superview != host) {
         [host addSubview:self];
     }
-    [host bringSubviewToFront:self];
-    // The system bar keeps its place and shows nothing; UIKit makes its subviews anew on a size change.
+    if (host.subviews.lastObject != self) {
+        [host bringSubviewToFront:self];
+    }
+    // The system bar keeps its place and shows nothing; UIKit makes its subviews anew on a size change. Not the bar's
+    // `alpha`: UIKit puts it back to 1 when the bar shows, on a pop with `hidesBottomBarWhenPushed`, and on iOS 27 on
+    // a rotation and a theme change, after the tabs' layout (a check here misses it); alpha 0 also drops the system's
+    // soft fade at the bottom.
     for (UIView *subview in bar.subviews) {
         if (!subview.hidden) {
             subview.hidden = YES;
@@ -193,6 +198,7 @@ static const CGFloat ANNWideRowMargin = 16;
         extra = MAX(0, CGRectGetMinY(barFrame) - CGRectGetMinY(frame));
     }
     BOOL hidden = wide ? _hiddenByOptions : (tabs.barHidden || bar.hidden);
+    // A new size lays the cells out again by itself; the same frame changes nothing.
     if (!CGRectEqualToRect(self.frame, frame)) {
         self.frame = frame;
     }
@@ -203,7 +209,6 @@ static const CGFloat ANNWideRowMargin = 16;
         _background.layer.cornerRadius = radius;
     }
     [self setExtraSafeArea:hidden ? 0 : extra];
-    [self setNeedsLayout];
 }
 
 - (void)setHiddenByOptions:(BOOL)hiddenByOptions {
