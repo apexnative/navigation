@@ -93,8 +93,8 @@ Top-level files: `Package.swift` (SwiftPM; `headerFolders` lists every folder wh
 - `scripts/build-ios.sh`: 0 warnings in `ios/` (warnings fail it). It builds the Showcase for the simulator.
 - A new file needs `scripts/pods.sh` first (CocoaPods globs `ios/**`). A new folder also goes into `headerFolders` of
   `Package.swift`, because files import each other's headers by bare name.
-- There is no iOS unit-test target. `ANNSystemUIRulesSelfCheck` and `ANNCheckOptionClassesFrom` run once in DEBUG; the
-  rest is checked by the Showcase scenarios.
+- There is no iOS unit-test target. `ANNSystemUIRulesSelfCheck`, `ANNCheckOptionClassesFrom` and `ANNCheckSameValues`
+  (the options' value equality) run once in DEBUG; the rest is checked by the Showcase scenarios.
 - Format by hand: `.claude/rules/code-objc.md`.
 
 ## Pitfalls
