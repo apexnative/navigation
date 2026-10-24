@@ -3,16 +3,17 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-/// Reads and checks a command's layout on the module's queue: the layout read, or nil with the text of the rejection.
+/// Reads and checks a command's layout before its body, in the same task: the layout read, or nil with the text of the
+/// rejection.
 typedef id _Nullable (^ANNCommandCheck)(NSString *_Nullable *_Nonnull error);
 
-/// The command's own work on the main queue, with the layout its check read (nil without a check). It answers once,
-/// now or later; an exception it throws rejects the command, and undoing what it made by then is the body's.
+/// The command's own work, with the layout its check read (nil without a check). It answers once, now or later; an
+/// exception it throws rejects the command, and undoing what it made by then is the body's.
 typedef void (^ANNCommandBody)(id _Nullable layout, ANNCommandAnswer *answer);
 
-/// The one path of every asynchronous method of `ANNTurboModule`. On the module's queue, at once: the command takes the
-/// generation of its JavaScript and its layout is read and checked whole; a failure rejects it there and nothing is
-/// queued. Then one task on the main queue per command, in the order they came: the command does nothing when its
+/// The one path of every asynchronous method of `ANNTurboModule`, on the main queue (the module's queue), in one task
+/// per command in the order JavaScript made them: the command takes the generation of its JavaScript and its layout is
+/// read and checked whole, a failure rejecting it before anything is made; then the command does nothing when its
 /// JavaScript went, rejects when the navigation has nowhere to show screens, and runs its body inside the protection.
 @interface ANNCommandRunner : NSObject
 
@@ -27,7 +28,7 @@ typedef void (^ANNCommandBody)(id _Nullable layout, ANNCommandAnswer *answer);
         check:(nullable ANNCommandCheck)check
          body:(ANNCommandBody)body;
 
-/// A command without a promise: its body on the main queue, inside the protection; a failure is one log line.
+/// A command without a promise: its body at once, inside the protection; a failure is one log line. Main queue.
 + (void)runVoid:(NSString *)name what:(NSString *)what body:(dispatch_block_t)body;
 
 /// The log line of a command without a promise that failed: `[ApexNavigation] <name>: <text>`.

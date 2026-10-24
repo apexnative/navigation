@@ -1,9 +1,9 @@
 #import "ANNCommandRunner.h"
+#import "ANNAssert.h"
 #import "ANNErrorHandler.h"
 #import "ANNErrorTexts.h"
 #import "ANNReloadCoordinator.h"
 #import "ApexNavigation+Internal.h"
-#import <React/RCTUtils.h>
 
 // Why an exception happened: its message, else its name.
 static NSString *ANNReasonOf(NSException *exception) {
@@ -27,6 +27,8 @@ static NSString *ANNRejectionOf(NSException *exception, NSString *what) {
        reject:(RCTPromiseRejectBlock)reject
         check:(ANNCommandCheck)check
          body:(ANNCommandBody)body {
+    // The module's methods come on the main queue: the check and the body run in this one task.
+    ANNAssertMainQueue();
     NSUInteger generation = ANNReloadCoordinator.generation;
     id layout = nil;
     if (check) {
@@ -46,36 +48,28 @@ static NSString *ANNRejectionOf(NSException *exception, NSString *what) {
                                                                   generation:generation
                                                                      resolve:resolve
                                                                       reject:reject];
-    // At once when the caller is on the main queue already; the module's queue never is.
-    RCTExecuteOnMainQueue(^{
-      if (!answer.isCurrent) {
-          return;
-      }
-      if (commandId && !ApexNavigation.mainWindow) {
-          [answer reject:ANNErrorTexts.nowhereToShow];
-          return;
-      }
-      @try {
-          body(layout, answer);
-      } @catch (NSException *exception) {
-          [answer reject:ANNRejectionOf(exception, what)];
-      }
-    });
+    if (!answer.isCurrent) {
+        return;
+    }
+    if (commandId && !ApexNavigation.mainWindow) {
+        [answer reject:ANNErrorTexts.nowhereToShow];
+        return;
+    }
+    @try {
+        body(layout, answer);
+    } @catch (NSException *exception) {
+        [answer reject:ANNRejectionOf(exception, what)];
+    }
 }
 
 // Before the navigation started a command without a promise has nothing to act on: its body finds nothing.
 + (void)runVoid:(NSString *)name what:(NSString *)what body:(dispatch_block_t)body {
-    NSUInteger generation = ANNReloadCoordinator.generation;
-    RCTExecuteOnMainQueue(^{
-      if (generation != ANNReloadCoordinator.generation) {
-          return;
-      }
-      @try {
-          body();
-      } @catch (NSException *exception) {
-          [self logFailure:name text:[ANNErrorTexts couldNot:what reason:ANNReasonOf(exception)]];
-      }
-    });
+    ANNAssertMainQueue();
+    @try {
+        body();
+    } @catch (NSException *exception) {
+        [self logFailure:name text:[ANNErrorTexts couldNot:what reason:ANNReasonOf(exception)]];
+    }
 }
 
 + (void)logFailure:(NSString *)name text:(NSString *)text {

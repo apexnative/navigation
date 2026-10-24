@@ -70,20 +70,21 @@ Top-level files: `Package.swift` (SwiftPM; `headerFolders` lists every folder wh
 
 ## Threads
 
-- **Module queue:** the layout check (`ANNLayoutReader`) and the sync getters. The check reads only stores safe from
-  any thread (`ApexNavigation hasNativeScreenNamed:`, `ANNArrangementState canShowArrangements`).
-- **Main queue:** everything else. A command body starts with `ANNAssertMainQueue()`. The options of a layout are parsed
-  here (`ANNLayoutTreeOptions`; an image keeps only its source). `ANNEventEmitter` moves an event from another queue
-  to the main queue.
+- **Main queue:** everything but the sync getters and the images. `ANNTurboModule`'s method queue is the main queue,
+  as `ANNTurboEventEmitter`'s: an async method comes there from the JavaScript thread, and `ANNCommandRunner` runs the
+  layout check (`ANNLayoutReader`) and the body in that one task. A command body starts with `ANNAssertMainQueue()`.
+  The options of a layout are parsed here (`ANNLayoutTreeOptions`; an image keeps only its source). `ANNEventEmitter`
+  moves an event from another queue to the main queue.
 - **The images' queue** (`ANNOptionImages`, `Options/Params`): every option image decodes there, through one cache.
   An element that shows an image asks for it when it applies and waits for it (the first frame needs it); only a tab
   item's new icon on the bar that shows comes later (`ANNBottomTabsPresenter`), the last build of the item winning.
-- **Sync getters** answer JS during a screen's first render: `getScreenInsets`, `getScreenRegions`,
-  `getArrangementState`, `getHinge`, `getStartInfo`. They read `ANNScreenInsets`, `ANNScreenRegions`,
-  `ANNArrangementState`, `ANNHinge lastValue`, written on the main queue and guarded by `@synchronized`.
+- **Sync getters** answer JS on the JavaScript thread (React Native calls them there whatever the module's queue)
+  during a screen's first render: `getScreenInsets`, `getScreenRegions`, `getArrangementState`, `getHinge`,
+  `getStartInfo`. They read `ANNScreenInsets`, `ANNScreenRegions`, `ANNArrangementState`, `ANNHinge lastValue`,
+  written on the main queue and guarded by `@synchronized`.
   `ANNReloadCoordinator.generation` and `ANNEventEmitter.isCurrent` are readable from any thread.
 - **After the calls of JavaScript:** `ANNJavaScriptCalls afterCallsMadeSoFar:` runs a step on the main queue after
-  every call JavaScript made by then, by the calls' own way (the JavaScript thread, the module's queue, the main
+  every call JavaScript made by then, by the calls' own way (a task on the JavaScript thread, then one on the main
   queue). A push's wait ends through it, so the `mergeOptions` of its screen's first commit come first.
 
 ## Checks

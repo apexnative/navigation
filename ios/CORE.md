@@ -8,10 +8,10 @@ and files is `ios/CLAUDE.md`.
 
 ```
 JS ── ANNTurboModule (codegen ApexNavigationSpec) ────────────────────────────────────────────┐ sync getters
-       │ module queue                                                                          │ read stores
+       │ main queue (the module's queue), one task per command, in call order                  │ read stores
        ▼                                                                                       ▼ (@synchronized)
   ANNCommandRunner ── ANNLayoutReader (check the whole layout) ── ANNErrorTexts ── ANNErrorHandler
-       │ one task per command on the main queue, in call order
+       │ the check passed: the body, in the same task
        ▼
   area command (ANNStackCommands, ANNRootCoordinator, ANNModalCoordinator, ANNOverlayCoordinator, ANNSplitViewCommands)
        │ ANNLayoutValidator · ANNLayoutTreeOptions · ANNLayoutFactory ── ANNNodeRegistry
@@ -32,12 +32,13 @@ JS ── ANNTurboModule (codegen ApexNavigationSpec) ────────�
 One line per layer. Each layer calls the next one down, and the answer and the events come back up through the
 dispatcher.
 
-- **Way in** (`ANNTurboModule`): the codegen methods. An async method hands its work to `ANNCommandRunner`; a sync
-  getter reads a store and never touches the main queue.
+- **Way in** (`ANNTurboModule`): the codegen methods. Its method queue is the main queue: an async method comes there
+  from the JavaScript thread and hands its work to `ANNCommandRunner`; a sync getter runs on the JavaScript thread,
+  reads a store and never touches the main queue.
 - **Layout check** (`ANNLayoutReader`, `ANNLayoutNode`): reads the JSON into immutable nodes and checks the whole
   tree before any view exists. The first error is the rejection text.
-- **Command runner** (`ANNCommandRunner`, `ANNCommandAnswer`): takes the generation of the JavaScript, runs the check on
-  the module queue, then runs the body on the main queue inside an exception guard. The answer resolves or rejects once.
+- **Command runner** (`ANNCommandRunner`, `ANNCommandAnswer`): takes the generation of the JavaScript, runs the check,
+  then the body inside an exception guard, both in the command's one task on the main queue. The answer resolves or rejects once.
 - **Registry and factory** (`ANNNodeRegistry`, `ANNLayoutFactory`): the factory turns a checked tree into view
   controllers and registers every node by id.
 - **Nodes** (`ANNLayoutProtocol`, `UIViewController+LayoutProtocol`, `ANNNodeHelper`): the view controllers. Each holds
@@ -58,13 +59,13 @@ dispatcher.
 `navigation.push('Profile')` from Home: JS builds a layout node `{ id, type: 'Component', data, children }`, and calls
 `push(commandId, componentId, layout)`.
 
-1. **`ANNTurboModule push:componentId:layout:resolve:reject:`** (module queue). Builds the failure text
-   (`could not push the screen '…'`) and calls `+[ANNCommandRunner run:…]` with a check block and a body block.
-2. **`ANNCommandRunner`** (module queue). Takes `ANNReloadCoordinator.generation`. Runs the check:
+1. **`ANNTurboModule push:componentId:layout:resolve:reject:`** (main queue, the module's queue: React Native sends
+   the call there from the JavaScript thread). Builds the failure text (`could not push the screen '…'`) and calls
+   `+[ANNCommandRunner run:…]` with a check block and a body block.
+2. **`ANNCommandRunner`** (the same task). Takes `ANNReloadCoordinator.generation`. Runs the check:
    `+[ANNLayoutReader nodeFrom:error:]` reads and validates the whole tree into `ANNLayoutNode`s. A failure rejects here,
-   through `ANNErrorHandler`, and nothing is queued. Otherwise it makes the `ANNCommandAnswer` and hands one task to the
-   main queue.
-3. **Main queue.** The task does nothing when the JavaScript went (`answer.isCurrent`), rejects
+   through `ANNErrorHandler`, and nothing is made. Otherwise it makes the `ANNCommandAnswer`.
+3. **The body.** The runner does nothing when the JavaScript went (`answer.isCurrent`), rejects
    `+[ANNErrorTexts nowhereToShow]` when there is no window, then runs the body in `@try`. The body finds Home in
    `ANNNodeRegistry` and calls `+[ANNStackCommands push:componentId:what:answer:]`.
 4. **`ANNStackCommands`.** Finds the stack by walking `layoutParent`; checks `ANNLayoutValidator` (an id already shown,
@@ -80,7 +81,7 @@ dispatcher.
    `ANNRenderWait`: unset, for the content at most 0.5 s, with `true` as long as it takes, then for the bar components
    (their limits from the wait's start when unset, from the content's end with `true`; the screen is parked unseen in
    the stack's view by `ANNParking`, `stackPark:`); the content's end, content there already too, waits for the calls
-   JavaScript made by then (`ANNJavaScriptCalls`: the JavaScript thread, the module's queue, the main queue), so the
+   JavaScript made by then (`ANNJavaScriptCalls`: the JavaScript thread, then the main queue), so the
    options of the screen's first commit are in the bar; with `false` nothing. Then it renders the node, drives the appearance of Home and Profile (`+[ANNAppearanceDispatcher driveAppearanceOf:]`), and calls
    `+[ANNAppearanceDispatcher beginTransitionShowing:]`. Profile's `ComponentWillAppear` is sent now (held until its
    content mounted, 0.5 s at most). `stackChange:` pushes in UIKit; with an own animation `ANNTransitionPlan` and
@@ -115,8 +116,8 @@ How the others differ:
 
 Each of these owns one rule. Call it; do not copy it.
 
-- `ANNCommandRunner`: The one path of every async command: generation, check, main queue, exception guard. Called by: `ANNTurboModule`.
-- `ANNLayoutReader`: The layout check, depth first, the same order and texts as Android. Module queue. Called by: The runner's check blocks.
+- `ANNCommandRunner`: The one path of every async command: main queue (the module's queue), generation, check, exception guard. Called by: `ANNTurboModule`.
+- `ANNLayoutReader`: The layout check, depth first, the same order and texts as Android. Main queue, before the body. Called by: The runner's check blocks.
 - `ANNCommandAnswer`: The answer: state (one step per answer, `reportStateNow`, asked by the end of its transition or by `resolve:`), then promise, then `ANN.CommandCompleted`; once; silent for a JavaScript that went. Called by: Every coordinator and queue.
 - `ANNNodeRegistry`: Every node by id, weakly. Filled by the factory, cleared at a reload. Called by: Commands, modules, `findViewController:`.
 - `ANNLayoutFactory`: The core code that names module classes (`ANNSplitViewController`, `ANNSideMenuViewController`, `ANNArrangementViewController`); `ANNSideMenuPresenter` is the one other file that does. One maker per layout type; registers each node. Called by: Every command that shows a layout.

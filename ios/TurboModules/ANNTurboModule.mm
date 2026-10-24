@@ -88,14 +88,14 @@ static BOOL ANNFindsScreen(NSString *componentId, ANNCommandAnswer *answer) {
     return NO;
 }
 
-// The module's call invoker and queue go to `ANNJavaScriptCalls`, so that a step of the core can come after the calls
+// The module's call invoker goes to `ANNJavaScriptCalls`, so that a step of the core can come after the calls
 // JavaScript made (a push after the options of its screen's first commit).
 @interface ANNTurboModule () <RCTCallInvokerModule, RCTInitializing, RCTInvalidating>
 @end
 
-// Every asynchronous method takes the one path of `ANNCommandRunner`: on the module's queue the layout is read and
-// checked whole, then one task on the main queue runs the command with its area's class. A question answers at once on
-// the JavaScript thread what it answers before the first data.
+// Every asynchronous method comes on the main queue and takes the one path of `ANNCommandRunner`: in that one task the
+// layout is read and checked whole, then the command runs with its area's class. A question answers at once on the
+// JavaScript thread what it answers before the first data.
 @implementation ANNTurboModule {
     BOOL _coldStart;
     id _splashLogo;
@@ -103,13 +103,18 @@ static BOOL ANNFindsScreen(NSString *componentId, ANNCommandAnswer *answer) {
 
 RCT_EXPORT_MODULE(ANNTurboModule)
 
-// React Native gives the module its shared queue through this (it has none of its own) and its call invoker, both
-// before `initialize`.
-@synthesize methodQueue = _methodQueue;
+// React Native gives the module its call invoker before `initialize`.
 @synthesize callInvoker = _callInvoker;
 
 + (BOOL)requiresMainQueueSetup {
     return NO;
+}
+
+// The asynchronous methods and `invalidate` come here, where every command runs: a call goes from the JavaScript thread
+// straight to the main queue, without waiting behind other modules on React Native's shared queue and without a second
+// hop. The synchronous questions stay on the JavaScript thread (React Native calls them there whatever the queue).
+- (dispatch_queue_t)methodQueue {
+    return dispatch_get_main_queue();
 }
 
 - (instancetype)init {
@@ -124,7 +129,7 @@ RCT_EXPORT_MODULE(ANNTurboModule)
 }
 
 - (void)initialize {
-    [ANNJavaScriptCalls setCallInvoker:_callInvoker methodQueue:_methodQueue ofModule:self];
+    [ANNJavaScriptCalls setCallInvoker:_callInvoker ofModule:self];
 }
 
 - (void)invalidate {
@@ -338,7 +343,7 @@ RCT_EXPORT_MODULE(ANNTurboModule)
                      }];
 }
 
-// The screens may be none here; the command rejects that with the id of its screen, on the module's queue too.
+// The screens may be none here; the command rejects that with the id of its screen, in its check too.
 - (void)setStackRoot:(NSString *)commandId
          componentId:(NSString *)componentId
               layout:(NSArray *)layout

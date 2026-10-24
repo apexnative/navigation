@@ -5,9 +5,9 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /// Reads the layout JSON of a command into `ANNLayoutNode`s and checks it whole, before any view is made. It runs on
-/// the module's queue, where the command arrives: a failure rejects the command there with the text of the first error
-/// found, and nothing goes to the main queue. It reads only the stores that are safe from any thread (the registered
-/// native screens, whether the app shows pairs).
+/// the main queue, in the command's task before its body: a failure rejects the command with the text of the first
+/// error found, and nothing is made. The stores it reads are safe from any thread (the registered native screens,
+/// whether the app shows pairs).
 ///
 /// One pass over the tree, depth first, children in order, the same order on both platforms so that the first error
 /// is the same text. At each node: a known `type` (`''` for a node that is no object or has no string type), an `id`
