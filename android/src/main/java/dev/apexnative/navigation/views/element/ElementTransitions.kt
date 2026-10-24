@@ -15,6 +15,7 @@ import dev.apexnative.navigation.react.events.AppearanceDispatcher
 import dev.apexnative.navigation.utils.DevelopmentLog
 import dev.apexnative.navigation.utils.NavigationLog
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.ViewController
+import dev.apexnative.navigation.views.animations.AnimationLayer
 import dev.apexnative.navigation.views.animations.SideAnimator
 import dev.apexnative.navigation.views.element.animators.SharedAnimatorFactory
 
@@ -161,9 +162,15 @@ internal class ElementTransition private constructor(private val layer: Transiti
         }
     }
 
+    // An element with views in it fades through a hardware layer only where its alpha would draw it into an offscreen
+    // buffer at every frame (AnimationLayer: its rendering overlaps). React's views overlap only with
+    // `needsOffscreenAlphaCompositing`, so most elements fade without one and nothing they draw outside their bounds (a
+    // box shadow) is clipped. A view without children fades its own drawing at no extra cost.
     private fun addElement(options: ElementTransitionOptions, item: Moved) {
         val base = SideAnimator.Base(xOffset = item.originX.toFloat(), yOffset = item.originY.toFloat())
-        SideAnimator.build(item.view, options, base)?.let(animators::add)
+        val animator = SideAnimator.build(item.view, options, base) ?: return
+        if (item.view is ViewGroup) AnimationLayer.during(item.view, animator)
+        animators += animator
     }
 
     // The pair's flight: `to` hidden until it starts, `from` hidden from its start; false when it doesn't fly.

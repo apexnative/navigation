@@ -100,8 +100,9 @@ top-level folder. Main thread only, unless a line says otherwise.
 - Preview, key commands: iOS only. The options are parsed and merged (`options/PreviewOptions.kt`,
   `options/KeyCommandOptions.kt`) and not applied; `dismissPreview` does nothing.
 - Animations and transitions: `views/animations/` (`AnimationRules`, `Curves`, `SideAnimator`, `ValueInterpolation`,
-  `FadeThrough`, `SystemTransition`); `views/element/` (`ElementTransitions`, `TransitionLayer`, `TargetsWait`,
-  `animators/`); `options/StackAnimationOptions.kt`, `ViewAnimationOptions.kt`.
+  `FadeThrough`, `SystemTransition`, `AnimationLayer`: the hardware layer of a fade); `views/element/`
+  (`ElementTransitions`, `TransitionLayer`, `TargetsWait`, `animators/`); `options/StackAnimationOptions.kt`,
+  `ViewAnimationOptions.kt`.
 - System bars: `system/SystemUiOwner.kt`, `SystemUiLayers.kt`, `SystemUiRules.kt`, `SystemUiWindow.kt`,
   `AppDirection.kt`; `viewcontrollers/parent/ContainerBackground.kt`.
 - Events and state: `react/events/AppearanceDispatcher.kt`, `ScreenAppearance.kt`, `EventEmitter.kt`,

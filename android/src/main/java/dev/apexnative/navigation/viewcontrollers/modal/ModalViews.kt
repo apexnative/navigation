@@ -19,6 +19,7 @@ import dev.apexnative.navigation.options.Options
 import dev.apexnative.navigation.utils.TestIds
 import dev.apexnative.navigation.utils.dp
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.ViewController
+import dev.apexnative.navigation.views.animations.AnimationLayer
 import dev.apexnative.navigation.views.animations.AnimationRules
 import dev.apexnative.navigation.views.animations.SideAnimator
 import dev.apexnative.navigation.views.element.ElementTransition
@@ -293,7 +294,11 @@ internal class ModalViews(
         val under = motion.underSide?.let { side -> underView?.let { SideAnimator.build(it, side, underBase) } }
         if (under != null && underView != null) {
             if (showing) moved[underView] = record else moved.remove(underView)
+            AnimationLayer.during(underView, under)
         }
+        // A fade of the modal or of the layer under it draws it through a hardware layer, given back at its end and at
+        // any stop (the set's cancel cancels it).
+        for (animator in listOfNotNull(side, fade)) AnimationLayer.during(container, animator)
         val fadeLength = motion.side?.takeIf(AnimationRules::isSingleAlpha)?.let(AnimationRules::lengthOf)
         val elements = motion.elements?.let { animation ->
             val content = modalsLayer.parent as? ViewGroup ?: return@let null
