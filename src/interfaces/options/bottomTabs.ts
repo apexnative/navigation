@@ -73,8 +73,10 @@ export interface OptionsBottomTabsAccessoryComponent {
 /**
  * (iOS 26+) The accessory above the tab bar, like the mini player of a music app. The system sizes it (48 points high)
  * and the component fills that size. It is placed above the bar, or beside the bar when the bar is minimized; on an
- * iPad with the bar at the top it sits at the bottom over the full width, always above the bar. The accessory stops
- * together with the tabs. Android has no accessory.
+ * iPad with the bar at the top it sits at the bottom over the full width, always above the bar. A hidden accessory
+ * (`visible: false`, or no name) keeps its React root and its state, and shows again with them. When another accessory
+ * (another `componentId`) shows, the replaced one stops once it has left the window and its state is gone. The last
+ * accessory stops together with the tabs. Android has no accessory.
  */
 export interface OptionsBottomTabsAccessory {
   /**

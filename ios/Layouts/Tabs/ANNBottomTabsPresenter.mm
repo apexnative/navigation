@@ -72,7 +72,8 @@ static id ANNValue(NSArray *list, NSUInteger index) {
     ANNBottomTabsOptions *_barOptions;
     UITabBarAppearance *_base;
     ANNBottomTabsCustomRow *_row;
-    // The accessory shown (its id), and the content view of each accessory made, kept until the tabs go.
+    // The accessory shown (its id), and the content view of each accessory made: kept while hidden, until another
+    // accessory shows or the tabs go.
     NSString *_accessoryId;
     NSMutableDictionary<NSString *, ANNBottomTabsAccessoryView *> *_accessoryViews;
     // The pictures of the bar's colors by color and size.
@@ -963,8 +964,9 @@ static ANNBottomTabOptions *ANNWithIcons(ANNBottomTabOptions *bottomTab, NSArray
 
 #pragma mark - The accessory (iOS 26)
 
-// No name or `visible: false`: no accessory. The same id shown: nothing; another: a new one. A root of an id stays
-// with the tabs once made, so one hidden and shown again keeps its state.
+// No name or `visible: false`: no accessory. The same id shown: nothing; another: a new one. A hidden accessory keeps
+// its root, so one hidden and shown again keeps its state; the roots of the other ids stop once another accessory
+// shows and theirs is out of the window.
 - (void)applyAccessoryOf:(ANNNavigationOptions *)options animated:(BOOL)animated {
     if (@available(iOS 26.0, *)) {
         ANNBottomTabsController *tabs = self.tabs;
@@ -1000,8 +1002,37 @@ static ANNBottomTabOptions *ANNWithIcons(ANNBottomTabOptions *bottomTab, NSArray
             return;
         }
         _accessoryId = componentId;
+        [view whenOutOfWindow:nil];
         UITabAccessory *tabAccessory = [[UITabAccessory alloc] initWithContentView:view];
         [tabs setBottomAccessory:tabAccessory animated:animated && inWindow];
+        [self stopAccessoriesOtherThan:componentId];
+    }
+}
+
+// The roots of the accessories not shown stop, each once its view is out of the window, unless it shows again first.
+- (void)stopAccessoriesOtherThan:(NSString *)shownId {
+    ANNBottomTabsController *tabs = self.tabs;
+    __weak ANNBottomTabsPresenter *weakSelf = self;
+    __weak ANNReactComponentRegistry *weakComponents = tabs.components;
+    for (NSString *componentId in _accessoryViews.allKeys) {
+        if ([componentId isEqualToString:shownId]) {
+            continue;
+        }
+        ANNBottomTabsAccessoryView *view = _accessoryViews[componentId];
+        __weak ANNBottomTabsAccessoryView *weakView = view;
+        [view whenOutOfWindow:^{
+          ANNBottomTabsPresenter *presenter = weakSelf;
+          ANNBottomTabsAccessoryView *gone = weakView;
+          if (!presenter || !gone || presenter->_accessoryViews[componentId] != gone ||
+              [presenter->_accessoryId isEqualToString:componentId]) {
+              return;
+          }
+          [presenter->_accessoryViews removeObjectForKey:componentId];
+          ANNReactComponentRegistry *components = weakComponents;
+          if ([components existingComponent:componentId] == gone.reactView) {
+              [components removeChildComponent:componentId];
+          }
+        }];
     }
 }
 
