@@ -19,6 +19,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// What the options name; nil without a value.
 @property(nonatomic, strong, readonly, nullable) ANNImageSource *source;
 
+/// The same image the options name: a source by its `sourceKey` (what a file holds now isn't compared, so a file the
+/// app writes again at the same path is the same value), an image that came already by identity.
+- (BOOL)isSameValueAs:(nullable ANNParam *)other;
+
 @end
 
 NS_ASSUME_NONNULL_END

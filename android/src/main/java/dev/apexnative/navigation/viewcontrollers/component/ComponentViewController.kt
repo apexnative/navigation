@@ -8,9 +8,8 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import dev.apexnative.navigation.options.DefaultOptions
 import dev.apexnative.navigation.options.Options
-import dev.apexnative.navigation.react.ArrangementStates
 import dev.apexnative.navigation.react.ReactView
-import dev.apexnative.navigation.react.ScreenInsets
+import dev.apexnative.navigation.react.ScreenEnvironment
 import dev.apexnative.navigation.react.ScreenRegions
 import dev.apexnative.navigation.react.events.AppearanceDispatcher
 import dev.apexnative.navigation.react.events.ComponentType
@@ -157,7 +156,7 @@ class ComponentViewController(
             shown = layout.isShown || prepared,
             layoutPending = !prepared && isLayoutPending(content),
             topOfStack = parent?.isTopOfStack(this) ?: true,
-            hasSafeArea = ScreenInsets.padding(id) != null,
+            hasSafeArea = ScreenEnvironment.padding(id) != null,
         )
         if (!measures) return
         val windowInsets = ViewCompat.getRootWindowInsets(content) ?: return
@@ -180,7 +179,9 @@ class ComponentViewController(
         )
         // The events of the screen go to the JavaScript it was made for, and to no other.
         val emitter = EventEmitter.of(jsGeneration)
-        ScreenInsets.update(id, insets, ScreenSafeArea.padding(insets, edges), emitter)
+        val padding = ScreenSafeArea.padding(insets, edges)
+        val uncovered = ScreenSafeArea.uncovered(insets, padding)
+        ScreenEnvironment.setInsets(id, uncovered, padding, ScreenEnvironment.changesOf(emitter))
         val area = Rect(place.left, place.top, place.right, place.bottom)
         ScreenRegions.update(activity, id, area, windowInsets, emitter)
     }
@@ -245,9 +246,7 @@ class ComponentViewController(
         }
         setParentController(null)
         if (isIdTakenByAnother) return
-        ScreenInsets.remove(id)
-        ScreenRegions.remove(id)
-        ArrangementStates.remove(id)
+        ScreenEnvironment.remove(id)
         ScreenReadiness.remove(id)
     }
 

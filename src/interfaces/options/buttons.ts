@@ -60,7 +60,7 @@ export interface IconInsets {
  * a color the other fields are ignored.
  *
  * On iOS the icon is drawn onto the shape and the button becomes a button of its own (the back button keeps its
- * history menu), without the glass capsule on iOS 26 by default. On Android the icon sits on the shape, mirrored in a
+ * history menu), without the glass capsule (glass design, iOS 26+) by default. On Android the icon sits on the shape, mirrored in a
  * right-to-left layout. Layers merge differently: on iOS an object merges field by field like any other, on Android
  * an `iconBackground` that has a `color` replaces the earlier one as a whole.
  */
@@ -189,7 +189,7 @@ export interface OptionsTopBarButton {
    */
   icon?: ImageResource;
   /**
-   * (iOS) The space around the image of `icon`; the button becomes a button of its own, without a capsule on iOS 26.
+   * (iOS) The space around the image of `icon`; the button becomes a button of its own, without a capsule with the glass design (iOS 26+, see `UIDesignRequiresCompatibility`).
    */
   iconInsets?: IconInsets;
   /**
@@ -238,14 +238,14 @@ export interface OptionsTopBarButton {
   disabledColor?: Color;
   /**
    * A shape behind the icon. It works with an `icon` image and a `color` of the shape; on iOS the button becomes a
-   * button of its own without menu, toggle or style, and without a capsule on iOS 26 by default. The color of a whole
+   * button of its own without menu, toggle or style, and without a capsule with the glass design by default. The color of a whole
    * side is `leftButtonBackgroundColor` / `rightButtonBackgroundColor`.
    */
   iconBackground?: IconBackgroundOptions;
   /**
-   * (iOS) `'plain'` or `'prominent'`, the main action of the bar (Done, Send). On iOS 26 a prominent button is a
+   * (iOS) `'plain'` or `'prominent'`, the main action of the bar (Done, Send). With the glass design (iOS 26+, see `UIDesignRequiresCompatibility`) a prominent button is a
    * capsule in the button's tint with bold text or icon on it (the tint is `color`, the bar's tint without it);
-   * before iOS 26 it is the system's done style with bold text. Not for component buttons, buttons with
+   * without it, it is the system's done style with bold text. Not for component buttons, buttons with
    * `iconBackground`, and `showText` buttons.
    * @default 'plain'
    */
@@ -257,7 +257,7 @@ export interface OptionsTopBarButton {
    */
   testID?: string;
   /**
-   * (iOS 26+) Whether the button has no glass capsule under it; neighbors keep theirs. By default `true` for
+   * (iOS 26+, glass design) Whether the button has no glass capsule under it; neighbors keep theirs. By default `true` for
    * component buttons and for icon buttons with a background or insets, `false` for the rest. In a `group` of several
    * buttons the capsule is shared and this has no effect. A change by `mergeOptions` builds the buttons anew.
    */
@@ -270,8 +270,8 @@ export interface OptionsTopBarButton {
    */
   showText?: boolean;
   /**
-   * (iOS 26+) Buttons next to each other with the same group share one capsule; a button without a group has its
-   * own. Before iOS 26 it does nothing, on iOS 15 there are no groups. A side that has a group of several buttons
+   * (iOS 26+, glass design) Buttons next to each other with the same group share one capsule; a button without a group has its
+   * own. Without the glass design it does nothing, on iOS 15 there are no groups. A side that has a group of several buttons
    * doesn't animate button changes. The toolbar has no groups: only icons share a capsule there. For center buttons
    * the group is a section of the overflow menu, and its name is the id the customization is saved under.
    */

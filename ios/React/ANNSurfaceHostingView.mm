@@ -1,9 +1,49 @@
 #import "ANNSurfaceHostingView.h"
+#import "ANNAssert.h"
 #import <React/RCTFabricSurface.h>
+#import <objc/runtime.h>
+
+// How long a gone screen's surface that doesn't run yet is kept for its stop. The host starts a surface through a weak
+// reference once its JavaScript ran, so a surface let go before that, which nothing else holds, goes away unstarted.
+static const NSTimeInterval ANNSurfaceStartWaitLimit = 5.0;
+static const void *ANNSurfaceStopperKey = &ANNSurfaceStopperKey;
+
+// The hosting views whose surface stops at its start; each keeps its surface. Main queue.
+static NSMutableSet<ANNSurfaceHostingView *> *ANNHostingViewsStoppingAtStart;
+
+// The delegate of a surface its hosting view let go at the limit: the surface keeps it, and it keeps nothing, so
+// neither holds the other alive. A surface that something else still starts (a start already on its way holds its
+// surface; React Native restarts every surface it knows after a reload, holding it) stops at once, instead of running
+// with no screen and going away running, which leaves its React tree registered.
+@interface ANNSurfaceStopper : NSObject <RCTSurfaceDelegate>
+@end
+
+@implementation ANNSurfaceStopper
+
+// React Native's delegate method names the deprecated `RCTSurface`; the surface is an `RCTFabricSurface`.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated"
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+- (void)surface:(RCTSurface *)surface didChangeStage:(RCTSurfaceStage)stage {
+    if (!RCTSurfaceStageIsRunning(stage)) {
+        return;
+    }
+    // The start tells this off the main queue, before it ends: the stop goes on the main queue, the block keeping the
+    // surface until then.
+    id<RCTSurfaceProtocol> startedSurface = (id<RCTSurfaceProtocol>)surface;
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [startedSurface stop];
+    });
+}
+#pragma clang diagnostic pop
+
+@end
 
 @implementation ANNSurfaceHostingView {
     // The surface was given a new size since its last mount.
     BOOL _surfaceSizeChanged;
+    // The screen went: the surface stops each time it runs. Main queue.
+    BOOL _stopsWhenRunning;
 }
 
 // React Native 0.87 posts the hosting view's traits as the app's scheme from here (`RCTSurfaceHostingView.mm`). On
@@ -58,6 +98,82 @@
     [surface setMinimumSize:minimumSize
                 maximumSize:CGSizeMake(maximumSize.width, maximumSize.height + 1)];
     [surface setMinimumSize:minimumSize maximumSize:maximumSize];
+}
+
+#pragma mark - The stop
+
+// `RCTFabricSurface stop` does nothing while the surface doesn't run, and the host starts a surface later, off the main
+// queue: a screen can go before that. Its surface then stops at its change to running. This view is kept until then,
+// with its surface: released earlier, it would stop the surface in its `dealloc`, maybe off the main queue.
+- (void)stopSurfaceWhenRunning {
+    ANNAssertMainQueue();
+    if (_stopsWhenRunning) {
+        return;
+    }
+    _stopsWhenRunning = YES;
+    RCTFabricSurface *surface = [self fabricSurface];
+    if (!surface) {
+        return;
+    }
+    if (RCTSurfaceStageIsRunning(surface.stage)) {
+        [surface stop];
+        return;
+    }
+    if (!ANNHostingViewsStoppingAtStart) {
+        ANNHostingViewsStoppingAtStart = [NSMutableSet new];
+    }
+    [ANNHostingViewsStoppingAtStart addObject:self];
+    __weak ANNSurfaceHostingView *weakSelf = self;
+    int64_t delay = (int64_t)(ANNSurfaceStartWaitLimit * NSEC_PER_SEC);
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, delay), dispatch_get_main_queue(), ^{
+      [weakSelf letSurfaceGo];
+    });
+}
+
+// The surface tells its stage off the main queue, from its start and its stop. React Native's hosting view follows it
+// as before; a gone screen's surface that starts stops on the next turn of the main queue, once its start ended. The
+// block keeps this view, and with it the surface, until then, so their last release is on the main queue.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated"
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+- (void)surface:(RCTSurface *)surface didChangeStage:(RCTSurfaceStage)stage {
+    [super surface:surface didChangeStage:stage];
+    if (!RCTSurfaceStageIsRunning(stage)) {
+        return;
+    }
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [self stopSurfaceIfAsked];
+    });
+}
+#pragma clang diagnostic pop
+
+- (void)stopSurfaceIfAsked {
+    if (!_stopsWhenRunning) {
+        return;
+    }
+    RCTFabricSurface *surface = [self fabricSurface];
+    if (surface && RCTSurfaceStageIsRunning(surface.stage)) {
+        [surface stop];
+    }
+    [ANNHostingViewsStoppingAtStart removeObject:self];
+}
+
+// The limit: the surface hasn't started. It gets a delegate of its own that stops it at any later start, and this
+// view lets it go. The delegate changes before the check: a start told before the change reaches this view, which
+// stops the surface (its block keeps the view); one told after it reaches the new delegate.
+- (void)letSurfaceGo {
+    if (![ANNHostingViewsStoppingAtStart containsObject:self]) {
+        return;
+    }
+    RCTFabricSurface *surface = [self fabricSurface];
+    ANNSurfaceStopper *stopper = [ANNSurfaceStopper new];
+    objc_setAssociatedObject(surface, ANNSurfaceStopperKey, stopper,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    surface.delegate = stopper;
+    if (RCTSurfaceStageIsRunning(surface.stage)) {
+        [surface stop];
+    }
+    [ANNHostingViewsStoppingAtStart removeObject:self];
 }
 
 - (nullable RCTFabricSurface *)fabricSurface {

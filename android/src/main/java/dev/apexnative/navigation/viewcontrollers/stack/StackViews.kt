@@ -15,6 +15,7 @@ import dev.apexnative.navigation.viewcontrollers.component.ComponentViewControll
 import dev.apexnative.navigation.viewcontrollers.externalcomponent.ExternalComponentViewController
 import dev.apexnative.navigation.viewcontrollers.stack.StackDisplay.Motion
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.ViewController
+import dev.apexnative.navigation.views.animations.AnimationLayer
 import dev.apexnative.navigation.views.animations.AnimationRules
 import dev.apexnative.navigation.views.animations.SideAnimator
 import dev.apexnative.navigation.views.animations.SystemTransition
@@ -157,6 +158,8 @@ internal class StackViews(private val stack: StackController) : StackDisplay {
         custom.alpha?.let { view.alpha = it }
         val own = custom.side?.let { SideAnimator.build(view, it, SideAnimator.Base(alpha = custom.alpha)) }
         val fade = if (own == null) StackTransitions.fade(view, custom.fade) else null
+        // A fade of the whole screen draws it through a hardware layer, as the default transition does ([dress]).
+        for (animator in listOfNotNull(own, fade)) AnimationLayer.during(view, animator)
         val elements = custom.elements?.let { elements ->
             val layout = layout ?: return@let null
             val fadeLength = custom.side?.takeIf(AnimationRules::isSingleAlpha)?.let(AnimationRules::lengthOf)

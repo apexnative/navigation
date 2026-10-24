@@ -1,6 +1,6 @@
 package dev.apexnative.navigation.viewcontrollers.component
 
-import dev.apexnative.navigation.react.ScreenInsets
+import dev.apexnative.navigation.react.ScreenEnvironment
 import dev.apexnative.navigation.viewcontrollers.component.ScreenSafeArea.Box
 import dev.apexnative.navigation.viewcontrollers.component.ScreenSafeArea.Step
 import org.junit.Assert.assertEquals
@@ -22,7 +22,7 @@ class ScreenSafeAreaTest {
 
     @Test
     fun aFullWindowRootIsCoveredByTheSystemBars() {
-        assertEquals(ScreenInsets.Insets(40.0, 0.0, 20.0, 0.0), insets(Box(0, 0, 1080, 2400)))
+        assertEquals(ScreenEnvironment.Insets(40.0, 0.0, 20.0, 0.0), insets(Box(0, 0, 1080, 2400)))
     }
 
     @Test
@@ -41,7 +41,7 @@ class ScreenSafeAreaTest {
     fun theSidesAreTheSystemBarsAndTheCutout() {
         val landscape = Box(120, 60, 90, 0)
         assertEquals(
-            ScreenInsets.Insets(24.0, 36.0, 0.0, 48.0),
+            ScreenEnvironment.Insets(24.0, 36.0, 0.0, 48.0),
             ScreenSafeArea.insets(2400, 1080, landscape, Box(0, 0, 2400, 1080), null, null, 2.5f),
         )
     }
@@ -50,7 +50,7 @@ class ScreenSafeAreaTest {
     fun aRootInsideTheViewsPaddingIsNotCoveredTwice() {
         // The screen's view keeps the navigation bar (50) and the side bar (120) as its padding: the root ends above.
         val root = Box(120, 0, 1080, 2350)
-        assertEquals(ScreenInsets.Insets(40.0, 0.0, 0.0, 0.0), insets(root, sides = Box(120, 100, 0, 50)))
+        assertEquals(ScreenEnvironment.Insets(40.0, 0.0, 0.0, 0.0), insets(root, sides = Box(120, 100, 0, 50)))
     }
 
     @Test
@@ -88,9 +88,16 @@ class ScreenSafeAreaTest {
 
     @Test
     fun thePaddingIsTheInsetsOnTheKeptEdges() {
-        val insets = ScreenInsets.Insets(40.0, 5.0, 20.0, 7.0)
+        val insets = ScreenEnvironment.Insets(40.0, 5.0, 20.0, 7.0)
         val padding = ScreenSafeArea.padding(insets, setOf("right", "bottom", "left"))
-        assertEquals(ScreenInsets.Insets(0.0, 5.0, 20.0, 7.0), padding)
+        assertEquals(ScreenEnvironment.Insets(0.0, 5.0, 20.0, 7.0), padding)
+    }
+
+    @Test
+    fun javaScriptGetsWhatStillCoversTheContentNeverBelowZero() {
+        val insets = ScreenEnvironment.Insets(40.0, 5.0, 20.0, 7.0)
+        val padding = ScreenEnvironment.Insets(40.0, 0.0, 30.0, 7.0)
+        assertEquals(ScreenEnvironment.Insets(0.0, 5.0, 0.0, 0.0), ScreenSafeArea.uncovered(insets, padding))
     }
 
     @Test

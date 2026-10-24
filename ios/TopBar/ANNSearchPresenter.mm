@@ -1,6 +1,6 @@
 #import "ANNSearchPresenter.h"
 #import "ANNEventEmitter.h"
-#import "ANNScreenInsets.h"
+#import "ANNScreenEnvironment.h"
 #import "ANNSearchResultsViewController.h"
 #import "ANNUserChoice.h"
 
@@ -298,7 +298,7 @@ static ANNUserChoice *ANNScopeChoice(NSString *scope) {
     _appliedSuggestions = nil;
     if (_resultsComponentId) {
         [_componentRegistry removeChildComponent:_resultsComponentId];
-        [ANNScreenInsets removeScreenId:_resultsComponentId];
+        [ANNScreenEnvironment removeScreenId:_resultsComponentId];
     }
     _resultsKey = nil;
     _resultsComponentId = nil;

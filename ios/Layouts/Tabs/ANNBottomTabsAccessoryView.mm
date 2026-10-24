@@ -3,6 +3,7 @@
 @implementation ANNBottomTabsAccessoryView {
     ANNEventEmitter *_eventEmitter;
     NSString *_placement;
+    dispatch_block_t _outOfWindowHandler;
 }
 
 - (instancetype)initWithReactView:(ANNReactView *)reactView
@@ -30,6 +31,28 @@
       self->_reactView.frame = self.bounds;
       [self->_reactView layoutIfNeeded];
     }];
+}
+
+- (void)whenOutOfWindow:(dispatch_block_t)handler {
+    _outOfWindowHandler = nil;
+    if (!handler) {
+        return;
+    }
+    if (!self.window) {
+        handler();
+        return;
+    }
+    _outOfWindowHandler = [handler copy];
+}
+
+- (void)didMoveToWindow {
+    [super didMoveToWindow];
+    dispatch_block_t handler = _outOfWindowHandler;
+    if (self.window || !handler) {
+        return;
+    }
+    _outOfWindowHandler = nil;
+    handler();
 }
 
 // UIKit sets the environment when the accessory is shown and changes it as the tab bar minimizes

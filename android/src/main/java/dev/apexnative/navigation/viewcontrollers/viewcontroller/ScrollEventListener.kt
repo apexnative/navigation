@@ -13,8 +13,8 @@ import java.lang.ref.WeakReference
  * tag) is in the screen, found once per tag —, not the horizontal ones, nor those of a modal, an overlay or another
  * screen; a slot screen's lists are in its container too. While a list is dragged, each follower gets the drag as a
  * translation to follow; when the drag ends, the way to settle; at every scroll event, the drags' and the inertia's,
- * the offset. It listens to React Native's events only while it has followers; without React Native's event dispatcher
- * (around a reload) it waits and listens once there is one. Released with the screen. Main thread only.
+ * the offset. It listens to React Native's scroll views ([ScrollEvents]) only while it has followers and its screen's
+ * view. Released with the screen. Main thread only.
  */
 class ScrollEventListener() {
     /** Follows the content while it is dragged. */
@@ -105,15 +105,12 @@ class ScrollEventListener() {
     }
 
     /**
-     * Listens to React Native's scroll events when followers wait for them and it doesn't yet: after a reload there may
-     * be no event dispatcher at first: then it is asked again once React Native has one, and as the screen joins a
-     * window.
+     * Listens to React Native's scroll views when followers wait for them and it doesn't yet, once it has the screen's
+     * view to tell its own lists by; asked again as the screen joins a window.
      */
     internal fun attachIfNeeded() {
-        if (released || stopListening != null || registrations.isEmpty()) return
-        val context = scope?.get()?.context ?: return
-        stopListening = ScrollEvents.listen(context, ::onScrollEvent)
-        if (stopListening == null) ScrollEvents.waitForDispatcher(this)
+        if (released || stopListening != null || registrations.isEmpty() || scope?.get() == null) return
+        stopListening = ScrollEvents.listen(::onScrollEvent)
     }
 
     /** The screen is destroyed: no follower hears it any more. */

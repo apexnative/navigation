@@ -1,5 +1,16 @@
 #import "ANNScrollEdgeEffects.h"
 #import "ANNBarAppearance.h"
+#import "ANNMainList.h"
+
+// How deep the walk looks for lists, as the main list's search.
+static const NSUInteger ANNEdgeWalkMaxDepth = 16;
+static const CGFloat ANNEdgeWalkTolerance = 1;
+
+// A list that scrolls (or bounces) vertically: what is in it is its rows, which never meet a bar themselves.
+static BOOL ANNScrollsVertically(UIScrollView *list) {
+    return list.alwaysBounceVertical ||
+           list.contentSize.height > CGRectGetHeight(list.bounds) + ANNEdgeWalkTolerance;
+}
 
 // What one edge gets: whether it is hidden and its style; `nil` style is automatic.
 typedef struct {
@@ -18,6 +29,11 @@ static ANNEdgeEffect ANNEdgeEffectOf(ANNScrollEdgeEffectOptions *effect,
 @implementation ANNScrollEdgeEffects {
     __weak UIView *_screenView;
     NSHashTable<UIScrollView *> *_lists;
+    // What the last walk read (nil: walk at the next call), and whether content mounted since or the walk found a
+    // scroll view whose lists come and go without a mount (a pager's pages).
+    NSArray *_walkInputs;
+    BOOL _mountedSinceWalk;
+    BOOL _walkFoundPager;
 }
 
 - (instancetype)initWithScreenView:(UIView *)screenView {
@@ -30,46 +46,137 @@ static ANNEdgeEffect ANNEdgeEffectOf(ANNScrollEdgeEffectOptions *effect,
 
 - (void)applyToAllWithOptions:(ANNNavigationOptions *)options {
     if (@available(iOS 26.0, *)) {
-        [self reset];
         UIView *screenView = _screenView;
-        if (screenView) {
-            [self applyIn:screenView options:options];
+        if (!screenView) {
+            [self reset];
+            return;
         }
-    }
-}
-
-- (void)applyIn:(UIView *)view options:(ANNNavigationOptions *)options API_AVAILABLE(ios(26.0)) {
-    for (UIView *subview in view.subviews) {
-        if ([subview isKindOfClass:UIScrollView.class]) {
-            [self apply:options to:(UIScrollView *)subview];
+        NSArray *inputs = [self inputsOf:options traits:screenView.traitCollection];
+        [self dropListsOutside:screenView];
+        // The lists are the same as at the last walk: they take the values again (the screen gave them the system
+        // ones as it went), without a walk.
+        if (_walkInputs && _mountsReported && !_mountedSinceWalk && !_walkFoundPager &&
+            ANNOptionValuesSame(_walkInputs, inputs)) {
+            for (UIScrollView *list in _lists.allObjects) {
+                [self apply:options to:list];
+            }
+            return;
         }
-        [self applyIn:subview options:options];
-    }
-}
-
-- (void)applyToList:(UIScrollView *)list options:(ANNNavigationOptions *)options {
-    if (@available(iOS 26.0, *)) {
-        // Lists React took out of the screen (and gave to another one) get the system values now.
-        UIView *screenView = _screenView;
+        NSMutableArray<UIScrollView *> *found = [NSMutableArray new];
+        BOOL pager = NO;
+        [self collectIn:screenView depth:0 into:found pager:&pager];
+        // The screen's lists that the walk no longer finds get the system values; the others are set again.
         for (UIScrollView *kept in _lists.allObjects) {
-            if (!screenView || ![kept isDescendantOfView:screenView]) {
+            if ([found indexOfObjectIdenticalTo:kept] == NSNotFound) {
                 [ANNScrollEdgeEffects resetList:kept];
                 [_lists removeObject:kept];
             }
         }
+        for (UIScrollView *list in found) {
+            [self apply:options to:list];
+        }
+        _walkInputs = inputs;
+        _mountedSinceWalk = NO;
+        _walkFoundPager = pager;
+    }
+}
+
+// What the effects of a list read: the effect's options, the bar's background (a solid one hides the top), the traits
+// a clear color is told by.
+- (NSArray *)inputsOf:(ANNNavigationOptions *)options traits:(UITraitCollection *)traits {
+    ANNTopBarBackgroundOptions *background = options.topBar.background;
+    return @[
+        options.scrollEdgeEffect, background.color, background.component.name,
+        @(traits.userInterfaceStyle), @(traits.accessibilityContrast)
+    ];
+}
+
+// The lists of `view`, bounded as the main list's search: hidden views (`display: none`) and the core's own views are
+// left out with what is in them. A view at alpha 0 is not: an animation (a fade in, a transition) changes it without a
+// mount. A list that scrolls vertically and a text view are set, not looked into; a scroll view that doesn't is looked
+// into for the lists of its pages, and such a walk is never skipped.
+- (void)collectIn:(UIView *)view
+            depth:(NSUInteger)depth
+             into:(NSMutableArray<UIScrollView *> *)found
+            pager:(BOOL *)pager {
+    if (depth > ANNEdgeWalkMaxDepth) {
+        return;
+    }
+    for (UIView *subview in view.subviews) {
+        if (subview.hidden || [ANNMainList isExcludedView:subview]) {
+            continue;
+        }
+        if ([subview isKindOfClass:UIScrollView.class]) {
+            UIScrollView *list = (UIScrollView *)subview;
+            [found addObject:list];
+            if ([list isKindOfClass:UITextView.class] || ANNScrollsVertically(list)) {
+                continue;
+            }
+            *pager = YES;
+        }
+        [self collectIn:subview depth:depth + 1 into:found pager:pager];
+    }
+}
+
+- (void)applyToList:(UIScrollView *)list options:(ANNNavigationOptions *)options {
+    _mountedSinceWalk = YES;
+    if (@available(iOS 26.0, *)) {
+        [self dropListsOutside:_screenView];
         if (list) {
             [self apply:options to:list];
         }
     }
 }
 
-- (void)reset {
+// Whether `view` is in some screen: one of its views is the view of a view controller, in a window or not. A list in
+// Fabric's pool is not: its component view (the list's own superview) has no superview there.
+static BOOL ANNIsInAScreen(UIView *view) {
+    for (UIView *ancestor = view; ancestor; ancestor = ancestor.superview) {
+        if ([ancestor.nextResponder isKindOfClass:UIViewController.class]) {
+            return YES;
+        }
+    }
+    return NO;
+}
+
+// A list React took out of the screen is no longer the screen's: outside every screen (in the pool Fabric recycles
+// its views from, shared by every surface) it gets the system values, so it comes clean into the screen that takes it;
+// in another screen it may be that screen's already, which set its values: it is only forgotten.
+- (void)dropListsOutside:(nullable UIView *)screenView {
+    for (UIScrollView *kept in _lists.allObjects) {
+        if (screenView && [kept isDescendantOfView:screenView]) {
+            continue;
+        }
+        if (@available(iOS 26.0, *)) {
+            if (!ANNIsInAScreen(kept)) {
+                [ANNScrollEdgeEffects resetList:kept];
+            }
+        }
+        [_lists removeObject:kept];
+    }
+}
+
+// The screen's lists get the system values; with `keepingLists` they stay known, with what the last walk read, for
+// the next appearance to set them again without a walk.
+- (void)giveBackKeepingLists:(BOOL)keepingLists {
+    [self dropListsOutside:_screenView];
     if (@available(iOS 26.0, *)) {
         for (UIScrollView *list in _lists.allObjects) {
             [ANNScrollEdgeEffects resetList:list];
         }
     }
-    [_lists removeAllObjects];
+    if (!keepingLists) {
+        [_lists removeAllObjects];
+        _walkInputs = nil;
+    }
+}
+
+- (void)screenDidDisappear {
+    [self giveBackKeepingLists:YES];
+}
+
+- (void)reset {
+    [self giveBackKeepingLists:NO];
 }
 
 + (void)resetList:(UIScrollView *)list API_AVAILABLE(ios(26.0)) {

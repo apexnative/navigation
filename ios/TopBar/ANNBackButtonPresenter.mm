@@ -2,6 +2,7 @@
 #import "ANNExternalViewController.h"
 #import "ANNIconButtonImage.h"
 #import "ANNStackController.h"
+#import "ANNTabsDesign.h"
 #import <objc/runtime.h>
 
 // The item below that the core configured: what it set may go again.
@@ -141,10 +142,8 @@ static const void *ANNBackButtonConfiguredKey = &ANNBackButtonConfiguredKey;
     ANNBackBarButtonItem *item = [ANNBackBarButtonItem new];
     item.allowsMenu = [backButton.enableMenu withDefault:YES];
     item.style = UIBarButtonItemStylePlain;
-    BOOL before26 = YES;
-    if (@available(iOS 26.0, *)) {
-        before26 = NO;
-    }
+    // The compatibility mode of iOS 26 shows the title below too, as the design before it.
+    BOOL before26 = !ANNTabsDesign.isGlass;
     item.title = title ?: (before26 ? belowTitle : nil);
     UIColor *background = [self iconBackgroundColorOf:backButton];
     if (background) {
@@ -165,7 +164,9 @@ static const void *ANNBackButtonConfiguredKey = &ANNBackButtonConfiguredKey;
                                      [iconBackground.height withDefault:0])
                    insets:UIEdgeInsetsZero];
         if (@available(iOS 26.0, *)) {
-            item.hidesSharedBackground = [backButton.hideSharedBackground withDefault:YES];
+            if (ANNTabsDesign.isGlass) {
+                item.hidesSharedBackground = [backButton.hideSharedBackground withDefault:YES];
+            }
         }
     }
     return item;

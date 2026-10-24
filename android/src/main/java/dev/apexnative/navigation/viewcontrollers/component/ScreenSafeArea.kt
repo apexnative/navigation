@@ -1,6 +1,6 @@
 package dev.apexnative.navigation.viewcontrollers.component
 
-import dev.apexnative.navigation.react.ScreenInsets
+import dev.apexnative.navigation.react.ScreenEnvironment.Insets
 
 /**
  * The arithmetic of a screen's room, safe area and background on Android, without views: the screen nodes read the
@@ -57,10 +57,10 @@ internal object ScreenSafeArea {
         headerBottom: Int?,
         tabsTop: Int?,
         density: Float,
-    ): ScreenInsets.Insets {
+    ): Insets {
         val coveredAbove = maxOf(system.top, headerBottom ?: 0)
         val coveredBelow = minOf(windowHeight - system.bottom, tabsTop ?: windowHeight)
-        return ScreenInsets.Insets(
+        return Insets(
             top = dp((coveredAbove - root.top).coerceAtLeast(0), density),
             right = dp((root.right - (windowWidth - system.right)).coerceAtLeast(0), density),
             bottom = dp((root.bottom - coveredBelow).coerceAtLeast(0), density),
@@ -82,11 +82,22 @@ internal object ScreenSafeArea {
     }
 
     /** The padding of the safe area view: the [insets] on the [edges] it keeps, 0 on the others. */
-    fun padding(insets: ScreenInsets.Insets, edges: Set<String>): ScreenInsets.Insets = ScreenInsets.Insets(
+    fun padding(insets: Insets, edges: Set<String>): Insets = Insets(
         top = if (TOP in edges) insets.top else 0.0,
         right = if (RIGHT in edges) insets.right else 0.0,
         bottom = if (BOTTOM in edges) insets.bottom else 0.0,
         left = if (LEFT in edges) insets.left else 0.0,
+    )
+
+    /**
+     * The insets JavaScript gets (`useSafeAreaInsets`): what of the [insets] still covers the content once the safe
+     * area view keeps it off its [padding], 0 on a padded edge.
+     */
+    fun uncovered(insets: Insets, padding: Insets) = Insets(
+        top = (insets.top - padding.top).coerceAtLeast(0.0),
+        right = (insets.right - padding.right).coerceAtLeast(0.0),
+        bottom = (insets.bottom - padding.bottom).coerceAtLeast(0.0),
+        left = (insets.left - padding.left).coerceAtLeast(0.0),
     )
 
     /**

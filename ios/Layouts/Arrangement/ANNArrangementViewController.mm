@@ -2,10 +2,10 @@
 
 #if __IPHONE_OS_VERSION_MAX_ALLOWED >= 270100
 
-#import "ANNArrangementState.h"
 #import "ANNComponentViewController.h"
 #import "ANNEventContract.h"
 #import "ANNExternalViewController.h"
+#import "ANNScreenEnvironment.h"
 #import "ANNShownScreens.h"
 #import "ANNUtils.h"
 
@@ -298,9 +298,9 @@ static BOOL ANNIsShown(UIViewController *screen, UIArrangementViewState *state, 
          ofScreen:(UIViewController *)screen
      eventEmitter:(ANNEventEmitter *)eventEmitter {
     if (ANNKeepsState(screen)) {
-        [ANNArrangementState setState:state
-                          forScreenId:screen.layoutInfo.componentId
-                         eventEmitter:eventEmitter];
+        [ANNScreenEnvironment setArrangement:state
+                                 forScreenId:screen.layoutInfo.componentId
+                                eventEmitter:eventEmitter];
     }
 }
 

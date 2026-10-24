@@ -1,5 +1,6 @@
 package dev.apexnative.navigation.viewcontrollers.modal
 
+import androidx.activity.BackEventCompat
 import dev.apexnative.navigation.options.ModalAnimationOptions
 import dev.apexnative.navigation.options.Options
 import dev.apexnative.navigation.options.ViewAnimationOptions
@@ -32,6 +33,8 @@ internal class FakeModalViews : ModalCoordinator.Views {
     private val dismissals = LinkedHashMap<String, () -> Unit>()
     /** The sheet events of each record that showed, by its root id. */
     val sheets = HashMap<String, ModalSheet.Events>()
+    /** The sheets as back sees them, by root id: a sheet record that showed gets one, hiding on back. */
+    val sheetBacks = HashMap<String, FakeSheetBack>()
 
     override fun place(record: ModalRecord) {
         log += "place:${record.rootId}"
@@ -49,6 +52,7 @@ internal class FakeModalViews : ModalCoordinator.Views {
         if (failPresent) error("no view")
         log += "present:${record.rootId}:${if (animated && seen) "animated" else "at once"}" + describe(motion)
         sheets[record.rootId] = events
+        if (record.isSheet) sheetBacks.getOrPut(record.rootId) { FakeSheetBack() }
         if (instant || !seen || (!animated && !record.isSheet)) {
             onEnd()
             return {}
@@ -127,6 +131,8 @@ internal class FakeModalViews : ModalCoordinator.Views {
         log += "update:${record.rootId}:${merge != null}"
     }
 
+    override fun sheetBack(record: ModalRecord): SheetBack? = sheetBacks[record.rootId]
+
     private val targets = LinkedHashMap<String, Pair<() -> Boolean, () -> Unit>>()
 
     override fun awaitTargets(
@@ -197,6 +203,11 @@ internal class FakeModalViews : ModalCoordinator.Views {
             "x", "y", "translationX", "translationY", "alpha", "scaleX", "scaleY", "rotationX", "rotationY", "rotation",
         )
     }
+}
+
+/** A sheet as back sees it: whether back would hide it is the test's; it previews nothing. */
+internal class FakeSheetBack(override var hidesOnBack: Boolean = true) : SheetBack {
+    override fun startBackPreview(event: BackEventCompat): SheetBack.Gesture? = null
 }
 
 /** The navigation the modals and the overlays ask: the root, the registry, the waiting layers, the log. */

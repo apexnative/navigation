@@ -69,4 +69,4 @@ Our modules that stay show the house style; read the closest one before writing.
 
 - UIKit glue with weak references in blocks, associated objects and availability checks:
   `ios/Layouts/Screen/ANNPreviewInteraction.{h,mm}`.
-- A nullability-annotated header and state read from any thread: `ios/Layouts/Screen/ANNScreenInsets.{h,mm}`.
+- A nullability-annotated header and state read from any thread: `ios/Layouts/Screen/ANNScreenEnvironment.{h,mm}`.

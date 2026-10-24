@@ -1,8 +1,6 @@
 #import "ANNScreenRegions.h"
 #import "ANNEventContract.h"
 
-static NSMutableDictionary<NSString *, NSDictionary<NSString *, NSArray *> *> *ANNScreenRegionsById;
-
 #if __IPHONE_OS_VERSION_MAX_ALLOWED >= 270100
 // The part of a region inside the screen, CGRectNull for a region outside it (the fold beside a screen of a pair, the
 // camera above a screen under the bar). A fold is 0 wide or 0 high: it is inside where its line crosses the screen,
@@ -51,12 +49,6 @@ ANNRegionRects(NSArray<UIViewReservedRegion *> *regions, UIView *view, UIView *c
 
 @implementation ANNScreenRegions
 
-+ (void)initialize {
-    if (self == ANNScreenRegions.class) {
-        ANNScreenRegionsById = [NSMutableDictionary new];
-    }
-}
-
 + (NSDictionary<NSString *, NSArray *> *)regionsOfView:(UIView *)view
                                        inCoordinatesOf:(UIView *)coordinateView {
 #if __IPHONE_OS_VERSION_MAX_ALLOWED >= 270100
@@ -73,36 +65,6 @@ ANNRegionRects(NSArray<UIViewReservedRegion *> *regions, UIView *view, UIView *c
     }
 #endif
     return nil;
-}
-
-+ (void)setRegions:(NSDictionary<NSString *, NSArray *> *)regions
-       forScreenId:(NSString *)screenId
-      eventEmitter:(ANNEventEmitter *)eventEmitter {
-    @synchronized(ANNScreenRegionsById) {
-        if ([ANNScreenRegionsById[screenId] isEqualToDictionary:regions]) {
-            return;
-        }
-        ANNScreenRegionsById[screenId] = regions;
-    }
-    [eventEmitter sendScreenRegionsChanged:screenId regions:regions];
-}
-
-+ (NSDictionary<NSString *, NSArray *> *)regionsForScreenId:(NSString *)screenId {
-    @synchronized(ANNScreenRegionsById) {
-        return ANNScreenRegionsById[screenId];
-    }
-}
-
-+ (void)removeScreenId:(NSString *)screenId {
-    @synchronized(ANNScreenRegionsById) {
-        [ANNScreenRegionsById removeObjectForKey:screenId];
-    }
-}
-
-+ (void)removeAll {
-    @synchronized(ANNScreenRegionsById) {
-        [ANNScreenRegionsById removeAllObjects];
-    }
 }
 
 @end

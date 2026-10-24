@@ -9,7 +9,9 @@
 #import "ANNScreenBars.h"
 #import "ANNScrollEdgeEffects.h"
 #import "ANNSearchPresenter.h"
+#import "ANNSlotScreenView.h"
 #import "ANNStackController.h"
+#import "ANNTabsDesign.h"
 #import "ANNTitleComponentView.h"
 #import "ANNTitleGlassView.h"
 #import "ANNTitleView.h"
@@ -34,11 +36,27 @@ typedef NS_ENUM(NSInteger, ANNBarPhase) {
     ANNBarPhaseDidAppear,
 };
 
-static BOOL ANNIsIOS26(void) {
-    if (@available(iOS 26.0, *)) {
-        return YES;
+// The glass design of iOS 26, not its compatibility mode: the large title in the list, the title's capsule, the
+// system subtitle and the pin of the title's color are its own (`ANNTabsDesign`).
+static BOOL ANNIsGlass(void) {
+    return ANNTabsDesign.isGlass;
+}
+
+// The same look: the item's appearance is the one set last, or one equal to it.
+static BOOL ANNSameAppearance(UINavigationBarAppearance *a, UINavigationBarAppearance *b) {
+    return a == b || [a isEqual:b];
+}
+
+// The traits a look's colors and fonts resolve with: the style, the contrast, the elevation (the 1×1 background is
+// drawn with them) and the text size.
+static NSArray *ANNLookTraitsOf(UITraitCollection *traits) {
+    if (!traits) {
+        return @[];
     }
-    return NO;
+    return @[
+        @(traits.userInterfaceStyle), @(traits.accessibilityContrast), @(traits.userInterfaceLevel),
+        traits.preferredContentSizeCategory ?: @""
+    ];
 }
 
 static BOOL ANNHasComponentName(ANNComponentOptions *component) {
@@ -110,6 +128,10 @@ static ANNUserChoice *ANNRenameChoice(NSString *title) {
     NSUInteger _pinToken;
     // A pop's band under the title keeps the bar's look as it is (the screen leaves for one without a band of its own).
     BOOL _bandKeepsLook;
+    // What the last look was filled from, and the two appearances the item held right after it.
+    NSArray *_lookInputs;
+    UINavigationBarAppearance *_lookStandard;
+    UINavigationBarAppearance *_lookEdge;
 }
 
 - (instancetype)initWithScreen:(UIViewController *)screen {
@@ -177,13 +199,13 @@ static ANNUserChoice *ANNRenameChoice(NSString *title) {
     BOOL collapses = [ANNLargeTitlePresenter collapsesIntoList:options];
     BOOL inlineInRow = [self inlineInRow:options];
     BOOL ownEdge = [options.topBar.scrollEdgeAppearance.active withDefault:NO];
-    context.transparentEdge = ANNIsIOS26() && collapses && !inlineInRow && !ownEdge;
+    context.transparentEdge = ANNIsGlass() && collapses && !inlineInRow && !ownEdge;
     // While a pop draws the band behind the title in the title's own place, the bar's edge stays clear: UIKit grows
     // the bar's background with an interactive pop, over the screen's top where the title is.
     if ([_largeTitle drawsTitleBand] && !_bandKeepsLook && !ownEdge) {
         context.transparentEdge = YES;
     }
-    context.largeTitleNeedsBackground = ANNIsIOS26() && canShow && !collapses && !inlineInRow;
+    context.largeTitleNeedsBackground = ANNIsGlass() && canShow && !collapses && !inlineInRow;
     return context;
 }
 
@@ -367,26 +389,64 @@ static ANNUserChoice *ANNRenameChoice(NSString *title) {
 
 #pragma mark - The look
 
+// Several callers ask for the look along one appearance (the screen's, a merge, the band and the pin of iOS 26): it
+// is filled only when what the fill reads changed or the item holds another look, and set only when it differs from
+// the item's. A look set again makes UIKit lay the bar out anew, and on iOS 26 copy it into the stack's bar.
 - (void)applyLook:(ANNNavigationOptions *)options {
     UIViewController *screen = _screen;
     UINavigationItem *item = screen.navigationItem;
+    UITraitCollection *traits =
+        screen.viewIfLoaded.window.traitCollection ?: screen.traitCollection;
+    ANNBarAppearanceContext context = [self appearanceContextOf:options];
+    UITraitCollection *pinned = ANNIsGlass() ? _pinnedTraits : nil;
+    NSArray *inputs = [self lookInputsOf:options context:context traits:traits pinned:pinned];
+    if (_lookInputs && ANNOptionValuesSame(_lookInputs, inputs) &&
+        ANNSameAppearance(item.standardAppearance, _lookStandard) &&
+        ANNSameAppearance(item.scrollEdgeAppearance, _lookEdge)) {
+        return;
+    }
     // The screen's own looks, filled whole and set again (the item copies them).
     UINavigationBarAppearance *standard =
         [item.standardAppearance copy] ?: [UINavigationBarAppearance new];
     UINavigationBarAppearance *edge =
         [item.scrollEdgeAppearance copy] ?: [UINavigationBarAppearance new];
-    UITraitCollection *traits =
-        screen.viewIfLoaded.window.traitCollection ?: screen.traitCollection;
     [ANNBarAppearance fillStandard:standard
                         scrollEdge:edge
                        withOptions:options
-                           context:[self appearanceContextOf:options]
+                           context:context
                             traits:traits];
-    if (_pinnedTraits && ANNIsIOS26()) {
-        [self pinTitleColorsOf:standard edge:edge options:options traits:_pinnedTraits];
+    if (pinned) {
+        [self pinTitleColorsOf:standard edge:edge options:options traits:pinned];
     }
-    item.standardAppearance = standard;
-    item.scrollEdgeAppearance = edge;
+    if (!ANNSameAppearance(item.standardAppearance, standard)) {
+        item.standardAppearance = standard;
+    }
+    if (!ANNSameAppearance(item.scrollEdgeAppearance, edge)) {
+        item.scrollEdgeAppearance = edge;
+    }
+    _lookInputs = inputs;
+    _lookStandard = item.standardAppearance;
+    _lookEdge = item.scrollEdgeAppearance;
+}
+
+// What `fillStandard:scrollEdge:withOptions:context:traits:` and the pin read: the bar's options by value, the
+// image the back button's icon loads (a file written again at its path is another image), the context, the traits.
+- (NSArray *)lookInputsOf:(ANNNavigationOptions *)options
+                  context:(ANNBarAppearanceContext)context
+                   traits:(UITraitCollection *)traits
+                   pinned:(nullable UITraitCollection *)pinned {
+    ANNTopBarOptions *topBar = options.topBar;
+    Image *backIcon = topBar.backButton.icon;
+    ANNImageSource *source = backIcon.source;
+    BOOL loads = backIcon.hasValue && !(source && source.kind == ANNImageSourceKindSymbol);
+    id backImage = loads ? [backIcon withDefault:nil] : nil;
+    return @[
+        topBar.background, topBar.scrollEdgeAppearance, topBar.noBorder, topBar.borderColor,
+        topBar.title.font, topBar.title.color, topBar.largeTitle.font, topBar.largeTitle.color,
+        topBar.backButton, backImage ?: NSNull.null, @(context.transparentEdge),
+        @(context.largeTitleNeedsBackground), ANNLookTraitsOf(traits),
+        pinned ? ANNLookTraitsOf(pinned) : NSNull.null
+    ];
 }
 
 // The title colors resolved for `traits`: fixed colors that don't follow the glass's style.
@@ -414,7 +474,7 @@ static ANNUserChoice *ANNRenameChoice(NSString *title) {
 - (void)pinTitleColorAlong:(id<UIViewControllerTransitionCoordinator>)coordinator
                     traits:(UITraitCollection *)traits {
     UIViewController *screen = _screen;
-    if (!screen || !ANNIsIOS26()) {
+    if (!screen || !ANNIsGlass()) {
         return;
     }
     NSUInteger token = ++_pinToken;
@@ -461,7 +521,7 @@ static ANNUserChoice *ANNRenameChoice(NSString *title) {
     NSString *glass = [title.glass withDefault:nil];
     BOOL glassShows = NO;
     if (@available(iOS 26.0, *)) {
-        glassShows = [ANNTitleGlassView isGlass:glass];
+        glassShows = ANNIsGlass() && [ANNTitleGlassView isGlass:glass];
     }
     [self applySubtitle:options glass:glassShows];
 
@@ -497,7 +557,7 @@ static ANNUserChoice *ANNRenameChoice(NSString *title) {
         }
     } else if (_titleComponent) {
         titleView = _titleComponent;
-    } else if (!ANNIsIOS26() && subtitle.length > 0 && !ANNLargeTitleCanShow(options)) {
+    } else if (!ANNIsGlass() && subtitle.length > 0 && !ANNLargeTitleCanShow(options)) {
         // Before iOS 26 a subtitle is a two-label title, without a large title that can show.
         titleView = [[ANNTitleView alloc] initWithOptions:options];
     }
@@ -538,7 +598,8 @@ static ANNUserChoice *ANNRenameChoice(NSString *title) {
         if (_native && !subtitle.text.hasValue) {
             return;
         }
-        if (text.length == 0) {
+        // The compatibility mode draws no system subtitle: a two-label title shows it, as before iOS 26.
+        if (text.length == 0 || !ANNIsGlass()) {
             item.attributedSubtitle = nil;
             item.largeAttributedSubtitle = nil;
             return;
@@ -590,7 +651,7 @@ static ANNUserChoice *ANNRenameChoice(NSString *title) {
         return NO;
     }
     CGFloat height = ANNTitleRowHeight;
-    if (!ANNIsIOS26()) {
+    if (!ANNIsGlass()) {
         if (_screen.traitCollection.userInterfaceIdiom == UIUserInterfaceIdiomPad) {
             height = ANNTitleRowHeightPad;
         }
@@ -1029,8 +1090,10 @@ static ANNUserChoice *ANNRenameChoice(NSString *title) {
         ANNNavigationOptions *options = [screen resolveOptionsWithDefault];
         [_largeTitle screenDidDisappear:options list:[self followedList]];
     }
-    // The lists the screen set leave with it; its color and its React background leave the main list.
-    [self releaseLists];
+    // The lists the screen set leave with it (the edge effects stay known for its next appearance); its color and its
+    // React background leave the main list.
+    [_edgeEffects screenDidDisappear];
+    [self releaseListsKeepingEdgeEffects:YES];
     _bandKeepsLook = NO;
     // A swipe back given up: the screen keeps the bar's own look for its next appearance.
     if (band && screen) {
@@ -1039,7 +1102,13 @@ static ANNUserChoice *ANNRenameChoice(NSString *title) {
 }
 
 - (void)releaseLists {
-    [_edgeEffects reset];
+    [self releaseListsKeepingEdgeEffects:NO];
+}
+
+- (void)releaseListsKeepingEdgeEffects:(BOOL)keepEdgeEffects {
+    if (!keepEdgeEffects) {
+        [_edgeEffects reset];
+    }
     [_largeTitle removeListFill];
     [_largeTitle removeTitlePlaceFill];
     [_largeTitle removeTitleHost];
@@ -1084,6 +1153,10 @@ static ANNUserChoice *ANNRenameChoice(NSString *title) {
       [weakSelf contentDidMount];
     }
                          forKey:ANNTopBarMountKey];
+    // The edge effect walks the screen again only after a mount. A native screen's views are the app's, never told; a
+    // screen of one tree (`appProvider`) hears the mounts only in the window, so it walks at each appearance.
+    [self edgeEffects].mountsReported =
+        !_native && ![content isKindOfClass:ANNSlotScreenView.class];
 }
 
 // The list the bar follows at the top edge under a large title that folds into it: the main list of a React screen;
@@ -1224,7 +1297,7 @@ static ANNUserChoice *ANNRenameChoice(NSString *title) {
         return;
     }
     ANNNavigationOptions *options = [screen resolveOptionsWithDefault];
-    BOOL eligible = ANNIsIOS26() && [self isShownTop] && screen.viewIfLoaded.window != nil &&
+    BOOL eligible = ANNIsGlass() && [self isShownTop] && screen.viewIfLoaded.window != nil &&
                     [background isShownInBar:bar] &&
                     [ANNLargeTitlePresenter collapsesIntoList:options] &&
                     ![self inlineInRow:options];

@@ -4,7 +4,7 @@ import type { OptionsTopBarButton } from './buttons';
 export interface OptionsToolbarSpace {
   /**
    * `'flexibleSpace'` takes the free width and pushes the next buttons to the far edge; `'fixedSpace'` is a gap of zero
-   * width that starts a new capsule on iOS 26.
+   * width that starts a new capsule with the glass design (iOS 26+).
    */
   systemItem: 'flexibleSpace' | 'fixedSpace';
 }
@@ -36,7 +36,7 @@ export interface OptionsToolbar {
    * The buttons from the leading edge, in the format of the bar buttons: text, icon, SF Symbol, `systemItem`, a
    * component (drawn before the screen shows), `enabled`, `color`, `style`, `menu` (it opens upward), `toggle`,
    * `showText`, `group`; also spaces and the search field. A press sends a button press. The color of a side doesn't
-   * apply to them, and badges are not drawn. On iOS 26 each button has its own capsule, neighbor icons with the same
+   * apply to them, and badges are not drawn. With the glass design (iOS 26+, see `UIDesignRequiresCompatibility`) each button has its own capsule, neighbor icons with the same
    * `group` share one (the toolbar has no real groups, so text buttons never share), and a zero-width space is put
    * between neighbors of different groups unless an explicit space is there. The list is replaced as a whole;
    * `mergeOptions` animates it.

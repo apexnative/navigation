@@ -10,11 +10,9 @@ import dev.apexnative.navigation.layout.LayoutException
 import dev.apexnative.navigation.nativescreen.NativeScreenContext
 import dev.apexnative.navigation.options.DefaultOptions
 import dev.apexnative.navigation.options.Options
-import dev.apexnative.navigation.react.ArrangementStates
 import dev.apexnative.navigation.react.CommandScope
 import dev.apexnative.navigation.react.ErrorTexts
-import dev.apexnative.navigation.react.ScreenInsets
-import dev.apexnative.navigation.react.ScreenRegions
+import dev.apexnative.navigation.react.ScreenEnvironment
 import dev.apexnative.navigation.react.events.AppearanceDispatcher
 import dev.apexnative.navigation.react.events.ComponentType
 import dev.apexnative.navigation.react.events.ScreenAppearance
@@ -170,9 +168,7 @@ class ExternalComponentViewController internal constructor(
         peekView()?.let { (it.parent as? ViewGroup)?.removeView(it) }
         setParentController(null)
         if (isIdTakenByAnother) return
-        ScreenInsets.remove(id)
-        ScreenRegions.remove(id)
-        ArrangementStates.remove(id)
+        ScreenEnvironment.remove(id)
         ScreenReadiness.remove(id)
         if (!notMade) AppearanceDispatcher.nativeScreenReleased(this)
     }

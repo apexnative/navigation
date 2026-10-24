@@ -18,7 +18,7 @@ NS_ASSUME_NONNULL_BEGIN
 + (nullable ANNNativeScreenCreator)nativeScreenCreatorForName:(NSString *)name;
 
 /// Whether a native screen is registered under the name by `registerNativeScreen:creator:` (the registration of 8.x is
-/// gone). Any thread: the layout of a command is checked on the module's queue.
+/// gone). Any thread (the layout check of a command reads it on the main queue).
 + (BOOL)hasNativeScreenNamed:(NSString *)name;
 
 @end

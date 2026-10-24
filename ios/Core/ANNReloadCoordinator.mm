@@ -1,5 +1,4 @@
 #import "ANNReloadCoordinator.h"
-#import "ANNArrangementState.h"
 #import "ANNAssert.h"
 #import "ANNErrorTexts.h"
 #import "ANNHinge.h"
@@ -12,9 +11,8 @@
 #import "ANNPreviewInteraction.h"
 #import "ANNPreviewPush.h"
 #import "ANNRootCoordinator.h"
-#import "ANNScreenInsets.h"
+#import "ANNScreenEnvironment.h"
 #import "ANNScreenReadiness.h"
-#import "ANNScreenRegions.h"
 #import "ANNSplashViewController.h"
 #import "ANNSplitViewCommands.h"
 #import "ANNTabsPreloadWindow.h"
@@ -154,12 +152,10 @@ static BOOL ANNWatchingBundles;
     [oldScreens addObjectsFromArray:[ANNSplitViewCommands takeAllForReload]];
     // The new JavaScript counts its ids anew: nothing the safe area views of the old screens said stays ready for a new
     // screen with the same id. The old surfaces are stopped or silent. The same for what the old screens kept for
-    // JavaScript: their insets and padding, regions and arrangement states (an old screen still in a window writes no
-    // insets or regions again: its emitter is not current).
+    // JavaScript, their environment: insets and padding, regions and arrangements (an old screen still in a window
+    // writes no insets or regions again: its emitter is not current).
     [ANNScreenReadiness reset];
-    [ANNScreenInsets removeAll];
-    [ANNScreenRegions removeAll];
-    [ANNArrangementState removeAll];
+    [ANNScreenEnvironment removeAll];
     // 6. The window shows the blank screen, which counts as the splash: a reload is not a launch. The
     // reset runs from the second bundle of the process on.
     if (window) {

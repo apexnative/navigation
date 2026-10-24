@@ -17,7 +17,7 @@ Swift is not used here: apps reach the core through the public headers (`Public/
 - `Contract/`: The command path: runner, answer, layout reader and nodes, validator, error texts, tree options.
 - `Core/`: The spine: node protocol and helper, registry, dispatcher, state, render wait, parking, system UI, reload, event emitter, start (`ApexNavigation.mm`, `ANNAppDelegate.mm`), and the modules `ANNKeyCommands`, `ANNDeepLinkQueue`, `ANNHinge`, `ANNSceneDelegate.mm`.
 - `Layouts/Root/`: `ANNRootCoordinator` (`setRoot`), `ANNLayoutFactory`, `ANNSplashViewController`.
-- `Layouts/Screen/`: The screen (`ANNComponentViewController`), its presenter, readiness, insets, regions, safe-area math, the main list rule, previews.
+- `Layouts/Screen/`: The screen (`ANNComponentViewController`), its presenter, readiness, its environment for JS (`ANNScreenEnvironment`), regions, safe-area math, the main list rule, previews.
 - `Layouts/External/`: Native screens: `ANNExternalViewController`, `ANNNativeScreenCalls`.
 - `Layouts/Stack/`: `ANNStackController`, `ANNStackQueue`, `ANNStackCommands`, `ANNStackPresenter`, `ANNPreviewPush`, the swipe-back delegate.
 - `Layouts/Tabs/`: `ANNBottomTabsController`, its presenter, item builder, custom row, preload window, More delegate, long press, dots.
@@ -25,7 +25,7 @@ Swift is not used here: apps reach the core through the public headers (`Public/
 - `Layouts/Overlay/`: `ANNOverlayCoordinator`, `ANNOverlayWindow`.
 - `Layouts/SideMenu/`: The side menu module and its presenter and wrapper.
 - `Layouts/SplitView/`: The split view module, plus the core's `ANNSplitViewPresenter` and `ANNSplitViewCommands`.
-- `Layouts/Arrangement/`: The pair (iOS 27.1): `ANNArrangementViewController`, `ANNArrangementState`.
+- `Layouts/Arrangement/`: The pair (iOS 27.1): `ANNArrangementViewController`, `ANNArrangementState` (whether pairs can show).
 - `TopBar/`: The bar of a screen: title, buttons, back button, large title, appearance, search, toolbar, edge effects.
 - `Options/`, `Options/Params`: One `ANN<Group>Options` class per group, the field table, the value kinds and parsers (`Bool`, `Color`, `Text`, `Image`, …), the images' cache and loader (`ANNOptionImages`).
 - `Animations/`: The custom transition engine: plan, animator, wait, frame driver, rules; `Elements/` and `Interpolators/`.
@@ -42,7 +42,7 @@ Top-level files: `Package.swift` (SwiftPM; `headerFolders` lists every folder wh
 - Launch, the app-facing API — `Public/ApexNavigation/`; `Core/`: `ApexNavigation.mm`, `ANNAppDelegate.mm`, `ANNSceneDelegate.mm`, `ApexNavigation+Internal.h`
 - Root, splash, reload — `Layouts/Root/`: `ANNRootCoordinator`, `ANNSplashViewController`; `Core/`: `ANNReloadCoordinator`
 - Screen: React root, slot, native screen — `Layouts/Screen/`: `ANNComponentViewController`; `React/`: `ANNReactView`, `ANNReactViewCreator`, `Slots/`; `Layouts/External/`
-- Screen: insets, background, keyboard focus — `Layouts/Screen/`: `ANNScreenInsets`, `ANNScreenSafeArea`, `ANNScreenBars`, `ANNScreenPlace` (the safe area of a parked screen), `ANNComponentPresenter` (background, status bar blur), `ANNComponentViewController` (key commands)
+- Screen: insets, background, keyboard focus — `Layouts/Screen/`: `ANNScreenEnvironment`, `ANNScreenSafeArea`, `ANNScreenBars`, `ANNScreenPlace` (the safe area of a parked screen), `ANNComponentPresenter` (background, status bar blur), `ANNComponentViewController` (key commands)
 - Safe area view — `React/`: `ANNSafeAreaViewComponentView`; `Layouts/Screen/`: `ANNScreenReadiness`; `cpp/`
 - Stack: queue, commands, back, gestures — `Layouts/Stack/`: `ANNStackQueue`, `ANNStackCommands`, `ANNStackController`, `InteractivePopGestureDelegate`, `ANNStackAnimatingDelegate`
 - Top bar: title, buttons, menus, large title — `TopBar/`: `ANNTopBarPresenter`, `ANNBarButtons`, `ANNBarAppearance`, `ANNLargeTitlePresenter`, `ANNBackButtonPresenter`, `ANNTitleView`, `ANNTitleGlassView`
@@ -63,27 +63,29 @@ Top-level files: `Package.swift` (SwiftPM; `headerFolders` lists every folder wh
 - Error texts and answers — `Contract/`: `ANNErrorTexts` and `ANNCommandContract` (made from `src/interfaces/contract/errors.json` and `commands.json` by `scripts/contract.mjs`); `Core/`: `ANNErrorHandler`
 - Links — `Core/`: `ANNDeepLinkQueue`; the `getLaunchLink` method of `ANNTurboModule`
 - Key commands — `Core/`: `ANNKeyCommands`; `Layouts/Screen/`: `ANNComponentViewController`
-- Hinge, regions — `Core/`: `ANNHinge`; `Layouts/Screen/`: `ANNScreenRegions`; `Layouts/Arrangement/`: `ANNArrangementState`
+- Hinge, regions, arrangement — `Core/`: `ANNHinge`; `Layouts/Screen/`: `ANNScreenRegions` (the measuring), `ANNScreenEnvironment` (what JS reads); `Layouts/Arrangement/`: `ANNArrangementState`
 - Native screens — `Layouts/External/`: `ANNExternalViewController`, `ANNNativeScreenCalls`; `Layouts/Screen/ANNNativeScreenContext.mm`
 - Slots — `React/Slots/`: `ANNSlotHost`, `ANNSlotContainers` (containers and slot views by slot id: a change goes
   straight to the views of its id), `ANNSlotScreenView`, `ANNSlotComponentView`; `cpp/`
 
 ## Threads
 
-- **Module queue:** the layout check (`ANNLayoutReader`) and the sync getters. The check reads only stores safe from
-  any thread (`ApexNavigation hasNativeScreenNamed:`, `ANNArrangementState canShowArrangements`).
-- **Main queue:** everything else. A command body starts with `ANNAssertMainQueue()`. The options of a layout are parsed
-  here (`ANNLayoutTreeOptions`; an image keeps only its source). `ANNEventEmitter` moves an event from another queue
-  to the main queue.
+- **Main queue:** everything but the sync getters and the images. `ANNTurboModule`'s method queue is the main queue,
+  as `ANNTurboEventEmitter`'s: an async method comes there from the JavaScript thread, and `ANNCommandRunner` runs the
+  layout check (`ANNLayoutReader`) and the body in that one task. A command body starts with `ANNAssertMainQueue()`.
+  The options of a layout are parsed here (`ANNLayoutTreeOptions`; an image keeps only its source). `ANNEventEmitter`
+  moves an event from another queue to the main queue.
 - **The images' queue** (`ANNOptionImages`, `Options/Params`): every option image decodes there, through one cache.
   An element that shows an image asks for it when it applies and waits for it (the first frame needs it); only a tab
   item's new icon on the bar that shows comes later (`ANNBottomTabsPresenter`), the last build of the item winning.
-- **Sync getters** answer JS during a screen's first render: `getScreenInsets`, `getScreenRegions`,
-  `getArrangementState`, `getHinge`, `getStartInfo`. They read `ANNScreenInsets`, `ANNScreenRegions`,
-  `ANNArrangementState`, `ANNHinge lastValue`, written on the main queue and guarded by `@synchronized`.
+- **Sync getters** answer JS on the JavaScript thread (React Native calls them there whatever the module's queue)
+  during a screen's first render: `getScreenInsets`, `getScreenRegions`, `getArrangementState`, `getHinge`,
+  `getStartInfo`. They read `ANNScreenEnvironment` (one record per screen id: insets, padding, regions, arrangement)
+  and `ANNHinge lastValue`, written on the main queue and guarded by `@synchronized`. The environment's padding
+  listeners are main-queue only.
   `ANNReloadCoordinator.generation` and `ANNEventEmitter.isCurrent` are readable from any thread.
 - **After the calls of JavaScript:** `ANNJavaScriptCalls afterCallsMadeSoFar:` runs a step on the main queue after
-  every call JavaScript made by then, by the calls' own way (the JavaScript thread, the module's queue, the main
+  every call JavaScript made by then, by the calls' own way (a task on the JavaScript thread, then one on the main
   queue). A push's wait ends through it, so the `mergeOptions` of its screen's first commit come first.
 
 ## Checks
@@ -91,8 +93,8 @@ Top-level files: `Package.swift` (SwiftPM; `headerFolders` lists every folder wh
 - `scripts/build-ios.sh`: 0 warnings in `ios/` (warnings fail it). It builds the Showcase for the simulator.
 - A new file needs `scripts/pods.sh` first (CocoaPods globs `ios/**`). A new folder also goes into `headerFolders` of
   `Package.swift`, because files import each other's headers by bare name.
-- There is no iOS unit-test target. `ANNSystemUIRulesSelfCheck` and `ANNCheckOptionClassesFrom` run once in DEBUG; the
-  rest is checked by the Showcase scenarios.
+- There is no iOS unit-test target. `ANNSystemUIRulesSelfCheck`, `ANNCheckOptionClassesFrom` and `ANNCheckSameValues`
+  (the options' value equality) run once in DEBUG; the rest is checked by the Showcase scenarios.
 - Format by hand: `.claude/rules/code-objc.md`.
 
 ## Pitfalls

@@ -82,8 +82,6 @@ internal object ReloadCoordinator {
         UiThread.runOnMain {
             launches.contextReady(context)
             NativeScreenCalls.failAll { name, componentId -> ErrorTexts.nativeCallReloaded(name, componentId) }
-            // Scroll listeners that found no event dispatcher listen now.
-            ScrollEvents.dispatcherReady()
             Navigators.all().filter { it.isNavigationResumed }.forEach(::launchIfDue)
         }
     }

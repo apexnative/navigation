@@ -1,5 +1,12 @@
 #import "ANNBarAppearance.h"
 #import "ANNBackButtonPresenter.h"
+#import "ANNTabsDesign.h"
+#import <objc/runtime.h>
+
+// The icon an indicator was tinted from: an entry found by the icon's address counts only for that icon. An indicator
+// that is the icon itself (already an original image) carries nothing: the icon must not hold itself, and it may be
+// the image the options' cache keeps.
+static const void *ANNIndicatorIconKey = &ANNIndicatorIconKey;
 
 // UIKit's fonts of the places the options build over: the title of the row, the large title, the text of the back
 // button.
@@ -26,6 +33,27 @@ static UIColor *ANNColorOf(Color *color, UIColor *placeColor) {
 
 static BOOL ANNIsClear(UIColor *color, UITraitCollection *traits) {
     return CGColorGetAlpha([color resolvedColorWithTraitCollection:traits].CGColor) == 0;
+}
+
+// The images the looks are made of, by what they are drawn from, so a look filled again from the same options is
+// equal to the one before (UIKit compares appearances by value, images by identity) and nothing is set again. Main
+// queue; a memory warning empties it.
+static NSCache<id, UIImage *> *ANNLookImages(void) {
+    static NSCache<id, UIImage *> *images;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+      images = [NSCache new];
+      images.countLimit = 64;
+    });
+    return images;
+}
+
+// A color of the options as a key: a pair by its sides (its dynamic color is made anew), else its value.
+static NSArray *ANNColorKeyOf(Color *color) {
+    if (color.light || color.dark) {
+        return @[ color.light ?: NSNull.null, color.dark ?: NSNull.null ];
+    }
+    return @[ color.value ?: NSNull.null ];
 }
 
 static NSDictionary<NSAttributedStringKey, id> *ANNTextAttributes(ANNFontOptions *font,
@@ -104,16 +132,14 @@ static NSDictionary<NSAttributedStringKey, id> *ANNTextAttributes(ANNFontOptions
     return resolved && !ANNIsClear(resolved, traits) ? resolved : nil;
 }
 
+// The glass bar is translucent by default; the design before iOS 26 (and its compatibility mode) opaque.
 + (BOOL)translucentByDefault {
-    if (@available(iOS 26.0, *)) {
-        return YES;
-    }
-    return NO;
+    return ANNTabsDesign.isGlass;
 }
 
-// `color` beats `blur` and `translucent`; a clear color is a clear bar. On iOS 26 a color is a solid bar: a clear base
-// with the color and a 1×1 image of it, without the system effect. `blur` is the system's chrome material on a clear
-// base, with no view of its own in the bar.
+// `color` beats `blur` and `translucent`; a clear color is a clear bar. On the glass of iOS 26 a color is a solid
+// bar: a clear base with the color and a 1×1 image of it, without the system effect. `blur` is the system's chrome
+// material on a clear base, with no view of its own in the bar.
 + (void)configure:(UINavigationBarAppearance *)appearance
             color:(UIColor *)color
              blur:(BOOL)blur
@@ -124,7 +150,7 @@ static NSDictionary<NSAttributedStringKey, id> *ANNTextAttributes(ANNFontOptions
             [appearance configureWithTransparentBackground];
             return;
         }
-        if (@available(iOS 26.0, *)) {
+        if (ANNTabsDesign.isGlass) {
             [appearance configureWithTransparentBackground];
             appearance.backgroundEffect = nil;
             appearance.backgroundColor = color;
@@ -219,23 +245,51 @@ static NSDictionary<NSAttributedStringKey, id> *ANNTextAttributes(ANNFontOptions
         if (!color) {
             return nil;
         }
-        icon = [UIImage systemImageNamed:@"chevron.backward"];
+        symbol = @"chevron.backward";
+        icon = [UIImage systemImageNamed:symbol];
         isSymbol = YES;
     }
-    if (color) {
-        return [icon imageWithTintColor:color renderingMode:UIImageRenderingModeAlwaysOriginal];
+    // A symbol by its name; an image by its object, which the entry keeps, so its address is never another's.
+    id iconKey = isSymbol ? symbol : [NSValue valueWithNonretainedObject:icon];
+    NSArray *key = @[
+        @"back", iconKey, color ? ANNColorKeyOf(backButton.color) : NSNull.null
+    ];
+    NSCache<id, UIImage *> *images = ANNLookImages();
+    UIImage *cached = [images objectForKey:key];
+    if (cached && (isSymbol || cached == icon ||
+                   objc_getAssociatedObject(cached, ANNIndicatorIconKey) == icon)) {
+        return cached;
     }
-    return isSymbol ? icon : [icon imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
+    UIImage *indicator = nil;
+    if (color) {
+        indicator = [icon imageWithTintColor:color
+                               renderingMode:UIImageRenderingModeAlwaysOriginal];
+    } else {
+        indicator =
+            isSymbol ? icon : [icon imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
+    }
+    if (!isSymbol && indicator != icon) {
+        objc_setAssociatedObject(indicator, ANNIndicatorIconKey, icon,
+                                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    [images setObject:indicator forKey:key];
+    return indicator;
 }
 
+// One for the app: every look that hides the arrow holds the same image.
 + (UIImage *)emptyIndicator {
-    UIGraphicsImageRendererFormat *format = [UIGraphicsImageRendererFormat preferredFormat];
-    format.opaque = NO;
-    UIGraphicsImageRenderer *renderer =
-        [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(1, 1) format:format];
-    UIImage *empty = [renderer imageWithActions:^(UIGraphicsImageRendererContext *context){
-    }];
-    return [empty imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
+    static UIImage *empty;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+      UIGraphicsImageRendererFormat *format = [UIGraphicsImageRendererFormat preferredFormat];
+      format.opaque = NO;
+      UIGraphicsImageRenderer *renderer =
+          [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(1, 1) format:format];
+      UIImage *drawn = [renderer imageWithActions:^(UIGraphicsImageRendererContext *context){
+      }];
+      empty = [drawn imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
+    });
+    return empty;
 }
 
 + (UIColor *)pinnedTitleColor:(Color *)color traits:(UITraitCollection *)traits {
@@ -244,8 +298,44 @@ static NSDictionary<NSAttributedStringKey, id> *ANNTextAttributes(ANNFontOptions
 }
 
 // The 1×1 picture of the color in both styles: the bar's image view picks the variant of its own style, so a `{ light,
-// dark }` color follows a switch of the style without a new appearance.
+// dark }` color follows a switch of the style without a new appearance. Made once for the two resolved colors and the
+// style picked.
 + (UIImage *)imageOfColor:(UIColor *)color traits:(UITraitCollection *)traits {
+    UITraitCollection *light =
+        [UITraitCollection traitCollectionWithUserInterfaceStyle:UIUserInterfaceStyleLight];
+    UITraitCollection *dark =
+        [UITraitCollection traitCollectionWithUserInterfaceStyle:UIUserInterfaceStyleDark];
+    // Each variant is drawn with the window's other traits (contrast, elevation) and registered by its style only.
+    NSArray<UITraitCollection *> *base = traits ? @[ traits ] : @[];
+    UITraitCollection *lightTraits = [UITraitCollection
+        traitCollectionWithTraitsFromCollections:[base arrayByAddingObject:light]];
+    UITraitCollection *darkTraits = [UITraitCollection
+        traitCollectionWithTraitsFromCollections:[base arrayByAddingObject:dark]];
+    UIColor *lightColor = [color resolvedColorWithTraitCollection:lightTraits];
+    UIColor *darkColor = [color resolvedColorWithTraitCollection:darkTraits];
+    BOOL isDark = traits.userInterfaceStyle == UIUserInterfaceStyleDark;
+    NSArray *key = @[ @"color", lightColor, darkColor, @(isDark) ];
+    NSCache<id, UIImage *> *images = ANNLookImages();
+    UIImage *cached = [images objectForKey:key];
+    if (cached) {
+        return cached;
+    }
+    UIImage *image = [self drawImageOf:color
+                                 light:light
+                                  dark:dark
+                           lightTraits:lightTraits
+                            darkTraits:darkTraits
+                                isDark:isDark];
+    [images setObject:image forKey:key];
+    return image;
+}
+
++ (UIImage *)drawImageOf:(UIColor *)color
+                   light:(UITraitCollection *)light
+                    dark:(UITraitCollection *)dark
+             lightTraits:(UITraitCollection *)lightTraits
+              darkTraits:(UITraitCollection *)darkTraits
+                  isDark:(BOOL)isDark {
     UIImage * (^draw)(UITraitCollection *) = ^UIImage *(UITraitCollection *variant) {
       UIColor *resolved = [color resolvedColorWithTraitCollection:variant];
       UIGraphicsImageRendererFormat *format = [UIGraphicsImageRendererFormat preferredFormat];
@@ -257,20 +347,11 @@ static NSDictionary<NSAttributedStringKey, id> *ANNTextAttributes(ANNFontOptions
         [context fillRect:CGRectMake(0, 0, 1, 1)];
       }];
     };
-    UITraitCollection *light =
-        [UITraitCollection traitCollectionWithUserInterfaceStyle:UIUserInterfaceStyleLight];
-    UITraitCollection *dark =
-        [UITraitCollection traitCollectionWithUserInterfaceStyle:UIUserInterfaceStyleDark];
-    // Each variant is drawn with the window's other traits (contrast, elevation) and registered by its style only.
-    NSArray<UITraitCollection *> *base = traits ? @[ traits ] : @[];
-    UIImage *lightImage =
-        draw([UITraitCollection traitCollectionWithTraitsFromCollections:[base arrayByAddingObject:light]]);
-    UIImage *darkImage =
-        draw([UITraitCollection traitCollectionWithTraitsFromCollections:[base arrayByAddingObject:dark]]);
+    UIImage *lightImage = draw(lightTraits);
+    UIImage *darkImage = draw(darkTraits);
     UIImageAsset *asset = [UIImageAsset new];
     [asset registerImage:lightImage withTraitCollection:light];
     [asset registerImage:darkImage withTraitCollection:dark];
-    BOOL isDark = traits.userInterfaceStyle == UIUserInterfaceStyleDark;
     UIImage *picked = [asset imageWithTraitCollection:isDark ? dark : light];
     return picked ?: (isDark ? darkImage : lightImage);
 }

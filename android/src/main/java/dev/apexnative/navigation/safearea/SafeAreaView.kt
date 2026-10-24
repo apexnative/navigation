@@ -10,7 +10,7 @@ import com.facebook.react.uimanager.StateWrapper
 import com.facebook.react.uimanager.ThemedReactContext
 import com.facebook.react.uimanager.UIManagerHelper
 import com.facebook.react.views.view.ReactViewGroup
-import dev.apexnative.navigation.react.ScreenInsets
+import dev.apexnative.navigation.react.ScreenEnvironment
 import dev.apexnative.navigation.viewcontrollers.component.ScreenReadiness
 
 /**
@@ -20,7 +20,7 @@ import dev.apexnative.navigation.viewcontrollers.component.ScreenReadiness
 @SuppressLint("ViewConstructor")
 class SafeAreaView(reactContext: ThemedReactContext) : ReactViewGroup(reactContext) {
     private var stopListening: (() -> Unit)? = null
-    private var applied: ScreenInsets.Insets? = null
+    private var applied: ScreenEnvironment.Insets? = null
     private var readySent = false
     private var contentSignalled = false
 
@@ -48,7 +48,7 @@ class SafeAreaView(reactContext: ThemedReactContext) : ReactViewGroup(reactConte
             stopListening?.invoke()
             field = value
             applied = null
-            stopListening = value?.let { id -> ScreenInsets.listenToPadding(id) { applyPadding() } }
+            stopListening = value?.let { id -> ScreenEnvironment.listenToPadding(id) { applyPadding() } }
             // The screen has a safe area view: it counts as rendered once this view says so.
             value?.let(ScreenReadiness::wrapped)
             applyPadding()
@@ -56,7 +56,7 @@ class SafeAreaView(reactContext: ThemedReactContext) : ReactViewGroup(reactConte
 
     private fun applyPadding() {
         val state = stateWrapper ?: return
-        val padding = screenId?.let(ScreenInsets::padding) ?: return
+        val padding = screenId?.let(ScreenEnvironment::padding) ?: return
         if (padding == applied) return
         applied = padding
         state.updateState(
@@ -69,9 +69,9 @@ class SafeAreaView(reactContext: ThemedReactContext) : ReactViewGroup(reactConte
         )
     }
 
-    private fun paddingOf(data: ReadableMap): ScreenInsets.Insets? {
+    private fun paddingOf(data: ReadableMap): ScreenEnvironment.Insets? {
         if (!data.hasKey("top")) return null
-        return ScreenInsets.Insets(data.getDouble("top"), data.getDouble("right"), data.getDouble("bottom"),
+        return ScreenEnvironment.Insets(data.getDouble("top"), data.getDouble("right"), data.getDouble("bottom"),
             data.getDouble("left"))
     }
 

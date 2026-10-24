@@ -50,7 +50,7 @@ export interface OptionsTopBarTitleDocument {
 export interface OptionsTopBarTitle {
   /**
    * The text of the title. Setting it removes a React title. On iOS it is the title of the screen's navigation item,
-   * the label the system shows on the next screen's back button before iOS 26, and what Rename edits. On Android it
+   * the label the system shows on the next screen's back button without the glass design, and what Rename edits. On Android it
    * is one line cut with an ellipsis, and also the text of the large title; a title component set together with the
    * text drops the text and the subtitle (with a warning in development).
    */
@@ -94,9 +94,9 @@ export interface OptionsTopBarTitle {
    */
   document?: OptionsTopBarTitleDocument;
   /**
-   * (iOS 26+) Puts the title on a Liquid Glass capsule like the buttons: `'regular'` or `'clear'`; `'none'` and any
+   * (iOS 26+, glass design) Puts the title on a Liquid Glass capsule like the buttons: `'regular'` or `'clear'`; `'none'` and any
    * other value mean no capsule. A text title and the subtitle are two lines on the capsule; a component title sits on
-   * it as it is, the capsule taking its size. Before iOS 26 and on Android it does nothing.
+   * it as it is, the capsule taking its size. Without the glass design (see `UIDesignRequiresCompatibility`) and on Android it does nothing.
    */
   glass?: 'regular' | 'clear' | 'none';
   /** (Android) The height of the row of title and buttons, in dp. By default 64, regardless of `topBar.height`. */
@@ -118,15 +118,15 @@ export interface OptionsTopBarTitle {
 /** The subtitle: a second line under the title. */
 export interface OptionsTopBarSubtitle {
   /**
-   * The text of the second line. An empty text removes it. On iOS 26 it is the system subtitle, under the title, the
-   * large title and the collapsed bar, and on the capsule when the title has `glass`; a React title hides it. Before
-   * iOS 26 it makes a two-line title view, only without a large title or a React title. On Android it is the line under
+   * The text of the second line. An empty text removes it. With the glass design (iOS 26+, see `UIDesignRequiresCompatibility`) it is the system subtitle, under the title, the
+   * large title and the collapsed bar, and on the capsule when the title has `glass`; a React title hides it. Without
+   * it, it makes a two-line title view, only without a large title or a React title. On Android it is the line under
    * the title, hidden when empty and dropped when the title is a component.
    */
   text?: string;
   /**
-   * The size of the font. On iOS 26 only what is set goes to the system subtitle, and any font option sets the whole
-   * font; before iOS 26 the size is 12. On Android it is in sp, 14 by default.
+   * The size of the font. With the glass design only what is set goes to the system subtitle, and any font option sets the whole
+   * font; without it the size is 12. On Android it is in sp, 14 by default.
    */
   fontSize?: number;
   /** The color of the subtitle. On Android the theme's on-surface-variant color by default. */
@@ -177,14 +177,14 @@ export interface OptionsTopBarBackButton {
    */
   visible?: boolean;
   /**
-   * (iOS) The text of the back button. On iOS 26 the system button without it is an arrow alone, since the title of
-   * the screen below is never shown; before iOS 26 it is that title while it fits. It is set on the screen below, as
+   * (iOS) The text of the back button. With the glass design (iOS 26+, see `UIDesignRequiresCompatibility`) the system button without it is an arrow alone,
+   * since the title of the screen below is never shown; without it, it is that title while it fits. It is set on the screen below, as
    * its back button title.
    */
   title?: string;
   /**
    * (iOS) `true` shows the title of the screen below (or `title`), `false` shows an arrow alone (the minimal mode).
-   * Without it the system decides; on iOS 26 that is the arrow.
+   * Without it the system decides; with the glass design that is the arrow.
    */
   showTitle?: boolean;
   /**
@@ -207,7 +207,7 @@ export interface OptionsTopBarBackButton {
   /**
    * A shape behind the icon, as for a button. It takes effect with a `color` of the shape. On iOS the icon (the
    * chevron by default) is drawn on it and the back button becomes an own button that keeps the history menu unless
-   * `enableMenu` is `false`; without a capsule on iOS 26 by default. On Android the arrow sits on the shape.
+   * `enableMenu` is `false`; without a capsule with the glass design by default. On Android the arrow sits on the shape.
    */
   iconBackground?: IconBackgroundOptions;
   /**
@@ -228,7 +228,7 @@ export interface OptionsTopBarBackButton {
    */
   displayMode?: 'default' | 'generic' | 'minimal';
   /**
-   * (iOS 26+) Whether the Liquid Glass capsule under the back button is hidden. It works only for an own button with
+   * (iOS 26+, glass design) Whether the Liquid Glass capsule under the back button is hidden. It works only for an own button with
    * an `iconBackground`, where the shape is already drawn into the icon; the system button ignores it.
    * @default true
    */
@@ -245,9 +245,9 @@ export interface OptionsTopBarBackButton {
 /** The background of the bar: a color, a component, translucency and blur. */
 export interface OptionsTopBarBackground {
   /**
-   * The color of the bar. On iOS it fills both the standard look and the one at the scroll edge; on iOS 26 the bar is
-   * then solid in this color instead of glass. A transparent color makes a transparent bar. It beats `blur` and
-   * `translucent`. With a large title on iOS 26 the color is drawn into the list under the title, and the collapsed bar
+   * The color of the bar. On iOS it fills both the standard look and the one at the scroll edge; with the glass design the bar is
+   * then solid in this color instead of glass; without it (`UIDesignRequiresCompatibility`) it is the opaque bar of before iOS 26. A transparent color makes a transparent bar. It beats `blur` and
+   * `translucent`. With a large title and the glass design the color is drawn into the list under the title, and the collapsed bar
    * paints itself. On Android it is the background of the bar with the status bar strip, by default the theme's
    * surface color, changing at once on push and pop. Together with `component` the color lies under the component.
    */
@@ -266,8 +266,8 @@ export interface OptionsTopBarBackground {
    */
   component?: OptionsTopBarBackgroundComponent;
   /**
-   * (iOS) Whether content shows through the bar. By default `true` on iOS 26 (glass) and `false` before. With `true`
-   * the bar is glass on iOS 26 and the system translucent bar before; with `false` it is solid in the system color.
+   * (iOS) Whether content shows through the bar. By default `true` with the glass design (iOS 26+, see `UIDesignRequiresCompatibility`) and `false` without it. With `true`
+   * the bar is glass with the glass design and the system translucent bar without it; with `false` it is solid in the system color.
    * `color` and `blur` beat it. Only an explicit `true` puts the screen under the bar.
    */
   translucent?: boolean;
@@ -301,7 +301,7 @@ export interface OptionsTopBarBackgroundComponent {
 export interface OptionsTopBarScrollEdgeAppearanceTitle {
   /** The size of the font, handled like `topBar.title.fontSize`. */
   fontSize?: number;
-  /** The color of the title at the edge. On iOS 26 it is fixed during a push, like the usual title color. */
+  /** The color of the title at the edge. With the glass design it is fixed during a push, like the usual title color. */
   color?: Color;
   /** The font family, handled like `topBar.title.fontFamily`. */
   fontFamily?: FontFamily;
@@ -327,7 +327,7 @@ export interface OptionsTopBarScrollEdgeAppearanceBackground {
 
 /**
  * (iOS) How the bar looks while the list is at its top edge. Without `active` the edge looks as the usual bar, except
- * for the transparency under a large title on iOS 26; the title and the border at the edge still come from the fields
+ * for the transparency under a large title with the glass design; the title and the border at the edge still come from the fields
  * here or from the usual ones. Android doesn't read it.
  */
 export interface OptionsTopBarScrollEdgeAppearance {
@@ -337,7 +337,7 @@ export interface OptionsTopBarScrollEdgeAppearance {
   background?: OptionsTopBarScrollEdgeAppearanceBackground;
   /**
    * Whether the bar has a background of its own at the edge (`background`). With it the edge isn't made transparent
-   * under a large title, and on iOS 26 an opaque color covers the large title. A change by `mergeOptions` applies at
+   * under a large title, and with the glass design an opaque color covers the large title. A change by `mergeOptions` applies at
    * once.
    * @default false
    */
@@ -373,7 +373,7 @@ export interface OptionsTopBarLargeTitle {
    * Whether the large title collapses into the bar as the list scrolls. With `false` on iOS the bar follows an empty
    * scroll view instead of the list, so the title stays as at the top of the list; under the row it then needs a
    * background (`background.color`, else a system blur), and `searchBar.hideOnScroll` doesn't work. On Android `false`
-   * leaves the bar as it is and stops listening to the list. On iOS 26 in a right-to-left layout nothing collapses.
+   * leaves the bar as it is and stops listening to the list. With the glass design in a right-to-left layout nothing collapses.
    * @default true
    */
   collapseOnScroll?: boolean;
@@ -637,7 +637,7 @@ export interface OptionsTopBar {
   /**
    * The shape color behind the icons of the left buttons that have an `icon` image and no `iconBackground.color`; the
    * size and corners come from the button's `iconBackground`, or the icon's size without corners. On iOS only image
-   * buttons, not SF Symbols, and without a capsule on iOS 26. A color sent by `mergeOptions` repaints all the side's
+   * buttons, not SF Symbols, and without a capsule with the glass design. A color sent by `mergeOptions` repaints all the side's
    * image buttons, those with their own shape color too.
    */
   leftButtonBackgroundColor?: Color;
@@ -815,12 +815,15 @@ export interface OptionsScrollEdge {
 
 /**
  * (iOS 26+) The scroll edge effect of the scroll views of a screen: how the content fades or blurs where it scrolls
- * under a bar. The scroll views draw it, and only where content goes under a bar. It applies to every scroll view in
- * the view of the screen when the screen appears; after React mounts it applies to the main list of the screen only; on
- * `mergeOptions` all is reset and applied again. Other scroll views mounted later get it at the next appearance or
- * `mergeOptions`. When the screen leaves, its scroll views get the system effect back. Under a bar with
- * `background.color` or `background.component` there is no effect at the top unless the screen sets one for the top or
- * for all edges. Before iOS 26 and on Android it does nothing.
+ * under a bar. The scroll views draw it, and only where content goes under a bar. When the screen appears, it applies
+ * to the vertical lists and text views (a multi-line `TextInput`) in the view of the screen, except in hidden views
+ * (`display: none`). A list inside another vertical list gets none (UIKit draws no edge effect there); a scroll view
+ * that doesn't scroll vertically, like a pager, is searched for its lists. A list nested very deep in the screen's
+ * views may not get it. After React mounts, the main list of the screen gets it; a list mounted later gets it at the
+ * next appearance, or at a `mergeOptions` of `scrollEdgeEffect` or of the bar's background. The lists get the system
+ * effect back when the screen leaves or is destroyed, and a list React removes from the screen gets it back too. Under
+ * a bar with `background.color` or `background.component` there is no effect at the top unless the screen sets one for
+ * the top or for all edges. Before iOS 26 and on Android it does nothing.
  */
 export interface OptionsScrollEdgeEffect {
   /** Whether the effect is hidden on all four edges. The value of an edge beats it. */

@@ -33,6 +33,7 @@ import dev.apexnative.navigation.viewcontrollers.externalcomponent.ExternalCompo
 import dev.apexnative.navigation.viewcontrollers.modal.ModalCoordinator
 import dev.apexnative.navigation.viewcontrollers.modal.ModalRecord
 import dev.apexnative.navigation.viewcontrollers.modal.ModalViews
+import dev.apexnative.navigation.viewcontrollers.modal.SheetBack
 import dev.apexnative.navigation.viewcontrollers.overlay.OverlayCoordinator
 import dev.apexnative.navigation.viewcontrollers.overlay.OverlayRecord
 import dev.apexnative.navigation.viewcontrollers.overlay.OverlayViews
@@ -176,6 +177,9 @@ class Navigator(
         val modalRoot = modals.backTargetRoot()
         return if (modalRoot != null) modalRoot.stackPoppedByBack() else root?.stackPoppedByBack()
     }
+
+    /** The sheet [handleBack] would dismiss, as a drag down of the user would; none when back would do anything else. */
+    internal fun sheetDismissedByBack(): SheetBack? = modals.backTargetSheet()
 
     /**
      * [layer] may wait to show from now on ([WaitingLayer]): the nodes in it ask it through [isInWaitingLayer] and

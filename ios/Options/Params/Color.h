@@ -38,6 +38,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// A pair that has only one of its sides.
 - (BOOL)isPartial;
 
+/// The same color: a pair by its sides (its dynamic color is made anew at each read), anything else by its value.
+- (BOOL)isSameValueAs:(nullable ANNParam *)other;
+
 @end
 
 NS_ASSUME_NONNULL_END

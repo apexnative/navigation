@@ -3,9 +3,9 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-/// One node of a command's layout, as `ANNLayoutReader` read and checked it on the module's queue. Immutable: made off
-/// the main queue, read on it by the command. The data stays the JSON JS sent; the accessors give its fields with the
-/// kind the contract has, or nothing.
+/// One node of a command's layout, as `ANNLayoutReader` read and checked it before the command's body. Immutable: made
+/// once, read by the command and the steps it runs later. The data stays the JSON JS sent; the accessors give its
+/// fields with the kind the contract has, or nothing.
 @interface ANNLayoutNode : NSObject
 
 /// Made by `ANNLayoutReader` only: the id as JS gave it, the type, the node's `data` (empty when missing) and its

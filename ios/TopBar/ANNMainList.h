@@ -23,6 +23,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// search takes it, or what is in it, for the screen's list.
 + (void)excludeView:(UIView *)view;
 
+/// The view is one of those (`excludeView:`).
++ (BOOL)isExcludedView:(UIView *)view;
+
 @end
 
 NS_ASSUME_NONNULL_END

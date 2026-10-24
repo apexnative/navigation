@@ -11,7 +11,7 @@ import dev.apexnative.navigation.options.DefaultOptions
 import dev.apexnative.navigation.react.CommandAnswer
 import dev.apexnative.navigation.react.CommandListener
 import dev.apexnative.navigation.react.ErrorTexts
-import dev.apexnative.navigation.react.ScreenInsets
+import dev.apexnative.navigation.react.ScreenEnvironment
 import dev.apexnative.navigation.slots.SlotScreenView
 import dev.apexnative.navigation.utils.NavigationLog
 import dev.apexnative.navigation.viewcontrollers.child.ChildControllersRegistry
@@ -318,7 +318,7 @@ internal class StackCommands(
         layoutNow(stackView, screenView)
         node.updateSafeArea()
         val content = node.content?.asView()
-        val padding = ScreenInsets.padding(node.id)
+        val padding = ScreenEnvironment.padding(node.id)
         val noInsets = content == null || ViewCompat.getRootWindowInsets(content) == null
         if (noInsets || padding == null || content.width <= 0 || content.height <= 0) {
             prepared.discard(node.id)

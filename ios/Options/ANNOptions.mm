@@ -11,7 +11,6 @@ NSDictionary *ANNOptionsDictionary(NSDictionary *dict, NSString *key) {
     return [value isKindOfClass:NSDictionary.class] ? value : nil;
 }
 
-#if DEBUG
 // The kinds of property a group holds options in.
 static BOOL ANNIsOptionClass(Class cls) {
     return [cls isSubclassOfClass:ANNParam.class] || [cls isSubclassOfClass:ANNOptions.class] ||
@@ -33,6 +32,7 @@ static Class ANNPropertyClass(objc_property_t property) {
     return name ? NSClassFromString(name) : nil;
 }
 
+#if DEBUG
 // There is no iOS test target: in development each group of the core checks once that its table names every property
 // that holds options, and that every field of the table has its property (the stand-in for the whole-tree test of
 // Android). A missing field would be neither read, merged, copied nor given defaults.
@@ -84,6 +84,94 @@ static NSArray<ANNOptionField *> *ANNFieldsOf(Class cls) {
         }
         return fields;
     }
+}
+
+// The properties that hold the options of a group, asked once per class: its field table's, or for a module's group
+// (its own read and merge, an empty table) every property of an options kind its classes declare up to `ANNOptions`.
+static NSArray<NSString *> *ANNValuePropertiesOf(Class cls) {
+    static NSMutableDictionary<NSString *, NSArray<NSString *> *> *propertiesByClass;
+    NSString *name = NSStringFromClass(cls);
+    @synchronized(ANNOptions.class) {
+        if (!propertiesByClass) {
+            propertiesByClass = [NSMutableDictionary new];
+        }
+        NSArray<NSString *> *names = propertiesByClass[name];
+        if (names) {
+            return names;
+        }
+    }
+    NSArray<ANNOptionField *> *fields = ANNFieldsOf(cls);
+    NSMutableArray<NSString *> *found = [NSMutableArray new];
+    if (fields.count) {
+        for (ANNOptionField *field in fields) {
+            [found addObject:field.property];
+        }
+    } else {
+        NSSet<NSString *> *inherited =
+            [NSSet setWithArray:@[ @"description", @"debugDescription" ]];
+        for (Class current = cls; current && current != ANNOptions.class;
+             current = class_getSuperclass(current)) {
+            unsigned int count = 0;
+            objc_property_t *properties = class_copyPropertyList(current, &count);
+            for (unsigned int i = 0; i < count; i++) {
+                NSString *property = @(property_getName(properties[i]));
+                Class propertyClass = ANNPropertyClass(properties[i]);
+                if (propertyClass && ANNIsOptionClass(propertyClass) &&
+                    ![inherited containsObject:property] && ![found containsObject:property]) {
+                    [found addObject:property];
+                }
+            }
+            free(properties);
+        }
+    }
+    NSArray<NSString *> *names = [found copy];
+    @synchronized(ANNOptions.class) {
+        propertiesByClass[name] = names;
+    }
+    return names;
+}
+
+BOOL ANNOptionValuesSame(id a, id b) {
+    if (a == b) {
+        return YES;
+    }
+    if ([a isKindOfClass:ANNParam.class]) {
+        return [b isKindOfClass:ANNParam.class] && [(ANNParam *)a isSameValueAs:b];
+    }
+    if ([a isKindOfClass:ANNOptions.class]) {
+        return [b isKindOfClass:ANNOptions.class] && [(ANNOptions *)a isSameValueAs:b];
+    }
+    if ([a isKindOfClass:NSArray.class]) {
+        if (![b isKindOfClass:NSArray.class] || [a count] != [b count]) {
+            return NO;
+        }
+        NSArray *items = b;
+        NSUInteger index = 0;
+        for (id item in (NSArray *)a) {
+            if (!ANNOptionValuesSame(item, items[index++])) {
+                return NO;
+            }
+        }
+        return YES;
+    }
+    return ANNJSONValuesSame(a, b);
+}
+
+NSUInteger ANNOptionValueHash(id value) {
+    if ([value isKindOfClass:ANNParam.class]) {
+        return [(ANNParam *)value valueHash];
+    }
+    if ([value isKindOfClass:ANNOptions.class]) {
+        return [(ANNOptions *)value valueHash];
+    }
+    if ([value isKindOfClass:NSArray.class]) {
+        NSUInteger hash = [value count];
+        for (id item in value) {
+            hash = hash * 31 + ANNOptionValueHash(item);
+        }
+        return hash;
+    }
+    return ANNJSONValueHash(value);
 }
 
 #if DEBUG
@@ -324,6 +412,29 @@ static NSArray *ANNCopyItems(NSArray *items) {
     ANNOptions *result = defaults ? [defaults copy] : [[self.class alloc] initWithDict:nil];
     [result mergeOptions:self];
     return result;
+}
+
+- (BOOL)isSameValueAs:(ANNOptions *)other {
+    if (other == self) {
+        return YES;
+    }
+    if (other.class != self.class) {
+        return NO;
+    }
+    for (NSString *property in ANNValuePropertiesOf(self.class)) {
+        if (!ANNOptionValuesSame([self valueForKey:property], [other valueForKey:property])) {
+            return NO;
+        }
+    }
+    return YES;
+}
+
+- (NSUInteger)valueHash {
+    NSUInteger hash = (NSUInteger)(__bridge void *)self.class;
+    for (NSString *property in ANNValuePropertiesOf(self.class)) {
+        hash = hash * 31 + ANNOptionValueHash([self valueForKey:property]);
+    }
+    return hash;
 }
 
 @end

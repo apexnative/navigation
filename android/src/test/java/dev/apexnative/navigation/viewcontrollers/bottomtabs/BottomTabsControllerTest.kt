@@ -15,7 +15,7 @@ import dev.apexnative.navigation.react.CommandListener
 import dev.apexnative.navigation.react.events.DispatcherFixture
 import dev.apexnative.navigation.react.events.EventJournal
 import dev.apexnative.navigation.react.events.FakeContent
-import dev.apexnative.navigation.react.events.NavigationStateReporter
+import dev.apexnative.navigation.react.events.NavigationState
 import dev.apexnative.navigation.viewcontrollers.child.ChildControllersRegistry
 import dev.apexnative.navigation.viewcontrollers.component.RenderWait
 import dev.apexnative.navigation.viewcontrollers.component.ScreenReadiness
@@ -190,7 +190,7 @@ class BottomTabsControllerTest {
         val tabs = fading()
         tabs.mergeOptions(options { bottomTabs.currentTabIndex = Fraction(2.0) })
         assertEquals(listOf("will:C1", "stateNow"), events())
-        assertEquals(NavigationStateReporter.State("C1", "C1", 2), NavigationStateReporter.stateOf(tabs))
+        assertEquals(NavigationState.State("C1", "C1", 2), NavigationState.stateOf(tabs))
         fades.single()()
         assertEquals(listOf("didDisappear:A1", "didAppear:C1", "stateNeeded", "stateNow"), events())
     }

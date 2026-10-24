@@ -11,8 +11,8 @@ NS_ASSUME_NONNULL_BEGIN
 ///
 /// Its view has the size of the screen of the navigation window's scene; the content sits in the root frame, by the one
 /// "under bars" rule (`ANNScreenBars`). Every recompute of the frame (a layout, a change of the safe area or the
-/// traits, `mergeOptions`, an appearance) gives the modules the screen's insets, padding and regions
-/// (`ANNScreenInsets`, `ANNScreenRegions`). Its presenter is an `ANNComponentPresenter`.
+/// traits, `mergeOptions`, an appearance) gives the store the screen's insets, padding and regions
+/// (`ANNScreenEnvironment`). Its presenter is an `ANNComponentPresenter`.
 ///
 /// The screen answers UIKit's questions about the system UI (native screens too): the status bar's style and visibility
 /// (never animated), the orientations, the home indicator, the deferred edges and the vertical bars, from its resolved

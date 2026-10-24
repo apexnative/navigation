@@ -12,6 +12,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// out again, so a render that was on its way during the change doesn't keep the old size's layout.
 - (void)surfaceDidMount;
 
+/// The screen went: the hosted surface stops as soon as it runs, on the main queue. A surface that runs already stops
+/// at once; one that doesn't run yet stops at its change to running (`surface:didChangeStage:`). Until then this view
+/// and its surface are kept, so the core gives them up on the main queue. A surface that hasn't started after 5 s is
+/// let go, and stops if it ever starts later. Once; main queue.
+- (void)stopSurfaceWhenRunning;
+
 @end
 
 NS_ASSUME_NONNULL_END

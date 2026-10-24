@@ -1,5 +1,7 @@
 #import "UITabBar+utils.h"
+#import "ANNTabsDesign.h"
 #import "UIView+Utils.h"
+#import <React/RCTLog.h>
 #import <objc/runtime.h>
 
 static const void *ANNItemImagesCenteredKey = &ANNItemImagesCenteredKey;
@@ -37,17 +39,16 @@ static void ANNTabBarButtonLayoutSubviews(UIView *button, SEL _cmd) {
     badge.center = CGPointMake(badge.center.x, badge.center.y + offset);
 }
 
-// The design of iOS 26 centers the icon of an item without a title itself; in its compatibility
-// mode (UIDesignRequiresCompatibility) the tab bar is drawn as before.
+// The design of iOS 26 centers the icon of an item without a title itself; the design before it
+// (before iOS 26, and the compatibility mode where UIKit keeps it) keeps the title's room.
 static BOOL ANNTabBarButtonsKeepTitleRoom(void) {
-    if (@available(iOS 26.0, *)) {
-        return [[NSBundle.mainBundle objectForInfoDictionaryKey:@"UIDesignRequiresCompatibility"]
-            boolValue];
-    }
-    return YES;
+    return !ANNTabsDesign.isGlass;
 }
 
-// Once for the app; the buttons of other tab bars keep the layout of UIKit.
+// Once for the app; the buttons of other tab bars keep the layout of UIKit. No public API does this: in the
+// compatibility mode of iOS 26 UIKit ignores `imageInsets` and a symbol's baseline offset, and a symbol drawn into a
+// taller bitmap is scaled down and stops being a symbol. `badgePositionAdjustment` would move the badge alone, so the
+// button's layout moves both.
 static void ANNInstallTabBarButtonLayout(void) {
     static dispatch_once_t once;
     dispatch_once(&once, ^{
@@ -65,18 +66,36 @@ static void ANNInstallTabBarButtonLayout(void) {
     });
 }
 
+// Once per app run, in DEBUG: the tab items' buttons can't be found any more.
+static void ANNWarnNoButtonOfItem(void) {
+#if DEBUG
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+      RCTLogWarn(@"[ApexNavigation] This iOS version gives no button for a tab item: "
+                 @"bottomTab.testID on the tab buttons, the dot before iOS 26 and the long "
+                 @"press on a tab don't apply.");
+    });
+#endif
+}
+
 @implementation UITabBar (utils)
 
 - (UIView *)viewOfItem:(UITabBarItem *)item {
+    if (!item) {
+        return nil;
+    }
+    // An item out of the bar (in More, or before the bar's first layout) has no button: that is no failure. Only an
+    // item without the `view` key, or with something else under it, says that UIKit changed.
     if (![item respondsToSelector:NSSelectorFromString(@"view")]) {
+        ANNWarnNoButtonOfItem();
         return nil;
     }
     id view = [item valueForKey:@"view"];
-    return [view isKindOfClass:UIView.class] ? view : nil;
-}
-
-- (UIView *)tabBarItemViewAtIndex:(NSUInteger)index {
-    return index < self.items.count ? [self viewOfItem:self.items[index]] : nil;
+    if (view && ![view isKindOfClass:UIView.class]) {
+        ANNWarnNoButtonOfItem();
+        return nil;
+    }
+    return view;
 }
 
 - (void)removeTabBarItemTitles {

@@ -34,6 +34,7 @@ import dev.apexnative.navigation.viewcontrollers.stack.StackController
 import dev.apexnative.navigation.viewcontrollers.stack.fab.FabPlacement
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.Presenter
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.ViewController
+import dev.apexnative.navigation.views.animations.AnimationLayer
 import dev.apexnative.navigation.views.animations.FadeThrough
 import dev.apexnative.navigation.views.bottomtabs.BottomTabItem
 import dev.apexnative.navigation.views.bottomtabs.BottomTabsLayout
@@ -199,7 +200,9 @@ class BottomTabsController(
                 }
             })
             val set = AnimatorSet()
-            set.playTogether(exit, FadeThrough.enter(coming))
+            // Each tab fades whole through a hardware layer; a switch ended early ([set]'s end) gives them back too.
+            val enter = FadeThrough.enter(coming)
+            set.playTogether(AnimationLayer.during(going, exit), AnimationLayer.during(coming, enter))
             set.addListener(object : AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: Animator) {
                     set.removeAllListeners()

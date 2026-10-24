@@ -40,6 +40,27 @@
     return [super get];
 }
 
+- (BOOL)isSameValueAs:(ANNParam *)other {
+    if (other == self) {
+        return YES;
+    }
+    if (other.class != self.class) {
+        return NO;
+    }
+    Color *color = (Color *)other;
+    if (_light || _dark || color.light || color.dark) {
+        return ANNJSONValuesSame(_light, color.light) && ANNJSONValuesSame(_dark, color.dark);
+    }
+    return [super isSameValueAs:other];
+}
+
+- (NSUInteger)valueHash {
+    if (_light || _dark) {
+        return _light.hash * 31 + _dark.hash;
+    }
+    return [super valueHash];
+}
+
 - (UIColor *)withDefault:(UIColor *)defaultValue {
     if (!self.isPartial) {
         return self.hasValue ? self.get : defaultValue;

@@ -8,28 +8,8 @@
 #import "ANNSurfaceHostingView.h"
 #import <React/RCTFabricSurface.h>
 #import <React/RCTSurfacePresenter.h>
-#import <React/RCTSurfaceStage.h>
 #import <React/RCTSurfaceView.h>
 #import <ReactCommon/RCTHost.h>
-
-// A surface that still starts can't be stopped yet: it is checked this often, at most this many times (5 s), and then
-// stopped anyway.
-static const NSTimeInterval ANNSurfaceStopCheckInterval = 0.05;
-static const NSUInteger ANNSurfaceStopCheckLimit = 100;
-
-// Stops `surface` once it runs. The block holds the surface and the view that hosts it until then: a hosting view
-// released earlier would stop the surface in its `dealloc`, maybe off the main queue.
-static void ANNStopSurfaceWhenRunning(RCTFabricSurface *surface, UIView *hostingView,
-                                      NSUInteger checksLeft) {
-    if (RCTSurfaceStageIsRunning(surface.stage) || checksLeft == 0) {
-        [surface stop];
-        return;
-    }
-    int64_t delay = (int64_t)(ANNSurfaceStopCheckInterval * NSEC_PER_SEC);
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, delay), dispatch_get_main_queue(), ^{
-      ANNStopSurfaceWhenRunning(surface, hostingView, checksLeft - 1);
-    });
-}
 
 @interface ANNReactView () <RCTSurfacePresenterObserver, ANNScreenReadinessListener>
 @end
@@ -359,14 +339,15 @@ static void ANNStopSurfaceWhenRunning(RCTFabricSurface *surface, UIView *hosting
     _reactViewReadyBlock = nil;
     _mountHandlers = nil;
     [_contentDidMountHandlers removeAllObjects];
-    RCTFabricSurface *surface = _surface;
-    if (surface) {
+    ANNSurfaceHostingView *hostingView = _hostingView;
+    if (_surface && hostingView) {
         // On the next turn of the main queue: a destroy that runs inside React Native's mounting (a wait that ends in
         // a mount, a root that replaces at once) would stop the surface there, React Native would drop its last
-        // transaction and recycle its root view with the old content still in it, to show in a later screen.
-        UIView *hostingView = _hostingView;
+        // transaction and recycle its root view with the old content still in it, to show in a later screen. The
+        // hosting view stops the surface then, or at its start when it doesn't run yet; the block keeps the hosting
+        // view, and with it the surface, until it asks.
         dispatch_async(dispatch_get_main_queue(), ^{
-          ANNStopSurfaceWhenRunning(surface, hostingView, ANNSurfaceStopCheckLimit);
+          [hostingView stopSurfaceWhenRunning];
         });
     }
 }

@@ -22,8 +22,8 @@ top-level folder. Main thread only, unless a line says otherwise.
   `Variant`, `ThemeColour`); `parsers/` reads them tolerantly from React Native data.
 - `react/`: the way in and out: `NavigationTurboModule`, `CommandRunner`, `CommandAnswer`, `ErrorTexts`,
   `OptionsCommands`, `PendingCalls` (a task behind the calls JavaScript made), `ReloadCoordinator`, `ReactGateway`,
-  `ReactView` (a React root), the stores (`ScreenInsets`, `ScreenRegions`, `ArrangementStates`, `Hinge`, `StartInfo`),
-  `LaunchLink`, `ScrollEvents`.
+  `ReactView` (a React root), the stores (`ScreenEnvironment`: a screen's insets, padding, regions and pair state;
+  `Hinge`, `StartInfo`), `ScreenRegions` (measures a screen's regions), `LaunchLink`, `ScrollEvents`.
 - `react/events/`: `AppearanceDispatcher`, `ScreenAppearance`, `EventEmitter`, `EventContract` (made by
   `scripts/contract.mjs`), `NavigationState`, `ComponentType`.
 - `viewcontrollers/viewcontroller/`: `ViewController` (the base of every node), `Presenter`, `IReactView` (what a
@@ -44,7 +44,7 @@ top-level folder. Main thread only, unless a line says otherwise.
 - `viewcontrollers/sidemenu/`: `SideMenuController`, `SideMenuMotion`, `SideMenuPresenter`, `SideMenuRules`.
 - `viewcontrollers/splitview/`, `arrangement/`: the split view and the pair (modules, plus the core's
   `SplitViewPresenter`).
-- `viewcontrollers/modal/`, `overlay/`: `ModalCoordinator`, `ModalRecord`, `ModalViews`, `ModalSheet`;
+- `viewcontrollers/modal/`, `overlay/`: `ModalCoordinator`, `ModalRecord`, `ModalViews`, `ModalSheet`, `SheetBack`;
   `OverlayCoordinator`, `OverlayRecord`, `OverlayViews`, `OverlayTouches`.
 - `views/`: Android views and animators, no rules: `component/`, `externalcomponent/`, `stack/` (`StackLayout`,
   `topbar/`, `fab/`), `bottomtabs/`, `sidemenu/`, `animations/` (curves, `SideAnimator`, `AnimationRules`), `element/`
@@ -78,7 +78,8 @@ top-level folder. Main thread only, unless a line says otherwise.
   `StackViews.kt`, `StackTransitions.kt`, `PreparedPushes.kt`; `views/stack/StackLayout.kt`, `ScreenEdge.kt` (the edge
   a moving screen extends); back: `NavigationActivity.kt`, `viewcontrollers/navigator/BackCallbackState.kt`; the
   preview of a pop during the back gesture (Android 14+): `StackController.BackGesture`, `BackPreview.kt`,
-  `stackPoppedByBack` of the layouts.
+  `stackPoppedByBack` of the layouts; of a sheet's dismissal: `viewcontrollers/modal/SheetBack.kt`,
+  `ModalCoordinator.backTargetSheet`, `ModalSheet.BackPreview`.
 - Stack FAB: `viewcontrollers/stack/fab/FabPresenter.kt`, `FabPlan.kt`, `FabPlacement.kt`; `views/stack/fab/`.
 - Top bar (title, buttons, menus, large title): `viewcontrollers/stack/topbar/TopBarPresenter.kt`, `TopBarRoom.kt`,
   `TopBarVisibility.kt`, `BarComponents.kt`, `ButtonPlaces.kt`, `LargeTitleCollapse.kt`, `BarRowTransition.kt`;
@@ -96,12 +97,13 @@ top-level folder. Main thread only, unless a line says otherwise.
 - Split view: `viewcontrollers/splitview/SplitViewController.kt`, `SplitViewLayout.kt`, `SplitPanes.kt`,
   `SplitViewPresenter.kt`; `StackCommands.showInColumn`.
 - Pair (arrangement): `viewcontrollers/arrangement/ArrangementController.kt`, `ArrangementPlanner.kt`,
-  `ArrangementLayout.kt`, `ArrangementDefinition.kt`; `react/ArrangementStates.kt`.
+  `ArrangementLayout.kt`, `ArrangementDefinition.kt`; the pair's state in `react/ScreenEnvironment.kt`.
 - Preview, key commands: iOS only. The options are parsed and merged (`options/PreviewOptions.kt`,
   `options/KeyCommandOptions.kt`) and not applied; `dismissPreview` does nothing.
 - Animations and transitions: `views/animations/` (`AnimationRules`, `Curves`, `SideAnimator`, `ValueInterpolation`,
-  `FadeThrough`, `SystemTransition`); `views/element/` (`ElementTransitions`, `TransitionLayer`, `TargetsWait`,
-  `animators/`); `options/StackAnimationOptions.kt`, `ViewAnimationOptions.kt`.
+  `FadeThrough`, `SystemTransition`, `AnimationLayer`: the hardware layer of a fade); `views/element/`
+  (`ElementTransitions`, `TransitionLayer`, `TargetsWait`, `animators/`); `options/StackAnimationOptions.kt`,
+  `ViewAnimationOptions.kt`.
 - System bars: `system/SystemUiOwner.kt`, `SystemUiLayers.kt`, `SystemUiRules.kt`, `SystemUiWindow.kt`,
   `AppDirection.kt`; `viewcontrollers/parent/ContainerBackground.kt`.
 - Events and state: `react/events/AppearanceDispatcher.kt`, `ScreenAppearance.kt`, `EventEmitter.kt`,
@@ -111,21 +113,21 @@ top-level folder. Main thread only, unless a line says otherwise.
 - Error texts and answers: `react/ErrorTexts.kt` and `react/CommandContract.kt`, made by `scripts/contract.mjs` from
   `src/interfaces/contract/errors.json` and `commands.json`.
 - Links: `react/LaunchLink.kt`, `NavigationActivity.kt` (`onNewIntent`); `react/StartInfo.kt`.
-- Hinge and regions: `react/Hinge.kt`, `react/ScreenRegions.kt`, `react/ScreenInsets.kt`, `utils/WindowFolds.kt`.
+- Hinge and regions: `react/Hinge.kt`, `react/ScreenRegions.kt`, `react/ScreenEnvironment.kt`, `utils/WindowFolds.kt`.
 - Native screens: `nativescreen/NativeScreenContext.kt`, `NativeScreenCalls.kt`, `NativeScreenCreator.kt`;
   `viewcontrollers/externalcomponent/`.
 - Slots: `slots/SlotHost.kt`, `SlotView.kt`, `SlotScreenView.kt`, `SlotContainers.kt` (containers and slot views by
   slot id: a change goes straight to the views of its id, `SlotViews.kt`), `SlotViewManager.kt`.
 - Safe area: `safearea/SafeAreaView.kt`, `SafeAreaViewManager.kt`; `viewcontrollers/component/ScreenReadiness.kt`;
-  `react/ScreenInsets.kt`.
+  `react/ScreenEnvironment.kt`.
 - The C++ of `ANNSlot`, `ANNSafeAreaView`: `android/src/main/jni/CMakeLists.txt`, `ApexNavigationSpec.h`; sources in
   `ios/cpp/`.
 
 ## Threads
 
 - **JS thread.** The sync getters `getScreenInsets`, `getScreenRegions`, `getArrangementState`, `getHinge`,
-  `getStartInfo` read stores (`ConcurrentHashMap` in `ScreenInsets`, `ScreenRegions`, `ArrangementStates`; `@Volatile`
-  in `Hinge`). They never touch a node.
+  `getStartInfo` read stores (one `ConcurrentHashMap` of immutable records in `ScreenEnvironment`; `@Volatile` in
+  `Hinge`). They never touch a node.
 - **Module thread.** The `check` of every command with a promise: `LayoutReader` and, through it, `OptionsReader` (also
   for `setDefaultOptions`, `mergeOptions` and the options of `dismissModal`, in the runner's `prepare` step);
   `ReadableJson` for native-screen props. The registry of native screens is read under its lock. Images are not loaded

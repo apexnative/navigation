@@ -1,4 +1,5 @@
 #import "ANNBarBackgroundComponent.h"
+#import <React/RCTLog.h>
 #import <objc/runtime.h>
 
 // The background a bar shows now.
@@ -13,6 +14,21 @@ static UIView *ANNBackgroundHostOf(UINavigationBar *bar) {
             return subview;
         }
     }
+#if DEBUG
+    // The name is UIKit's private one: a system that renames the view puts the components on the bar itself. Told
+    // once, in development, and only for a bar that has its views already (one not laid out yet has none).
+    static BOOL told = NO;
+    if (!told && bar.subviews.count > 0) {
+        told = YES;
+        NSMutableArray<NSString *> *names = [NSMutableArray new];
+        for (UIView *subview in bar.subviews) {
+            [names addObject:NSStringFromClass(subview.class)];
+        }
+        RCTLogWarn(@"[ApexNavigation] the bar has no view named …BarBackground, so a background "
+                   @"component goes on the bar itself at index 1; its views: %@",
+                   [names componentsJoinedByString:@", "]);
+    }
+#endif
     return bar;
 }
 

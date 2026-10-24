@@ -35,6 +35,7 @@ import dev.apexnative.navigation.splash.SplashTheme
 import dev.apexnative.navigation.splash.SplashView
 import dev.apexnative.navigation.system.SystemUiWindow
 import dev.apexnative.navigation.utils.MaterialTheme
+import dev.apexnative.navigation.viewcontrollers.modal.SheetBack
 import dev.apexnative.navigation.viewcontrollers.navigator.BackCallbackCheck
 import dev.apexnative.navigation.viewcontrollers.navigator.BackCallbackState
 import dev.apexnative.navigation.viewcontrollers.navigator.Navigator
@@ -72,23 +73,33 @@ open class NavigationActivity : AppCompatActivity(), DefaultHardwareBackBtnHandl
     // Enabled while back has something to do in the app (BackCallbackState); otherwise the system does its own back.
     // From Android 14, where the app hears the progress of the back gesture, a gesture that would pop a stack with the
     // default transition previews the pop as the system previews back between activities (`StackController
-    // .BackGesture`); JavaScript's listeners hear back first, so with them there is no preview.
+    // .BackGesture`), and one that would dismiss a sheet previews its hide as Material's sheets do (`SheetBack`), its
+    // release closing it as a drag down does; JavaScript's listeners hear back first, so with them there is no preview.
     private val backCallback = object : OnBackPressedCallback(false) {
         override fun handleOnBackStarted(backEvent: BackEventCompat) {
             backGesture = null
-            navigator?.let { backCheck?.atBack(it) }
+            sheetGesture = null
+            val navigator = navigator ?: return
+            backCheck?.atBack(navigator)
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE || BackCallbackState.hasJsListeners) return
-            val stack = navigator?.stackPoppedByBack() ?: return
-            backGesture = stack.startBackGesture(backEvent.swipeEdge == BackEventCompat.EDGE_LEFT, backEvent.touchY)
+            val stack = navigator.stackPoppedByBack()
+            if (stack != null) {
+                backGesture = stack.startBackGesture(backEvent.swipeEdge == BackEventCompat.EDGE_LEFT, backEvent.touchY)
+                return
+            }
+            sheetGesture = navigator.sheetDismissedByBack()?.startBackPreview(backEvent)
         }
 
         override fun handleOnBackProgressed(backEvent: BackEventCompat) {
             backGesture?.progress(backEvent.progress, backEvent.touchY)
+            sheetGesture?.progress(backEvent)
         }
 
         override fun handleOnBackCancelled() {
             backGesture?.cancel()
             backGesture = null
+            sheetGesture?.cancel()
+            sheetGesture = null
             navigator?.let(BackCallbackState::update)
         }
 
@@ -96,12 +107,32 @@ open class NavigationActivity : AppCompatActivity(), DefaultHardwareBackBtnHandl
             navigator?.let { backCheck?.atBack(it) }
             val gesture = backGesture
             backGesture = null
-            if (gesture?.commit() == true) BackCallbackState.update() else passBack()
+            val sheet = sheetGesture
+            sheetGesture = null
+            when {
+                gesture?.commit() == true -> BackCallbackState.update()
+                sheet != null && commitSheet(sheet) -> BackCallbackState.update()
+                else -> passBack()
+            }
         }
     }
 
     // The back gesture that previews a pop now; none.
     private var backGesture: StackController.BackGesture? = null
+
+    // The back gesture that previews a sheet's hide now; none.
+    private var sheetGesture: SheetBack.Gesture? = null
+
+    // A sheet's preview released: the sheet goes as the user's drag down closes it, and back doesn't go on (no
+    // `passBack`, which would dismiss it a second time). A command that changed what back does since the gesture
+    // started (a push in the sheet, a modal over it, a hold) leaves it to the usual back, the sheet back in place.
+    private fun commitSheet(gesture: SheetBack.Gesture): Boolean {
+        if (navigator?.sheetDismissedByBack() !== gesture.sheet) {
+            gesture.cancel()
+            return false
+        }
+        return gesture.commit()
+    }
 
     // Debug builds only: the check that what back does never changes without its trigger (BackCallbackState), sampled
     // before frames and at back events. It only logs; release builds have neither the check nor the listener.

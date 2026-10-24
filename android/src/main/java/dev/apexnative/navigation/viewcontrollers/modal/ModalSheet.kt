@@ -15,6 +15,7 @@ import android.view.ViewOutlineProvider
 import android.view.ViewTreeObserver
 import android.widget.FrameLayout
 import android.widget.ScrollView
+import androidx.activity.BackEventCompat
 import androidx.coordinatorlayout.widget.CoordinatorLayout
 import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
@@ -34,13 +35,14 @@ import kotlin.math.roundToInt
  * the detents of its options — `medium` at half the height, `large` at the full height under the status bar, a number
  * at that height in dp — and the user drags it between them. In a window wider than [MAX_WIDTH_DP] it stands in the
  * middle at that width. A drag down past the smallest one closes it, unless `swipeToDismiss` is false: then the sheet
- * stays, and the try is told. The screen under it stays in place.
+ * stays, and the try is told. The screen under it stays in place. On Android 14+ the back gesture previews its hide
+ * ([SheetBack]): the Material behavior shrinks it with the progress and slides it down at the release.
  */
 internal class ModalSheet(
     private val layout: CoordinatorLayout,
     private val content: View,
     private val events: Events,
-) {
+) : SheetBack {
     interface Events {
         /** The user dragged the sheet to another detent. */
         fun onDetentChanged(detent: SheetDetent)
@@ -66,6 +68,28 @@ internal class ModalSheet(
     private var dragged = false
     private var shown: (() -> Unit)? = null
     private var closing: (() -> Unit)? = null
+    // The back gesture whose preview runs now; none.
+    private var backPreview: BackPreview? = null
+    // Released: the behavior slides the sheet down from where the preview left it, and hides it at the end.
+    private var backFinishing = false
+    // The window's observer the scrim follows the preview's frames through, from its start until the sheet is back
+    // in place or gone; none otherwise.
+    private var backFramesObserver: ViewTreeObserver? = null
+
+    // The behavior tells no slide while back's preview scales the sheet and its release slides it down (they move it by
+    // its transform, not its offset): the scrim follows what is drawn, frame by frame, until the sheet stands again.
+    private val backFrames = ViewTreeObserver.OnPreDrawListener {
+        updateScrim()
+        if (backPreview == null && !backFinishing && container.scaleY == 1f && container.translationY == 0f) {
+            stopBackFrames()
+        }
+        true
+    }
+
+    private val sheetCallback = object : BottomSheetBehavior.BottomSheetCallback() {
+        override fun onStateChanged(sheet: View, newState: Int) = onState(newState)
+        override fun onSlide(sheet: View, slideOffset: Float) = updateScrim()
+    }
 
     // A list inside the sheet scrolls with it, as the Material behavior expects: up at half height the sheet goes up
     // first, down at the top of the list the sheet comes down. The behavior follows views that scroll nested.
@@ -89,6 +113,13 @@ internal class ModalSheet(
             }
         })
         scrim.setOnTouchListener { _, event -> taps.onTouchEvent(event) }
+        // The sheet keeps a touch that lands on it and no view in it takes (its bar, an empty part), as Material's
+        // BottomSheetDialog does: else the touch falls to the scrim under it, and a tap there closes a dimmed sheet;
+        // past an undimmed scrim it reaches the behavior, which takes the sheet into its drag state at the touch's
+        // down, before any move. The back gesture starts with such a touch, and a sheet in the drag state has no
+        // preview. A drag that starts there still moves the sheet: the behavior takes it past the touch slop, as from
+        // the views in it.
+        container.setOnTouchListener { _, _ -> true }
         container.clipToOutline = true
         container.outlineProvider = object : ViewOutlineProvider() {
             // The bottom corners are under the screen's bottom: only the top ones round.
@@ -116,10 +147,7 @@ internal class ModalSheet(
         behavior.isHideable = true
         behavior.state = BottomSheetBehavior.STATE_HIDDEN
         behavior.halfExpandedRatio = 0.5f
-        behavior.addBottomSheetCallback(object : BottomSheetBehavior.BottomSheetCallback() {
-            override fun onStateChanged(sheet: View, newState: Int) = onState(newState)
-            override fun onSlide(sheet: View, slideOffset: Float) = updateScrim()
-        })
+        behavior.addBottomSheetCallback(sheetCallback)
         container.viewTreeObserver.addOnGlobalLayoutListener(scrollViews)
     }
 
@@ -154,10 +182,12 @@ internal class ModalSheet(
         behavior.dragAnywhere = sheetOptions.expandsOnScroll.get(true)
         container.invalidateOutline()
         configure()
-        if (merge == null || closing != null) return
+        if (merge == null || closing != null || backFinishing) return
         val settled = detentOf(behavior.state)
         if (settled != null) behavior.isHideable = swipeToDismiss && settled == detents.first()
         val target = SheetStops.target(settled, detents, merge.selectedDetent, sheetOptions.selectedDetent)
+        // A merge that moves the sheet or keeps it from going down ends a preview of back on it.
+        if (target != null || !behavior.isHideable) stopBackPreview()
         if (target != null) {
             selected = target
             behavior.state = stateOf(target)
@@ -172,12 +202,19 @@ internal class ModalSheet(
             finishClosing()
             return
         }
+        // Released by back, it goes down already: it is closed at the end of that slide.
+        if (backFinishing) return
+        stopBackPreview()
         behavior.isHideable = true
         behavior.state = BottomSheetBehavior.STATE_HIDDEN
     }
 
     /** Takes the sheet's views away; the modal's view is the caller's. */
     fun remove() {
+        // A slide down of back's release that ends after this tells nothing: the modal went already.
+        behavior.removeBottomSheetCallback(sheetCallback)
+        stopBackPreview()
+        stopBackFrames()
         container.viewTreeObserver.removeOnGlobalLayoutListener(scrollViews)
         container.removeView(content)
         layout.removeView(container)
@@ -189,6 +226,69 @@ internal class ModalSheet(
         TestIds.apply(container, testId)
         TestIds.applyOver(grabber, testId?.let { "$it.grabber" })
         TestIds.apply(scrim, testId?.let { "$it.scrim" })
+    }
+
+    override val hidesOnBack: Boolean
+        get() = closing == null && !backFinishing && behavior.isHideable && container.isLaidOut &&
+            detentOf(behavior.state) != null
+
+    override fun startBackPreview(event: BackEventCompat): SheetBack.Gesture? {
+        if (!hidesOnBack || backPreview != null) return null
+        val preview = BackPreview()
+        backPreview = preview
+        startBackFrames()
+        behavior.startBackProgress(event)
+        return preview
+    }
+
+    // A command closed or moved the sheet, or it goes, while back's preview runs: the sheet grows back where it stands
+    // (the behavior's cancel), and the gesture's release does the usual back.
+    private fun stopBackPreview() {
+        if (backPreview == null) return
+        backPreview = null
+        behavior.cancelBackProgress()
+    }
+
+    private fun startBackFrames() {
+        if (backFramesObserver != null) return
+        backFramesObserver = container.viewTreeObserver.also { it.addOnPreDrawListener(backFrames) }
+    }
+
+    // The listener leaves the observer it joined: a container out of the window has another one.
+    private fun stopBackFrames() {
+        val observer = backFramesObserver ?: return
+        backFramesObserver = null
+        if (observer.isAlive) observer.removeOnPreDrawListener(backFrames)
+    }
+
+    /** The back gesture over this sheet: the Material behavior previews its hide (`MaterialBackHandler`). */
+    private inner class BackPreview : SheetBack.Gesture {
+        override val sheet: SheetBack
+            get() = this@ModalSheet
+
+        override fun progress(event: BackEventCompat) {
+            if (backPreview !== this) return
+            behavior.updateBackProgress(event)
+            updateScrim()
+        }
+
+        override fun cancel() {
+            if (backPreview === this) stopBackPreview()
+        }
+
+        // The behavior slides the sheet down from the preview and sets its hidden state at the end: `onState` closes
+        // it there as a drag down does (`onClosedByUser`), so the modal goes through the user's path once.
+        override fun commit(): Boolean {
+            if (backPreview !== this) return false
+            backPreview = null
+            if (!hidesOnBack) {
+                behavior.cancelBackProgress()
+                return false
+            }
+            backFinishing = true
+            behavior.handleBackInvoked()
+            return true
+        }
     }
 
     private fun closeByUser() {
@@ -243,6 +343,7 @@ internal class ModalSheet(
         when (state) {
             BottomSheetBehavior.STATE_DRAGGING -> dragged = true
             BottomSheetBehavior.STATE_HIDDEN -> {
+                backFinishing = false
                 when {
                     closing != null -> finishClosing()
                     else -> {
@@ -280,11 +381,21 @@ internal class ModalSheet(
     // The screen under the sheet dims as the sheet goes up past `largestUndimmedDetent` (from the bottom without
     // one), to the dim of a Material modal sheet at the next detent; while it isn't dimmed, it takes touches.
     private fun updateScrim() {
-        val height = layout.height - container.top
+        // Hidden at the end of back's slide, it still stands at its detent until the next layout.
+        if (behavior.state == BottomSheetBehavior.STATE_HIDDEN) return setDim(0f)
+        val height = layout.height - sheetTop()
         val undimmed = options.largestUndimmedDetent?.takeIf { it in detents }
         val from = undimmed?.let { heightOf(it) } ?: 0
         val to = detents.firstOrNull { heightOf(it) > from }?.let { heightOf(it) } ?: return run { setDim(0f) }
         setDim(((height - from).toFloat() / (to - from)).coerceIn(0f, 1f))
+    }
+
+    // The top of the sheet as drawn: its offset, and while back's preview moves it, its slide and its scale toward
+    // the bottom (the behavior's pivot).
+    private fun sheetTop(): Int {
+        if (backFramesObserver == null) return container.top
+        val scaled = container.pivotY * (1f - container.scaleY)
+        return (container.top + container.translationY + scaled).roundToInt()
     }
 
     private fun setDim(fraction: Float) {
