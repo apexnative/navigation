@@ -1,5 +1,6 @@
 #import "ANNBarAppearance.h"
 #import "ANNBackButtonPresenter.h"
+#import "ANNTabsDesign.h"
 #import <objc/runtime.h>
 
 // The icon an indicator was tinted from: an entry found by the icon's address counts only for that icon.
@@ -129,16 +130,14 @@ static NSDictionary<NSAttributedStringKey, id> *ANNTextAttributes(ANNFontOptions
     return resolved && !ANNIsClear(resolved, traits) ? resolved : nil;
 }
 
+// The glass bar is translucent by default; the design before iOS 26 (and its compatibility mode) opaque.
 + (BOOL)translucentByDefault {
-    if (@available(iOS 26.0, *)) {
-        return YES;
-    }
-    return NO;
+    return ANNTabsDesign.isGlass;
 }
 
-// `color` beats `blur` and `translucent`; a clear color is a clear bar. On iOS 26 a color is a solid bar: a clear base
-// with the color and a 1×1 image of it, without the system effect. `blur` is the system's chrome material on a clear
-// base, with no view of its own in the bar.
+// `color` beats `blur` and `translucent`; a clear color is a clear bar. On the glass of iOS 26 a color is a solid
+// bar: a clear base with the color and a 1×1 image of it, without the system effect. `blur` is the system's chrome
+// material on a clear base, with no view of its own in the bar.
 + (void)configure:(UINavigationBarAppearance *)appearance
             color:(UIColor *)color
              blur:(BOOL)blur
@@ -149,7 +148,7 @@ static NSDictionary<NSAttributedStringKey, id> *ANNTextAttributes(ANNFontOptions
             [appearance configureWithTransparentBackground];
             return;
         }
-        if (@available(iOS 26.0, *)) {
+        if (ANNTabsDesign.isGlass) {
             [appearance configureWithTransparentBackground];
             appearance.backgroundEffect = nil;
             appearance.backgroundColor = color;

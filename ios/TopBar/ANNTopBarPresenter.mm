@@ -10,6 +10,7 @@
 #import "ANNScrollEdgeEffects.h"
 #import "ANNSearchPresenter.h"
 #import "ANNStackController.h"
+#import "ANNTabsDesign.h"
 #import "ANNTitleComponentView.h"
 #import "ANNTitleGlassView.h"
 #import "ANNTitleView.h"
@@ -34,11 +35,10 @@ typedef NS_ENUM(NSInteger, ANNBarPhase) {
     ANNBarPhaseDidAppear,
 };
 
-static BOOL ANNIsIOS26(void) {
-    if (@available(iOS 26.0, *)) {
-        return YES;
-    }
-    return NO;
+// The glass design of iOS 26, not its compatibility mode: the large title in the list, the title's capsule, the
+// system subtitle and the pin of the title's color are its own (`ANNTabsDesign`).
+static BOOL ANNIsGlass(void) {
+    return ANNTabsDesign.isGlass;
 }
 
 // The same look: the item's appearance is the one set last, or one equal to it.
@@ -198,13 +198,13 @@ static ANNUserChoice *ANNRenameChoice(NSString *title) {
     BOOL collapses = [ANNLargeTitlePresenter collapsesIntoList:options];
     BOOL inlineInRow = [self inlineInRow:options];
     BOOL ownEdge = [options.topBar.scrollEdgeAppearance.active withDefault:NO];
-    context.transparentEdge = ANNIsIOS26() && collapses && !inlineInRow && !ownEdge;
+    context.transparentEdge = ANNIsGlass() && collapses && !inlineInRow && !ownEdge;
     // While a pop draws the band behind the title in the title's own place, the bar's edge stays clear: UIKit grows
     // the bar's background with an interactive pop, over the screen's top where the title is.
     if ([_largeTitle drawsTitleBand] && !_bandKeepsLook && !ownEdge) {
         context.transparentEdge = YES;
     }
-    context.largeTitleNeedsBackground = ANNIsIOS26() && canShow && !collapses && !inlineInRow;
+    context.largeTitleNeedsBackground = ANNIsGlass() && canShow && !collapses && !inlineInRow;
     return context;
 }
 
@@ -397,7 +397,7 @@ static ANNUserChoice *ANNRenameChoice(NSString *title) {
     UITraitCollection *traits =
         screen.viewIfLoaded.window.traitCollection ?: screen.traitCollection;
     ANNBarAppearanceContext context = [self appearanceContextOf:options];
-    UITraitCollection *pinned = ANNIsIOS26() ? _pinnedTraits : nil;
+    UITraitCollection *pinned = ANNIsGlass() ? _pinnedTraits : nil;
     NSArray *inputs = [self lookInputsOf:options context:context traits:traits pinned:pinned];
     if (_lookInputs && ANNOptionValuesSame(_lookInputs, inputs) &&
         ANNSameAppearance(item.standardAppearance, _lookStandard) &&
@@ -473,7 +473,7 @@ static ANNUserChoice *ANNRenameChoice(NSString *title) {
 - (void)pinTitleColorAlong:(id<UIViewControllerTransitionCoordinator>)coordinator
                     traits:(UITraitCollection *)traits {
     UIViewController *screen = _screen;
-    if (!screen || !ANNIsIOS26()) {
+    if (!screen || !ANNIsGlass()) {
         return;
     }
     NSUInteger token = ++_pinToken;
@@ -520,7 +520,7 @@ static ANNUserChoice *ANNRenameChoice(NSString *title) {
     NSString *glass = [title.glass withDefault:nil];
     BOOL glassShows = NO;
     if (@available(iOS 26.0, *)) {
-        glassShows = [ANNTitleGlassView isGlass:glass];
+        glassShows = ANNIsGlass() && [ANNTitleGlassView isGlass:glass];
     }
     [self applySubtitle:options glass:glassShows];
 
@@ -556,7 +556,7 @@ static ANNUserChoice *ANNRenameChoice(NSString *title) {
         }
     } else if (_titleComponent) {
         titleView = _titleComponent;
-    } else if (!ANNIsIOS26() && subtitle.length > 0 && !ANNLargeTitleCanShow(options)) {
+    } else if (!ANNIsGlass() && subtitle.length > 0 && !ANNLargeTitleCanShow(options)) {
         // Before iOS 26 a subtitle is a two-label title, without a large title that can show.
         titleView = [[ANNTitleView alloc] initWithOptions:options];
     }
@@ -597,7 +597,8 @@ static ANNUserChoice *ANNRenameChoice(NSString *title) {
         if (_native && !subtitle.text.hasValue) {
             return;
         }
-        if (text.length == 0) {
+        // The compatibility mode draws no system subtitle: a two-label title shows it, as before iOS 26.
+        if (text.length == 0 || !ANNIsGlass()) {
             item.attributedSubtitle = nil;
             item.largeAttributedSubtitle = nil;
             return;
@@ -649,7 +650,7 @@ static ANNUserChoice *ANNRenameChoice(NSString *title) {
         return NO;
     }
     CGFloat height = ANNTitleRowHeight;
-    if (!ANNIsIOS26()) {
+    if (!ANNIsGlass()) {
         if (_screen.traitCollection.userInterfaceIdiom == UIUserInterfaceIdiomPad) {
             height = ANNTitleRowHeightPad;
         }
@@ -1293,7 +1294,7 @@ static ANNUserChoice *ANNRenameChoice(NSString *title) {
         return;
     }
     ANNNavigationOptions *options = [screen resolveOptionsWithDefault];
-    BOOL eligible = ANNIsIOS26() && [self isShownTop] && screen.viewIfLoaded.window != nil &&
+    BOOL eligible = ANNIsGlass() && [self isShownTop] && screen.viewIfLoaded.window != nil &&
                     [background isShownInBar:bar] &&
                     [ANNLargeTitlePresenter collapsesIntoList:options] &&
                     ![self inlineInRow:options];

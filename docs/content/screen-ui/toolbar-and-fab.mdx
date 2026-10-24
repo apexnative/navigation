@@ -55,10 +55,10 @@ Filter sits at the leading edge and Compose at the trailing one. The buttons are
 | Item | What it does |
 | --- | --- |
 | `{ systemItem: 'flexibleSpace' }` | Takes the free width, and pushes the next buttons to the far side. |
-| `{ systemItem: 'fixedSpace' }` | A gap. On iOS 26 it also starts a new glass capsule. |
+| `{ systemItem: 'fixedSpace' }` | A gap. With the glass design it also starts a new glass capsule. |
 | `{ systemItem: 'searchField' }` | iOS 26: the search field of the screen, between the buttons. See [Search](./search#toolbar). |
 
-On iOS 26 icons next to each other share one glass capsule; a text button has one of its own, and a `badge` doesn't show in the toolbar. `visible: false` hides the toolbar with its buttons.
+With the glass design ([what it is](./top-bar#glass-design)) icons next to each other share one glass capsule; a text button has one of its own, and a `badge` doesn't show in the toolbar. `visible: false` hides the toolbar with its buttons.
 
 On iPhone with iOS 26 the floating tab bar takes the same place at the bottom. A screen with a toolbar inside [tabs](../containers/tabs) hides the tab bar with `hideBottomTabs()`.
 

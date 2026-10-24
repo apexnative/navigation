@@ -3,6 +3,13 @@
 #import "ANNBarAppearance.h"
 #import "ANNMainList.h"
 #import "ANNScreenBars.h"
+#import "ANNTabsDesign.h"
+
+// The glass design of iOS 26 draws the large title inside the list the bar follows: the places, fills and bands of
+// this file are for it. The compatibility mode keeps the title in the bar, as before iOS 26 (`ANNTabsDesign`).
+static BOOL ANNTitleInList(void) {
+    return ANNTabsDesign.isGlass;
+}
 
 // How far the color reaches above the list's content: as far as a pull can show.
 static const CGFloat ANNListFillHeight = 2000;
@@ -58,10 +65,8 @@ static UINavigationItemLargeTitleDisplayMode ANNItemModeOf(NSString *mode) {
         ![options.topBar.largeTitle.collapseOnScroll withDefault:YES]) {
         return NO;
     }
-    if (@available(iOS 26.0, *)) {
-        if (ANNAppDirection.reactNativeIsRightToLeft) {
-            return NO;
-        }
+    if (ANNTitleInList() && ANNAppDirection.reactNativeIsRightToLeft) {
+        return NO;
     }
     return YES;
 }
@@ -132,6 +137,9 @@ static UINavigationItemLargeTitleDisplayMode ANNItemModeOf(NSString *mode) {
 - (void)screenInPop:(ANNNavigationOptions *)options
                list:(UIScrollView *)list
         inlineInRow:(BOOL)inlineInRow {
+    if (!ANNTitleInList()) {
+        return;
+    }
     if (@available(iOS 26.0, *)) {
         UIViewController *screen = _screen;
         UIView *screenView = screen.viewIfLoaded;
@@ -168,6 +176,9 @@ static UINavigationItemLargeTitleDisplayMode ANNItemModeOf(NSString *mode) {
          inlineInRow:(BOOL)inlineInRow
                  top:(CGFloat)top
             stackTop:(CGFloat)stackTop {
+    if (!ANNTitleInList()) {
+        return;
+    }
     if (@available(iOS 26.0, *)) {
         UIView *screenView = _screen.viewIfLoaded;
         if (!screenView || inlineInRow || !ANNLargeTitleCanShow(options) || top - stackTop <= 0) {
@@ -282,6 +293,9 @@ static UINavigationItemLargeTitleDisplayMode ANNItemModeOf(NSString *mode) {
                   list:(UIScrollView *)list
            inlineInRow:(BOOL)inlineInRow
    backgroundComponent:(BOOL)backgroundComponent {
+    if (!ANNTitleInList()) {
+        return;
+    }
     if (@available(iOS 26.0, *)) {
         UIViewController *screen = _screen;
         UIColor *fill = [ANNBarAppearance solidColorOf:options.topBar.background.color
@@ -320,6 +334,9 @@ static UINavigationItemLargeTitleDisplayMode ANNItemModeOf(NSString *mode) {
 - (void)fillTitlePlaceFrom:(CGFloat)oldBarBottom
                       list:(UIScrollView *)list
                    options:(ANNNavigationOptions *)options {
+    if (!ANNTitleInList()) {
+        return;
+    }
     if (@available(iOS 26.0, *)) {
         [self removeTitlePlaceFill];
         if (!ANNLargeTitleCanShow(options) || [ANNLargeTitlePresenter collapsesIntoList:options]) {
@@ -334,6 +351,9 @@ static UINavigationItemLargeTitleDisplayMode ANNItemModeOf(NSString *mode) {
 // The pushed screen's content may render only during the push, so its list mounts later than the push starts: the
 // fill is placed again at each mount and layout until the screen appeared.
 - (void)updateTitlePlaceFill:(ANNNavigationOptions *)options list:(UIScrollView *)list {
+    if (!ANNTitleInList()) {
+        return;
+    }
     if (@available(iOS 26.0, *)) {
         UIViewController *screen = _screen;
         UIView *screenView = screen.viewIfLoaded;

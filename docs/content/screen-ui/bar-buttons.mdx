@@ -73,8 +73,8 @@ The look and the state of a button:
 | --- | --- |
 | `color` | The color of this button. |
 | `enabled: false` | Dimmed; a press does nothing. |
-| `style: 'prominent'` | <Os name="iOS" /> The main action, such as Done or Send. On iOS 26 a filled capsule in the button's `color`; before, a bold title. |
-| `group` | <Os name="iOS" /> 26: buttons with the same group share one glass capsule; each other button has a capsule of its own. |
+| `style: 'prominent'` | <Os name="iOS" /> The main action, such as Done or Send. With the glass design a filled capsule in the button's `color`; without it, a bold title. See [the glass design](./top-bar#glass-design). |
+| `group` | <Os name="iOS" /> Glass design: buttons with the same group share one glass capsule; each other button has a capsule of its own. |
 | `badge` | <Os name="iOS" /> 26: a number, a short text, or `true` for a dot. |
 | `toggle`, `selected` | <Os name="iOS" /> A button that switches on and off at each tap; the press carries the new state as `selected`. |
 
@@ -259,7 +259,7 @@ s.rightButtons({
 });
 ```
 
-The bar sends no press for it: the component's own `onPress` is the press. On <Os name="iOS" /> 26 it has no glass capsule; `hideSharedBackground: false` puts it on one. On <Os name="Android" /> `component.width` and `height` size it.
+The bar sends no press for it: the component's own `onPress` is the press. On <Os name="iOS" /> with the glass design it has no glass capsule; `hideSharedBackground: false` puts it on one. On <Os name="Android" /> `component.width` and `height` size it.
 
 ## Buttons that change {#change}
 
@@ -284,7 +284,7 @@ function NewNote() {
 
 The options are built on each render and applied before the screen paints when they changed, so the bar never lags behind the state. `onPress` sees the state of the same render. A full form in a modal, with Cancel and Save, is walked through in [Forms in a modal](../flows/forms-in-a-modal).
 
-On <Os name="iOS" /> `animateRightButtons` and `animateLeftButtons` fade the new buttons in. On iOS 26 buttons that share a capsule (several with one `group`) change at once: UIKit has no animation for groups of buttons.
+On <Os name="iOS" /> `animateRightButtons` and `animateLeftButtons` fade the new buttons in. With the glass design buttons that share a capsule (several with one `group`) change at once: UIKit has no animation for groups of buttons.
 
 ## Buttons on iPhone Duo {#iphone-duo}
 

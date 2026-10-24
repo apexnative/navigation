@@ -43,6 +43,10 @@ The top bar belongs to <Mark>the stack, not to a screen</Mark>: one bar for all 
 
 The platform draws the bar: `UINavigationBar` on <Os name="iOS" />, with Liquid Glass on iOS 26, and the Material 3 top app bar on <Os name="Android" />. Its colors come from the [theme](../architecture/theme-and-context) until a screen sets its own.
 
+## The glass design and the compatibility mode {#glass-design}
+
+On <Os name="iOS" /> the look of iOS 26 (Liquid Glass) is *the glass design*, and this page and [the bar buttons](./bar-buttons) call it that. An app in the compatibility mode (`UIDesignRequiresCompatibility = YES` in Info.plist) doesn't get it: the mode applies on iOS 26, and on iOS 27 only to an app built with an SDK before iOS 27. There the bar looks and behaves as before iOS 26: a title with a subtitle as two lines, no capsules (`title.glass`, `sharesBackground` and `hideSharedBackground` do nothing), `style: 'prominent'` is a bold Done button, the back button shows the title of the screen below, `background.color` gives an opaque bar, and a large title is drawn in the bar. [The bottom tabs](../containers/tabs) follow the same mode.
+
 ## The title {#title}
 
 The title is the name of the screen. The subtitle is a second line under it, such as a status or a count. Both can come from the props of the screen:
@@ -98,20 +102,20 @@ s.title('Details').largeTitle({ displayMode: 'never' });
 
 ## The background and the border {#background}
 
-On iOS 26 the bar is Liquid Glass, and the content shows through it as it scrolls under. <Mark>A color takes the glass away</Mark>, so set one only when the design needs it:
+With the glass design the bar is Liquid Glass, and the content shows through it as it scrolls under. <Mark>A color takes the glass away</Mark>, so set one only when the design needs it:
 
 ```ts
 s.topBar({ background: { color: '#F3E9D2' }, noBorder: true });
 ```
 
-`background.color` colors the bar on both platforms. With a large title on iOS 26 the color goes behind the title in the list, and fills the bar once the title collapses. Under a bar with a color the list has no edge effect at the top: see [The edge of the scroll](./system-ui#scroll-edge).
+`background.color` colors the bar on both platforms. With a large title and the glass design the color goes behind the title in the list, and fills the bar once the title collapses. Under a bar with a color the list has no edge effect at the top: see [The edge of the scroll](./system-ui#scroll-edge).
 
 The other keys of the background are rarer:
 
 | Option | What it does |
 | --- | --- |
 | `background.component` | A component of `screens` drawn behind the bar, such as a gradient. It is registered as the [title component](#title-component) is. |
-| `background.translucent` | <Os name="iOS" /> `true`: the content shows through; Liquid Glass on iOS 26, where it is the default. `false`: a solid bar, white in the light theme and black in the dark one. |
+| `background.translucent` | <Os name="iOS" /> `true`: the content shows through; Liquid Glass with the glass design, where it is the default. `false`: a solid bar, white in the light theme and black in the dark one. |
 | `background.blur` | <Os name="iOS" /> The system's frosted blur, plainer than the glass. A `color` wins over it, and it wins over `translucent`. |
 | `scrollEdgeAppearance` | <Os name="iOS" /> The look of the bar while the content is at its top, with `active: true`. The bar takes its usual look once the content scrolls under it. |
 

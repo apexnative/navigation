@@ -2,6 +2,7 @@
 #import "ANNBarButtonComponentView.h"
 #import "ANNIconButtonImage.h"
 #import "ANNShowTextButton.h"
+#import "ANNTabsDesign.h"
 #import "ANNUIBarButtonItem.h"
 #import "ANNUserChoice.h"
 #import "UIViewController+LayoutProtocol.h"
@@ -601,7 +602,7 @@ static BOOL ANNSameObjects(NSArray *a, NSArray *b) {
         }
     }
     if (@available(iOS 26.0, *)) {
-        if ([self hasGroupOfSeveral:placed]) {
+        if (ANNTabsDesign.isGlass && [self hasGroupOfSeveral:placed]) {
             NSArray<UIBarButtonItemGroup *> *groups = [self groupsOf:placed];
             if (side == ANNBarButtonsSideLeft) {
                 navigationItem.leadingItemGroups = groups;
@@ -615,12 +616,14 @@ static BOOL ANNSameObjects(NSArray *a, NSArray *b) {
     for (ANNBuiltButton *button in placed) {
         if (@available(iOS 26.0, *)) {
             // Each button its own capsule: a zero-width space between neighbours, and the right ones never share the
-            // capsule of "•••".
-            if (items.count > 0) {
-                [items addObject:[UIBarButtonItem fixedSpaceItemOfWidth:0]];
-            }
-            if (side == ANNBarButtonsSideRight) {
-                button.item.sharesBackground = NO;
+            // capsule of "•••". The compatibility mode has no capsules.
+            if (ANNTabsDesign.isGlass) {
+                if (items.count > 0) {
+                    [items addObject:[UIBarButtonItem fixedSpaceItemOfWidth:0]];
+                }
+                if (side == ANNBarButtonsSideRight) {
+                    button.item.sharesBackground = NO;
+                }
             }
         }
         [items addObject:button.item];
@@ -721,7 +724,7 @@ static BOOL ANNSameObjects(NSArray *a, NSArray *b) {
         NSMutableArray<UIBarButtonItem *> *items = [NSMutableArray new];
         for (ANNBuiltButton *button in run) {
             if (@available(iOS 26.0, *)) {
-                if (run.count == 1) {
+                if (run.count == 1 && ANNTabsDesign.isGlass) {
                     button.item.sharesBackground = NO;
                 }
             }
@@ -829,7 +832,7 @@ static BOOL ANNSameObjects(NSArray *a, NSArray *b) {
         BOOL icon = kind == ANNBarButtonKindSymbol || kind == ANNBarButtonKindImage ||
                     kind == ANNBarButtonKindImageButton || kind == ANNBarButtonKindShowText;
         NSString *group = icon ? [button.group withDefault:nil] : nil;
-        if (@available(iOS 26.0, *)) {
+        if (ANNTabsDesign.isGlass) {
             // Only icons of one group share a capsule (the toolbar has no groups): any other neighbours get a
             // zero-width space, unless a space of the options is there already.
             BOOL sameGroup = group.length > 0 && [group isEqualToString:previousIconGroup];
@@ -997,10 +1000,12 @@ static BOOL ANNSameObjects(NSArray *a, NSArray *b) {
     }
     BOOL prominent = [[button.style withDefault:nil] isEqualToString:@"prominent"];
     if (prominent) {
+        // The capsule of the glass; the design before it (and its compatibility mode) has the bold `done` style.
+        item.style = UIBarButtonItemStyleDone;
         if (@available(iOS 26.0, *)) {
-            item.style = UIBarButtonItemStyleProminent;
-        } else {
-            item.style = UIBarButtonItemStyleDone;
+            if (ANNTabsDesign.isGlass) {
+                item.style = UIBarButtonItemStyleProminent;
+            }
         }
     }
     // The color: the tint, and for a plain button also the text's; `prominent` takes it only into the tint, and a font
@@ -1183,9 +1188,11 @@ static BOOL ANNSameObjects(NSArray *a, NSArray *b) {
                  kind:(ANNBarButtonKind)kind
                    to:(UIBarButtonItem *)item {
     if (@available(iOS 26.0, *)) {
-        BOOL ownBackground =
-            kind == ANNBarButtonKindComponent || kind == ANNBarButtonKindImageButton;
-        item.hidesSharedBackground = [button.hideSharedBackground withDefault:ownBackground];
+        if (ANNTabsDesign.isGlass) {
+            BOOL ownBackground =
+                kind == ANNBarButtonKindComponent || kind == ANNBarButtonKindImageButton;
+            item.hidesSharedBackground = [button.hideSharedBackground withDefault:ownBackground];
+        }
     }
 #if __IPHONE_OS_VERSION_MAX_ALLOWED >= 270000
     if (@available(iOS 27.0, *)) {
