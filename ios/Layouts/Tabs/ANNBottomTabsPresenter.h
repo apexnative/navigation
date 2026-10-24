@@ -55,6 +55,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// The tabs laid out (and before they appear): the dots, the buttons' `testID`s, the custom row.
 - (void)tabsDidLayOut;
 
+/// The tabs appeared, in a window: a dot set while they were out of it (under a modal over the whole screen) is
+/// placed now, as no layout may follow.
+- (void)tabsDidAppear;
+
 /// The bar laid out in a window for the first time: the titles are set again, so that the bar measures them at their
 /// real place.
 - (void)barDidLayOutInWindow;

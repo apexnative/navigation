@@ -598,10 +598,11 @@ static void ANNStacksOfNode(UIViewController *node, NSMutableArray<ANNStackContr
     [[self tabsPresenter] tabsDidLayOut];
 }
 
-// `afterInitialTab` goes on at the tabs' first appearance at the latest.
+// `afterInitialTab` goes on at the tabs' first appearance at the latest; a dot that waited for the window shows.
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
     [self scheduleChain];
+    [[self tabsPresenter] tabsDidAppear];
 }
 
 #pragma mark - Rendering and the preload window

@@ -1107,6 +1107,12 @@ static ANNBottomTabOptions *ANNWithIcons(ANNBottomTabOptions *bottomTab, NSArray
     [_row layOutInTabs];
 }
 
+- (void)tabsDidAppear {
+    if (_tabsAreSet && _dotsWaitForWindow && !ANNTabsDesign.isGlass) {
+        [self placeDots];
+    }
+}
+
 // The bar's items and the button of each tab and of More, by pointer, against those last seen; no walk through the
 // buttons. An item moving between the bar and More changes the items. The tabs lay out before the bar does: a tab in
 // the bar without its button yet makes the bar lay out first.
