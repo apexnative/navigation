@@ -816,14 +816,14 @@ export interface OptionsScrollEdge {
 /**
  * (iOS 26+) The scroll edge effect of the scroll views of a screen: how the content fades or blurs where it scrolls
  * under a bar. The scroll views draw it, and only where content goes under a bar. When the screen appears, it applies
- * to the vertical lists and text views (a multi-line `TextInput`) in the view of the screen, down to 16 levels, except
- * in hidden views (`display: none`). A list inside another vertical list gets none (UIKit draws no edge effect
- * there); a scroll view that doesn't scroll vertically, like a pager, is searched for its lists. After React mounts, the
- * main list of the screen gets it; a list mounted later gets it at the next appearance or `mergeOptions`. A covered
- * screen keeps the effect on its lists. The system effect comes back when the screen is destroyed, when a list
- * leaves the screen, or when the screen no longer has the list. Under a bar with
- * `background.color` or `background.component` there is no effect at the top unless the screen sets one for the top or
- * for all edges. Before iOS 26 and on Android it does nothing.
+ * to the vertical lists and text views (a multi-line `TextInput`) in the view of the screen, except in hidden views
+ * (`display: none`). A list inside another vertical list gets none (UIKit draws no edge effect there); a scroll view
+ * that doesn't scroll vertically, like a pager, is searched for its lists. A list nested very deep in the screen's
+ * views may not get it. After React mounts, the main list of the screen gets it; a list mounted later gets it at the
+ * next appearance or `mergeOptions`. The lists get the system effect back when the screen leaves or is destroyed, and
+ * a list that leaves the screen gets it back too. Under a bar with `background.color` or `background.component` there
+ * is no effect at the top unless the screen sets one for the top or for all edges. Before iOS 26 and on Android it
+ * does nothing.
  */
 export interface OptionsScrollEdgeEffect {
   /** Whether the effect is hidden on all four edges. The value of an edge beats it. */

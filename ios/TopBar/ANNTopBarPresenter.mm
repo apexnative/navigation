@@ -9,6 +9,7 @@
 #import "ANNScreenBars.h"
 #import "ANNScrollEdgeEffects.h"
 #import "ANNSearchPresenter.h"
+#import "ANNSlotScreenView.h"
 #import "ANNStackController.h"
 #import "ANNTabsDesign.h"
 #import "ANNTitleComponentView.h"
@@ -1089,9 +1090,9 @@ static ANNUserChoice *ANNRenameChoice(NSString *title) {
         ANNNavigationOptions *options = [screen resolveOptionsWithDefault];
         [_largeTitle screenDidDisappear:options list:[self followedList]];
     }
-    // Its color and its React background leave the main list. The edge effects stay on its lists while it is covered:
-    // they are the screen's own, and its next appearance finds them set (its destroy and a mount that takes a list out
-    // give them the system values).
+    // The lists the screen set leave with it (the edge effects stay known for its next appearance); its color and its
+    // React background leave the main list.
+    [_edgeEffects screenDidDisappear];
     [self releaseListsKeepingEdgeEffects:YES];
     _bandKeepsLook = NO;
     // A swipe back given up: the screen keeps the bar's own look for its next appearance.
@@ -1152,8 +1153,10 @@ static ANNUserChoice *ANNRenameChoice(NSString *title) {
       [weakSelf contentDidMount];
     }
                          forKey:ANNTopBarMountKey];
-    // The edge effect walks the screen again only after a mount: a native screen's views are the app's, never told.
-    [self edgeEffects].mountsReported = !_native;
+    // The edge effect walks the screen again only after a mount. A native screen's views are the app's, never told; a
+    // screen of one tree (`appProvider`) hears the mounts only in the window, so it walks at each appearance.
+    [self edgeEffects].mountsReported =
+        !_native && ![content isKindOfClass:ANNSlotScreenView.class];
 }
 
 // The list the bar follows at the top edge under a large title that folds into it: the main list of a React screen;

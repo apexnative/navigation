@@ -295,7 +295,7 @@ export const Navigation = createNavigation({
 s.scrollEdgeEffect({ top: { style: 'hard' } });
 ```
 
-The effect applies to the vertical lists and text views of the screen when it shows, so a list that mounts after the screen shows gets it the next time the screen appears. A list inside another vertical list, like a horizontal carousel in a feed, gets none: UIKit draws no edge effect there. Render the list at once, and fill it when the data comes.
+The effect applies to the vertical lists and text views of the screen when it shows, so a list that mounts after the screen shows gets it the next time the screen appears. A list nested very deep in the screen's views may not get it. A list inside another vertical list, like a horizontal carousel in a feed, gets none: UIKit draws no edge effect there. Render the list at once, and fill it when the data comes.
 
 ## Keyboard shortcuts {#shortcuts}
 
