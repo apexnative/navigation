@@ -264,6 +264,8 @@ internal class ModalViews(
         parts[record]?.container?.requestLayout()
     }
 
+    override fun sheetBack(record: ModalRecord): SheetBack? = parts[record]?.sheet
+
     // `modal.testID` on the modal's view; a sheet's on the sheet's container, `modal.sheet.testID` first, and its
     // grabber and scrim after it.
     private fun applyTestIds(record: ModalRecord, parts: Parts, options: Options) {

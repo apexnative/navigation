@@ -658,6 +658,84 @@ class ModalCoordinatorTest {
         assertEquals(listOf("attempted:Sheet", "detent:Sheet:medium"), entries)
     }
 
+    // The back gesture's preview of a sheet's dismissal (Android 14+): only where back would dismiss it as a drag down.
+
+    @Test
+    fun backPreviewsTheTopSheetThatWouldHide() {
+        home()
+        shown("Sheet", sheet())
+        assertSame(views.sheetBacks.getValue("Sheet"), modals.backTargetSheet())
+    }
+
+    @Test
+    fun aModalThatIsntASheetHasNoSheetPreview() {
+        home()
+        shown("Details")
+        assertNull(modals.backTargetSheet())
+    }
+
+    @Test
+    fun aSheetWhoseContentGoesBackHasNoSheetPreview() {
+        home()
+        val stack = object : TestLayout(activity, registry, "Stack1", sheet()) {
+            override fun canHandleBack() = true
+        }
+        stack.add(screen("Details"))
+        views.instant = true
+        show(stack)
+        assertEquals(State.Shown, record("Stack1").state)
+        assertNull(modals.backTargetSheet())
+    }
+
+    @Test
+    fun aSheetThatKeepsTheUserHasNoSheetPreview() {
+        home()
+        shown("Sheet", sheet().apply { modal.swipeToDismiss = Bool(false) })
+        assertNull(modals.backTargetSheet())
+    }
+
+    @Test
+    fun aSheetThatHoldsBackHasNoSheetPreview() {
+        home()
+        shown("Sheet", sheet().apply { hardwareBackButton.dismissModalOnPress = Bool(false) })
+        assertNull(modals.backTargetSheet())
+    }
+
+    @Test
+    fun aSheetThatWouldCollapseOrIsClosingHasNoSheetPreview() {
+        home()
+        shown("Sheet", sheet())
+        views.sheetBacks.getValue("Sheet").hidesOnBack = false
+        assertNull(modals.backTargetSheet())
+    }
+
+    @Test
+    fun theOnlySheetOverNoRootHasNoSheetPreview() {
+        shown("Sheet", sheet())
+        assertNull(modals.backTargetSheet())
+    }
+
+    @Test
+    fun aSheetThatComesInOrGoesHasNoSheetPreview() {
+        home()
+        show(screen("Sheet", sheet()))
+        assertEquals(State.Presenting, record("Sheet").state)
+        assertNull(modals.backTargetSheet())
+        views.endShow("Sheet")
+        assertSame(views.sheetBacks.getValue("Sheet"), modals.backTargetSheet())
+        dismiss("Sheet")
+        assertEquals(State.Dismissing, record("Sheet").state)
+        assertNull(modals.backTargetSheet())
+    }
+
+    @Test
+    fun aSheetUnderAnotherModalHasNoSheetPreview() {
+        home()
+        shown("Sheet", sheet())
+        shown("Details")
+        assertNull(modals.backTargetSheet())
+    }
+
     @Test
     fun aMergeIntoAModalUpdatesItsSheet() {
         home()

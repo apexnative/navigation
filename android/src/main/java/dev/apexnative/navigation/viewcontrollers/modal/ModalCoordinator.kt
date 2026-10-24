@@ -158,6 +158,9 @@ internal class ModalCoordinator(
 
         /** The record's views lay out again (the activity resumed). */
         fun requestLayout(record: ModalRecord) = Unit
+
+        /** The record's sheet as back sees it; none before its show and for a modal that isn't a sheet. */
+        fun sheetBack(record: ModalRecord): SheetBack? = null
     }
 
     /**
@@ -397,10 +400,25 @@ internal class ModalCoordinator(
     }
 
     /**
-     * The root of the modal that back goes to first; none without one. A back gesture previews only a pop in it: its
-     * dismissal has a preview of its own nowhere yet.
+     * The root of the modal that back goes to first; none without one. A back gesture previews a pop in it, or the
+     * modal's dismissal when it is a sheet ([backTargetSheet]).
      */
     fun backTargetRoot(): ViewController<*>? = backTarget()?.root
+
+    /**
+     * The sheet back would dismiss now, as [handleBack] would, and as a drag down of the user would: the top modal is
+     * a sheet that shows, its content can't go back (else back goes there, and a pop in it has its own preview),
+     * `modal.swipeToDismiss` isn't false, `hardwareBackButton.dismissModalOnPress` doesn't hold back, it isn't the only
+     * modal over no root, and its sheet would hide, not collapse, and isn't closing already ([SheetBack.hidesOnBack]).
+     * None otherwise. The back gesture previews its hide on Android 14+, and its release closes it as the user does.
+     */
+    fun backTargetSheet(): SheetBack? {
+        val record = backTarget()?.takeIf { it.isSheet && it.state == State.Shown } ?: return null
+        if (record.root.canHandleBack() || holdsBack(record) || isLastWithoutRoot(record)) return null
+        val options = record.root.resolveShownOptions(DefaultOptions.current)
+        if (options.modal.swipeToDismiss.isFalse) return null
+        return views.sheetBack(record)?.takeIf { it.hidesOnBack }
+    }
 
     /** The mirror of [handleBack], without acting; null without a modal to ask. */
     fun canHandleBack(): Boolean? {

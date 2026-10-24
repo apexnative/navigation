@@ -44,7 +44,7 @@ top-level folder. Main thread only, unless a line says otherwise.
 - `viewcontrollers/sidemenu/`: `SideMenuController`, `SideMenuMotion`, `SideMenuPresenter`, `SideMenuRules`.
 - `viewcontrollers/splitview/`, `arrangement/`: the split view and the pair (modules, plus the core's
   `SplitViewPresenter`).
-- `viewcontrollers/modal/`, `overlay/`: `ModalCoordinator`, `ModalRecord`, `ModalViews`, `ModalSheet`;
+- `viewcontrollers/modal/`, `overlay/`: `ModalCoordinator`, `ModalRecord`, `ModalViews`, `ModalSheet`, `SheetBack`;
   `OverlayCoordinator`, `OverlayRecord`, `OverlayViews`, `OverlayTouches`.
 - `views/`: Android views and animators, no rules: `component/`, `externalcomponent/`, `stack/` (`StackLayout`,
   `topbar/`, `fab/`), `bottomtabs/`, `sidemenu/`, `animations/` (curves, `SideAnimator`, `AnimationRules`), `element/`
@@ -78,7 +78,8 @@ top-level folder. Main thread only, unless a line says otherwise.
   `StackViews.kt`, `StackTransitions.kt`, `PreparedPushes.kt`; `views/stack/StackLayout.kt`, `ScreenEdge.kt` (the edge
   a moving screen extends); back: `NavigationActivity.kt`, `viewcontrollers/navigator/BackCallbackState.kt`; the
   preview of a pop during the back gesture (Android 14+): `StackController.BackGesture`, `BackPreview.kt`,
-  `stackPoppedByBack` of the layouts.
+  `stackPoppedByBack` of the layouts; of a sheet's dismissal: `viewcontrollers/modal/SheetBack.kt`,
+  `ModalCoordinator.backTargetSheet`, `ModalSheet.BackPreview`.
 - Stack FAB: `viewcontrollers/stack/fab/FabPresenter.kt`, `FabPlan.kt`, `FabPlacement.kt`; `views/stack/fab/`.
 - Top bar (title, buttons, menus, large title): `viewcontrollers/stack/topbar/TopBarPresenter.kt`, `TopBarRoom.kt`,
   `TopBarVisibility.kt`, `BarComponents.kt`, `ButtonPlaces.kt`, `LargeTitleCollapse.kt`, `BarRowTransition.kt`;

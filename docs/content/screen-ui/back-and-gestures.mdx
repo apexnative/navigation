@@ -128,6 +128,20 @@ defineScreen({
 
 iOS ignores it: the swipe back there is UIKit's.
 
+### The preview of a sheet closing {#sheet-preview}
+
+<Os name="Android" /> 14+ The back gesture over a modal sheet that back would close shows the close before the user lets go: the sheet shrinks a little toward the bottom as the swipe goes on, and the dimming behind it follows. Letting go slides the sheet down and closes it exactly as a swipe down does, with the same events and the same answers (`onDismiss`, `modalDismissed`). Swiping back cancels, and the sheet returns.
+
+There is no preview, and the sheet closes when the swipe ends (at once for a button press), when:
+
+- the sheet has several detents and is above its lowest one: the sheet can be hidden only at the lowest detent, so back closes it right there, as before;
+- its screen holds back: `hardwareBackButton.dismissModalOnPress: false`, a [`BackHandler` listener](#back-handler), `usePreventLeave`;
+- a screen pushed inside the sheet pops first: that pop keeps [its own preview](#pop-preview);
+- the modal can't be swiped down (`swipeToDismiss: false`);
+- the sheet is the only modal over no root.
+
+On Android 13 and older the sheet closes when the swipe ends. iOS keeps UIKit's sheet: nothing changes there.
+
 ### Back to the home screen {#system-animation}
 
 <Os name="Android" /> On the first screen of the app, with nothing left to go back to, the navigation leaves the back to the system. The system then plays its predictive back animation: as the user swipes, the app shrinks and the home screen shows behind it, and the user can still change their mind halfway. The system decides this as the swipe starts, so the navigation takes the back only while it has something to do with it: a screen to pop, a modal, a menu or a search to close, a tab to go to (`backBehavior`), or a [`BackHandler` listener](#back-handler) of the app.
