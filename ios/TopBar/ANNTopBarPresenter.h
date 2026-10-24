@@ -70,8 +70,9 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)screenDidLayOut;
 - (void)contentDidMount;
 
-/// The screen's content is about to go (a pop removes it before `viewDidDisappear`): its lists get the system edge
-/// effect back and the large title's color leaves them; the place of the large title during a pop leaves the screen.
+/// The screen's content is about to go (its destroy; a pop removes it before `viewDidDisappear`): its lists get the
+/// system edge effect back and the large title's color leaves them; the place of the large title during a pop leaves
+/// the screen. At `screenDidDisappear` the same but the edge effects, which stay while the screen is covered.
 - (void)releaseLists;
 
 /// Every root of the screen's bar still alive stops, once, on the main queue.

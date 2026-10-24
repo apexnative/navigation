@@ -22,6 +22,10 @@ static const CGFloat ANNMainListTolerance = 1;
     objc_setAssociatedObject(view, ANNMainListExcludedKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
++ (BOOL)isExcludedView:(UIView *)view {
+    return objc_getAssociatedObject(view, ANNMainListExcludedKey) != nil;
+}
+
 - (UIScrollView *)keptList {
     UIScrollView *list = _list;
     UIView *screenView = _screenView;

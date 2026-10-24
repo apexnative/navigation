@@ -1088,8 +1088,10 @@ static ANNUserChoice *ANNRenameChoice(NSString *title) {
         ANNNavigationOptions *options = [screen resolveOptionsWithDefault];
         [_largeTitle screenDidDisappear:options list:[self followedList]];
     }
-    // The lists the screen set leave with it; its color and its React background leave the main list.
-    [self releaseLists];
+    // Its color and its React background leave the main list. The edge effects stay on its lists while it is covered:
+    // they are the screen's own, and its next appearance finds them set (its destroy and a mount that takes a list out
+    // give them the system values).
+    [self releaseListsKeepingEdgeEffects:YES];
     _bandKeepsLook = NO;
     // A swipe back given up: the screen keeps the bar's own look for its next appearance.
     if (band && screen) {
@@ -1098,7 +1100,13 @@ static ANNUserChoice *ANNRenameChoice(NSString *title) {
 }
 
 - (void)releaseLists {
-    [_edgeEffects reset];
+    [self releaseListsKeepingEdgeEffects:NO];
+}
+
+- (void)releaseListsKeepingEdgeEffects:(BOOL)keepEdgeEffects {
+    if (!keepEdgeEffects) {
+        [_edgeEffects reset];
+    }
     [_largeTitle removeListFill];
     [_largeTitle removeTitlePlaceFill];
     [_largeTitle removeTitleHost];
@@ -1143,6 +1151,8 @@ static ANNUserChoice *ANNRenameChoice(NSString *title) {
       [weakSelf contentDidMount];
     }
                          forKey:ANNTopBarMountKey];
+    // The edge effect walks the screen again only after a mount: a native screen's views are the app's, never told.
+    [self edgeEffects].mountsReported = !_native;
 }
 
 // The list the bar follows at the top edge under a large title that folds into it: the main list of a React screen;
