@@ -14,8 +14,9 @@ typedef NS_ENUM(NSInteger, ANNBarButtonsSide) {
 
 /// The buttons of one screen's bar and toolbar (`topBar.leftButtons[].*`, the side options, `overflowMenu`,
 /// `toolbar.buttons`): built from the resolved options, whole, at the screen's creation, at each appearance and at a
-/// merge of a side. Each button is an `ANNUIBarButtonItem` of the first kind its fields give (React view → icon and
-/// text → image button → SF Symbol → image → text → system item); a button without `id` is not placed. Side colors go
+/// merge of a side, when anything the side's build reads changed or the item no longer holds what it put there.
+/// Each button is an `ANNUIBarButtonItem` of the first kind its fields give (React view → icon and text → image
+/// button → SF Symbol → image → text → system item); a button without `id` is not placed. Side colors go
 /// onto what is built, never into the options; what the user chose (a toggle, a menu's check) goes into the screen's
 /// user layer. The React buttons' slots are kept by component id, so a button built again reuses its slot. Main queue.
 @interface ANNBarButtons : NSObject
@@ -27,7 +28,8 @@ typedef NS_ENUM(NSInteger, ANNBarButtonsSide) {
 + (instancetype)new NS_UNAVAILABLE;
 
 /// Sets `side` of the screen's item (left, right, center) from `options`; `animated` fades new buttons in (a side set
-/// as groups changes at once).
+/// as groups changes at once). Nothing when the side's buttons, colors, loaded images, React roots and traits are the
+/// same as at its last build and the item still holds what that build set: iOS 26 animates even equal new items.
 - (void)applySide:(ANNBarButtonsSide)side
           options:(ANNNavigationOptions *)options
          animated:(BOOL)animated;

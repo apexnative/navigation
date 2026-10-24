@@ -301,6 +301,27 @@ static BOOL ANNHasComponent(ANNButtonOptions *button) {
            [button.component.componentId withDefault:nil].length > 0;
 }
 
+// The image an icon loads, for telling builds apart (NSNull without one): a source of a file, data or Metro's server
+// loads through the shared cache, which gives the same image until the file at its path changes or a failed load
+// succeeds. An SF Symbol is the system's: its name in the options says it all.
+static id ANNLoadedImageOf(Image *icon) {
+    ANNImageSource *source = icon.source;
+    if (!icon.hasValue || (source && source.kind == ANNImageSourceKindSymbol)) {
+        return NSNull.null;
+    }
+    return [icon withDefault:nil] ?: NSNull.null;
+}
+
+// The images the items of a menu load (an item with `sfSymbol` shows the symbol), at any depth.
+static void ANNAddMenuImages(NSArray<ANNMenuItemOptions *> *items, NSMutableArray *loaded) {
+    for (ANNMenuItemOptions *item in items) {
+        if (!item.sfSymbol.hasValue) {
+            [loaded addObject:ANNLoadedImageOf(item.icon)];
+        }
+        ANNAddMenuImages(item.items, loaded);
+    }
+}
+
 // The image button's background: its own `iconBackground.color`, else (only for an image icon) the side's.
 static UIColor *ANNIconBackgroundOf(ANNButtonOptions *button, Color *sideBackground) {
     UIColor *own = ANNColorOf(button.iconBackground.color);
@@ -394,6 +415,60 @@ static UIBarButtonSystemItem ANNSystemItemOf(NSString *name) {
 @implementation ANNButtonPress
 @end
 
+// The same objects, one by one: what a build read by identity (a loaded image, a React button's slot) and what it put
+// on the navigation item. A string (the item's customization id) by its value.
+static BOOL ANNSameObjects(NSArray *a, NSArray *b) {
+    if (a.count != b.count) {
+        return NO;
+    }
+    for (NSUInteger index = 0; index < a.count; index++) {
+        id mine = a[index];
+        id theirs = b[index];
+        if (mine != theirs && !([mine isKindOfClass:NSString.class] && [mine isEqual:theirs])) {
+            return NO;
+        }
+    }
+    return YES;
+}
+
+// Everything the build of one side reads: the side's buttons, its colors and the customization id of the middle by
+// value; the images it loads and the slots of its React buttons by identity (a file written again at its path loads as
+// another image, a reload gives other roots); the traits it builds under (a text button's font follows the text size,
+// a drawn image the scale and the style).
+@interface ANNSideInputs : NSObject
+@property(nonatomic, strong, nullable) NSArray<ANNButtonOptions *> *buttons;
+@property(nonatomic, strong, nullable) Color *color;
+@property(nonatomic, strong, nullable) Color *disabledColor;
+@property(nonatomic, strong, nullable) Color *background;
+@property(nonatomic, strong, nullable) Text *customizationId;
+@property(nonatomic, copy) NSArray *loaded;
+@property(nonatomic, copy) NSArray *traits;
+@end
+
+@implementation ANNSideInputs
+
+- (BOOL)isSameAs:(ANNSideInputs *)other {
+    return ANNOptionValuesSame(_buttons, other.buttons) &&
+           ANNOptionValuesSame(_color, other.color) &&
+           ANNOptionValuesSame(_disabledColor, other.disabledColor) &&
+           ANNOptionValuesSame(_background, other.background) &&
+           ANNOptionValuesSame(_customizationId, other.customizationId) &&
+           ANNSameObjects(_loaded, other.loaded) && [_traits isEqualToArray:other.traits];
+}
+
+@end
+
+// The last build of one side: what it read and what the navigation item held right after it.
+@interface ANNSideBuild : NSObject
+@property(nonatomic, strong) ANNSideInputs *inputs;
+// The side went in as groups (`leadingItemGroups`, …), not as a list of items.
+@property(nonatomic) BOOL grouped;
+@property(nonatomic, copy) NSArray *placed;
+@end
+
+@implementation ANNSideBuild
+@end
+
 @implementation ANNBarButtons {
     __weak UIViewController *_screen;
     ANNReactComponentRegistry *_registry;
@@ -402,6 +477,8 @@ static UIBarButtonSystemItem ANNSystemItemOf(NSString *name) {
     NSMutableDictionary<NSString *, NSNumber *> *_selected;
     // What a press of each sender (an item, a button of an item) means.
     NSMapTable<id, ANNButtonPress *> *_presses;
+    // The last build of each side, by the side.
+    NSMutableDictionary<NSNumber *, ANNSideBuild *> *_builds;
 }
 
 - (instancetype)initWithScreen:(UIViewController *)screen
@@ -412,12 +489,16 @@ static UIBarButtonSystemItem ANNSystemItemOf(NSString *name) {
         _slots = [NSMutableDictionary new];
         _selected = [NSMutableDictionary new];
         _presses = [NSMapTable weakToStrongObjectsMapTable];
+        _builds = [NSMutableDictionary new];
     }
     return self;
 }
 
 #pragma mark - The sides
 
+// From iOS 26 UIKit animates any change of the bar's items, also to equal ones and with `animated:NO`: new items on
+// each appearance would morph, close an open menu and drop a pressed state. So a side is built again only when what
+// its build reads changed, or when the item no longer holds what the last build put there.
 - (void)applySide:(ANNBarButtonsSide)side
           options:(ANNNavigationOptions *)options
          animated:(BOOL)animated {
@@ -426,12 +507,92 @@ static UIBarButtonSystemItem ANNSystemItemOf(NSString *name) {
         return;
     }
     UINavigationItem *navigationItem = screen.navigationItem;
+    ANNSideInputs *inputs = [self inputsOfSide:side options:options];
+    ANNSideBuild *last = _builds[@(side)];
+    if (last && [last.inputs isSameAs:inputs]) {
+        NSArray *placed = [self placedOf:side grouped:last.grouped item:navigationItem];
+        if (ANNSameObjects(last.placed, placed)) {
+            return;
+        }
+    }
+    ANNSideBuild *build = [ANNSideBuild new];
+    build.inputs = inputs;
+    build.grouped = [self placeSide:side options:options item:navigationItem animated:animated];
+    build.placed = [self placedOf:side grouped:build.grouped item:navigationItem];
+    _builds[@(side)] = build;
+}
+
+- (ANNSideInputs *)inputsOfSide:(ANNBarButtonsSide)side options:(ANNNavigationOptions *)options {
+    ANNTopBarOptions *topBar = options.topBar;
+    ANNSideInputs *inputs = [ANNSideInputs new];
+    inputs.buttons = ANNButtonsOfSide(options, side);
+    inputs.color = ANNSideColor(topBar, side);
+    inputs.disabledColor = ANNSideDisabledColor(topBar, side);
+    inputs.background = ANNSideBackgroundColor(topBar, side);
+    inputs.customizationId = side == ANNBarButtonsSideCenter ? topBar.customizationId : nil;
+    NSMutableArray *loaded = [NSMutableArray new];
+    for (ANNButtonOptions *button in inputs.buttons ?: @[]) {
+        if (ANNHasComponent(button)) {
+            [loaded addObject:[self slotFor:button] ?: NSNull.null];
+        }
+        [loaded addObject:ANNLoadedImageOf(button.icon)];
+        ANNAddMenuImages(button.menu.items, loaded);
+    }
+    inputs.loaded = loaded;
+    UITraitCollection *traits = UITraitCollection.currentTraitCollection;
+    inputs.traits = @[
+        @(traits.userInterfaceStyle), @(traits.displayScale),
+        traits.preferredContentSizeCategory ?: @"", @(traits.legibilityWeight)
+    ];
+    return inputs;
+}
+
+// What the navigation item holds of `side` now, as the side's build put it there.
+- (NSArray *)placedOf:(ANNBarButtonsSide)side
+              grouped:(BOOL)grouped
+                 item:(UINavigationItem *)navigationItem {
+    NSMutableArray *placed = [NSMutableArray new];
+    BOOL left = side == ANNBarButtonsSideLeft;
+    switch (side) {
+        case ANNBarButtonsSideLeft:
+        case ANNBarButtonsSideRight: {
+            NSArray *shown =
+                left ? navigationItem.leftBarButtonItems : navigationItem.rightBarButtonItems;
+            if (@available(iOS 16.0, *)) {
+                if (grouped) {
+                    shown = left ? navigationItem.leadingItemGroups
+                                 : navigationItem.trailingItemGroups;
+                }
+                if (!left) {
+                    [placed addObject:navigationItem.pinnedTrailingGroup ?: NSNull.null];
+                }
+            }
+            [placed addObjectsFromArray:shown ?: @[]];
+            break;
+        }
+        case ANNBarButtonsSideCenter:
+            if (@available(iOS 16.0, *)) {
+                [placed addObjectsFromArray:navigationItem.centerItemGroups ?: @[]];
+                [placed addObject:navigationItem.customizationIdentifier ?: NSNull.null];
+            }
+            break;
+        case ANNBarButtonsSideToolbar:
+            break;
+    }
+    return placed;
+}
+
+// Builds `side` whole and puts it on the item; YES when it went in as groups.
+- (BOOL)placeSide:(ANNBarButtonsSide)side
+          options:(ANNNavigationOptions *)options
+             item:(UINavigationItem *)navigationItem
+         animated:(BOOL)animated {
     NSArray<ANNBuiltButton *> *built = [self buildSide:side options:options];
     if (side == ANNBarButtonsSideCenter) {
         if (@available(iOS 16.0, *)) {
             [self setCenter:built options:options item:navigationItem];
         }
-        return;
+        return YES;
     }
     NSMutableArray<ANNBuiltButton *> *placed = [built mutableCopy];
     if (side == ANNBarButtonsSideRight) {
@@ -447,7 +608,7 @@ static UIBarButtonSystemItem ANNSystemItemOf(NSString *name) {
             } else {
                 navigationItem.trailingItemGroups = groups.reverseObjectEnumerator.allObjects;
             }
-            return;
+            return YES;
         }
     }
     NSMutableArray<UIBarButtonItem *> *items = [NSMutableArray new];
@@ -469,6 +630,7 @@ static UIBarButtonSystemItem ANNSystemItemOf(NSString *name) {
     } else {
         [navigationItem setRightBarButtonItems:items animated:animated];
     }
+    return NO;
 }
 
 - (NSArray<ANNBuiltButton *> *)buildSide:(ANNBarButtonsSide)side
