@@ -3,7 +3,9 @@
 #import "ANNTabsDesign.h"
 #import <objc/runtime.h>
 
-// The icon an indicator was tinted from: an entry found by the icon's address counts only for that icon.
+// The icon an indicator was tinted from: an entry found by the icon's address counts only for that icon. An indicator
+// that is the icon itself (already an original image) carries nothing: the icon must not hold itself, and it may be
+// the image the options' cache keeps.
 static const void *ANNIndicatorIconKey = &ANNIndicatorIconKey;
 
 // UIKit's fonts of the places the options build over: the title of the row, the large title, the text of the back
@@ -254,7 +256,8 @@ static NSDictionary<NSAttributedStringKey, id> *ANNTextAttributes(ANNFontOptions
     ];
     NSCache<id, UIImage *> *images = ANNLookImages();
     UIImage *cached = [images objectForKey:key];
-    if (cached && (isSymbol || objc_getAssociatedObject(cached, ANNIndicatorIconKey) == icon)) {
+    if (cached && (isSymbol || cached == icon ||
+                   objc_getAssociatedObject(cached, ANNIndicatorIconKey) == icon)) {
         return cached;
     }
     UIImage *indicator = nil;
@@ -265,7 +268,7 @@ static NSDictionary<NSAttributedStringKey, id> *ANNTextAttributes(ANNFontOptions
         indicator =
             isSymbol ? icon : [icon imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
     }
-    if (!isSymbol) {
+    if (!isSymbol && indicator != icon) {
         objc_setAssociatedObject(indicator, ANNIndicatorIconKey, icon,
                                  OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
