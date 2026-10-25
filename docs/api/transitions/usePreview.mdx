@@ -124,18 +124,38 @@ usePreview(`message-${id}`, {
 
 ## When the screen renders {#time}
 
-The previewed screen is made and rendered **when the component mounts**, not at the long press: UIKit
-shows the preview at once, so it has to be ready. It renders like any screen, with its effects; it isn't on the
-stack until the user commits the preview. After a push, the view gets a new preview, rendered
-again, so the next long press works too.
+The previewed screen is **rendered when a press on the view starts**, not when the component mounts. At the mount the
+native side only makes the screen's node, which is cheap: it has no React root yet. When the press starts, UIKit asks
+for the menu about half a second before it shows the preview, and that is when the screen gets its root and renders:
+its content is there when the preview shows.
+
+A tap held for a moment (about 0.3 s, before the long press is recognized) starts the render too, even if the menu
+never opens. A right click with a pointer on iPad opens the menu at once, with no press before it: the first time, the
+screen renders as the preview shows, and its content can come a moment after the preview. A tap on the preview then
+waits for that content before it pushes the screen.
+
+Once rendered, the screen stays rendered until the preview goes: the component unmounts, its `props`, `screen` or
+`actions` change, the screen with the view closes, or a tap pushes it. Closing the menu without a tap keeps the
+screen, so the next long press shows it at once. It renders like any screen, with its effects; it isn't on the stack
+until the user commits the preview. After a push, the view gets a new preview, which renders at the next press.
+
+Two cases still render **at the mount**:
+
+- With [`appProvider`](/api/starting-the-app/createNavigation), where every screen is in the app's one React tree,
+  the screen renders in its place in that tree as the hook mounts.
+- A native screen, registered with a native name and made by the app's native creator, is made and rendered at the
+  mount.
 
 A screen with a [`key`](/api/screens-and-props/defineScreen#key) is no exception: the preview leaves the stack alone
 until the tap. If the stack has a screen with the same key by then, the tap goes back to that screen, as
 [`push`](/api/moving-between-screens/navigation#push) does, and the preview goes.
 
-So each `usePreview` costs one rendered screen while it is mounted. A list of a hundred rows with a preview each holds a
-hundred screens. Keep previews to what the user sees, such as the rows of a `FlatList`, which unmounts the rows that
-scroll away, and keep the previewed screen light to render.
+So a `usePreview` costs a rendered screen only after the user presses its view. A list of a hundred rows with a
+preview each holds no rendered screens until one is pressed: no hidden React roots, and no renders or effects (network
+calls, subscriptions) of screens the user never opens. Each screen the user did press stays rendered until its preview
+goes, so keep the previewed screen light to render. With `appProvider` or native screens, which render at the mount,
+each `usePreview` costs one rendered screen while it is mounted; there, keep previews to what the user sees, such as
+the rows of a `FlatList`, which unmounts the rows that scroll away.
 
 ## Android {#android}
 
