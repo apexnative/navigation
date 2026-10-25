@@ -11,6 +11,7 @@ import { useColors } from '../colors';
 import { fonts } from '../../ui';
 import { md } from '../../ui/icons';
 import { ITEMS } from '../data';
+import { useScrollBottomPadding } from '../insets';
 
 export interface NoteProps {
   /**
@@ -65,6 +66,7 @@ function Note({ kind = 'menus' }: NoteProps) {
   const [sort, setSort] = useState('Date');
   const [editing, setEditing] = useState(false);
   const [badge, setBadge] = useState(0);
+  const bottom = useScrollBottomPadding(20);
   useNavigationButton('sort-date', () => setSort('Date'));
   useNavigationButton('sort-name', () => setSort('Name'));
   useNavigationButton('edit', () => setEditing((value) => !value));
@@ -73,7 +75,7 @@ function Note({ kind = 'menus' }: NoteProps) {
   if (kind === 'toolbar' || kind === 'title') {
     return (
       <ScrollView
-        contentContainerStyle={styles.page}
+        contentContainerStyle={[styles.page, bottom]}
         contentInsetAdjustmentBehavior="automatic"
         style={{ backgroundColor: c.background }}
       >

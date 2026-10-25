@@ -72,18 +72,17 @@ class ScreenSafeAreaTest {
     }
 
     @Test
-    fun theSafeAreaKeepsEveryEdgeUnlessTheBarsHideOnScroll() {
-        val all = setOf("top", "right", "bottom", "left")
-        assertEquals(all, ScreenSafeArea.paddedEdges(null, topFree = false, bottomFree = false))
-        assertEquals(all - "top", ScreenSafeArea.paddedEdges(null, topFree = true, bottomFree = false))
-        assertEquals(all - "bottom", ScreenSafeArea.paddedEdges(null, topFree = false, bottomFree = true))
+    fun theSafeAreaKeepsTheTopAndTheSidesUnlessTheTopBarHidesOnScroll() {
+        val kept = setOf("top", "right", "left")
+        assertEquals(kept, ScreenSafeArea.paddedEdges(null, topFree = false))
+        assertEquals(kept - "top", ScreenSafeArea.paddedEdges(null, topFree = true))
     }
 
     @Test
     fun explicitEdgesAreExactlyThose() {
-        val explicit = ScreenSafeArea.paddedEdges(listOf("top", "middle"), topFree = true, bottomFree = true)
-        assertEquals(setOf("top"), explicit)
-        assertEquals(emptySet<String>(), ScreenSafeArea.paddedEdges(emptyList(), topFree = false, bottomFree = false))
+        val explicit = ScreenSafeArea.paddedEdges(listOf("top", "middle", "bottom"), topFree = true)
+        assertEquals(setOf("top", "bottom"), explicit)
+        assertEquals(emptySet<String>(), ScreenSafeArea.paddedEdges(emptyList(), topFree = false))
     }
 
     @Test

@@ -464,7 +464,7 @@ The route patterns of `linking` are typed too: in `'user/:userId'` the handler g
 | `useNavigation` | `useNavigation`: the commands of this screen. |
 | `useIsFocused` | `useIsFocused`. |
 
-Every screen keeps clear of the bars by itself, so a `SafeAreaView` around the content can go; `useSafeAreaInsets` of this package gives what still covers the content, 0 on an edge the screen keeps clear, so padding by it never comes twice. More: [Lifecycle and events](../fundamentals/lifecycle-and-events#hooks), [The safe area](../screen-ui/system-ui#safe-area).
+The bottom edge of a screen is not padded by default, as with `react-native-safe-area-context`: a list adds `useSafeAreaInsets().bottom` to its bottom padding, or the screen lists `'bottom'` in `safeArea(…)`. Every screen keeps its top and sides clear of the bars by itself, so a `SafeAreaView` around the content can go; `useSafeAreaInsets` of this package gives what still covers the content, 0 on an edge the screen keeps clear, so padding by it never comes twice. More: [Lifecycle and events](../fundamentals/lifecycle-and-events#hooks), [The safe area](../screen-ui/system-ui#safe-area).
 
 ## What has no direct equivalent {#no-equivalent}
 

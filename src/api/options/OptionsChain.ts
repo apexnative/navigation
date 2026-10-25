@@ -68,8 +68,8 @@ export abstract class OptionsChain {
 
   /**
    * The edges on which the screen keeps its content out of its safe area (bars, status bar, home indicator, cutout);
-   * none with no edge. Without it: all four on Android, and on iOS every edge but those where the content goes under
-   * a bar. On iOS a large title leaves the top out by itself.
+   * none with no edge. Without it: the top and the sides, but those where the content goes under a bar; the bottom is
+   * free, and a list keeps clear of it with `useSafeAreaInsets()`. A large title leaves the top out by itself.
    */
   safeArea(...edges: SafeAreaEdge[]): this {
     return this.layout({ safeAreaEdges: edges });

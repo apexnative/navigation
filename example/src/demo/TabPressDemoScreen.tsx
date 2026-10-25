@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { defineScreen, navigation, useTabPress } from '@apexnative/navigation';
+import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { defineScreen, navigation, useSafeAreaInsets, useTabPress } from '@apexnative/navigation';
 import { log } from '../showcase/journal';
 import { Button, Card, Muted, useTheme } from '../ui';
 
@@ -10,6 +10,9 @@ const ROWS = Array.from({ length: 40 }, (_, index) => `Row ${index + 1}`);
 function TabPressDemo({ title }: { title: string }) {
   const t = useTheme();
   const list = useRef<ScrollView>(null);
+  const insets = useSafeAreaInsets();
+  // iOS keeps the last rows clear of the home indicator with the content inset, on Android they end above the bar here.
+  const bottom = Platform.OS === 'android' ? { paddingBottom: 56 + insets.bottom } : null;
   useTabPress((event) => {
     log('event', `useTabPress (${title})`, event.wasSelected ? 'again: to the top' : 'first press');
     if (event.wasSelected) list.current?.scrollTo({ y: 0, animated: true });
@@ -18,7 +21,7 @@ function TabPressDemo({ title }: { title: string }) {
     <ScrollView
       ref={list}
       style={{ backgroundColor: t.background }}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, bottom]}
       contentInsetAdjustmentBehavior="automatic"
     >
       <Card title={title}>

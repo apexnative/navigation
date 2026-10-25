@@ -59,11 +59,6 @@ internal object TabsRoom {
         if (screen.hidden) null else tabsBottom - bar.reach - bar.rowOvershoot
 
     /**
-     * The safe area of the screen leaves its bottom edge free: the bar hides on scroll and shows for it.
-     */
-    fun leavesBottomEdgeFree(screen: Screen): Boolean = screen.hideOnScroll && !screen.hidden
-
-    /**
      * The bar at rest under a stack's FAB: also when the screen is under it (`drawBehind`, `hideOnScroll`); none when
      * the screen hides it.
      */

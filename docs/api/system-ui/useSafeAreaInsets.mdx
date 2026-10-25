@@ -58,11 +58,11 @@ of a React Native style on both.
 Each side is how far into the screen's content something still covers it, once the screen's own padding is taken
 out:
 
-- **0 on an edge the screen pads.** The padding keeps the content clear already. On an iPhone, a screen with the
-  default edges pushed in a stack gets 0 on every side.
+- **0 on an edge the screen pads.** The padding keeps the content clear already. On an iPhone, a screen with
+  the default edges pushed in a stack gets 0 on the sides and the home indicator's height at the bottom.
 - **All of what covers it on an edge the content goes under**: under a top bar it draws behind (`drawBehind`, a large
-  title, `hideOnScroll`), under the vertical bar of iPhone Duo, on every edge with `safeArea()`. On an iPhone, a screen
-  with a large title over tabs and `safeArea()` gets about top 168 and bottom 83: the status bar and the bar with its
+  title, `hideOnScroll`), under the vertical bar of iPhone Duo, on the bottom by default and on every edge with
+  `safeArea()`. On an iPhone, a screen with a large title over tabs and `safeArea()` gets about top 168 and bottom 83: the status bar and the bar with its
   large title, the tab bar and the home indicator. On iPhone Duo folded, a screen with the default edges gets right 84:
   the vertical bar.
 
@@ -80,7 +80,7 @@ without a top bar gets the status bar's.
 <ApiMember data={data} of="EdgeInsets" name="bottom" />
 
 The home indicator <Os name="iOS" />, Android's navigation bar, and the tab bar or the toolbar, where the content goes
-under them. 0 where the screen pads the bottom, the default on Android and on iOS without a bar at the bottom.
+under them. What still covers the bottom, on every screen by default. It is 0 where the screen lists `'bottom'` in its `safeArea` edges, and wherever nothing covers the bottom of the screen: on <Os name="Android" /> tabs that keep their room (without `bottomTabs.drawBehind` or `hideOnScroll`), an opaque navigation bar or `navigationBar.drawBehind: false`, the keyboard with `adjustResize`; on <Os name="iOS" /> an opaque tab bar (compatibility mode).
 
 ### `left` {#left}
 
@@ -97,8 +97,8 @@ The same, on the right: on iPhone Duo, the vertical bar of a left-to-right app, 
 
 ## The insets and the safe area of the screen {#safe-area}
 
-The navigation keeps every screen in its safe area, on the edges of the screen's `safeArea` option: all four on
-Android, and on iOS every edge but one under a bar that shows (see
+The navigation keeps every screen in its safe area, on the edges of the screen's `safeArea` option: by default the
+top and the sides, but one under a bar that shows; the bottom is free (see
 [The safe area](/docs/screen-ui/system-ui#safe-area)). The insets are <Mark>what is left after that padding</Mark>, so
 adding them to the content never pads an edge twice:
 
@@ -121,6 +121,9 @@ return (
 
 On an iPhone the sides are 0 and the rows have 16 points on each side. On iPhone Duo the list goes under the vertical
 bar, and its rows end 16 points before it.
+
+The bottom works the same way: a list adds `insets.bottom` to its bottom padding, as with
+`react-native-safe-area-context`.
 
 One thing pads by itself: on <Os name="iOS" /> a scroll view with `contentInsetAdjustmentBehavior="automatic"` keeps
 clear of the bars it goes under. Leave the inset out on those edges, or the rows start twice as far down (see

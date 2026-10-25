@@ -451,10 +451,6 @@
     UINavigationController *stack = [self shownNavigation];
     ANNScreenPaddingContext context = {
         .inStack = stack != nil,
-        // The stack's toolbar, by the rule the stack shows it with: one that `topBar.hideOnScroll`
-        // hid with the bar still counts.
-        .stackShowsToolbar = stack != nil && options.toolbar.shouldShow,
-        .windowBottomSafeArea = window.safeAreaInsets.bottom,
         .verticalBarSide = [self verticalBarSide],
     };
     UIEdgeInsets padding = ANNScreenPadding(insets, options, context);

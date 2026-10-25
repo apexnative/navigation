@@ -4,7 +4,7 @@ import { defineScreen } from '@apexnative/navigation';
 import { TILES, useColors } from '../colors';
 import { fonts } from '../../ui';
 import { PEOPLE } from '../data';
-import { LIST_LAYOUT, useSidePadding } from '../insets';
+import { LIST_LAYOUT, useScrollBottomPadding, useSidePadding } from '../insets';
 
 export interface ProfileProps {
   index: number;
@@ -14,6 +14,7 @@ export interface ProfileProps {
 function Profile({ index }: ProfileProps) {
   const c = useColors();
   const sides = useSidePadding();
+  const bottom = useScrollBottomPadding();
   const name = PEOPLE[index % PEOPLE.length] ?? 'Alex Kim';
   const initials = name
     .split(' ')
@@ -21,7 +22,7 @@ function Profile({ index }: ProfileProps) {
     .join('');
   return (
     <ScrollView
-      contentContainerStyle={sides}
+      contentContainerStyle={[sides, bottom]}
       contentInsetAdjustmentBehavior="automatic"
       style={{ backgroundColor: c.background }}
     >

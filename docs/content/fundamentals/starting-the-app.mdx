@@ -182,7 +182,7 @@ More: [Errors and loading](../architecture/errors-and-loading).
 
 Keys of the system; the defaults suit most apps.
 
-- `safeArea` — the edges on which every screen keeps its content out of the safe area: `{ edges: ['top', 'bottom'] }`.
+- `safeArea` — the edges on which every screen keeps its content out of the safe area: `{ edges: ['top', 'left', 'right', 'bottom'] }`. Listed edges replace the default, so list every edge the screens keep. Without it the screens keep the top and the sides, and the bottom is free.
 - `window` — <Os name="iOS" /> the color behind the screens, seen around a modal as it comes in: `{ backgroundColor: '#000000' }`.
 - `direction` — `'ltr'`, `'rtl'`, or `'locale'` for the language of the app; `navigation.setDirection` changes it.
 

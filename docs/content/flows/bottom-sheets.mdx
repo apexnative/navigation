@@ -161,7 +161,7 @@ navigation.showModal('PhotoActions', {
 });
 ```
 
-The content is measured after every render, so the sheet follows it when it grows. It needs <Os name="iOS" /> 16; on <Os name="Android" /> the sheet stops at half the height instead, as the Material sheet has no height of its content. A screen that fills its parent (`flex: 1`) has no height of its own, so give the content of this screen its natural height.
+The content is measured after every render, so the sheet follows it when it grows. It needs <Os name="iOS" /> 16; on <Os name="Android" /> the sheet stops at half the height instead, as the Material sheet has no height of its content. A screen that fills its parent (`flex: 1`) has no height of its own, so give the content of this screen its natural height. On <Os name="iOS" /> UIKit adds the bottom safe area to the height of a `'content'` sheet itself, so don't add `insets.bottom` to its content: the gap would come twice.
 
 ## 8. Close it with a pick {#close}
 

@@ -442,6 +442,27 @@ return (
 
 More: [Hiding the bar](../screen-ui/top-bar#hide), [The large title](../screen-ui/top-bar#large-title).
 
+### The last rows of a list sit under the home indicator or the tab bar {#rows-under-bottom}
+
+The last row of a list can't be scrolled above the home indicator, the navigation bar or the tab bar.
+
+**Why:** the bottom edge of a screen is not padded by default, so the content goes down to the edge, under the system and under the tab bar or toolbar.
+
+**Fix:** add the bottom inset to the padding of the list; on <Os name="iOS" /> `contentInsetAdjustmentBehavior="automatic"` does it by itself. Or have the screen pad it: list every edge the screen keeps (`safeArea('top', 'left', 'right', 'bottom')`), since listed edges replace the default. An explicit `'top'` also keeps the top under a large title, so a large-title screen usually pads its list with `insets.bottom` instead:
+
+```tsx
+const insets = useSafeAreaInsets();
+return (
+  <FlatList
+    data={items}
+    contentContainerStyle={{ paddingBottom: 16 + insets.bottom }}
+    renderItem={renderItem}
+  />
+);
+```
+
+More: [The safe area](../screen-ui/system-ui#safe-area).
+
 ### A pick in the overflow menu does nothing {#overflow-pick}
 
 The user picks Export in the overflow menu, and nothing happens.

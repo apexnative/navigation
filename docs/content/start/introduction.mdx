@@ -199,7 +199,7 @@ Four habits follow from the model. Each of them comes from the same fact: the pl
 
 - **Read the state, don't keep a copy.** The platform owns the stack, so a copy in React state goes stale after the first swipe back. Read it with [`useNavigationState`](../fundamentals/lifecycle-and-events#state), and listen to events instead of guessing.
 - **One React root per screen, by default.** Each screen renders on its own, so a provider around one screen doesn't reach the others. Providers for the whole app or for every screen go to `createNavigation`; with `appProvider`, all screens share one React tree. More: [One tree](../architecture/one-tree#modes).
-- **No safe area code.** Every screen keeps its content clear of the status bar, the cutout, the bars and the home indicator by itself, without `SafeAreaView` or a safe area library. The native side measures each screen, so the insets are right under a top bar, in a sheet and in a tab. More: [The safe area](../screen-ui/system-ui#safe-area).
+- **No safe area code.** Every screen keeps its top and sides clear of the status bar, the cutout and the bars by itself (the bottom is free: a list adds `useSafeAreaInsets().bottom`), without `SafeAreaView` or a safe area library. The native side measures each screen, so the insets are right under a top bar, in a sheet and in a tab. More: [The safe area](../screen-ui/system-ui#safe-area).
 - **Native screens are screens like the others.** A SwiftUI, UIKit or Compose screen is pushed, presented and put in tabs the same way as a React screen. More: [Native screens](../architecture/native-screens).
 
 ## When it fits {#fit}

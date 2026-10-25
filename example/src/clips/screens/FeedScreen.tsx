@@ -8,6 +8,7 @@ import { ITEMS } from '../data';
 import { useClipNavigation } from '../nav';
 import { Row } from '../Row';
 import { List } from '../../ui';
+import { useScrollBottomPadding } from '../insets';
 
 /** Runs `refresh` each time the screen gets the focus again, as the data fetching guide shows. */
 function useRefreshOnFocus(refresh: () => void) {
@@ -28,6 +29,7 @@ function useRefreshOnFocus(refresh: () => void) {
 function Feed() {
   const c = useColors();
   const nav = useClipNavigation();
+  const bottom = useScrollBottomPadding(16);
   const [minute, setMinute] = useState(4);
   const [loading, setLoading] = useState(false);
   const [broken, setBroken] = useState(false);
@@ -42,7 +44,7 @@ function Feed() {
   if (broken) throw new Error('The feed did not load.');
   return (
     <ScrollView
-      contentContainerStyle={{ padding: 16 }}
+      contentContainerStyle={{ padding: 16, ...bottom }}
       contentInsetAdjustmentBehavior="automatic"
       style={{ backgroundColor: c.background }}
     >

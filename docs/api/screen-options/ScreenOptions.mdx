@@ -269,12 +269,12 @@ indicator, a cutout. One argument per edge: `'top'`, `'right'`, `'bottom'`, `'le
 edge to edge.
 
 ```ts
-s.safeArea('top', 'bottom'); // a form
+s.safeArea('top', 'left', 'right', 'bottom'); // a form
 s.safeArea(); // a full-screen photo
 ```
 
-Without it: all four on Android, and on iOS every edge but those where the content goes under a bar: the top bar,
-a bar at the bottom, the vertical bar at the side of iPhone Duo. `useSafeAreaInsets()` gives what the screen doesn't
+Without it: the top and the sides, but those where the content goes under a bar (the top bar, the vertical bar at the
+side of iPhone Duo); the bottom is free, and a list keeps clear of it with `useSafeAreaInsets().bottom`. `useSafeAreaInsets()` gives what the screen doesn't
 pad. See [The safe area](/docs/screen-ui/system-ui#safe-area).
 
 ### `orientation` {#orientation}

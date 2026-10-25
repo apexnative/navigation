@@ -188,7 +188,7 @@ Each rule has one owner. Change the owner, not a caller; if a new feature needs 
 - **Room for the bars.** A screen's room at the top and bottom is `ScreenFrame` with `ScreenSafeArea` and the
   `ParentController` room hooks (`getTopInset`, `keepsStatusBarRoomOf`, …). A screen in a pair forwards its room to
   the pair (`ScreenFrame.applyRoom`), and the pair's `getTopInset` uses the screens' rule (`ScreenFrame.topRoomOf`)
-  with the options it shows with. A view's place in the window for the safe area (the React root, the stack's header
+  with the options it shows with. The bottom edge is not padded by default (only `'bottom'` in the edges pads it); `roomPadding` still shrinks the view for an opaque navigation bar and the keyboard. A view's place in the window for the safe area (the React root, the stack's header
   bottom in `headerBottomOf`, the tabs' top in `tabsTopOf`) is `RestPlace`: from layout, without translations, a sheet
   at rest.
 - **A container's own move.** A container that moves children in or out of the window without a command (the split

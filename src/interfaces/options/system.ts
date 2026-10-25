@@ -36,10 +36,12 @@ export interface OptionsLayout {
    * which is 0 on an edge the screen keeps and the whole covered size on an edge where the content goes under a bar.
    * Edges listed here always win, also for a screen with a large title.
    *
-   * Without it, on iOS: every edge except those where the content goes under a bar that shows (the top bar, a tab
-   * bar or toolbar at the bottom, the side of a vertical bar); a screen with a large title keeps the top free so its
-   * list can scroll under the bar. On Android: all four edges, except the top under a top bar that hides on scroll
-   * or under a large title, and the bottom under tabs that hide on scroll.
+   * Without it the screen keeps the top and the sides, and its content goes down to the bottom: under the home
+   * indicator or the navigation bar, and under a tab bar or toolbar it goes under. A list keeps its last rows clear
+   * with `useSafeAreaInsets().bottom`. The top is free where the content goes under a top bar: on iOS under a bar
+   * that shows, on Android under a bar that hides on scroll; on both under a large title, so the list scrolls under
+   * the bar. On iOS the side of a vertical bar is free too. To have the screen keep the bottom, list every edge it
+   * keeps: listed edges replace the default, and an explicit `'top'` keeps the top under a large title too.
    */
   safeAreaEdges?: SafeAreaEdge[];
   /**

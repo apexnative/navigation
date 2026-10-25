@@ -9,6 +9,8 @@ import {
 import { Chip } from '../ui';
 
 const EDGES: SafeAreaEdge[] = ['top', 'right', 'bottom', 'left'];
+// What a screen keeps its content off without `safeAreaEdges`: the bottom is free.
+const DEFAULT_EDGES: SafeAreaEdge[] = ['top', 'right', 'left'];
 // Coral: the screen out of its safe area (under the bars, the status bar, the gesture handle, the camera). Blue: its
 // content, framed.
 const OUTSIDE = '#FF7675';
@@ -22,7 +24,7 @@ const FRAME = '#0652DD';
 function SafeArea() {
   const nav = useNavigation();
   const insets = useSafeAreaInsets();
-  const [edges, setEdges] = useState<SafeAreaEdge[]>(EDGES);
+  const [edges, setEdges] = useState<SafeAreaEdge[]>(DEFAULT_EDGES);
   const [topBar, setTopBar] = useState(true);
   const [statusBar, setStatusBar] = useState(true);
   const [underTopBar, setUnderTopBar] = useState(false);

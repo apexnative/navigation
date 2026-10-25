@@ -130,13 +130,6 @@ abstract class ParentController<V : ViewGroup>(
         parentController?.leavesTopEdgeFree(this) ?: false
 
     /**
-     * Whether the safe area of [child] leaves its bottom edge free by default: the tabs show with
-     * `bottomTabs.hideOnScroll` of [screen], the screen that asks.
-     */
-    open fun leavesBottomEdgeFree(child: ViewController<*>, screen: ViewController<*> = child): Boolean =
-        parentController?.leavesBottomEdgeFree(this, screen) ?: false
-
-    /**
      * The tab bar at rest under [child]: where a stack's FAB keeps clear of it, by the options of [screen], the stack's
      * screen on top; none out of tabs.
      */
