@@ -11,18 +11,21 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewOutlineProvider
+import android.view.ViewTreeObserver
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import dev.apexnative.navigation.customrow.BottomTabsCustomRowOptions
 import dev.apexnative.navigation.utils.TestIds
+import dev.apexnative.navigation.utils.UiUtils
 import dev.apexnative.navigation.viewcontrollers.bottomtabs.CustomTabRowGeometry
 
 /**
- * The custom row of bottom tabs on Android (`bottomTabs.customRow`): a container over the bar, in the window's content,
- * that holds the tabs' cells in one row of equal widths in tab order. It owns its place, its look, its visibility and
- * the touches: each cell's place takes them, the React elements in the cell don't, and a tap or a long press of a place
- * goes to [onPress] or [onLongPress] with the tab's index. Where it lies is the placer's to say (`CustomTabRowPlacer`);
- * what it looks like its tabs'. Main thread only.
+ * The custom row of bottom tabs on Android (`bottomTabs.customRow`): a container over the bar, a child of the tabs'
+ * view right after the bar's container, that holds the tabs' cells in one row of equal widths in tab order. It owns its
+ * look, its visibility and the touches: each cell's place takes them, the React elements in the cell don't, and a tap
+ * or a long press of a place goes to [onPress] or [onLongPress] with the tab's index. The tabs' view lays it out over
+ * the bar ([placeOver]); before each frame it goes with the bar's [container]. What it looks like is its tabs'. Main
+ * thread only.
  */
 @SuppressLint("ViewConstructor")
 internal class CustomTabRow(context: Context) : FrameLayout(context) {
@@ -42,11 +45,23 @@ internal class CustomTabRow(context: Context) : FrameLayout(context) {
     /** A cell's place was long-pressed. */
     var onLongPress: ((Int) -> Unit)? = null
 
-    /** `bottomTabs.customRow` of the tabs, resolved: the placer reads its height and margins. */
+    /** `bottomTabs.customRow` of the tabs, resolved: its height and margins say where the row lies. */
     var options = BottomTabsCustomRowOptions()
 
     /**
-     * Where the placer put the row last, in its parent; none before it did. The frame holds `bottomMargin` below the
+     * The bar's container the row goes with: its motion (a ride, a slide, the hide on scroll), its alpha, its height
+     * over the screens and whether it shows. The tabs' view sets it as the row joins it.
+     */
+    var container: View? = null
+
+    // Before each frame of the window the row is in: it goes with the container.
+    private val following = ViewTreeObserver.OnPreDrawListener {
+        container?.let(::follow)
+        true
+    }
+
+    /**
+     * Where the tabs' view put the row last, in it; none before it did. The frame holds `bottomMargin` below the
      * content: the row draws, clips, casts its shadow, lays its cells and takes touches only over the content, and the
      * margin below lets the touches through to what is under it.
      */
@@ -117,10 +132,57 @@ internal class CustomTabRow(context: Context) : FrameLayout(context) {
         return super.dispatchTouchEvent(event)
     }
 
-    /** Whether the row shows its cells: it hides with the bar. */
-    fun showWith(bar: View) {
-        val wanted = if (bar.visibility != View.GONE) View.VISIBLE else View.GONE
+    /**
+     * Where the row lies over the bar whose edges are [barLeft], [barRight] and [barBottom] and whose height is
+     * [barHeight], in the tabs' view of [tabsHeight] with the navigation bar's [navigationBar] at its bottom: its
+     * height and margins from [options].
+     */
+    fun placeOver(barLeft: Int, barRight: Int, barBottom: Int, barHeight: Int, tabsHeight: Int, navigationBar: Int) =
+        CustomTabRowGeometry.inTabs(
+            barLeft = barLeft,
+            barRight = barRight,
+            barBottom = barBottom,
+            tabsHeight = tabsHeight,
+            navigationBar = navigationBar,
+            margin = UiUtils.dpToPixels(
+                context,
+                options.horizontalMargin.get(CustomTabRowGeometry.HORIZONTAL_MARGIN_DP.toDouble()),
+            ),
+            content = CustomTabRowGeometry.content(
+                barHeight = barHeight,
+                height = options.height.get(null)?.let { UiUtils.dpToPixels(context, it) },
+                extra = UiUtils.dpToPixels(context, CustomTabRowGeometry.EXTRA_HEIGHT_DP.toDouble()),
+            ),
+            bottomMargin = UiUtils.dpToPixels(context, options.bottomMargin.get(0.0)),
+        )
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        viewTreeObserver.addOnPreDrawListener(following)
+    }
+
+    override fun onDetachedFromWindow() {
+        viewTreeObserver.removeOnPreDrawListener(following)
+        super.onDetachedFromWindow()
+    }
+
+    // The row hides with the bar and takes its motion and its alpha (the tabs' own alpha and motion, and their
+    // parents', the row has as their child); it stands as high as the container, and leaves accessibility while its
+    // tabs wait to show.
+    private fun follow(container: View) {
+        val wanted = if (container.visibility != View.GONE) View.VISIBLE else View.GONE
         if (visibility != wanted) visibility = wanted
+        if (alpha != container.alpha) alpha = container.alpha
+        if (translationX != container.translationX) translationX = container.translationX
+        if (translationY != container.translationY) translationY = container.translationY
+        val lift = CustomTabRowGeometry.lift(container.z, elevation)
+        if (translationZ != lift) translationZ = lift
+        val mode = if (hiddenFromAccessibility()) {
+            View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+        } else {
+            View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
+        }
+        if (importantForAccessibility != mode) importantForAccessibility = mode
     }
 
     /** Draws [look]; nothing changes when it is the one drawn. */

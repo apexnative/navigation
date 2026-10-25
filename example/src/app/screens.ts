@@ -47,6 +47,7 @@ import { GroupFirstScreen } from '../demo/GroupFirstScreen';
 import { GroupSecondScreen } from '../demo/GroupSecondScreen';
 import { TabsAccessory } from '../demo/TabsAccessory';
 import { TabsDemoScreen } from '../demo/TabsDemoScreen';
+import { TabItemCell } from '../demo/TabItemCell';
 import { FormOverlay } from '../demo/FormOverlay';
 import { MiniPlayerOverlay } from '../demo/MiniPlayerOverlay';
 import { PlainListScreen } from '../demo/PlainListScreen';
@@ -91,6 +92,7 @@ export const screens = {
   // The demo of tabs of section 9.
   TabsDemo: TabsDemoScreen,
   TabsAccessory,
+  TabItemCell,
   // The side menu demo of section 10.
   SideMenuCenter: SideMenuCenterScreen,
   SideMenuMenu: SideMenuMenuScreen,
