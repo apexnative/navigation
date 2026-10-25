@@ -52,6 +52,8 @@ import { MiniPlayerOverlay } from '../demo/MiniPlayerOverlay';
 import { PlainListScreen } from '../demo/PlainListScreen';
 import { TitleView } from '../demo/TitleView';
 import { ToastOverlay } from '../demo/ToastOverlay';
+import { ShapeScreen } from '../demo/ShapeScreen';
+import { ShapesScreen } from '../demo/ShapesScreen';
 import { BarAvatar } from '../examples/BarAvatar';
 import { BarLogo } from '../examples/BarLogo';
 import { ClubsScreen } from '../examples/ClubsScreen';
@@ -148,6 +150,8 @@ export const screens = {
   Person: PersonScreen,
   Cards: CardsScreen,
   Card: CardScreen,
+  Shapes: ShapesScreen,
+  Shape: ShapeScreen,
   RootDemo: RootDemoScreen,
   WaitForRenderDemo: WaitForRenderDemoScreen,
   Heavy: HeavyScreen,

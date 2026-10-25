@@ -14,17 +14,22 @@ import android.view.View
 import android.view.ViewGroup
 import com.facebook.react.views.view.ReactViewGroup
 import dev.apexnative.navigation.options.SharedElementTransitionOptions
-import dev.apexnative.navigation.utils.ViewUtils
 import dev.apexnative.navigation.utils.borderRadius
-import dev.apexnative.navigation.utils.computeInheritedScale
 import kotlin.math.roundToInt
 
 // A view with children moves as two pictures of itself, as on iOS: of the view that goes away and of the one that
-// comes, each with its children. The copy goes from the place, size and corner radius of the one to those of the other,
-// both pictures fill it, and the picture of the destination shows over the other on the way. The pictures are drawing
-// commands: an avatar's letter grows sharp. They are drawn in the overlay of the transition layer while `to` is hidden,
-// and nothing else moves the pair. A view without children moves itself, its outline growing, as before.
-class ViewChangeAnimator(from: View, to: View) : PropertyAnimatorCreator<ReactViewGroup>(from, to, ReactViewGroup::class.java) {
+// comes, each with its children. The copy goes from where the one is drawn — its center, its size at the scale it is
+// drawn at, its angle and corner radius — to where the other is drawn in its screen (FlightGeometry), the angle along
+// the shorter arc; both pictures fill it, and the picture of the destination shows over the other on the way. The
+// pictures are drawing commands: an avatar's letter grows sharp. They are drawn in the overlay of the transition layer
+// while `to` is hidden, and nothing else moves the pair. A view without children moves itself, its outline growing, as
+// before.
+class ViewChangeAnimator internal constructor(
+    from: View,
+    to: View,
+    // Where `to` was in its screen: what the copy flies to.
+    private val toStandIn: View?,
+) : PropertyAnimatorCreator<ReactViewGroup>(from, to, ReactViewGroup::class.java) {
     private val pictures by lazy { pictures() }
 
     override fun shouldAnimateProperty(fromChild: ReactViewGroup, toChild: ReactViewGroup): Boolean =
@@ -42,68 +47,72 @@ class ViewChangeAnimator(from: View, to: View) : PropertyAnimatorCreator<ReactVi
                 to.alpha = 0f
             }
             onFrame {
-                drawable.progress = curve.getInterpolation(it)
+                drawable.update(it, curve.getInterpolation(it))
                 layer.invalidate()
             }
+            // A flight that landed where `to` shows only in its screen keeps its last picture: the transition takes the
+            // layer away with it and shows `to` in its place.
+            val holds = FlightEnd.holdsAtEnd(to, toStandIn, layer)
             onEnd {
-                layer.overlay.remove(drawable)
-                layer.invalidate()
-                to.alpha = end.alpha
+                if (!holds || !landed) {
+                    layer.overlay.remove(drawable)
+                    layer.invalidate()
+                    to.alpha = end.alpha
+                }
             }
         }
     }
 
-    // `to` is in the transition layer already, at its margins (the coordinates of the other animators); `from` is where
-    // it is on the screen, at the scale of its parents.
+    // `to` is in the transition layer already: the pictures are drawn in its coordinates. `from` is where it is drawn
+    // on the screen, `to` where it is drawn once back in its screen.
     private fun pictures(): Pair<ViewPicture, ViewPicture>? {
-        if (to.parent !is ViewGroup) return null
-        val toPlace = to.layoutParams as? ViewGroup.MarginLayoutParams ?: return null
-        val fromPlace = ViewUtils.getLocationOnScreen(from)
-            .apply { ViewUtils.getLocationOnScreen(to.parent as View).let { offset(-it.x, -it.y) } }
-        val (scaleX, scaleY) = computeInheritedScale(from)
-        val fromRect = RectF(0f, 0f, from.width * scaleX, from.height * scaleY).apply {
-            offset(fromPlace.x.toFloat(), fromPlace.y.toFloat())
-        }
-        val toRect = RectF(0f, 0f, to.width.toFloat(), to.height.toFloat()).apply {
-            offset(toPlace.leftMargin.toFloat(), toPlace.topMargin.toFloat())
-        }
-        val start = ViewPicture.of(from as ReactViewGroup, fromRect, scaleX) ?: return null
-        val end = ViewPicture.of(to as ReactViewGroup, toRect, 1f) ?: return null
+        val layer = to.parent as? ViewGroup ?: return null
+        val start = ViewPicture.of(from as ReactViewGroup, LayerPlace.of(from, layer)) ?: return null
+        val end = ViewPicture.of(to as ReactViewGroup, LayerPlace.of(to, layer, toStandIn)) ?: return null
         return start to end
     }
 }
 
-// A view's picture, its place in the transition layer, its corner radius there and its opacity.
-private class ViewPicture(val picture: Picture, val rect: RectF, val radius: Float, val alpha: Float) {
+// A view's picture, where it is drawn in the transition layer, its corner radius there and its opacity.
+private class ViewPicture(val picture: Picture, val end: FlightEnd, val radius: Float, val alpha: Float) {
     companion object {
-        fun of(view: ReactViewGroup, rect: RectF, scale: Float): ViewPicture? {
+        fun of(view: ReactViewGroup, place: LayerPlace): ViewPicture? {
             if (view.width <= 0 || view.height <= 0) return null
             val picture = recordPicture(view) ?: return null
-            return ViewPicture(picture, rect, view.borderRadius * scale, view.alpha)
+            val end = place.end(view.width, view.height)
+            return ViewPicture(picture, end, view.borderRadius * end.scale, view.alpha)
         }
     }
 }
 
-// The copy where the move has brought it: its place, size and corner radius go from the start to the end along the
-// transition's curve, and so does the picture of the end over the picture of the start.
+// The copy where the move has brought it: its center, size, angle and corner radius go from the start to the end along
+// the transition's curve, and so does the picture of the end over the picture of the start.
 private class ViewMorphDrawable(private val start: ViewPicture, private val end: ViewPicture) : Drawable() {
-    var progress = 0f
+    private val flight = FlightGeometry(start.end, end.end, 0, 0)
+    private var at = start.end
+    private var progress = 0f
     private val rect = RectF()
     private val maskPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     // What is drawn over the mask keeps only the mask's pixels: the corners stay smooth (a clip path on the hardware
     // canvas is not anti-aliased).
     private val contentPaint = Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN) }
 
+    /** The copy at [time] (the part of the time), [progress] the curve's value. */
+    fun update(time: Float, progress: Float) {
+        this.progress = progress
+        at = flight.at(progress, time)
+    }
+
     override fun draw(canvas: Canvas) {
-        rect.set(
-            lerp(start.rect.left, end.rect.left),
-            lerp(start.rect.top, end.rect.top),
-            lerp(start.rect.right, end.rect.right),
-            lerp(start.rect.bottom, end.rect.bottom)
-        )
+        rect.set(-at.width / 2, -at.height / 2, at.width / 2, at.height / 2)
         if (rect.isEmpty) return
         val radius = lerp(start.radius, end.radius)
-        val count = canvas.saveLayer(rect, null)
+        // The copy turns about its center, mirrored where a view is.
+        val count = canvas.save()
+        canvas.translate(at.centerX, at.centerY)
+        canvas.rotate(at.rotation)
+        canvas.scale(at.mirrorX, at.mirrorY)
+        canvas.saveLayer(rect, null)
         canvas.drawRoundRect(rect, radius, radius, maskPaint)
         canvas.saveLayer(rect, contentPaint)
         draw(canvas, start, start.alpha)

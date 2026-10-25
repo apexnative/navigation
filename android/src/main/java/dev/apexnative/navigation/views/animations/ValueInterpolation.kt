@@ -19,6 +19,18 @@ internal object ValueInterpolation {
     }
 
     /**
+     * An angle in degrees at [fraction] of the way along the shorter arc, as iOS turns a shared element: 0 → 270 turns
+     * back by 90, 170 → −170 turns on by 20; half a turn goes on. At the end of the time exactly [to].
+     */
+    fun angle(from: Float, to: Float, fraction: Float, time: Float = fraction): Float {
+        if (time <= 0f) return from
+        if (time >= 1f) return to
+        val forward = ((to - from) % FULL_TURN + FULL_TURN) % FULL_TURN
+        val turn = if (forward > HALF_TURN) forward - FULL_TURN else forward
+        return from + fraction * turn
+    }
+
+    /**
      * A color (an sRGB color int, as React Native keeps a background; none is transparent) at [fraction] of the way
      * from [from] to [to]: L, a and b in Lab (D65), the alpha linear, the result rounded; at the end of the time
      * exactly [to].
@@ -90,4 +102,6 @@ internal object ValueInterpolation {
     private const val WHITE_Z = 108.883
     private const val EPSILON = 0.008856
     private const val KAPPA = 903.3
+    private const val FULL_TURN = 360f
+    private const val HALF_TURN = 180f
 }

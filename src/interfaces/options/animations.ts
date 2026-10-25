@@ -258,10 +258,12 @@ export type ElementAnimation = AppearingElementAnimation | DisappearingElementAn
  * the way (an error in its animation) is skipped too, with a warning in the log: it shows and hides with its screen,
  * and the transition and its command go on. Without an animation of the screens of its own, the screen that comes fades
  * in (or the one that goes fades out) in 300 ms around the elements. When the transition ends or is cancelled, the
- * element gets its own values back. `x` and `y` are the position in the parent of the element on both platforms. As on
- * a side of a screen, don't set `x` with `translationX` or `y` with `translationY` on one element: the translation
- * plays and the position doesn't. (Android) A view whose parent is a React view with `removeClippedSubviews` turned on,
- * such as a child of a clipping list, is not moved: it counts as not found.
+ * element gets its own values back. The element's own `transform` counts: a property that doesn't animate keeps the
+ * element's value, and a missing end is that value (a turn read from −180° to 180°, as React Native draws it). `x`
+ * and `y` are the position in the parent of the element on both platforms. As on a side of a screen, don't set `x`
+ * with `translationX` or `y` with `translationY` on one element: the translation plays and the position doesn't.
+ * (Android) A view whose parent is a React view with `removeClippedSubviews` turned on, such as a child of a clipping
+ * list, is not moved: it counts as not found.
  */
 export interface ElementTransition {
   /** The `nativeID` of the view to animate. */
@@ -295,9 +297,12 @@ export interface ElementTransition {
  * warning in the log: its views show and hide with their screens, and the transition and its command go on. (iOS) So is
  * a pair with a view without a size, or one whose picture can't be taken. Without an animation of the screens of its
  * own, the screen that comes fades in (or the one that goes fades out) in 300 ms around the pair. Text keeps its
- * proportions and changes its picture within a quarter of the flight. (Android) A picture that doesn't load within a
- * second drops out of the transition, and so does a pair with a view whose parent is a React view with
- * `removeClippedSubviews` turned on: it counts as not found.
+ * proportions and changes its picture within a quarter of the flight. A view turned or scaled by its own `transform` or
+ * by a parent's flies from where it shows, and its angle goes to the other view's along the shorter arc. The angle is
+ * the one React Native draws, from −180° to 180°: `rotate: '270deg'` turns back a quarter, and no pair spins a full
+ * turn. (Android) A picture that doesn't load within a second drops out of the transition, and so does a pair with a
+ * view whose parent is a React view with `removeClippedSubviews` turned on: it counts as not found. A skew and a tilt
+ * (`skewX`, `rotateX`, …) don't fly: the view flies without them and has them again at the end.
  */
 export interface SharedElementTransition {
   /** The `nativeID` of the view on the screen that goes. */

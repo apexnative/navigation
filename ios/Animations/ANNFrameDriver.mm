@@ -1,6 +1,7 @@
 #import "ANNFrameDriver.h"
 #import "ANNAssert.h"
 #import "ANNCurve.h"
+#import "ANNTransformParts.h"
 #import <QuartzCore/QuartzCore.h>
 
 // The display link holds its target strongly and the run loop holds the link: the driver is reached weakly, so a driver
@@ -57,6 +58,7 @@
     ANNAssertMainQueue();
 #if DEBUG
     ANNCurveSelfCheck();
+    ANNTransformPartsSelfCheck();
 #endif
     if (_link) {
         return;

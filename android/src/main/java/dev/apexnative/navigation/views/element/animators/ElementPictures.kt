@@ -45,12 +45,23 @@ internal class MoveAnimator : ValueAnimator() {
     private val frames = ArrayList<(Float) -> Unit>()
     private val ends = ArrayList<() -> Unit>()
     private var failed = false
+    private var cancelled = false
+
+    /**
+     * Whether the flight ran to its end: it wasn't cancelled and nothing in it failed. Read at its end; a flight that
+     * landed may keep showing its last frame until the transition gives its views back.
+     */
+    val landed: Boolean get() = !cancelled
 
     init {
         setFloatValues(0f, 1f)
         super.setInterpolator(LinearInterpolator())
         addListener(object : AnimatorListenerAdapter() {
             override fun onAnimationStart(animation: Animator) = guarded { for (start in starts) start() }
+
+            override fun onAnimationCancel(animation: Animator) {
+                cancelled = true
+            }
 
             override fun onAnimationEnd(animation: Animator) {
                 for (end in ends) elementStep(element) { end() }

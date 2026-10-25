@@ -3,19 +3,25 @@
 #import "ANNInterpolate.h"
 #import "ANNSharedElementTransitionOptions.h"
 #import "ANNTrack.h"
+#import "ANNTransformParts.h"
 #import "ANNUtils.h"
 #import <React/RCTViewComponentView.h>
 #import <react/renderer/components/view/ViewProps.h>
+#include <cmath>
 
 // How close two rectangles count as the same (points): a visible part that is the whole element needs no mask.
 static const CGFloat ANNSameRectTolerance = 0.5;
 
 // One end of a flight: the place, the size, the transform, the corners and the visible part of a React view, in the
-// container's coordinates.
+// container's coordinates. The transform is the whole one the view is drawn with there (its own and its parents'),
+// about its center; once split, its scale goes into the size, the corners and the visible part, so the size the copy
+// shows changes evenly on the way.
 typedef struct {
     CGPoint center;
     CGSize size;
     CATransform3D transform;
+    // The transform's parts, which the flight interpolates; their scale is only its sign once the scale is in the size.
+    ANNTransformParts parts;
     CGFloat cornerRadius;
     // The part the clipping parents leave visible, in the copy's coordinates, and its corners.
     CGRect visible;
@@ -71,12 +77,44 @@ static CGFloat ANNCornerRadiusOf(UIView *view) {
     return 0;
 }
 
+// The anchor of a layer in the coordinates of its bounds.
+static CGPoint ANNAnchorInBounds(CALayer *layer) {
+    CGRect bounds = layer.bounds;
+    return CGPointMake(bounds.origin.x + layer.anchorPoint.x * bounds.size.width,
+                       bounds.origin.y + layer.anchorPoint.y * bounds.size.height);
+}
+
+// What takes a point of the layer, counted from its anchor, to the top of its tree: its transform and place, then each
+// superlayer's `sublayerTransform`, transform and place the same way (a layer's transforms turn about its anchor).
+static CATransform3D ANNTransformToTop(CALayer *layer) {
+    CATransform3D transform = CATransform3DConcat(
+        layer.transform, CATransform3DMakeTranslation(layer.position.x, layer.position.y, 0));
+    for (CALayer *parent = layer.superlayer; parent; parent = parent.superlayer) {
+        CGPoint anchor = ANNAnchorInBounds(parent);
+        transform = CATransform3DConcat(transform,
+                                        CATransform3DMakeTranslation(-anchor.x, -anchor.y, 0));
+        transform = CATransform3DConcat(transform, parent.sublayerTransform);
+        transform = CATransform3DConcat(transform, parent.transform);
+        transform = CATransform3DConcat(
+            transform, CATransform3DMakeTranslation(parent.position.x, parent.position.y, 0));
+    }
+    return transform;
+}
+
 static ANNFlightEnd ANNFlightEndOf(UIView *view, UIView *screenRoot, UIView *container) {
     ANNFlightEnd end;
     CALayer *layer = view.layer;
     end.size = layer.bounds.size;
-    end.center = [view.superview convertPoint:layer.position toView:container];
-    end.transform = layer.transform;
+    // From the view's center to the container's bounds: up to the top, then down into the container.
+    CGPoint containerAnchor = ANNAnchorInBounds(container.layer);
+    CATransform3D toContainer =
+        CATransform3DConcat(CATransform3DInvert(ANNTransformToTop(container.layer)),
+                            CATransform3DMakeTranslation(containerAnchor.x, containerAnchor.y, 0));
+    CATransform3D whole = CATransform3DConcat(ANNTransformToTop(layer), toContainer);
+    // The center is where the view's center lands; the rest of the transform turns about it.
+    end.center = CGPointMake(whole.m41 / whole.m44, whole.m42 / whole.m44);
+    end.transform = CATransform3DConcat(
+        whole, CATransform3DMakeTranslation(-end.center.x, -end.center.y, 0));
     end.cornerRadius = ANNCornerRadiusOf(view);
     // The visible part: the element's bounds cut by every parent that clips (`overflow: hidden`, a scroll view) up to
     // the screen's root, in the element's own coordinates, moved to the copy's (its bounds start at 0, 0).
@@ -120,6 +158,28 @@ static BOOL ANNFlightEndIsFinite(ANNFlightEnd end) {
     return isfinite(end.center.x) && isfinite(end.center.y) && isfinite(end.size.width) &&
            isfinite(end.size.height) && isfinite(end.cornerRadius) && isfinite(end.visibleRadius) &&
            ANNIsFiniteRect(end.visible);
+}
+
+// The parts of the end's transform, its scale moved into the size, the corners and the visible part (a mirror keeps
+// its sign); NO when the transform flattens the view.
+static BOOL ANNSplitFlightEnd(ANNFlightEnd *end) {
+    ANNTransformParts parts;
+    if (!ANNTransformPartsOf(end->transform, &parts)) {
+        return NO;
+    }
+    CGFloat scaleX = (CGFloat)std::fabs(parts.scale[0]);
+    CGFloat scaleY = (CGFloat)std::fabs(parts.scale[1]);
+    CGFloat scale = MIN(scaleX, scaleY);
+    parts.scale[0] = std::copysign(1.0, parts.scale[0]);
+    parts.scale[1] = std::copysign(1.0, parts.scale[1]);
+    end->parts = parts;
+    end->size = CGSizeMake(end->size.width * scaleX, end->size.height * scaleY);
+    end->cornerRadius *= scale;
+    end->visibleRadius *= scale;
+    end->visible = CGRectMake(end->visible.origin.x * scaleX, end->visible.origin.y * scaleY,
+                              end->visible.size.width * scaleX,
+                              end->visible.size.height * scaleY);
+    return YES;
 }
 
 // The picture of the view's layer and its sublayers at the screen's scale, in the layer's own coordinates.
@@ -251,6 +311,11 @@ static UIImage *ANNPictureOf(UIView *view) {
         ANNElementSkipped(name, @"the place of a view of the pair can't be worked out");
         return nil;
     }
+    // A transform that flattens the view (a scale of 0) has no parts to fly between.
+    if (!ANNSplitFlightEnd(&_from) || !ANNSplitFlightEnd(&_to)) {
+        ANNElementSkipped(name, @"the transform of a view of the pair flattens it");
+        return nil;
+    }
     _text = ANNIsText(from) || ANNIsText(to);
     _grows = _to.size.height >= _from.size.height;
     _rightToLeft =
@@ -317,7 +382,8 @@ static UIImage *ANNPictureOf(UIView *view) {
     _copy.layer.transform = CATransform3DIdentity;
     _copy.bounds = CGRectMake(0, 0, size.width, size.height);
     _copy.center = ANNInterpolatePoint(_from.center, _to.center, f);
-    _copy.layer.transform = ANNInterpolateTransform(_from.transform, _to.transform, f);
+    _copy.layer.transform =
+        ANNTransformOfParts(ANNInterpolateTransformParts(_from.parts, _to.parts, f));
     if (_text) {
         [self placeTextPicturesAtTime:time size:size];
         return;

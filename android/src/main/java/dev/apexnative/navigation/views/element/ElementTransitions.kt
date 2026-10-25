@@ -183,7 +183,7 @@ internal class ElementTransition private constructor(private val layer: Transiti
     ): Boolean {
         val to = item.view
         val flight = SharedAnimatorFactory.create(
-            from, to, toParent, layer, options, fallbackDuration, DevelopmentLog::warn,
+            from, to, toParent, item.stub, layer, options, fallbackDuration, DevelopmentLog::warn,
         ) ?: return false
         val alpha = item.values[ALPHA]
         val fromAlpha = from.alpha
