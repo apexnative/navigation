@@ -62,6 +62,11 @@ let unmounted: ((screenId: string) => void) | undefined;
 // has no tag: while the one tree shows a screen with the id, no root of that id lets it go.
 const owners = new Map<string, Set<number>>();
 
+/** Whether a React root of the screen with the id is mounted now (a slot of the app's one tree doesn't count). */
+export function hasRoot(componentId: string): boolean {
+  return owners.has(componentId);
+}
+
 /** What runs when the root of a screen unmounts: the screen is gone. */
 export function onScreenUnmounted(listener: (screenId: string) => void): void {
   unmounted = listener;
