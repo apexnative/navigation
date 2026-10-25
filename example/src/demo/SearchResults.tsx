@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
-import { useSearchBar } from '@apexnative/navigation';
+import { Platform, Pressable, ScrollView, StyleSheet, Text } from 'react-native';
+import { useSafeAreaInsets, useSearchBar } from '@apexnative/navigation';
 import { log } from '../showcase/journal';
 import { useTheme } from '../ui';
 
@@ -23,6 +23,7 @@ const PLACES = [
  */
 export function SearchResults() {
   const t = useTheme();
+  const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
   useSearchBar({ onChange: (event) => setQuery(event.text) });
   const words = query.trim().toLowerCase();
@@ -32,6 +33,10 @@ export function SearchResults() {
   return (
     <ScrollView
       style={{ backgroundColor: t.background }}
+      // iOS keeps the last rows clear of the home indicator with the content inset, on Android they end above the bar here.
+      contentContainerStyle={
+        Platform.OS === 'android' ? { paddingBottom: insets.bottom } : undefined
+      }
       contentInsetAdjustmentBehavior="automatic"
       keyboardShouldPersistTaps="handled"
     >

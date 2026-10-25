@@ -5,7 +5,7 @@ import { TILES, useColors } from '../colors';
 import { useHingeForClips } from '../hinge';
 import { fonts } from '../../ui';
 import { ITEMS } from '../data';
-import { useSidePadding } from '../insets';
+import { useBottomPadding, useScrollBottomPadding, useSidePadding } from '../insets';
 
 // How far the pages keep from the fold: controls and text read badly on it.
 const GAP = 20;
@@ -17,6 +17,8 @@ const GAP = 20;
 function Spread() {
   const c = useColors();
   const sides = useSidePadding(16);
+  const scrollBottom = useScrollBottomPadding(16);
+  const bottom = useBottomPadding(16);
   const fold = useReservedRegions().division[0];
   useHingeForClips();
   const pages = [0, 1].map((page) => (
@@ -34,7 +36,7 @@ function Spread() {
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
         style={{ backgroundColor: c.background }}
-        contentContainerStyle={[styles.column, sides]}
+        contentContainerStyle={[styles.column, sides, scrollBottom]}
       >
         {pages}
       </ScrollView>
@@ -50,8 +52,8 @@ function Spread() {
     : { top: 0, bottom: 0, left: fold.x + fold.width + GAP, right: 0 };
   return (
     <View style={[styles.screen, { backgroundColor: c.background }]}>
-      <View style={[styles.side, first]}>{pages[0]}</View>
-      <View style={[styles.side, second]}>{pages[1]}</View>
+      <View style={[styles.side, first, !across && bottom]}>{pages[0]}</View>
+      <View style={[styles.side, second, bottom]}>{pages[1]}</View>
     </View>
   );
 }

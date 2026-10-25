@@ -6,6 +6,7 @@ import { useColors } from '../colors';
 import { useClipNavigation } from '../nav';
 import { Row } from '../Row';
 import { List } from '../../ui';
+import { useBottomPadding } from '../insets';
 
 const PLACES = [
   'Harbor Café',
@@ -28,6 +29,7 @@ const PLACES = [
 function Places() {
   const c = useColors();
   const nav = useClipNavigation();
+  const bottom = useBottomPadding(16);
   const list = useRef<ScrollView>(null);
   // A step of the clip moves the sheet to a detent, as a drag would.
   useClipEvent('detent', (detent) =>
@@ -37,7 +39,7 @@ function Places() {
   return (
     <ScrollView
       ref={list}
-      contentContainerStyle={{ padding: 16, paddingTop: 24 }}
+      contentContainerStyle={{ padding: 16, paddingTop: 24, ...bottom }}
       style={{ backgroundColor: c.background }}
     >
       <List>

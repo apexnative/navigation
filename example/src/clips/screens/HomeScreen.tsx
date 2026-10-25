@@ -8,7 +8,7 @@ import { ITEMS } from '../data';
 import { useClipNavigation } from '../nav';
 import { Row } from '../Row';
 import { List } from '../../ui';
-import { LIST_LAYOUT, useSidePadding } from '../insets';
+import { LIST_LAYOUT, useScrollBottomPadding, useSidePadding } from '../insets';
 
 export interface HomeProps {
   /** The screen has a large title: on Android the list starts below it. */
@@ -20,6 +20,7 @@ function Home({ largeTitle = false }: HomeProps) {
   const insets = useSafeAreaInsets();
   const c = useColors();
   const sides = useSidePadding(16);
+  const bottom = useScrollBottomPadding(16);
   const nav = useClipNavigation();
   const list = useRef<ScrollView>(null);
   const [saved, setSaved] = useState<string>();
@@ -39,6 +40,7 @@ function Home({ largeTitle = false }: HomeProps) {
       contentContainerStyle={{
         padding: 16,
         ...sides,
+        ...bottom,
         paddingTop: largeTitle && Platform.OS === 'android' ? 16 + insets.top : 16,
       }}
       ref={list}

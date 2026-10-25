@@ -3,12 +3,14 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { defineScreen, usePreview } from '@apexnative/navigation';
 import { useClipEvent } from '../bus';
 import { TILES, useColors } from '../colors';
+import { useScrollBottomPadding } from '../insets';
 import { useClipNavigation } from '../nav';
 
 /** A grid of photos; a tap moves the photo into its own screen, a long press previews it. */
 function Gallery() {
   const c = useColors();
   const nav = useClipNavigation();
+  const bottom = useScrollBottomPadding();
   const open = (index: number) =>
     nav.push('Photo', {
       props: { index },
@@ -17,6 +19,7 @@ function Gallery() {
   useClipEvent('open', (index) => open(Number(index)));
   return (
     <ScrollView
+      contentContainerStyle={bottom}
       contentInsetAdjustmentBehavior="automatic"
       style={{ backgroundColor: c.background }}
     >

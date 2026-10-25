@@ -75,7 +75,7 @@ function Panel({ section, focus }: { section: Section; focus?: string }) {
     });
   return (
     <View style={styles.flex}>
-      <Screen underBar>
+      <Screen underBar aboveFooter={Platform.OS === 'android' && mode !== 'none'}>
         <View style={styles.header}>
           <SectionBadge id={section.id} size={40} />
           <Tag look="dark" label={`${section.scenarios.length} scenarios`} />
@@ -156,19 +156,16 @@ function SectionPanel({ id, focus }: { id: number; focus?: string }) {
 
 export const SectionScreen = defineScreen({
   component: SectionPanel,
-  // The tabs are the Showcase's: the panels and the screens they show go without them. The screen goes down to the
-  // bottom edge: on iOS the list keeps its rows above the toolbar itself, on Android the footer keeps its buttons above
-  // the system bar. On Android the list keeps its first rows clear of the large title itself (`Screen underBar`). On
-  // iOS it goes to the sides too, so its scroll bar stands at the edge as on a UIKit screen: `Screen` keeps the rows
-  // clear of the vertical bar of iPhone Duo and of the cutout.
-  options: (s, props) => {
-    const screen = s
+  // The tabs are the Showcase's: the panels and the screens they show go without them. The screen keeps the default
+  // safe area: it goes down to the bottom edge, where on iOS the list keeps its rows above the toolbar itself and on
+  // Android the footer keeps its buttons above the system bar; under the large title the list keeps its first rows
+  // clear of the bar itself (`Screen underBar`).
+  options: (s, props) =>
+    s
       .title(findSection(props.id)?.title ?? 'Section')
       .largeTitle()
       .topBar(barFonts)
-      .hideBottomTabs();
-    return Platform.OS === 'android' ? screen.safeArea('right', 'left') : screen.safeArea('top');
-  },
+      .hideBottomTabs(),
 });
 
 const styles = StyleSheet.create({

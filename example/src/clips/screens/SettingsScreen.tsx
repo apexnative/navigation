@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { defineScreen } from '@apexnative/navigation';
 import { useColors } from '../colors';
 import { fonts } from '../../ui';
-import { LIST_LAYOUT, useSidePadding } from '../insets';
+import { LIST_LAYOUT, useScrollBottomPadding, useSidePadding } from '../insets';
 
 const ROWS = ['Notifications', 'Sync', 'Dark icons', 'Sounds', 'Backups'];
 
@@ -11,10 +11,11 @@ const ROWS = ['Notifications', 'Sync', 'Dark icons', 'Sounds', 'Backups'];
 function Settings() {
   const c = useColors();
   const sides = useSidePadding();
+  const bottom = useScrollBottomPadding();
   const [on, setOn] = useState<Record<string, boolean>>({ Notifications: true, Sync: true });
   return (
     <ScrollView
-      contentContainerStyle={sides}
+      contentContainerStyle={[sides, bottom]}
       contentInsetAdjustmentBehavior="automatic"
       style={{ backgroundColor: c.background }}
     >

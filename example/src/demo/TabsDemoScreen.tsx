@@ -10,10 +10,10 @@ const ROWS = Array.from({ length: 30 }, (_, index) => `Row ${index + 1}`);
  * bar that minimizes; a button back to the Showcase. With tabs that hide on scroll, Push in the bar: tabs hidden by
  * the rows here show again on the screen it shows.
  */
-function TabsDemo({ title, tabsHideOnScroll }: { title: string; tabsHideOnScroll?: boolean }) {
+function TabsDemo({ title }: { title: string; tabsHideOnScroll?: boolean }) {
   const t = useTheme();
   return (
-    <Screen underBar overTabs={tabsHideOnScroll}>
+    <Screen underBar>
       <Card title={`The ${title} tab`}>
         <Muted>A tab of a demo app, with the options of the Tabs panel.</Muted>
         <Button

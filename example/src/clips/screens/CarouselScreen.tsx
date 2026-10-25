@@ -4,6 +4,7 @@ import { defineScreen } from '@apexnative/navigation';
 import { TILES, useColors } from '../colors';
 import { fonts } from '../../ui';
 import { ITEMS } from '../data';
+import { useScrollBottomPadding } from '../insets';
 
 /**
  * A horizontal carousel of cards. The swipe back works from the edge only (`popGesture('edge')`), so a swipe on the
@@ -12,8 +13,10 @@ import { ITEMS } from '../data';
 function Carousel() {
   const c = useColors();
   const { width } = useWindowDimensions();
+  const bottom = useScrollBottomPadding();
   return (
     <ScrollView
+      contentContainerStyle={bottom}
       contentInsetAdjustmentBehavior="automatic"
       style={{ backgroundColor: c.background }}
     >

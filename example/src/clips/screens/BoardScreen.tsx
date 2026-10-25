@@ -7,7 +7,7 @@ import { ITEMS } from '../data';
 import { useClipNavigation } from '../nav';
 import { Row } from '../Row';
 import { md } from '../../ui/icons';
-import { LIST_LAYOUT, useSidePadding } from '../insets';
+import { LIST_LAYOUT, useScrollBottomPadding, useSidePadding } from '../insets';
 
 /**
  * A list with four right buttons, the first tab of the iPhone Duo clip: open, the buttons and the tabs go into the
@@ -17,6 +17,7 @@ function Board() {
   const c = useColors();
   const nav = useClipNavigation();
   const sides = useSidePadding();
+  const bottom = useScrollBottomPadding();
   useHingeForClips();
   return (
     <FlatList
@@ -24,7 +25,7 @@ function Board() {
       keyExtractor={(item) => item}
       contentInsetAdjustmentBehavior="automatic"
       style={{ backgroundColor: c.background }}
-      contentContainerStyle={sides}
+      contentContainerStyle={[sides, bottom]}
       renderItem={({ item, index }) => (
         <Row
           index={index}

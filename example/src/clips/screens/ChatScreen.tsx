@@ -4,6 +4,7 @@ import { defineScreen } from '@apexnative/navigation';
 import { useColors } from '../colors';
 import { fonts } from '../../ui';
 import { PEOPLE } from '../data';
+import { useBottomPadding } from '../insets';
 
 export interface ChatProps {
   id: string;
@@ -19,6 +20,8 @@ const MESSAGES = [
 /** A conversation: messages and a field to write in. */
 function Chat() {
   const c = useColors();
+  // The field sits above the home indicator or the navigation bar.
+  const { paddingBottom } = useBottomPadding(40);
   return (
     <View style={[styles.screen, { backgroundColor: c.background }]}>
       <ScrollView
@@ -44,7 +47,7 @@ function Chat() {
       <TextInput
         placeholder="Message"
         placeholderTextColor={c.muted}
-        style={[styles.field, { color: c.text, borderColor: c.line }]}
+        style={[styles.field, { color: c.text, borderColor: c.line, marginBottom: paddingBottom }]}
       />
     </View>
   );
@@ -70,6 +73,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     margin: 12,
-    marginBottom: 40,
   },
 });

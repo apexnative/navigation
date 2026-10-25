@@ -4,6 +4,7 @@ import { defineScreen, useScreenOptions, useSearchBar } from '@apexnative/naviga
 import { useClipEvent } from '../bus';
 import { useColors } from '../colors';
 import { PEOPLE } from '../data';
+import { useScrollBottomPadding } from '../insets';
 import { useClipNavigation } from '../nav';
 import { Row } from '../Row';
 import { fonts, List } from '../../ui';
@@ -24,6 +25,7 @@ function Contacts({ filters = false }: ContactsProps) {
   const c = useColors();
   const nav = useClipNavigation();
   const list = useRef<ScrollView>(null);
+  const bottom = useScrollBottomPadding(16);
   const [query, setQuery] = useState('');
   const [scope, setScope] = useState('all');
   useSearchBar({
@@ -54,7 +56,7 @@ function Contacts({ filters = false }: ContactsProps) {
   );
   return (
     <ScrollView
-      contentContainerStyle={{ padding: 16 }}
+      contentContainerStyle={{ padding: 16, ...bottom }}
       ref={list}
       contentInsetAdjustmentBehavior="automatic"
       style={{ backgroundColor: c.background }}

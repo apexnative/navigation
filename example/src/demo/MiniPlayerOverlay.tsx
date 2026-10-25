@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useNavigation } from '@apexnative/navigation';
+import { useNavigation, useSafeAreaInsets } from '@apexnative/navigation';
 import { useTheme } from '../ui';
 
 /**
@@ -10,9 +10,10 @@ import { useTheme } from '../ui';
 export function MiniPlayerOverlay() {
   const t = useTheme();
   const nav = useNavigation();
+  const insets = useSafeAreaInsets();
   const [playing, setPlaying] = useState(true);
   return (
-    <View pointerEvents="box-none" style={styles.fill}>
+    <View pointerEvents="box-none" style={[styles.fill, { paddingBottom: 96 + insets.bottom }]}>
       <View style={[styles.card, { backgroundColor: t.card, borderColor: t.border }]}>
         <Text style={[styles.title, { color: t.text }]} numberOfLines={1}>
           Morning playlist
@@ -29,7 +30,7 @@ export function MiniPlayerOverlay() {
 }
 
 const styles = StyleSheet.create({
-  fill: { flex: 1, justifyContent: 'flex-end', paddingHorizontal: 16, paddingBottom: 96 },
+  fill: { flex: 1, justifyContent: 'flex-end', paddingHorizontal: 16 },
   card: {
     flexDirection: 'row',
     alignItems: 'center',

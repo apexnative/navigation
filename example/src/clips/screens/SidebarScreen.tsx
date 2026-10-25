@@ -7,11 +7,13 @@ import { ITEMS } from '../data';
 import { useClipNavigation } from '../nav';
 import { Row } from '../Row';
 import { List } from '../../ui';
+import { useScrollBottomPadding } from '../insets';
 
 /** The list column of a split view: a pick shows the item in the column beside it. */
 function Sidebar() {
   const c = useColors();
   const nav = useClipNavigation();
+  const bottom = useScrollBottomPadding(16);
   const [, setOpen] = useState(0);
   const open = (index: number) => {
     setOpen(index);
@@ -20,7 +22,7 @@ function Sidebar() {
   useClipEvent('pick', (index) => open(Number(index)));
   return (
     <ScrollView
-      contentContainerStyle={{ padding: 16 }}
+      contentContainerStyle={{ padding: 16, ...bottom }}
       contentInsetAdjustmentBehavior="automatic"
       style={{ backgroundColor: c.background }}
     >
