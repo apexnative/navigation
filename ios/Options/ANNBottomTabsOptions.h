@@ -11,6 +11,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property(nonatomic, strong) Bool *visible;
 @property(nonatomic, strong) Bool *animate;
+/// `'platform'` or `'none'`; read on Android only: the system switches tabs at once.
+@property(nonatomic, strong) Text *switchAnimation;
 /// The index of the tab to select; a whole number (the fraction is dropped).
 @property(nonatomic, strong) Double *currentTabIndex;
 @property(nonatomic, strong) Text *currentTabId;

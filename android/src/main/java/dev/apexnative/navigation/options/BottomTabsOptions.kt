@@ -95,6 +95,7 @@ class BottomTabsAccessoryOptions {
 class BottomTabsOptions {
     @JvmField var visible: Bool = NullBool()
     @JvmField var animate: Bool = NullBool()
+    @JvmField var switchAnimation: Text = NullText()
     /** Selects a tab once; a whole number, truncated where it is read. */
     @JvmField var currentTabIndex: Fraction = NullFraction()
     /** Selects a tab once. */
@@ -124,18 +125,19 @@ class BottomTabsOptions {
     @JvmField var minimizeBehavior: Text = NullText()
     @JvmField var bottomAccessory = BottomTabsAccessoryOptions()
 
-    fun hasValue(): Boolean = visible.hasValue() || animate.hasValue() || currentTabIndex.hasValue() ||
-        currentTabId.hasValue() || testID.hasValue() || accessibilityLabel.hasValue() || moreTestID.hasValue() ||
-        drawBehind.hasValue() || backgroundColor.hasValue() || tabsAttachMode.hasValue() || barStyle.hasValue() ||
-        layoutStyle.hasValue() || cornerRadius.hasValue() || bottomMargin.hasValue() || translucent.hasValue() ||
-        hideShadow.hasValue() || titleDisplayMode.hasValue() || elevation.hasValue() || hideOnScroll.hasValue() ||
-        borderColor.hasValue() || borderWidth.hasValue() || shadow.hasValue() || customRow.hasValue() ||
-        sidebar.hasValue() || sidebarLayout.hasValue() || customizationId.hasValue() || minimizeBehavior.hasValue() ||
-        bottomAccessory.hasValue()
+    fun hasValue(): Boolean = visible.hasValue() || animate.hasValue() || switchAnimation.hasValue() ||
+        currentTabIndex.hasValue() || currentTabId.hasValue() || testID.hasValue() || accessibilityLabel.hasValue() ||
+        moreTestID.hasValue() || drawBehind.hasValue() || backgroundColor.hasValue() || tabsAttachMode.hasValue() ||
+        barStyle.hasValue() || layoutStyle.hasValue() || cornerRadius.hasValue() || bottomMargin.hasValue() ||
+        translucent.hasValue() || hideShadow.hasValue() || titleDisplayMode.hasValue() || elevation.hasValue() ||
+        hideOnScroll.hasValue() || borderColor.hasValue() || borderWidth.hasValue() || shadow.hasValue() ||
+        customRow.hasValue() || sidebar.hasValue() || sidebarLayout.hasValue() || customizationId.hasValue() ||
+        minimizeBehavior.hasValue() || bottomAccessory.hasValue()
 
     fun mergeWith(other: BottomTabsOptions) {
         if (other.visible.hasValue()) visible = other.visible
         if (other.animate.hasValue()) animate = other.animate
+        if (other.switchAnimation.hasValue()) switchAnimation = other.switchAnimation
         if (other.currentTabIndex.hasValue()) currentTabIndex = other.currentTabIndex
         if (other.currentTabId.hasValue()) currentTabId = other.currentTabId
         if (other.testID.hasValue()) testID = other.testID
@@ -167,6 +169,7 @@ class BottomTabsOptions {
     fun mergeWithDefault(defaults: BottomTabsOptions) {
         if (!visible.hasValue()) visible = defaults.visible
         if (!animate.hasValue()) animate = defaults.animate
+        if (!switchAnimation.hasValue()) switchAnimation = defaults.switchAnimation
         if (!currentTabIndex.hasValue()) currentTabIndex = defaults.currentTabIndex
         if (!currentTabId.hasValue()) currentTabId = defaults.currentTabId
         if (!testID.hasValue()) testID = defaults.testID
@@ -198,6 +201,7 @@ class BottomTabsOptions {
     fun copy() = BottomTabsOptions().also { it.mergeWith(this) }
 
     companion object {
+        private val SWITCH_ANIMATIONS = setOf("platform", "none")
         private val TABS_ATTACH_MODES = setOf("together", "afterInitialTab", "onSwitchToTab")
         private val BAR_STYLES = setOf("default", "black")
         private val LAYOUT_STYLES = setOf("stretch", "compact")
@@ -212,6 +216,7 @@ class BottomTabsOptions {
             if (map == null) return options
             options.visible = BoolParser.parse(map, "visible")
             options.animate = BoolParser.parse(map, "animate")
+            options.switchAnimation = TextParser.parse(map, "switchAnimation", SWITCH_ANIMATIONS)
             options.currentTabIndex = FractionParser.parse(map, "currentTabIndex")
             options.currentTabId = TextParser.parse(map, "currentTabId")
             options.testID = TextParser.parse(map, "testID")

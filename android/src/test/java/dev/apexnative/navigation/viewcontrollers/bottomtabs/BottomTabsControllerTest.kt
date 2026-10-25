@@ -59,10 +59,11 @@ class BottomTabsControllerTest {
     fun uninstall() {
         fixture.uninstall()
         ScreenReadiness.reset()
+        DefaultOptions.set(Options())
     }
 
-    private fun screen(id: String, ready: Boolean = true) =
-        QueueScreen(activity, registry, id, journal, calls, Options(), FakeContent(ready))
+    private fun screen(id: String, ready: Boolean = true, options: Options = Options()) =
+        QueueScreen(activity, registry, id, journal, calls, options, FakeContent(ready))
 
     private fun stack(id: String, vararg screens: QueueScreen, options: Options = Options()): StackController {
         val stack = StackController(activity, registry, id, StackPresenter(activity), options)
@@ -81,10 +82,15 @@ class BottomTabsControllerTest {
     ) = BottomTabsController(activity, registry, TABS, presenter, options, tabs.toList()).also { it.shows = { true } }
 
     // Three tabs of one screen each, the first shown; the journal cleared.
-    private fun shown(options: Options = Options(), first: Options = Options()): BottomTabsController {
+    private fun shown(
+        options: Options = Options(),
+        first: Options = Options(),
+        second: Options = Options(),
+        secondScreen: Options = Options(),
+    ): BottomTabsController {
         val tabs = tabs(
             stack("Stack1", screen("A1"), options = first),
-            stack("Stack2", screen("B1")),
+            stack("Stack2", screen("B1", options = secondScreen), options = second),
             stack("Stack3", screen("C1")),
             options = options,
         )
@@ -100,8 +106,12 @@ class BottomTabsControllerTest {
     private val fades = mutableListOf<() -> Unit>()
 
     // [shown] with tab views that fade on screen until the test ends the fade.
-    private fun fading(): BottomTabsController {
-        val tabs = shown()
+    private fun fading(
+        options: Options = Options(),
+        second: Options = Options(),
+        secondScreen: Options = Options(),
+    ): BottomTabsController {
+        val tabs = shown(options, second = second, secondScreen = secondScreen)
         tabs.tabViews = object : BottomTabsController.TabViews {
             override fun holds(tab: ViewController<*>): Boolean = true
 
@@ -225,6 +235,85 @@ class BottomTabsControllerTest {
     }
 
     private fun options(change: Options.() -> Unit) = Options().apply(change)
+
+    // `bottomTabs.switchAnimation`.
+
+    private fun switchAnimation(value: String) = options { bottomTabs.switchAnimation = Text(value) }
+
+    private val atOnce = listOf(
+        "tabPressed:$TABS:1:B1:false",
+        "will:B1",
+        "didDisappear:A1",
+        "didAppear:B1",
+        "stateNeeded",
+        "tabSelected:$TABS:1:0",
+        "stateNeeded",
+    )
+
+    @Test
+    fun noneInTheDefaultsSwitchesAtOnceWithTheEventsOfASwitch() {
+        DefaultOptions.set(switchAnimation("none"))
+        val tabs = fading()
+        tabs.onTabPressed(1)
+        assertTrue(fades.isEmpty())
+        assertEquals(atOnce, events())
+        assertEquals(1, tabs.selectedIndex)
+    }
+
+    @Test
+    fun theTabThatShowsDecides() {
+        val tabs = fading(options = switchAnimation("platform"), second = switchAnimation("none"))
+        tabs.onTabPressed(1)
+        assertTrue(fades.isEmpty())
+        assertEquals(atOnce, events())
+        tabs.onTabPressed(0)
+        assertEquals(1, fades.size)
+    }
+
+    @Test
+    fun aMergeChangesTheNextSwitch() {
+        val tabs = fading()
+        tabs.mergeOptions(switchAnimation("none"))
+        events()
+        tabs.onTabPressed(1)
+        assertTrue(fades.isEmpty())
+        assertEquals(atOnce, events())
+        tabs.mergeOptions(switchAnimation("platform"))
+        tabs.onTabPressed(2)
+        assertEquals(1, fades.size)
+    }
+
+    @Test
+    fun aChoiceFromCodeFollowsItToo() {
+        val tabs = fading(options = switchAnimation("none"))
+        tabs.mergeOptions(options { bottomTabs.currentTabIndex = Fraction(2.0) })
+        assertTrue(fades.isEmpty())
+        assertEquals(
+            listOf("will:C1", "stateNow", "didDisappear:A1", "didAppear:C1", "stateNeeded", "stateNow"),
+            events(),
+        )
+    }
+
+    @Test
+    fun backFollowsItToo() {
+        val tabs = fading(
+            options {
+                hardwareBackButton.bottomTabsOnPress = Text("previous")
+                bottomTabs.switchAnimation = Text("none")
+            },
+        )
+        tabs.onTabPressed(1)
+        assertTrue(tabs.handleBack(listener))
+        assertTrue(fades.isEmpty())
+        assertEquals(0, tabs.selectedIndex)
+    }
+
+    @Test
+    fun theScreenATabShowsGoesOverTheTab() {
+        val tabs = fading(second = switchAnimation("none"), secondScreen = switchAnimation("platform"))
+        tabs.onTabPressed(1)
+        assertEquals(1, fades.size)
+    }
 
     // A press.
 

@@ -101,6 +101,8 @@ Inbox shows, and Chat comes in over it, in the stack of the Inbox tab.
 
 On <Os name="Android" /> the content changes with Material's fade through, as in the system's Phone app: the tab that goes fades out, then the new one fades in and grows to its size, in 300 ms; the tab bar stays. On <Os name="iOS" /> the new tab shows at once, as the system's tab bar does.
 
+To switch at once on Android too, give `bottomTabs.switchAnimation: 'none'`: to every tabs node in the app's default `options`, to these tabs with `Tabs().options({ switchAnimation: 'none' })`, or to a screen. The tab that is selected decides, by the screen on top of it: a tab whose top screen says `'none'` comes in at once, and leaving it fades as usual. A screen's `setOptions` changes it from the next switch.
+
 ### A press on a tab {#press}
 
 A second tap on the selected tab is a convention of both platforms: <Mark>back to the start of the tab</Mark>. The navigation does it without code:
