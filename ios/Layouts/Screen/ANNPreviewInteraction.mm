@@ -24,15 +24,23 @@ static NSMutableSet *ANNPreviews(void) {
 @implementation ANNPreviewInteraction {
     UIViewController *_preview;
     NSInteger _reactTag;
+    __weak UIViewController *_source;
+    BOOL (^_prepare)(void);
     BOOL (^_commit)(void);
     void (^_dismissed)(void);
     UIContextMenuInteraction *_interaction;
+    // The snapshots of the view that the menu of this press lifts and puts back, over the view until
+    // the menu is gone. Each press has its own list: a new press may start while the last menu goes.
+    NSMutableArray<UIView *> *_snapshots;
+    // The list of the menu that goes now: its end removes them.
+    __weak NSMutableArray<UIView *> *_endingSnapshots;
 }
 
 + (void)attachPreview:(UIViewController *)preview
                toView:(UIView *)view
              reactTag:(NSInteger)reactTag
                source:(UIViewController *)source
+              prepare:(BOOL (^)(void))prepare
                commit:(BOOL (^)(void))commit
             dismissed:(void (^)(void))dismissed {
     if (!view || !preview) {
@@ -45,6 +53,8 @@ static NSMutableSet *ANNPreviews(void) {
     ANNPreviewInteraction *previewInteraction = [ANNPreviewInteraction new];
     previewInteraction->_preview = preview;
     previewInteraction->_reactTag = reactTag;
+    previewInteraction->_source = source;
+    previewInteraction->_prepare = [prepare copy];
     previewInteraction->_commit = [commit copy];
     previewInteraction->_dismissed = [dismissed copy];
     previewInteraction->_interaction =
@@ -91,7 +101,9 @@ static NSMutableSet *ANNPreviews(void) {
     [view removeInteraction:_interaction];
     // A tap's commit animation may still run: a preview that went, its screen destroyed and its push failed, is not
     // pushed when the animation ends.
+    _prepare = nil;
     _commit = nil;
+    [ANNPreviewInteraction removeSnapshots:_snapshots];
     void (^dismissed)(void) = _dismissed;
     _dismissed = nil;
     if (dismissed) {
@@ -116,6 +128,18 @@ static NSMutableSet *ANNPreviews(void) {
         [self detach];
         return nil;
     }
+    // UIKit ends a lift that never became a menu too (the touch ended before the long press); should
+    // it not, the snapshot of that press goes now.
+    if (_snapshots != _endingSnapshots) {
+        [ANNPreviewInteraction removeSnapshots:_snapshots];
+    }
+    _snapshots = [NSMutableArray new];
+    // UIKit asks for the configuration as the press starts, about half a second before it shows the preview: the
+    // screen renders now, so that its content is there by then.
+    if (_prepare && !_prepare()) {
+        [self detach];
+        return nil;
+    }
     UIViewController *preview = _preview;
     NSArray *actions = preview.resolveOptions.preview.actions;
     return [UIContextMenuConfiguration
@@ -127,6 +151,23 @@ static NSMutableSet *ANNPreviews(void) {
                        return [UIMenu menuWithTitle:@""
                                            children:[self menuElementsOf:actions preview:preview]];
                      }];
+}
+
+// The menu goes: the snapshots of its press go once it is gone. UIKit asks for the one
+// it goes back to after this call, so the list is read at the end, not now.
+- (void)contextMenuInteraction:(UIContextMenuInteraction *)interaction
+       willEndForConfiguration:(UIContextMenuConfiguration *)configuration
+                      animator:(id<UIContextMenuInteractionAnimating>)animator {
+    NSMutableArray<UIView *> *snapshots = _snapshots;
+    _endingSnapshots = snapshots;
+    void (^remove)(void) = ^{
+      [ANNPreviewInteraction removeSnapshots:snapshots];
+    };
+    if (animator) {
+        [animator addCompletion:remove];
+    } else {
+        dispatch_async(dispatch_get_main_queue(), remove);
+    }
 }
 
 - (void)contextMenuInteraction:(UIContextMenuInteraction *)interaction
@@ -148,24 +189,45 @@ static NSMutableSet *ANNPreviews(void) {
 
 #pragma mark - Targeted previews
 
-// The view the menu lifts from and goes back to: a snapshot of the source view in its window. With
-// the source view itself UIKit adds its views next to it, among the React views of its parent, and
-// Fabric then mounts and unmounts at the wrong places.
+// The view the menu lifts from and goes back to: a snapshot of the source view, laid over it in the
+// view of its screen, the core's own (in its window when the view is elsewhere), so that it goes with
+// the screen (a pop right after the menu). With the source view itself UIKit adds its views next to
+// it, among the React views of its parent, and Fabric then mounts and unmounts at the wrong places.
+// A snapshot out of the window, with only a target there, iOS 27 doesn't lift: it dims it in place.
 - (UITargetedPreview *)snapshotPreviewOf:(UIView *)view {
-    UIWindow *window = view.window;
-    UIView *snapshot = [view snapshotViewAfterScreenUpdates:NO];
-    if (!window || !snapshot) {
+    UIView *container = _source.viewIfLoaded;
+    if (!container || ![view isDescendantOfView:container]) {
+        container = view.window;
+    }
+    // A screen out of its window (a command took it away while the menu showed) has no place for it:
+    // UIKit needs the view in a window.
+    if (!container.window) {
         return nil;
     }
+    UIView *snapshot = [view snapshotViewAfterScreenUpdates:NO];
+    if (!snapshot) {
+        return nil;
+    }
+    snapshot.frame = [view convertRect:view.bounds toView:container];
+    snapshot.userInteractionEnabled = NO;
+    snapshot.accessibilityElementsHidden = YES;
+    [container addSubview:snapshot];
+    if (!_snapshots) {
+        _snapshots = [NSMutableArray new];
+    }
+    [_snapshots addObject:snapshot];
     UIPreviewParameters *parameters = [UIPreviewParameters new];
     parameters.backgroundColor = UIColor.clearColor;
     parameters.visiblePath = [UIBezierPath bezierPathWithRoundedRect:view.bounds
                                                         cornerRadius:view.layer.cornerRadius];
-    CGPoint center = [view convertPoint:CGPointMake(CGRectGetMidX(view.bounds),
-                                                    CGRectGetMidY(view.bounds))
-                                 toView:window];
-    UIPreviewTarget *target = [[UIPreviewTarget alloc] initWithContainer:window center:center];
-    return [[UITargetedPreview alloc] initWithView:snapshot parameters:parameters target:target];
+    return [[UITargetedPreview alloc] initWithView:snapshot parameters:parameters];
+}
+
++ (void)removeSnapshots:(NSMutableArray<UIView *> *)snapshots {
+    for (UIView *snapshot in snapshots) {
+        [snapshot removeFromSuperview];
+    }
+    [snapshots removeAllObjects];
 }
 
 - (UITargetedPreview *)contextMenuInteraction:(UIContextMenuInteraction *)interaction

@@ -5,12 +5,13 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-/// The preview of a push (`usePreview`): a push that waits for a tap on its preview. Its screen is made and renders
-/// unseen, out of the stack, its key kept; the view with `preview.nativeID` is looked for on the source screen at once,
-/// then at each mount of the source's content (on each frame for a slot screen), for at most 0.5 s; found, the preview module (`ANNPreviewInteraction`)
-/// shows the screen from it on a long press. A tap that commits pushes the screen without an animation and without a
-/// wait, or goes back to the entry with its key; a preview that goes without being opened destroys its screen and
-/// rejects the push. Main queue.
+/// The preview of a push (`usePreview`): a push that waits for a tap on its preview. Its screen is made at once, out of
+/// the stack, its key kept, and renders unseen: a React screen with a root of its own as a press on the view starts, a
+/// native screen or one of the app's one tree at once. The view with `preview.nativeID` is looked for on the source
+/// screen at once, then at each mount of the source's content (on each frame for a slot screen), for at most 0.5 s;
+/// found, the preview module (`ANNPreviewInteraction`) shows the screen from it on a long press. A tap that commits
+/// pushes the screen without an animation (and without a wait once its content is there), or goes back to the entry
+/// with its key; a preview that goes without being opened destroys its screen and rejects the push. Main queue.
 @interface ANNPreviewPush : NSObject
 
 - (instancetype)init NS_UNAVAILABLE;

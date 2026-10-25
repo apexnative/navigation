@@ -17,7 +17,7 @@ import {
   rootGoesOut,
   sentRoot,
 } from './rememberedOptions';
-import { afterLoading } from './screens';
+import { afterLoading, hasRoot, isReactScreen } from './screens';
 import { holdSlot, isSlotName, removeSlots, showSlot, type SlotFrame } from './slots';
 import { forgetTabsScreen, showScreensFrom } from './tabs';
 
@@ -229,14 +229,38 @@ export function push(
         layoutsOf(componentId)
       );
       return whenNativeScreensReady([node], () =>
-        sendPush(commandId, componentId, node, prepares, wanted, goneOut).then((shownId) => {
-          // A screen with a key went back to the one with the same key: the new screen never shows.
-          if (shownId !== node.id) forgetNeverShown(node.id);
-          return shownId;
-        })
+        sendPush(commandId, componentId, node, prepares, wanted, goneOut).then(
+          (shownId) => {
+            // A screen with a key went back to the one with the same key: the new screen never shows.
+            if (shownId !== node.id) forgetNeverShown(node.id);
+            return shownId;
+          },
+          (error: unknown) => {
+            if (rendersAtPress(node)) forgetUnmountedPreview(node.id);
+            throw error;
+          }
+        )
       );
     })
   );
+}
+
+// A preview's React screen with a root of its own renders only once the view is pressed (iOS): one whose preview went
+// before that never mounts. A screen of the one tree mounts with its slot, a native screen has no root.
+function rendersAtPress(node: LayoutNode): boolean {
+  return node.data.options?.preview?.nativeID !== undefined && isReactScreen(node.data.name ?? '');
+}
+
+// A root started at a press that came just before the preview went can reach JavaScript after its push failed: without
+// its props it would render the screen with none. Its notes go after this time, when no root of it has mounted by
+// then; one that has clears them as it unmounts.
+const PREVIEW_FORGET_DELAY = 1000;
+
+function forgetUnmountedPreview(screenId: string): void {
+  if (hasRoot(screenId)) return;
+  setTimeout(() => {
+    if (!hasRoot(screenId)) forgetNeverShown(screenId);
+  }, PREVIEW_FORGET_DELAY);
 }
 
 // Everything a push noted for a screen that never mounts, which an unmount would clear.

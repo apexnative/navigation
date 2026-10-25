@@ -1,11 +1,15 @@
 #import "ANNPreviewPush.h"
 #import "ANNAssert.h"
+#import "ANNCommandRunner.h"
+#import "ANNComponentViewController.h"
 #import "ANNErrorTexts.h"
+#import "ANNExternalViewController.h"
 #import "ANNLayoutFactory.h"
 #import "ANNParking.h"
 #import "ANNPopoverPresenter.h"
 #import "ANNPreviewInteraction.h"
 #import "ANNReloadCoordinator.h"
+#import "ANNSlotContainers.h"
 #import "ANNSlotScreenView.h"
 #import "ANNStackCommands.h"
 #import "ANNStackController.h"
@@ -34,6 +38,10 @@ static const NSTimeInterval ANNPreviewSearchInterval = 1.0 / 60;
 @property(nonatomic, weak, nullable) UIView<ANNComponentProtocol> *watched;
 @property(nonatomic) BOOL attached;
 @property(nonatomic) BOOL done;
+// The size of the preview, taken at the push.
+@property(nonatomic) CGSize size;
+// The screen rendered: at the push, or at the press for a screen of its own React root.
+@property(nonatomic) BOOL rendered;
 // The screen's unseen place in the main window, at its preview size, until UIKit takes its view for the menu.
 @property(nonatomic, strong, nullable) UIView *host;
 @property(nonatomic, strong, nullable) ANNParking *parking;
@@ -49,6 +57,15 @@ static NSMutableDictionary<NSString *, ANNPreviewRecord *> *ANNPreviewRecords(vo
         records = [NSMutableDictionary new];
     }
     return records;
+}
+
+// A React screen with a root of its own renders at the press: a view with a preview costs no React root, no render and
+// no effects of the screen until the user presses it. A native screen (a kind of component screen) renders as it is
+// made, and a screen of the app's one tree renders in JavaScript as its slot is added: both render at the push.
+static BOOL ANNPreviewRendersAtPress(UIViewController *screen) {
+    return [screen isKindOfClass:ANNComponentViewController.class] &&
+           ![screen isKindOfClass:ANNExternalViewController.class] &&
+           ![screen.layoutInfo.name hasPrefix:ANNSlotPrefix];
 }
 
 @implementation ANNPreviewPush
@@ -71,6 +88,7 @@ static NSMutableDictionary<NSString *, ANNPreviewRecord *> *ANNPreviewRecords(vo
     ANNPreviewRecord *record = [ANNPreviewRecord new];
     record.previewId = layout.nodeId;
     record.screen = screen;
+    record.size = size;
     record.source = source;
     record.answer = answer;
     // The key applies only once the tap made the preview a screen of the stack.
@@ -81,7 +99,9 @@ static NSMutableDictionary<NSString *, ANNPreviewRecord *> *ANNPreviewRecords(vo
     record.generation = answer.generation;
     ANNPreviewRecords()[record.previewId] = record;
     @try {
-        [self parkAndRender:record size:size];
+        if (!ANNPreviewRendersAtPress(screen)) {
+            [self parkAndRender:record];
+        }
     } @catch (NSException *exception) {
         [self finish:record];
         [screen destroy];
@@ -90,9 +110,11 @@ static NSMutableDictionary<NSString *, ANNPreviewRecord *> *ANNPreviewRecords(vo
     [self startSearch:record];
 }
 
-// The screen renders as now: its view waits unseen in the main window, at the size of the preview, so that its content
+// The screen renders, once: its view waits unseen in the main window, at the size of the preview, so that its content
 // lays out; nothing waits for it.
-+ (void)parkAndRender:(ANNPreviewRecord *)record size:(CGSize)size {
++ (void)parkAndRender:(ANNPreviewRecord *)record {
+    record.rendered = YES;
+    CGSize size = record.size;
     UIWindow *window = ApexNavigation.mainWindow;
     if (window) {
         UIView *host = [[UIView alloc] initWithFrame:CGRectMake(0, 0, size.width, size.height)];
@@ -207,6 +229,9 @@ static NSMutableDictionary<NSString *, ANNPreviewRecord *> *ANNPreviewRecords(vo
     record.attached = YES;
     [self stopWatching:record];
     __weak ANNPreviewRecord *weakRecord = record;
+    BOOL (^prepare)(void) = ^BOOL {
+      return [ANNPreviewPush renderAtPress:weakRecord];
+    };
     BOOL (^commit)(void) = ^BOOL {
       return [ANNPreviewPush commit:weakRecord];
     };
@@ -217,8 +242,33 @@ static NSMutableDictionary<NSString *, ANNPreviewRecord *> *ANNPreviewRecords(vo
                                   toView:view
                                 reactTag:view.tag
                                   source:source
+                                 prepare:prepare
                                   commit:commit
                                dismissed:dismissed];
+}
+
+#pragma mark - The press
+
+// The press starts (UIKit asks for the menu's configuration, about half a second before it shows the preview): the
+// screen renders now if it hasn't yet, so that its content is there when the preview shows. Out of the command's
+// runner, a failure rejects the push with its text and the preview goes. YES when the screen rendered. A preview of the
+// JavaScript before a reload renders nothing: its screen would start in the new one.
++ (BOOL)renderAtPress:(ANNPreviewRecord *)record {
+    if (!record || record.done || !record.answer.isCurrent) {
+        return NO;
+    }
+    if (record.rendered) {
+        return YES;
+    }
+    @try {
+        [self parkAndRender:record];
+    } @catch (NSException *exception) {
+        [self finish:record];
+        [record.screen destroy];
+        [record.answer reject:[ANNCommandRunner rejectionOf:exception what:record.what]];
+        return NO;
+    }
+    return YES;
 }
 
 #pragma mark - The tap
@@ -267,7 +317,9 @@ static NSMutableDictionary<NSString *, ANNPreviewRecord *> *ANNPreviewRecords(vo
         return YES;
     }
     // The preview grows into the screen: a push without an animation, and without a wait, as the screen rendered
-    // already; its answer at the end of the transaction.
+    // already; its answer at the end of the transaction. A screen that rendered only as the menu opened (a pointer's
+    // right click, then a quick tap) may have no content yet: its push waits for it as a push does.
+    BOOL waits = ANNPreviewRendersAtPress(screen) && !screen.reactView.isReady;
     [stack setKey:key ofEntry:screen];
     [stack.queue push:screen
              answer:record.answer
@@ -275,7 +327,7 @@ static NSMutableDictionary<NSString *, ANNPreviewRecord *> *ANNPreviewRecords(vo
         componentId:record.componentId
              source:entry
            animated:NO
-              waits:NO];
+              waits:waits];
     return YES;
 }
 

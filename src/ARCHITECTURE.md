@@ -248,10 +248,14 @@ name and on one id for two screens.
 
 `usePreview(nativeID, { screen, props, actions })` works on iOS only. It arms a `pushPreview` from its screen: a push
 with an id of its own (`Preview14`) and a `preview` option (`nativeID`, `commit`, the menu without its handlers, a
-size). The native side builds the screen and gives the view with that `nativeID` a context menu that previews it. A tap
-on the preview pushes the screen, the push resolves, and the hook arms the next one. A press of a menu item comes as
-`buttonPressed` of the preview's id, and the hook calls its `onPress`. A preview that goes without being shown rejects
-its push, which the hook ignores.
+size). The native side makes the screen's node at once and gives the view with that `nativeID` a context menu that
+previews it; a React screen gets its own root and renders when a press starts (the menu's configuration call, about
+0.5 s before the preview), so a hundred previews hold no rendered screens until one is pressed. A screen of the one
+tree (`appProvider`) and a native screen render at once. A tap on the preview pushes the screen, the push resolves, and
+the hook arms the next one. A press of a menu item comes as `buttonPressed` of the preview's id, and the hook calls its
+`onPress`. A preview that goes without being shown rejects its push, which the hook ignores. One that goes before its
+first press never mounted a root, so the engine forgets what the push noted for it (`forgetUnmountedPreview` in
+`src/engine/commands.ts`, after 1 s, unless a root of it mounted by then).
 
 ## The native side's contract
 

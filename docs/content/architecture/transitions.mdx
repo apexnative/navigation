@@ -134,7 +134,7 @@ function Tile({ id, uri }: { id: string; uri: string }) {
 }
 ```
 
-The preview goes when the component unmounts. On Android a long press on the view does nothing of the navigation's: the view has no preview.
+The previewed screen renders when the press starts, not when the component mounts ([when the screen renders](/api/transitions/usePreview#time)). The preview goes when the component unmounts. On Android a long press on the view does nothing of the navigation's: the view has no preview.
 
 ## Animations of your own {#custom}
 

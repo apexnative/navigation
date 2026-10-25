@@ -32,6 +32,7 @@ import { PlainHomeScreen } from '../demo/PlainHomeScreen';
 import { ThemeDemoScreen } from '../demo/ThemeDemoScreen';
 import { SharedStateScreen } from '../demo/SharedStateScreen';
 import { GalleryItemScreen } from '../demo/GalleryItemScreen';
+import { GalleryListScreen } from '../demo/GalleryListScreen';
 import { GalleryScreen } from '../demo/GalleryScreen';
 import { CardScreen } from '../demo/CardScreen';
 import { CardsScreen } from '../demo/CardsScreen';
@@ -142,6 +143,7 @@ export const screens = {
   LateContent: LateContentScreen,
   Gallery: GalleryScreen,
   GalleryItem: GalleryItemScreen,
+  GalleryList: GalleryListScreen,
   People: PeopleScreen,
   Person: PersonScreen,
   Cards: CardsScreen,
