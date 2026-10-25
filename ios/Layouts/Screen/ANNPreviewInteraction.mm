@@ -24,6 +24,7 @@ static NSMutableSet *ANNPreviews(void) {
 @implementation ANNPreviewInteraction {
     UIViewController *_preview;
     NSInteger _reactTag;
+    BOOL (^_prepare)(void);
     BOOL (^_commit)(void);
     void (^_dismissed)(void);
     UIContextMenuInteraction *_interaction;
@@ -33,6 +34,7 @@ static NSMutableSet *ANNPreviews(void) {
                toView:(UIView *)view
              reactTag:(NSInteger)reactTag
                source:(UIViewController *)source
+              prepare:(BOOL (^)(void))prepare
                commit:(BOOL (^)(void))commit
             dismissed:(void (^)(void))dismissed {
     if (!view || !preview) {
@@ -45,6 +47,7 @@ static NSMutableSet *ANNPreviews(void) {
     ANNPreviewInteraction *previewInteraction = [ANNPreviewInteraction new];
     previewInteraction->_preview = preview;
     previewInteraction->_reactTag = reactTag;
+    previewInteraction->_prepare = [prepare copy];
     previewInteraction->_commit = [commit copy];
     previewInteraction->_dismissed = [dismissed copy];
     previewInteraction->_interaction =
@@ -91,6 +94,7 @@ static NSMutableSet *ANNPreviews(void) {
     [view removeInteraction:_interaction];
     // A tap's commit animation may still run: a preview that went, its screen destroyed and its push failed, is not
     // pushed when the animation ends.
+    _prepare = nil;
     _commit = nil;
     void (^dismissed)(void) = _dismissed;
     _dismissed = nil;
@@ -113,6 +117,12 @@ static NSMutableSet *ANNPreviews(void) {
     // A preview already shown as a screen is no preview any more.
     if (interaction.view.tag != _reactTag || _preview.parentViewController ||
         _preview.presentingViewController) {
+        [self detach];
+        return nil;
+    }
+    // UIKit asks for the configuration as the press starts, about half a second before it shows the preview: the
+    // screen renders now, so that its content is there by then.
+    if (_prepare && !_prepare()) {
         [self detach];
         return nil;
     }
