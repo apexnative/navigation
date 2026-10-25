@@ -34,14 +34,15 @@ export interface OptionsLayout {
    * indicator or navigation bar, the camera cutout. `[]` lets the content reach every edge. The array replaces the
    * one from a lower layer. The screen adds the padding itself; `useSafeAreaInsets()` returns what is still covered,
    * which is 0 on an edge the screen keeps and the whole covered size on an edge where the content goes under a bar.
-   * Edges listed here always win, also for a screen with a large title.
+   * Edges listed here win, but the top under a large title: there the list keeps its first rows clear of the bar
+   * itself and scrolls under it, which collapses the title, so a `'top'` listed here counts for nothing.
    *
    * Without it the screen keeps the top and the sides, and its content goes down to the bottom: under the home
    * indicator or the navigation bar, and under a tab bar or toolbar it goes under. A list keeps its last rows clear
    * with `useSafeAreaInsets().bottom`. The top is free where the content goes under a top bar: on iOS under a bar
    * that shows, on Android under a bar that hides on scroll; on both under a large title, so the list scrolls under
    * the bar. On iOS the side of a vertical bar is free too. To have the screen keep the bottom, list every edge it
-   * keeps: listed edges replace the default, and an explicit `'top'` keeps the top under a large title too.
+   * keeps: listed edges replace the default.
    */
   safeAreaEdges?: SafeAreaEdge[];
   /**

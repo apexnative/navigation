@@ -59,8 +59,9 @@ s.safeArea('bottom'); // only the bottom: the photo goes under the top
 s.safeArea(); // no edge: the content goes everywhere
 s.safeArea('top', 'left', 'right', 'bottom'); // all four: a form above the home indicator
 
-// listed edges replace the default: this one keeps
-// the top under a large title too, and loses the sides
+// listed edges replace the default: this one loses
+// the sides; under a large title the top stays free,
+// because the list keeps clear of the bar itself
 s.safeArea('top', 'bottom');
 ```
 

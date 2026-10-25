@@ -594,6 +594,10 @@ class StackController(
     override fun leavesTopEdgeFree(child: ViewController<*>): Boolean =
         TopBarRoom.leavesTopEdgeFree(resolvedOf(child), largeTitleShown(child)) || super.leavesTopEdgeFree(child)
 
+    /** A large title shows over [child] in this stack's bar. */
+    override fun showsLargeTitleOver(child: ViewController<*>): Boolean =
+        largeTitleShown(child) || super.showsLargeTitleOver(child)
+
     /** A screen under another doesn't compute its safe area again; the prepared and waiting do. */
     override fun isTopOfStack(child: ViewController<*>): Boolean =
         child === queue.currentChild || child === queue.waitingScreen || isPrepared(child)

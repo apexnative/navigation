@@ -17,22 +17,27 @@ UIEdgeInsets ANNScreenInsetsOverRoot(CGRect rootFrame, CGSize viewSize, UIEdgeIn
 
 UIEdgeInsets ANNScreenPadding(UIEdgeInsets insets, ANNNavigationOptions *options,
                               ANNScreenPaddingContext context) {
+    ANNTopBarOptions *topBar = options.topBar;
+    BOOL topBarShown = [topBar.visible withDefault:YES];
+    // Under a large title the list keeps its first rows clear of the bar itself. A padded top would follow the bar as
+    // it collapses and move the list with it, and UIKit, which collapses the title by the list's offset, would keep
+    // the small title hidden.
+    BOOL largeTitleShown = topBarShown && context.inStack && ANNLargeTitleCanShow(options);
     NSArray<NSString *> *edges = options.layout.safeAreaEdges;
     if (edges) {
-        // Exactly the edges given; unknown names count for nothing (`layout.safeAreaEdges`).
-        return UIEdgeInsetsMake([edges containsObject:@"top"] ? insets.top : 0,
+        // Exactly the edges given, but the top under a large title; unknown names count for nothing
+        // (`layout.safeAreaEdges`).
+        BOOL top = [edges containsObject:@"top"] && !largeTitleShown;
+        return UIEdgeInsetsMake(top ? insets.top : 0,
                                 [edges containsObject:@"left"] ? insets.left : 0,
                                 [edges containsObject:@"bottom"] ? insets.bottom : 0,
                                 [edges containsObject:@"right"] ? insets.right : 0);
     }
     UIEdgeInsets padding = insets;
-    ANNTopBarOptions *topBar = options.topBar;
-    BOOL topBarShown = [topBar.visible withDefault:YES];
     // A bar hidden for a while (`hideOnScroll`, `hideOnTap`, `hideOnKeyboard`) still counts as shown: only
     // `topBar.visible: false` gives the content its top back. A large title that can show takes the top too: the list
     // goes under the bar that collapses it.
-    if (topBarShown && context.inStack &&
-        (ANNScreenIsUnderTopBar(options) || ANNLargeTitleCanShow(options))) {
+    if (largeTitleShown || (topBarShown && context.inStack && ANNScreenIsUnderTopBar(options))) {
         padding.top = 0;
     }
     // The bottom is free: the content goes down to the bottom of the screen, under the home indicator and under a bar

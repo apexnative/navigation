@@ -129,6 +129,10 @@ abstract class ParentController<V : ViewGroup>(
     open fun leavesTopEdgeFree(child: ViewController<*>): Boolean =
         parentController?.leavesTopEdgeFree(this) ?: false
 
+    /** Whether a large title shows over [child]: its stack shows the bar with one. No by default. */
+    open fun showsLargeTitleOver(child: ViewController<*>): Boolean =
+        parentController?.showsLargeTitleOver(this) ?: false
+
     /**
      * The tab bar at rest under [child]: where a stack's FAB keeps clear of it, by the options of [screen], the stack's
      * screen on top; none out of tabs.
