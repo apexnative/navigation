@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.0.0-alpha.6](https://github.com/apexnative/navigation/compare/v1.0.0-alpha.5...v1.0.0-alpha.6) (2026-10-25)
+
+
+### ⚠ BREAKING CHANGES
+
+* leave the bottom edge of a screen free by default ([#49](https://github.com/apexnative/navigation/issues/49))
+
+### Features
+
+* a sheet's back preview on android, lighter tabs and top bar, the compatibility mode on ios 27 ([#46](https://github.com/apexnative/navigation/issues/46)) ([24d333d](https://github.com/apexnative/navigation/commit/24d333dd43fc5e056786f22dc8d7f1a0ff82a1ad))
+* leave the bottom edge of a screen free by default ([#49](https://github.com/apexnative/navigation/issues/49)) ([b6bb165](https://github.com/apexnative/navigation/commit/b6bb165152114fb2886bd3c4ee55560c418f0cbe))
+* **tabs:** choose whether a tab switch animates with bottomTabs.switchAnimation ([#52](https://github.com/apexnative/navigation/issues/52)) ([c6185b6](https://github.com/apexnative/navigation/commit/c6185b6b42574cff671def1ebdf8aa4f5e4be681))
+
+
+### Bug Fixes
+
+* an explicit top edge stays free under a large title ([#53](https://github.com/apexnative/navigation/issues/53)) ([188a89e](https://github.com/apexnative/navigation/commit/188a89e8d160c071f91cc010ed43ccc0683e12b3))
+* shared elements fly turned and scaled views the same way on ios and android ([#50](https://github.com/apexnative/navigation/issues/50)) ([bf63ab6](https://github.com/apexnative/navigation/commit/bf63ab624d33ff9295af297ce6506206b1bfa0e6))
+* the custom tab row moves with its tabs on android, and tab cells get selected and badge ([#51](https://github.com/apexnative/navigation/issues/51)) ([fd8f41d](https://github.com/apexnative/navigation/commit/fd8f41d2efd108741672220c54253a86704929a5))
+
+
+### Performance Improvements
+
+* **ios:** render a preview's screen when a press on its view starts ([#48](https://github.com/apexnative/navigation/issues/48)) ([4a57d1a](https://github.com/apexnative/navigation/commit/4a57d1aee1df7690dbde4c7d08dca2a70773d1f5))
+
 ## [1.0.0-alpha.5](https://github.com/apexnative/navigation/compare/v1.0.0-alpha.4...v1.0.0-alpha.5) (2026-10-23)
 
 
