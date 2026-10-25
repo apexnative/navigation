@@ -418,7 +418,7 @@ themselves.
   `ArrangementPlanner`) on every version, and the hinge comes from `WindowFolds` and the sensors.
 - **Platform-only features.** iOS: previews (`ANNPreviewInteraction`), key commands (`ANNKeyCommands`), toolbar
   (`ANNToolbarOptions`), the tabs' accessory (`ANNBottomTabsAccessoryView`), scenes (`ANNSceneDelegate`). Android: the
-  FAB (`FabPresenter`), the custom tab row (`CustomTabRowPlacer`), the Material tab bar (`BottomTabs`), the splash
+  FAB (`FabPresenter`), the custom tab row (`CustomTabRow`), the Material tab bar (`BottomTabs`), the splash
   hold (`SplashHold`), edge-to-edge. On Android the preview and key command options are parsed and merged and not
   applied.
 - **Bars.** iOS uses UIKit's navigation bar, large title and tab bar. Android draws them (`TopBar`, `LargeTitleView`,
