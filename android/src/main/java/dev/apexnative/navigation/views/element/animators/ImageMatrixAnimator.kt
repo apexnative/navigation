@@ -14,15 +14,18 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
- * A shared image of another kind (an `ImageView` that isn't React Native's): its place by a translation; its image
- * matrix from `from`'s fit (`centerCrop`, `fitXY`, `fitCenter`, `centerInside`) to its own, the part seen from `from`'s
- * size to its own, the corner radius of the parent that clips it (`borderRadius` with `overflow: hidden`) by its
- * outline. Another fit: the pair moves without the change of its matrix, and a line goes to the log. Everything goes
- * back as it was at the end. Main thread only.
+ * A shared image of another kind (an `ImageView` that isn't React Native's): from where `from` is drawn to where it is
+ * drawn in its screen ([FlightGeometry]), unscaled and turned about its middle; its image matrix from `from`'s fit
+ * (`centerCrop`, `fitXY`, `fitCenter`, `centerInside`) to its own, the part seen from `from`'s size to its own, the
+ * corner radius of the parent that clips it (`borderRadius` with `overflow: hidden`) by its outline. Another fit: the
+ * pair moves without the change of its matrix, and a line goes to the log. Everything goes back as it was at the end.
+ * Main thread only.
  */
 internal class ImageMatrixAnimator(
     private val from: ImageView,
     private val to: ImageView,
+    /** Where [to] was in its screen: what it flies to. */
+    private val toStandIn: View?,
     private val layer: TransitionLayer,
     /** The parents the views are clipped by in their screens: [to]'s is the one it had before the layer. */
     private val fromParent: View?,
@@ -32,8 +35,7 @@ internal class ImageMatrixAnimator(
 ) {
     /** The animator; none when [to] has no place in the layer. */
     fun create(): Animator? {
-        val geometry = FlightGeometry.of(from, to, layer) ?: return null
-        val toRect = geometry.to
+        val geometry = FlightGeometry.of(from, to, toStandIn, layer) ?: return null
         val fromFit = from.scaleType
         val toFit = to.scaleType
         // The image whose matrix changes; none when a fit isn't one of the four or there is no image to fit.
@@ -42,9 +44,10 @@ internal class ImageMatrixAnimator(
         }
         val fits = image != null
         if (!fits) log("The image '$id' fits by ${fromFit.name} and ${toFit.name}: it moves without a change of fit")
-        val fromRadius = clipRadius(fromParent) * geometry.fromScale
-        val toRadius = clipRadius(toParent)
+        val fromRadius = clipRadius(fromParent) * geometry.from.scale
+        val toRadius = clipRadius(toParent) * geometry.to.scale
         val outline = FlightOutline()
+        val moved = MovedProperties(to)
         var savedProvider: ViewOutlineProvider? = null
         var savedClip = false
         val savedMatrix = Matrix(to.imageMatrix)
@@ -55,13 +58,11 @@ internal class ImageMatrixAnimator(
         return MoveAnimator().apply {
             fun frame(time: Float) {
                 val f = curve.getInterpolation(time)
-                val left = ValueInterpolation.number(geometry.from.left, toRect.left, f, time)
-                val top = ValueInterpolation.number(geometry.from.top, toRect.top, f, time)
-                val width = ValueInterpolation.number(geometry.from.width(), toRect.width(), f, time).roundToInt()
-                val height = ValueInterpolation.number(geometry.from.height(), toRect.height(), f, time).roundToInt()
-                layer.place(to, toRect.left.toInt(), toRect.top.toInt(), width, height)
-                to.translationX = left - toRect.left
-                to.translationY = top - toRect.top
+                val at = geometry.at(f, time)
+                val width = at.width.roundToInt()
+                val height = at.height.roundToInt()
+                layer.place(to, geometry.toLeft, geometry.toTop, width, height)
+                moved.show(geometry, at, width, height)
                 outline.width = width
                 outline.height = height
                 outline.radius = ValueInterpolation.number(fromRadius, toRadius, f, time)
@@ -92,10 +93,7 @@ internal class ImageMatrixAnimator(
                 }
                 to.outlineProvider = savedProvider
                 to.clipToOutline = savedClip
-                to.translationX = 0f
-                to.translationY = 0f
-                layer.place(to, toRect.left.toInt(), toRect.top.toInt(), toRect.width().toInt(),
-                    toRect.height().toInt())
+                moved.end(geometry, landed) { w, h -> layer.place(to, geometry.toLeft, geometry.toTop, w, h) }
             }
         }
     }

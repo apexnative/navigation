@@ -26,16 +26,3 @@ val View.borderRadius: Float
  */
 internal fun resolveBorderRadius(radius: LengthPercentage, width: Int, density: Float): Float =
     (radius.resolve(width / density) * density).coerceAtLeast(0f)
-
-/** The scale the parents of [view] give it, along x and along y: a view in a scaled parent shows smaller. */
-fun computeInheritedScale(view: View): Pair<Float, Float> {
-    var scaleX = 1f
-    var scaleY = 1f
-    var parent = view.parent as? View
-    while (parent != null) {
-        scaleX *= parent.scaleX
-        scaleY *= parent.scaleY
-        parent = parent.parent as? View
-    }
-    return scaleX to scaleY
-}
