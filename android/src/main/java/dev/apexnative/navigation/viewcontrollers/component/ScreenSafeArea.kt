@@ -70,13 +70,19 @@ internal object ScreenSafeArea {
     }
 
     /**
-     * The edges the screen's safe area view keeps its content off: exactly [safeAreaEdges] when the options give them;
-     * else the top and the sides, but the top when the stack's header hides on scroll or a large title shows
-     * ([topFree]). The bottom is free by default: the content goes down to the bottom, and a list keeps its last rows
-     * clear of the navigation bar with `useSafeAreaInsets()`.
+     * The edges the screen's safe area view keeps its content off: exactly [safeAreaEdges] when the options give them,
+     * but the top under a large title ([largeTitle]); else the top and the sides, but the top when the stack's header
+     * hides on scroll or a large title shows ([topFree]). The bottom is free by default: the content goes down to the
+     * bottom, and a list keeps its last rows clear of the navigation bar with `useSafeAreaInsets()`.
      */
-    fun paddedEdges(safeAreaEdges: List<String>?, topFree: Boolean): Set<String> {
-        if (safeAreaEdges != null) return safeAreaEdges.filterTo(LinkedHashSet()) { it in ALL_EDGES }
+    fun paddedEdges(safeAreaEdges: List<String>?, topFree: Boolean, largeTitle: Boolean): Set<String> {
+        if (safeAreaEdges != null) {
+            val edges = safeAreaEdges.filterTo(LinkedHashSet()) { it in ALL_EDGES }
+            // Under a large title the list keeps its first rows clear of the bar itself; a padded top would follow the
+            // header as it collapses and move the list with it.
+            if (largeTitle) edges -= TOP
+            return edges
+        }
         val edges = LinkedHashSet(DEFAULT_EDGES)
         if (topFree) edges -= TOP
         return edges

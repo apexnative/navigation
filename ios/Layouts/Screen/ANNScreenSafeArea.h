@@ -23,10 +23,10 @@ FOUNDATION_EXPORT UIEdgeInsets ANNScreenInsetsOverRoot(CGRect rootFrame, CGSize 
                                                       UIEdgeInsets safeArea);
 
 /// The padding the screen's safe area view keeps (`layout.safeAreaEdges`): the insets on the padded edges, 0 on the
-/// others. With `layout.safeAreaEdges` exactly those edges (an explicit `'top'` keeps the top under a large title too);
-/// without it every edge but: the top under a shown top bar (in a stack, under the top bar, `topBar.visible` not
-/// `false`) or with a large title that can show; the bottom, always; the side of the vertical bar unless
-/// `layout.drawBehindVerticalBar` or `layout.verticalBars` is `false`.
+/// others. With `layout.safeAreaEdges` exactly those edges, but the top under a large title that can show (in a stack,
+/// `topBar.visible` not `false`); without it every edge but: the top under a shown top bar (in a stack, under the top
+/// bar, `topBar.visible` not `false`) or with a large title that can show; the bottom, always; the side of the
+/// vertical bar unless `layout.drawBehindVerticalBar` or `layout.verticalBars` is `false`.
 FOUNDATION_EXPORT UIEdgeInsets ANNScreenPadding(UIEdgeInsets insets, ANNNavigationOptions *options,
                                                 ANNScreenPaddingContext context);
 
