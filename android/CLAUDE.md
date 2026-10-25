@@ -88,7 +88,7 @@ top-level folder. Main thread only, unless a line says otherwise.
   `views/stack/topbar/search/`.
 - Tabs: `viewcontrollers/bottomtabs/BottomTabsController.kt`, `BottomTabsPresenter.kt`, `TabSelection.kt`,
   `TabItems.kt`, `TabsRoom.kt`; `views/bottomtabs/`; `customrow/BottomTabsCustomRowOptions.kt`,
-  `viewcontrollers/bottomtabs/CustomTabRowPlacer.kt`.
+  `viewcontrollers/bottomtabs/CustomTabRowGeometry.kt`.
 - Modals and sheets: `viewcontrollers/modal/ModalCoordinator.kt`, `ModalRecord.kt`, `ModalViews.kt`, `ModalSheet.kt`,
   `ModalAnimations.kt`; `options/SheetOptions.kt`.
 - Overlays: `viewcontrollers/overlay/OverlayCoordinator.kt`, `OverlayViews.kt`, `OverlayTouches.kt`.

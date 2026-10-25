@@ -50,6 +50,22 @@ internal object CustomTabRowGeometry {
         )
 
     /**
+     * The row over the bar as the tabs' view lays it out: the bar's [barLeft], [barRight] and [barBottom] in that
+     * view, whose height is [tabsHeight] and whose bottom [navigationBar] pixels lie under the navigation bar — the
+     * row's bottom never goes over them —, with [margin], [content] and [bottomMargin] as [place] takes them.
+     */
+    fun inTabs(
+        barLeft: Int,
+        barRight: Int,
+        barBottom: Int,
+        tabsHeight: Int,
+        navigationBar: Int,
+        margin: Int,
+        content: Int,
+        bottomMargin: Int,
+    ): Place = place(barLeft, barRight, minOf(barBottom, tabsHeight - navigationBar), margin, content, bottomMargin)
+
+    /**
      * The part of the row's frame at [place] below its visible part, in pixels: `bottomMargin`. The row draws and takes
      * touches only above it.
      */
@@ -60,6 +76,12 @@ internal object CustomTabRowGeometry {
      * pass that changed nothing changes nothing and UI tests reach idle.
      */
     fun needsPlacing(last: Place?, next: Place): Boolean = last != next
+
+    /**
+     * The row's own lift over its [elevation] while the bar's container stands at [barZ]: as high as the container, so
+     * the row, after it in the tabs' view, draws over it and takes the touches first even under a raised bar.
+     */
+    fun lift(barZ: Float, elevation: Float): Float = (barZ - elevation).coerceAtLeast(0f)
 
     /**
      * The row's background: `customRow.backgroundColor` ([color]; `null` and `'NoColor'` are none); without it

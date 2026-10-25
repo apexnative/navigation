@@ -631,7 +631,6 @@ class BottomTabsController(
         layout.row = row
         layout.bar.customRowOptionsListener = { applyRow(row, it) }
         layout.bar.customRowOptions = resolveShownOptions(DefaultOptions.current).bottomTabs.customRow.copy()
-        CustomTabRowPlacer.track(activity)
     }
 
     private fun applyRow(row: CustomTabRow, options: BottomTabsCustomRowOptions) {
@@ -683,7 +682,7 @@ class BottomTabsController(
 
     /**
      * Destroys the tabs once: every tab and the registry first, then the cells (each stops its root once), the row out
-     * of the window, the scroll it followed. A press's event still waiting goes with them.
+     * of the tabs' view, the scroll it followed. A press's event still waiting goes with them.
      */
     override fun destroy() {
         if (isDestroyed) return
@@ -694,7 +693,6 @@ class BottomTabsController(
         endSwitch?.invoke()
         peekView()?.let { layout ->
             layout.bar.destroyCustomItemViews()
-            layout.row?.let(CustomTabRowPlacer::forget)
             layout.row = null
         }
         cells = emptyList()

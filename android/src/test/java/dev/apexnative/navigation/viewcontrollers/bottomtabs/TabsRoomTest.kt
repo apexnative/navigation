@@ -123,6 +123,27 @@ class TabsRoomTest {
     }
 
     @Test
+    fun inTheTabsTheRowLiesOverTheBarAndNeverOverTheNavigationBar() {
+        val content = CustomTabRowGeometry.content(barHeight = 210, height = null, extra = 47)
+        // A stretched bar ends at the navigation bar: the row ends with it.
+        val stretched = CustomTabRowGeometry.inTabs(0, 1080, 2074, 2200, 126, margin = 42, content, bottomMargin = 0)
+        assertEquals(CustomTabRowGeometry.Place(42, 2074 - 257, 1038, 2074, 257), stretched)
+        // A compact bar floats in the middle, its own bottom above the navigation bar.
+        val compact = CustomTabRowGeometry.inTabs(240, 840, 2000, 2200, 126, margin = 42, content, bottomMargin = 20)
+        assertEquals(CustomTabRowGeometry.Place(282, 2000 - 257 - 20, 798, 2000, 257), compact)
+        // A bar laid out over the navigation bar: the row stays above it.
+        val over = CustomTabRowGeometry.inTabs(0, 1080, 2200, 2200, 126, margin = 42, content, bottomMargin = 0)
+        assertEquals(2074, over.bottom)
+    }
+
+    @Test
+    fun theRowStandsAsHighAsARaisedBar() {
+        assertEquals(0f, CustomTabRowGeometry.lift(barZ = 0f, elevation = 8f))
+        assertEquals(0f, CustomTabRowGeometry.lift(barZ = 8f, elevation = 8f))
+        assertEquals(16f, CustomTabRowGeometry.lift(barZ = 24f, elevation = 8f))
+    }
+
+    @Test
     fun aRowHeightIsExactAndItsOvershootComesFromTheOptions() {
         assertEquals(400, CustomTabRowGeometry.content(barHeight = 210, height = 400, extra = 47))
         assertEquals(190, CustomTabRowGeometry.overshoot(barHeight = 210, content = 400, bottomMargin = 0))

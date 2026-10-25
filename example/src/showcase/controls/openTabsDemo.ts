@@ -30,28 +30,32 @@ export function splitTabOptions(bottomTab: OptionsBottomTab = {}) {
 /**
  * Shows a demo app of three tabs as the root, with the options of the Tabs panel: `bottomTabs` on the tab bar, the
  * colors and the font of `bottomTab` on every tab, its badge, dot and symbol on the Inbox tab. Each tab has a button
- * back to the Showcase.
+ * back to the Showcase. With `customRow` each tab draws its item with `TabItemCell`, and the tabs have buttons for a
+ * push, a sheet and a modal over them.
  */
 export function openTabsDemo(section: Section, values: ControlValues) {
   const options = buildOptions(sectionControls(section), values);
   const { everyTab, inbox } = splitTabOptions(options.bottomTab);
   // The screens go over tabs that hide on scroll: their rows end above the tabs themselves.
   const tabsHideOnScroll = options.bottomTabs?.hideOnScroll === true;
+  const customRow = options.bottomTabs?.customRow !== undefined;
+  const cell = (title: string): OptionsBottomTab =>
+    customRow ? { component: { name: 'TabItemCell', passProps: { title } } } : {};
   return navigation.switchTo(
     Tabs(
-      Tab(Stack(Screen('TabsDemo', { title: 'Home', tabsHideOnScroll })))
+      Tab(Stack(Screen('TabsDemo', { title: 'Home', tabsHideOnScroll, customRow })))
         .label('Home')
         .icon({ ios: 'house', android: icons.home })
-        .options(everyTab),
-      Tab(Stack(Screen('TabsDemo', { title: 'Inbox', tabsHideOnScroll })))
+        .options({ ...everyTab, ...cell('Home') }),
+      Tab(Stack(Screen('TabsDemo', { title: 'Inbox', tabsHideOnScroll, customRow })))
         .label('Inbox')
         .icon({ ios: 'tray', android: icons.bell })
-        .options({ ...everyTab, ...inbox }),
+        .options({ ...everyTab, ...inbox, ...cell('Inbox') }),
       // An image icon, not a symbol: on iOS 26 only an image takes iconColor on a tab that is not selected.
-      Tab(Stack(Screen('TabsDemo', { title: 'Profile', tabsHideOnScroll })))
+      Tab(Stack(Screen('TabsDemo', { title: 'Profile', tabsHideOnScroll, customRow })))
         .label('Profile')
         .icon(icons.person)
-        .options(everyTab)
+        .options({ ...everyTab, ...cell('Profile') })
     ).options(options.bottomTabs ?? {})
   );
 }
