@@ -52,8 +52,15 @@ export type EngineScreen =
 /** What the root of a React screen renders: the screen's id, and the props the command gave it. */
 export type ScreenRootProps = { componentId: string } & Record<string, unknown>;
 
+/**
+ * What React Native gives the root of a React screen: the screen's id, its root tag (none in a slot of the app's one
+ * tree), and the props the native side gives that root, a tab cell's `tabIndex`, `selected`, `badge`, `dot` and
+ * `dotColor`.
+ */
+export type NativeRootProps = { componentId: string; rootTag?: number } & Record<string, unknown>;
+
 const screens = new Map<string, EngineScreen>();
-const roots = new Map<string, ComponentType<{ componentId: string; rootTag?: number }>>();
+const roots = new Map<string, ComponentType<NativeRootProps>>();
 let unmounted: ((screenId: string) => void) | undefined;
 // The React roots mounted under each id, by their root tags. One id can have several: after a JavaScript reload React
 // Native starts the roots of the old screens again in the new runtime, under the ids the new screens get too, and
@@ -199,19 +206,28 @@ export function isReactScreen(name: string): boolean {
 }
 
 /**
- * The root a React screen runs in: the screen with the props a command left for it under its id, and the new ones when
- * options give its id new props. React Native gives a root only its id (and its own root props, which stay here); the
- * slot of the app's one tree renders the same root.
+ * The props a screen's component renders with: those a command left under its id ([stored]), the props the native side
+ * gave its root over them ([root]: a tab cell's state, which the docs promise arrives on top of `passProps`), and its
+ * id. The root tag stays with the root.
  */
-export function screenRoot(
-  name: string
-): ComponentType<{ componentId: string; rootTag?: number }> | undefined {
+export function screenProps(stored: object, root: NativeRootProps): ScreenRootProps {
+  const props: ScreenRootProps = { ...stored, ...root, componentId: root.componentId };
+  delete props.rootTag;
+  return props;
+}
+
+/**
+ * The root a React screen runs in: the screen with the props a command left for it under its id, and the new ones when
+ * options give its id new props, under the props the native side gives the root ([screenProps]). The slot of the app's
+ * one tree renders the same root.
+ */
+export function screenRoot(name: string): ComponentType<NativeRootProps> | undefined {
   const screen = screens.get(name);
   if (!screen || !('component' in screen)) return undefined;
   let root = roots.get(name);
   if (!root) {
     const Screen = screen.component();
-    root = function ScreenRoot(rootProps: { componentId: string; rootTag?: number }) {
+    root = function ScreenRoot(rootProps: NativeRootProps) {
       // In the app's one tree the slot renders the root, without a tag of its own.
       const { componentId, rootTag } = rootProps;
       const watch = useCallback(
@@ -245,7 +261,7 @@ export function screenRoot(
           unmounted?.(componentId);
         };
       }, [componentId, rootTag]);
-      return <Screen {...props} componentId={componentId} />;
+      return <Screen {...screenProps(props, rootProps)} />;
     };
     root.displayName = `ScreenRoot(${name})`;
     roots.set(name, root);
