@@ -117,7 +117,7 @@ A tap on Settings closes the menu and shows Settings in the center as it goes. W
 | <Os name="iOS" /> | Over the content, which dims: `openMode: 'aboveContent'` of the side, the default. Or under it, with the content moved aside: `'pushContent'`. Then `animation(…)` says how the menu appears: `'parallax'`, `'slide'`, `'slide-and-scale'` or `'door'`. |
 | <Os name="Android" /> | The drawer of the platform: over the content, which dims. |
 
-The menu's color is its screen's `layout.backgroundColor`: it fills the whole height of the menu, behind the status bar and the navigation bar, while the menu's content keeps clear of them. A background on the React content stops at the safe area.
+The menu's color is its screen's `layout.backgroundColor`: it fills the whole height of the menu, behind the status bar and the navigation bar, while the menu's content keeps its top and sides clear of them (the bottom goes down to the edge: a list adds `insets.bottom`). A background on the React content stops at the safe area.
 
 `.ios()` keeps the settings that only iOS has apart from the others:
 

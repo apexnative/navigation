@@ -834,7 +834,7 @@ The whole list of options, with what each does on each platform: [Where each opt
 | `react-native-navigation` | What to do here |
 | --- | --- |
 | `Navigation.updateProps` | Props are given once. What changes goes in the screen's state, or the app's context or store. |
-| `Navigation.constants()` | `useSafeAreaInsets()` of a screen: what the bars and the system still cover of its content, measured for that screen; 0 on an edge the screen keeps clear itself. A screen that needs the height of its top bar goes under it (`drawBehind`) and reads the top inset. |
+| `Navigation.constants()` | `useSafeAreaInsets()` of a screen (the bottom is not padded by default: a list adds `insets.bottom` to its bottom padding): what the bars and the system still cover of its content, measured for that screen; 0 on an edge the screen keeps clear itself. A screen that needs the height of its top bar goes under it (`drawBehind`) and reads the top inset. |
 | `componentId` in a class component | Hooks need a function component: wrap the class in one that passes `useNavigation()` down as a prop. |
 | `topTabs` | No container for it. A pager component inside one screen does the same. |
 | `Navigation.handleDeepLink(url)` | Run the command the route would run, such as `navigation.push('Profile', { props })`. |

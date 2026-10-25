@@ -71,7 +71,7 @@ The left side renders the navigation. The right side describes it: `createNaviga
 | **State** | A React object: routes, params, indexes. | The platform's. JavaScript hears events and reads a small state: the screen the user sees and the selected tab. |
 | **Params** | `route.params`, changed with `setParams`. | Props of the component, given by the command that shows the screen. |
 | **Options** | Props of a screen, with React elements for the header. | Data the platform reads before the screen shows. A component in a bar is registered in `screens`, as a screen is. |
-| **Safe area** | `SafeAreaView` or a safe area library. | Every screen keeps clear of the bars by itself. See [The safe area](../screen-ui/system-ui#safe-area). |
+| **Safe area** | `SafeAreaView` or a safe area library. | Every screen keeps its top and sides clear of the bars by itself; the bottom is yours (`insets.bottom`). See [The safe area](../screen-ui/system-ui#safe-area). |
 
 Because options are data, a title is there from the first frame, and because the state is the platform's, a move renders nothing in React by itself. More on the model: [Introduction](../start/introduction#models).
 
@@ -664,7 +664,7 @@ Once no file imports them, remove `@react-navigation/*`, and `react-native-scree
 npx apex-navigation doctor
 ```
 
-Screens wrapped in `SafeAreaView` can drop it, since every screen keeps clear of the bars by itself; `useSafeAreaInsets` of this package gives what still covers the content of the screen. Code such as `paddingTop: insets.top` keeps working with it: on an edge the screen keeps clear the inset is 0, so nothing is padded twice.
+The bottom edge of a screen is not padded by default, as with `react-native-safe-area-context`: a list adds `useSafeAreaInsets().bottom` to its bottom padding, or the screen lists `'bottom'` in `safeArea(…)`. Screens wrapped in `SafeAreaView` can drop it, since every screen keeps its top and sides clear of the bars by itself; `useSafeAreaInsets` of this package gives what still covers the content of the screen. Code such as `paddingTop: insets.top` keeps working with it: on an edge the screen keeps clear the inset is 0, so nothing is padded twice.
 
 ## What has no direct equivalent {#no-equivalent}
 

@@ -462,8 +462,8 @@ doesn't see the store change. See [Links that wait for the sign-in](/docs/guides
 
 <ApiMember data={data} of="NavigationConfig" name="safeArea" />
 
-The edges on which every screen keeps its content out of the safe area. By default all four on Android, and on iOS
-every edge but those where the content goes under a bar that shows. A screen sets its own with `safeArea(…)` in its
+The edges on which every screen keeps its content out of the safe area. By default the top and the sides, but
+those where the content goes under a bar; the bottom is free, and a list keeps clear of it with `useSafeAreaInsets()`. A screen sets its own with `safeArea(…)` in its
 options; set it here only to change it for every screen.
 
 ### `window` {#window}

@@ -23,7 +23,7 @@ const PARTS: { tone: string; title: string; text: ReactNode }[] = [
   {
     tone: 'safe',
     title: 'The safe area',
-    text: 'The navigation keeps the content out from under the bars, the notch and the home indicator.',
+    text: 'The navigation keeps the content out from under the bars, and the notch; the bottom is free for a list to pad.',
   },
 ];
 

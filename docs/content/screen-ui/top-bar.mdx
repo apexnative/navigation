@@ -152,7 +152,7 @@ The bar can also hide and show by itself:
 | `hideOnKeyboard` | <Os name="iOS" /> Hides while the keyboard shows. |
 | `animate` | `false`: hides and shows at once, without the animation. |
 
-With `hideOnScroll` the screen goes under the bar, so its rows show where the bar was. Its list keeps its first rows clear: on <Os name="iOS" /> with `contentInsetAdjustmentBehavior="automatic"`, on <Os name="Android" /> with `paddingTop: useSafeAreaInsets().top`.
+With `hideOnScroll` the screen goes under the bar, so its rows show where the bar was. Its list keeps its first rows clear: on <Os name="iOS" /> with `contentInsetAdjustmentBehavior="automatic"`, on <Os name="Android" /> with `paddingTop: useSafeAreaInsets().top`. The bottom edge is not padded by default, so the list also adds `useSafeAreaInsets().bottom` to its bottom padding (an iOS list with `contentInsetAdjustmentBehavior="automatic"` does it itself).
 
 `drawBehind: true` keeps the bar and puts the content under it, as a map or a photo under a glass bar.
 

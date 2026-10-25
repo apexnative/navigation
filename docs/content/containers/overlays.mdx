@@ -36,7 +36,7 @@ A push or a modal moves the user somewhere. An overlay doesn't move anyone: it p
 
 An overlay is a screen of `screens` like any other: a component, its props, its options. It shows above the tabs, the bars and the modals; on <Os name="iOS" /> it is in a window of its own. Its background is transparent, so the app shows wherever the overlay draws nothing.
 
-An overlay covers the whole window, <Mark>the status bar included</Mark>: a dialog's dimmed backdrop dims the status bar too, as a system dialog does. Its safe area keeps the content off the bars, so a toast at the top of the overlay sits below the status bar. On <Os name="Android" /> a status bar with a color of its own (`statusBar.backgroundColor`) stays over the backdrop, and `statusBar.drawBehind: false` starts the overlay below the status bar. What overlays are for:
+An overlay covers the whole window, <Mark>the status bar included</Mark>: a dialog's dimmed backdrop dims the status bar too, as a system dialog does. Its safe area keeps the top and the sides off the bars, so a toast at the top of the overlay sits below the status bar. On <Os name="Android" /> a status bar with a color of its own (`statusBar.backgroundColor`) stays over the backdrop, and `statusBar.drawBehind: false` starts the overlay below the status bar. What overlays are for:
 
 <OverlayKinds />
 

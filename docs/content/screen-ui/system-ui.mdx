@@ -39,12 +39,12 @@ The status bar sits at the top, with the camera cutout in it; the home indicator
 
 ## The safe area {#safe-area}
 
-The safe area is where nothing covers the content: not the bars of the navigation, not the status bar, not the cutout, not the home indicator. <Mark>The navigation keeps every screen in it by default</Mark>, so a screen doesn't need its own padding:
+The safe area is where nothing covers the content: not the bars of the navigation, not the status bar, not the cutout, not the home indicator. <Mark>The navigation keeps every screen's top and sides in it by default</Mark>, so a screen doesn't need its own padding there. The bottom is not padded: the content goes down to the edge, under the home indicator, the navigation bar and a tab bar or toolbar, and a list adds `useSafeAreaInsets().bottom` to its own padding, as with `react-native-safe-area-context`.
 
 | Platform | By default |
 | --- | --- |
-| <Os name="iOS" /> | Every edge, except one under a bar that shows: a list goes under the top bar and keeps its rows clear itself, so the bar's glass shows the content scrolling under it. A screen with a large title leaves the top out too, and on iPhone Duo the side of the [vertical bar](#vertical-bar). |
-| <Os name="Android" /> | All four edges: under the status bar, out of the cutout, above the navigation bar. |
+| <Os name="iOS" /> | The top and the sides, but not the top under a top bar that shows: a list goes under the bar and keeps its rows clear itself, so the bar's glass shows the content scrolling under it. A screen with a large title leaves the top out too, and on iPhone Duo the side of the [vertical bar](#vertical-bar). The bottom goes under the home indicator and under a tab bar or toolbar. |
+| <Os name="Android" /> | The top and the sides: under the status bar, out of the cutout. The top is free under a top bar that hides on scroll and under a large title. The bottom goes under the navigation bar, when the screen draws under it (not with an opaque bar), and under the tabs only with `bottomTabs.drawBehind` or `hideOnScroll`. |
 
 :::tip[No safe area library]
 
@@ -57,6 +57,11 @@ A screen that should go under the system, such as a photo or a map, says which e
 ```ts
 s.safeArea('bottom'); // only the bottom: the photo goes under the top
 s.safeArea(); // no edge: the content goes everywhere
+s.safeArea('top', 'left', 'right', 'bottom'); // all four: a form above the home indicator
+
+// listed edges replace the default: this one keeps
+// the top under a large title too, and loses the sides
+s.safeArea('top', 'bottom');
 ```
 
 The edges for every screen of the app go in `createNavigation`, and a screen's own `safeArea` wins over them:
@@ -64,11 +69,11 @@ The edges for every screen of the app go in `createNavigation`, and a screen's o
 ```ts title="Navigation.ts"
 export const Navigation = createNavigation({
   // …
-  safeArea: { edges: ['top', 'bottom'] },
+  safeArea: { edges: ['top', 'left', 'right', 'bottom'] },
 });
 ```
 
-Content that keeps clear of the system itself, such as a list that scrolls under the home indicator, reads what still covers it with `useSafeAreaInsets()`. The insets are <Mark>what is left after the screen's own padding</Mark>: 0 on an edge the screen keeps, all of what covers it on an edge its content goes under. So the content adds them to its own padding, and no edge is padded twice. Here the screen keeps the top only, and the list pads its own bottom:
+Content that keeps clear of the system itself, such as a list that scrolls under the home indicator, reads what still covers it with `useSafeAreaInsets()`. The insets are <Mark>what is left after the screen's own padding</Mark>: 0 on an edge the screen keeps, all of what covers it on an edge its content goes under. So the content adds them to its own padding, and no edge is padded twice. Here the screen keeps the top and the sides by default, and the list pads its own bottom:
 
 ```tsx title="src/screens/Inbox.tsx"
 import { ScrollView } from 'react-native';
@@ -81,7 +86,7 @@ function Inbox() {
   const insets = useSafeAreaInsets();
   return (
     <ScrollView
-      contentContainerStyle={{ paddingBottom: insets.bottom }}
+      contentContainerStyle={{ paddingBottom: 16 + insets.bottom }}
     >
       {/* the rows scroll under the home indicator,
           and the last one ends above it */}
@@ -90,12 +95,11 @@ function Inbox() {
 }
 
 export const InboxScreen = defineScreen({
-  component: Inbox,
-  options: (s) => s.safeArea('top'),
+  component: Inbox, // the default edges: the top and the sides
 });
 ```
 
-On a screen that keeps the bottom edge, the default on Android and on iOS without a bar at the bottom, `insets.bottom` is 0, so the same code works there: the content is already above the home indicator. Below a top bar the top inset is 0; on a screen drawn behind the bars it is their height. On <Os name="iOS" /> a scroll view with `contentInsetAdjustmentBehavior="automatic"` keeps clear of the bars by itself: leave the inset out on those edges. More: [The insets and the safe area of the screen](/api/system-ui/useSafeAreaInsets#safe-area).
+On a screen that lists `'bottom'` in its edges, `insets.bottom` is 0, so the same code works there: the content is already above the home indicator. Below a top bar the top inset is 0; on a screen drawn behind the bars it is their height. On <Os name="iOS" /> a scroll view with `contentInsetAdjustmentBehavior="automatic"` keeps clear of the bars by itself: leave the inset out on those edges. More: [The insets and the safe area of the screen](/api/system-ui/useSafeAreaInsets#safe-area).
 
 ### The vertical bar of iPhone Duo {#vertical-bar}
 
@@ -252,7 +256,7 @@ export const PhotoScreen = defineScreen({
 | Platform | The bottom |
 | --- | --- |
 | <Os name="iOS" /> | The home indicator. `layout.autoHideHomeIndicator` fades it out while the screen isn't touched, as in a video. `layout.deferSystemGestures` makes the first swipe on those edges go to the app, for a game or a drawing; the second swipe goes home. |
-| <Os name="Android" /> | The navigation bar: a handle, or three buttons. The screen goes under it, and its safe area keeps the content above it. `navigationBar` sets its `backgroundColor`, hides it with `visible: false`, or puts the screen above it with `drawBehind: false`. |
+| <Os name="Android" /> | The navigation bar: a handle, or three buttons. The screen goes under it, and by default so does the content; a list adds `insets.bottom`. With an opaque bar or `drawBehind: false` the screen ends above it. `navigationBar` sets its `backgroundColor`, hides it with `visible: false`, or puts the screen above it with `drawBehind: false`. |
 
 <Os name="Android" /> The screen goes edge to edge as the platform says: always on Android 16+ for apps targeting SDK 36, on Android 15 for SDK 35, and on every version with `edgeToEdgeEnabled=true` in `android/gradle.properties`, the default of new React Native apps.
 

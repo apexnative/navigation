@@ -97,7 +97,7 @@ navigation.push('Details', { props: { title: 'Order 42' } });
   each other: tabs of stacks, a stack in a modal, tabs in a side menu.
 - **Screen UI as options:** the top bar, bar buttons, search, the toolbar and the floating action button, the status
   bar and the system bars.
-- **No safe area code:** every screen keeps its content clear of the bars, the cutout and the home indicator by itself.
+- **No safe area code:** every screen keeps its top and sides clear of the bars and the cutout by itself; the bottom is free, and a list adds `useSafeAreaInsets().bottom`.
 - **Native screens:** SwiftUI, UIKit and Compose screens are pushed, presented and put in tabs the same way as React
   screens.
 - **One React tree when you want it:** each screen is its own React root by default; with `appProvider` all screens
