@@ -2,6 +2,7 @@ package dev.apexnative.navigation.viewcontrollers.bottomtabs
 
 import android.view.View
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.ScrollEventListener
+import dev.apexnative.navigation.views.bottomtabs.BottomTabsLayout
 
 /**
  * bottomTabs.hideOnScroll: the tabs hide after a drag that scrolls the screen's content down and come back after one
@@ -43,9 +44,10 @@ class BottomTabsCollapseBehavior(private val container: () -> View?) :
     override fun onHide() {
         val view = container() ?: return
         hiddenByScroll = true
-        // Out of the screen with what is under it: a compact bar floats over its bottom margin and the navigation bar.
-        val under = ((view.parent as? View)?.let { it.height - view.bottom } ?: 0).coerceAtLeast(0)
-        view.animate().translationY((view.height + under).toFloat()).setDuration(DURATION).start()
+        // Out of the screen with what is under it (a compact bar floats over its bottom margin and the navigation bar)
+        // and the custom row that rises above it.
+        val distance = (view.parent as? BottomTabsLayout)?.hideDistance ?: view.height
+        view.animate().translationY(distance.toFloat()).setDuration(DURATION).start()
     }
 
     private companion object {

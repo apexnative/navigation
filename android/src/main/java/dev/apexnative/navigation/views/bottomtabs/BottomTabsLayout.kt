@@ -78,6 +78,16 @@ class BottomTabsLayout(context: Context) : FrameLayout(context) {
         }
     }
 
+    /**
+     * How far the container goes down to leave the screen whole: from the top of what the bar shows — the container, or
+     * the custom row that rises above it — to this view's bottom, in pixels.
+     */
+    internal val hideDistance: Int
+        get() {
+            val rowTop = row?.takeIf { it.visibility != View.GONE }?.top ?: container.top
+            return (height - minOf(container.top, rowTop)).coerceAtLeast(0)
+        }
+
     /** [view] of a tab joins under the bar, invisible until its tab shows. */
     internal fun addTab(view: View) {
         if (view.parent === this) return
