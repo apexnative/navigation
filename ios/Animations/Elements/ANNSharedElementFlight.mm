@@ -3,6 +3,7 @@
 #import "ANNInterpolate.h"
 #import "ANNSharedElementTransitionOptions.h"
 #import "ANNTrack.h"
+#import "ANNTransformParts.h"
 #import "ANNUtils.h"
 #import <React/RCTViewComponentView.h>
 #import <react/renderer/components/view/ViewProps.h>
@@ -16,6 +17,8 @@ typedef struct {
     CGPoint center;
     CGSize size;
     CATransform3D transform;
+    // The transform's parts, which the flight interpolates.
+    ANNTransformParts parts;
     CGFloat cornerRadius;
     // The part the clipping parents leave visible, in the copy's coordinates, and its corners.
     CGRect visible;
@@ -251,6 +254,12 @@ static UIImage *ANNPictureOf(UIView *view) {
         ANNElementSkipped(name, @"the place of a view of the pair can't be worked out");
         return nil;
     }
+    // A transform that flattens the view (a scale of 0) has no parts to fly between.
+    if (!ANNTransformPartsOf(_from.transform, &_from.parts) ||
+        !ANNTransformPartsOf(_to.transform, &_to.parts)) {
+        ANNElementSkipped(name, @"the transform of a view of the pair flattens it");
+        return nil;
+    }
     _text = ANNIsText(from) || ANNIsText(to);
     _grows = _to.size.height >= _from.size.height;
     _rightToLeft =
@@ -317,7 +326,8 @@ static UIImage *ANNPictureOf(UIView *view) {
     _copy.layer.transform = CATransform3DIdentity;
     _copy.bounds = CGRectMake(0, 0, size.width, size.height);
     _copy.center = ANNInterpolatePoint(_from.center, _to.center, f);
-    _copy.layer.transform = ANNInterpolateTransform(_from.transform, _to.transform, f);
+    _copy.layer.transform =
+        ANNTransformOfParts(ANNInterpolateTransformParts(_from.parts, _to.parts, f));
     if (_text) {
         [self placeTextPicturesAtTime:time size:size];
         return;
