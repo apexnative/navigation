@@ -158,6 +158,16 @@ export interface OptionsBottomTabs {
    */
   animate?: boolean;
   /**
+   * How the content changes when another tab is selected on screen, by a press, by back or from code. `'platform'`
+   * does what the platform does: on Android the tab that goes fades out and the new one fades in and grows (Material's
+   * fade through, 300 ms), on iOS the content changes at once. `'none'` changes it at once on both platforms. The
+   * appear events of a switch and `ANN.BottomTabSelected` come at its end, so with `'none'` right away. The tab that is
+   * selected decides: the value of the screen it shows, over its own, the tabs' and the default options. A
+   * `mergeOptions` applies from the next switch. Off screen the content always changes at once.
+   * @default 'platform'
+   */
+  switchAnimation?: 'platform' | 'none';
+  /**
    * The tab to select, as an index from 0. It selects once, when the options arrive, at creation (the first tab to
    * show) or in `mergeOptions`; it is not kept. An index out of range selects nothing (or the first tab at creation)
    * and logs a warning. It sends no press or select events. Without it, the first tab shows. `currentTabId` wins when

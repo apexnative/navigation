@@ -6,6 +6,7 @@
     return @[
         [ANNOptionField boolField:@"visible"],
         [ANNOptionField boolField:@"animate"],
+        [ANNOptionField enumField:@"switchAnimation" values:@[ @"platform", @"none" ]],
         [ANNOptionField doubleField:@"currentTabIndex"],
         [ANNOptionField textField:@"currentTabId"],
         [ANNOptionField textField:@"testID"],

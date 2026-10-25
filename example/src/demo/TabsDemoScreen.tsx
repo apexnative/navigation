@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { defineScreen, navigation, useNavigation } from '@apexnative/navigation';
 import { Button, Card, Muted, Screen, TextField, useTheme } from '../ui';
 
@@ -8,8 +8,10 @@ const ROWS = Array.from({ length: 30 }, (_, index) => `Row ${index + 1}`);
 /**
  * A tab of the demo app the Tabs panel shows: the tab bar has the options of the panel. Rows to scroll, for the tab
  * bar that minimizes; a button back to the Showcase. With tabs that hide on scroll, Push in the bar: tabs hidden by
- * the rows here show again on the screen it shows. With the custom row: a push that hides the tabs, a sheet and a modal
- * over them, a text field for the keyboard, a turn to landscape, and a badge on this tab that counts up.
+ * the rows here show again on the screen it shows. A push that keeps the tab bar, to switch tabs while it runs; on
+ * Android, how a switch to this tab animates, merged into this screen's options (it decides while it is on top). With
+ * the custom row: a push that hides the tabs, a sheet and a modal over them, a text field for the keyboard, a turn to
+ * landscape, and a badge on this tab that counts up.
  */
 function TabsDemo({ title, customRow }: TabsDemoProps) {
   const t = useTheme();
@@ -20,6 +22,22 @@ function TabsDemo({ title, customRow }: TabsDemoProps) {
     <Screen underBar>
       <Card title={`The ${title} tab`}>
         <Muted>A tab of a demo app, with the options of the Tabs panel.</Muted>
+        <Button
+          title="Push Details"
+          onPress={() => nav.push('PlainDetails', { props: { title: 'Details' } })}
+        />
+        {Platform.OS === 'android' ? (
+          <>
+            <Button
+              title="Switch to this tab at once"
+              onPress={() => nav.setOptions({ bottomTabs: { switchAnimation: 'none' } })}
+            />
+            <Button
+              title="Switch to this tab with the platform's animation"
+              onPress={() => nav.setOptions({ bottomTabs: { switchAnimation: 'platform' } })}
+            />
+          </>
+        ) : null}
         <Button
           title="Back to the Showcase"
           variant="primary"

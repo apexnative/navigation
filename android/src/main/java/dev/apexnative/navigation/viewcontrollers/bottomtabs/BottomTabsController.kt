@@ -353,8 +353,8 @@ class BottomTabsController(
 
     /**
      * Selects the tab at [index]: the bar shows it at once; on screen the tab it left fades through to it (Material's
-     * fade through), off screen one container becomes invisible and the other visible at once; then [switched]. The
-     * history of back follows.
+     * fade through); off screen, or when the new tab's `bottomTabs.switchAnimation` is `'none'`, one container becomes
+     * invisible and the other visible at once; then [switched]. The history of back follows.
      */
     private fun select(index: Int, how: How) {
         if (index == selectedIndex || index !in tabs.indices || isDestroyed) return
@@ -384,7 +384,7 @@ class BottomTabsController(
         // it must act in this tab, not in the one still fading out.
         if (how != How.Press) AppearanceDispatcher.reportState()
         if (views == null) return switched(index, previous, how, onScreen, hasViews = false)
-        endSwitch = views.switch(shown, left, animated = onScreen) {
+        endSwitch = views.switch(shown, left, animated = onScreen && fadesThrough(shown)) {
             endSwitch = null
             if (!isDestroyed) switched(index, previous, how, onScreen, hasViews = true)
         }
@@ -429,6 +429,11 @@ class BottomTabsController(
         val screen = screenOf(shown)
         if (screen == null) finish() else AppearanceDispatcher.afterDidAppear(screen, finish)
     }
+
+    // `bottomTabs.switchAnimation` of the tab that shows, its shown screen's over its own, the tabs' and the defaults:
+    // `'platform'`, the default, fades through; `'none'` switches at once.
+    private fun fadesThrough(tab: ViewController<*>): Boolean =
+        tab.resolveShownOptions(DefaultOptions.current).bottomTabs.switchAnimation.get(null) != "none"
 
     // A switch still running ends at once and a press's `ANN.BottomTabSelected` still waiting goes, before anything
     // newer on these tabs.

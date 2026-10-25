@@ -354,6 +354,7 @@ object OptionsFixture {
     fun bottomTabs(): JavaOnlyMap = JavaOnlyMap.of(
         "visible", true,
         "animate", true,
+        "switchAnimation", "none",
         "currentTabIndex", 1,
         "currentTabId", "Profile",
         "testID", "Tabs",
