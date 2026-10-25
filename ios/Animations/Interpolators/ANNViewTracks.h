@@ -17,10 +17,12 @@ FOUNDATION_EXPORT CGFloat ANNCameraDistance(void);
 /// `rotationY`, `rotation` (clockwise, degrees), the perspective, the translation.
 ///
 /// A missing end is the view's value when the tracks are made: `x`, `y` its place in its parent (from its layer's
-/// position and bounds, never its frame), the translations 0, `alpha` its alpha before any hide, the scales 1, the
-/// rotations 0. Each frame writes only what plays: `alpha` only with an `alpha` track, `layer.transform` only when a
-/// property of the transform plays; with `translationX` and `x` on one side the translation wins. The frame is never
-/// changed (React keeps the layout). `restore` puts back the alpha and the transform as they were read.
+/// position and bounds, never its frame) moved by its own translation, `alpha` its alpha before any hide, the
+/// translations, scales and rotations those of its own transform (React Native's `transform`, split into its parts as
+/// Android's views hold it: the shorter angle, −180…180). A property that doesn't play keeps the view's own value, its
+/// skew and perspective stay. Each frame writes only what plays: `alpha` only with an `alpha` track, `layer.transform`
+/// only when a property of the transform plays; with `translationX` and `x` on one side the translation wins. The frame
+/// is never changed (React keeps the layout). `restore` puts back the alpha and the transform as they were read.
 @interface ANNViewTracks : NSObject <ANNFrameClient>
 
 /// The playing properties of `side` on `view`. `alphaBefore`: the view's alpha before the core hid it for the

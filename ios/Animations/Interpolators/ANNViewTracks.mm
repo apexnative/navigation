@@ -2,6 +2,7 @@
 #import "ANNAnimationPropertyOptions.h"
 #import "ANNElementTransitionOptions.h"
 #import "ANNTrack.h"
+#import "ANNTransformParts.h"
 #import "ANNUtils.h"
 #import "ANNViewAnimationOptions.h"
 #import <QuartzCore/QuartzCore.h>
@@ -81,6 +82,15 @@ static ANNTrack *ANNTrackOf(Double *from, Double *to, Double *duration, Double *
     CGPoint _origin;
     CGFloat _alphaBefore;
     CATransform3D _transformBefore;
+    // The parts of the view's own transform (its React Native `transform`): what a property that doesn't play keeps,
+    // and the missing end of one that does, as Android keeps a view's own properties.
+    CGPoint _ownTranslation;
+    CGPoint _ownScale;
+    double _ownRotationX;
+    double _ownRotationY;
+    double _ownRotation;
+    CATransform3D _ownSkew;
+    CGFloat _ownPerspective;
     BOOL _animatesTransform;
     BOOL _tilts;
     BOOL _wroteAlpha;
@@ -146,21 +156,48 @@ static ANNTrack *ANNTrackOf(Double *from, Double *to, Double *duration, Double *
                               layer.position.y - bounds.size.height * layer.anchorPoint.y);
         _alphaBefore = alphaBefore;
         _transformBefore = layer.transform;
+        [self readOwnTransform];
     }
     return self;
+}
+
+// A transform that can't be split (a scale of 0) counts as none, as before the view's own transform was kept.
+- (void)readOwnTransform {
+    _ownScale = CGPointMake(1, 1);
+    _ownSkew = CATransform3DIdentity;
+    ANNTransformParts parts;
+    if (!ANNTransformPartsOf(_transformBefore, &parts)) {
+        return;
+    }
+    _ownTranslation = CGPointMake((CGFloat)parts.translate[0], (CGFloat)parts.translate[1]);
+    _ownScale = CGPointMake((CGFloat)parts.scale[0], (CGFloat)parts.scale[1]);
+    ANNRotationDegreesOf(parts, &_ownRotationX, &_ownRotationY, &_ownRotation);
+    _ownSkew = ANNSkewTransformOf(parts);
+    _ownPerspective = (CGFloat)parts.perspective[2];
 }
 
 - (double)viewValueOf:(ANNViewProperty)property {
     switch (property) {
         case ANNViewPropertyX:
-            return _origin.x;
+            return _origin.x + _ownTranslation.x;
         case ANNViewPropertyY:
-            return _origin.y;
+            return _origin.y + _ownTranslation.y;
+        case ANNViewPropertyTranslationX:
+            return _ownTranslation.x;
+        case ANNViewPropertyTranslationY:
+            return _ownTranslation.y;
         case ANNViewPropertyAlpha:
             return _alphaBefore;
         case ANNViewPropertyScaleX:
+            return _ownScale.x;
         case ANNViewPropertyScaleY:
-            return 1;
+            return _ownScale.y;
+        case ANNViewPropertyRotationX:
+            return _ownRotationX;
+        case ANNViewPropertyRotationY:
+            return _ownRotationY;
+        case ANNViewPropertyRotation:
+            return _ownRotation;
         default:
             return 0;
     }
@@ -221,22 +258,25 @@ static ANNTrack *ANNTrackOf(Double *from, Double *to, Double *duration, Double *
             ? (CGFloat)[self valueOf:ANNViewPropertyTranslationY at:time]
             : (CGFloat)([self valueOf:ANNViewPropertyY at:time] - _origin.y);
     // `CATransform3D` multiplies row vectors: each step below comes after the ones before it.
-    CATransform3D transform = CATransform3DMakeScale(scaleX, scaleY, 1);
-    if (_tracks[ANNViewPropertyRotationX]) {
+    CATransform3D transform =
+        CATransform3DConcat(CATransform3DMakeScale(scaleX, scaleY, 1), _ownSkew);
+    if (_tracks[ANNViewPropertyRotationX] || _ownRotationX != 0) {
         CGFloat radians = ANNRadians([self valueOf:ANNViewPropertyRotationX at:time]);
         transform = CATransform3DConcat(transform, ANNRotationX(radians));
     }
-    if (_tracks[ANNViewPropertyRotationY]) {
+    if (_tracks[ANNViewPropertyRotationY] || _ownRotationY != 0) {
         CGFloat radians = ANNRadians([self valueOf:ANNViewPropertyRotationY at:time]);
         transform = CATransform3DConcat(transform, ANNRotationY(radians));
     }
-    if (_tracks[ANNViewPropertyRotation]) {
+    if (_tracks[ANNViewPropertyRotation] || _ownRotation != 0) {
         CGFloat radians = ANNRadians([self valueOf:ANNViewPropertyRotation at:time]);
         transform = CATransform3DConcat(transform, ANNRotationZ(radians));
     }
-    if (_tilts) {
+    // A tilt that plays gets the camera's perspective unless the view has its own; a view's own tilt keeps the
+    // perspective it had, none without one, as React Native draws it.
+    if (_tilts || _ownPerspective != 0) {
         CATransform3D perspective = CATransform3DIdentity;
-        perspective.m34 = -1.0 / ANNCameraDistance();
+        perspective.m34 = _ownPerspective != 0 ? _ownPerspective : -1.0 / ANNCameraDistance();
         transform = CATransform3DConcat(transform, perspective);
     }
     transform = CATransform3DConcat(transform,
