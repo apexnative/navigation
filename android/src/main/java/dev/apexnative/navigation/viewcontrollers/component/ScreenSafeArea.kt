@@ -19,6 +19,7 @@ internal object ScreenSafeArea {
     const val LEFT = "left"
 
     private val ALL_EDGES = setOf(TOP, RIGHT, BOTTOM, LEFT)
+    private val DEFAULT_EDGES = setOf(TOP, RIGHT, LEFT)
     private const val OPAQUE = 0xFF
 
     /**
@@ -70,14 +71,14 @@ internal object ScreenSafeArea {
 
     /**
      * The edges the screen's safe area view keeps its content off: exactly [safeAreaEdges] when the options give them;
-     * else all four, but the top when the stack's header hides on scroll or a large title shows ([topFree]) and the
-     * bottom when the tabs hide on scroll ([bottomFree]).
+     * else the top and the sides, but the top when the stack's header hides on scroll or a large title shows
+     * ([topFree]). The bottom is free by default: the content goes down to the bottom, and a list keeps its last rows
+     * clear of the navigation bar with `useSafeAreaInsets()`.
      */
-    fun paddedEdges(safeAreaEdges: List<String>?, topFree: Boolean, bottomFree: Boolean): Set<String> {
+    fun paddedEdges(safeAreaEdges: List<String>?, topFree: Boolean): Set<String> {
         if (safeAreaEdges != null) return safeAreaEdges.filterTo(LinkedHashSet()) { it in ALL_EDGES }
-        val edges = LinkedHashSet(ALL_EDGES)
+        val edges = LinkedHashSet(DEFAULT_EDGES)
         if (topFree) edges -= TOP
-        if (bottomFree) edges -= BOTTOM
         return edges
     }
 

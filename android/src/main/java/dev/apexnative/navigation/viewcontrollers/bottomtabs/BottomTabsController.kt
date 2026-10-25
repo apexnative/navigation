@@ -551,9 +551,6 @@ class BottomTabsController(
         return TabsRoom.tabsTop(room(), screenOptions(screen), bottom)
     }
 
-    override fun leavesBottomEdgeFree(child: ViewController<*>, screen: ViewController<*>): Boolean =
-        TabsRoom.leavesBottomEdgeFree(screenOptions(screen)) || super.leavesBottomEdgeFree(child, screen)
-
     override fun tabsAtRestOf(child: ViewController<*>, screen: ViewController<*>): FabPlacement.Tabs? {
         if (peekView() == null) return super.tabsAtRestOf(child, screen)
         return TabsRoom.fabTabs(room(), screenOptions(screen))

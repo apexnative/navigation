@@ -175,7 +175,6 @@ class ComponentViewController(
         val edges = ScreenSafeArea.paddedEdges(
             safeAreaEdges = resolveCurrentOptions(DefaultOptions.current).layout.safeAreaEdges,
             topFree = parent?.leavesTopEdgeFree(this) == true,
-            bottomFree = parent?.leavesBottomEdgeFree(this) == true,
         )
         // The events of the screen go to the JavaScript it was made for, and to no other.
         val emitter = EventEmitter.of(jsGeneration)

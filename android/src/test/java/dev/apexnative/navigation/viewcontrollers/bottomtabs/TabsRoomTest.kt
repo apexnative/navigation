@@ -61,13 +61,6 @@ class TabsRoomTest {
     }
 
     @Test
-    fun theBottomEdgeIsFreeOnlyWhileTheBarHidesOnScrollAndShows() {
-        assertTrue(TabsRoom.leavesBottomEdgeFree(shown.copy(hideOnScroll = true)))
-        assertFalse(TabsRoom.leavesBottomEdgeFree(shown))
-        assertFalse(TabsRoom.leavesBottomEdgeFree(shown.copy(hideOnScroll = true, hidden = true)))
-    }
-
-    @Test
     fun theFabKeepsClearOfTheBarAtRestUnlessTheScreenHidesIt() {
         assertEquals(FabPlacement.Tabs(273, false), TabsRoom.fabTabs(stretch, shown))
         assertEquals(FabPlacement.Tabs(273, false), TabsRoom.fabTabs(stretch, shown.copy(drawBehind = true)))

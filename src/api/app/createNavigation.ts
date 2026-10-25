@@ -151,9 +151,9 @@ interface BaseConfig<
   /** The look of the navigation: colors of the bars, tabs and backgrounds; `navigation.setTheme` changes it. */
   theme?: NavigationTheme;
   /**
-   * The edges on which every screen keeps its content out of its safe area. Without it: all four on Android; on iOS
-   * every edge but those where the content goes under a bar that shows. A screen gives its own with `safeArea(...)`
-   * in its options.
+   * The edges on which every screen keeps its content out of its safe area. Without it: the top and the sides, but
+   * those where the content goes under a bar (`layout.safeAreaEdges`); the bottom is free and a list keeps clear of it
+   * with `useSafeAreaInsets()`. A screen gives its own with `safeArea(...)` in its options.
    */
   safeArea?: { edges: SafeAreaEdge[] };
   /** (iOS) The app's window, behind the screens: seen around a modal as it comes in. */

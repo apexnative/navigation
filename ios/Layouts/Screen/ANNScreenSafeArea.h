@@ -7,10 +7,6 @@ NS_ASSUME_NONNULL_BEGIN
 typedef struct {
     /// The screen is in a stack.
     BOOL inStack;
-    /// The screen's stack shows its toolbar.
-    BOOL stackShowsToolbar;
-    /// The bottom of the window's safe area: the home indicator.
-    CGFloat windowBottomSafeArea;
     /// The physical side of the iPhone Duo vertical bar (iOS 27.1): `UIRectEdgeLeft`, `UIRectEdgeRight`, or
     /// `UIRectEdgeNone` without one.
     UIRectEdge verticalBarSide;
@@ -29,9 +25,8 @@ FOUNDATION_EXPORT UIEdgeInsets ANNScreenInsetsOverRoot(CGRect rootFrame, CGSize 
 /// The padding the screen's safe area view keeps (`layout.safeAreaEdges`): the insets on the padded edges, 0 on the
 /// others. With `layout.safeAreaEdges` exactly those edges (an explicit `'top'` keeps the top under a large title too);
 /// without it every edge but: the top under a shown top bar (in a stack, under the top bar, `topBar.visible` not
-/// `false`) or with a large title that can show; the bottom when the bottom inset covers more than the window's home
-/// indicator (by over 0.5 pt), or in a stack with a toolbar and `topBar.hideOnScroll`; the side of the vertical bar
-/// unless `layout.drawBehindVerticalBar` or `layout.verticalBars` is `false`.
+/// `false`) or with a large title that can show; the bottom, always; the side of the vertical bar unless
+/// `layout.drawBehindVerticalBar` or `layout.verticalBars` is `false`.
 FOUNDATION_EXPORT UIEdgeInsets ANNScreenPadding(UIEdgeInsets insets, ANNNavigationOptions *options,
                                                 ANNScreenPaddingContext context);
 

@@ -1,9 +1,6 @@
 #import "ANNScreenSafeArea.h"
 #import "ANNScreenBars.h"
 
-// A bar at the bottom covers more than the home indicator when the bottom inset passes it by more than this.
-static const CGFloat ANNBottomBarThreshold = 0.5;
-
 CGRect ANNScreenRootFrame(CGRect bounds, UIEdgeInsets safeArea, BOOL fromTop, BOOL toBottom) {
     CGFloat top = fromTop ? 0 : safeArea.top;
     CGFloat bottom = toBottom ? CGRectGetHeight(bounds) : CGRectGetHeight(bounds) - safeArea.bottom;
@@ -38,13 +35,9 @@ UIEdgeInsets ANNScreenPadding(UIEdgeInsets insets, ANNNavigationOptions *options
         (ANNScreenIsUnderTopBar(options) || ANNLargeTitleCanShow(options))) {
         padding.top = 0;
     }
-    // A bar at the bottom over the home indicator (a tab bar, a toolbar, the bottom search field of iOS 26): the list
-    // goes under it. A tab bar at the top on iPad adds nothing to the bottom. A toolbar that hides on scroll counts as
-    // there.
-    if (insets.bottom > context.windowBottomSafeArea + ANNBottomBarThreshold ||
-        (context.inStack && context.stackShowsToolbar && [topBar.hideOnScroll withDefault:NO])) {
-        padding.bottom = 0;
-    }
+    // The bottom is free: the content goes down to the bottom of the screen, under the home indicator and under a bar
+    // at the bottom, and a list keeps its last rows clear with `useSafeAreaInsets()`.
+    padding.bottom = 0;
     BOOL behindVerticalBar = [options.layout.drawBehindVerticalBar withDefault:YES] &&
                              [options.layout.verticalBars withDefault:YES];
     if (behindVerticalBar) {
