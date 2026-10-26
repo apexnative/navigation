@@ -52,8 +52,7 @@ static void ANNCheckSameValues(void) {
     NSDictionary *json = @{
         @"topBar" : @{
             @"title" : @{@"text" : @"Home", @"color" : @(0xFF112233)},
-            @"rightButtonColor" :
-                @{@"dynamic" : @{@"light" : @(0xFF000000), @"dark" : @(0xFFFFFFFF)}},
+            @"rightButtonColor" : @{@"light" : @(0xFF000000), @"dark" : @(0xFFFFFFFF)},
             @"leftButtonColor" : NSNull.null,
             @"rightButtons" : @[ button ],
             @"leftButtons" : @[],
@@ -75,8 +74,7 @@ static void ANNCheckSameValues(void) {
     NSDictionary<NSString *, NSArray *> *changes = @{
         @"a text" : @[ @[ @"topBar", @"title", @"text" ], @"Profile" ],
         @"a color" : @[ @[ @"topBar", @"title", @"color" ], @(0xFF112234) ],
-        @"a side of a color pair" :
-            @[ @[ @"topBar", @"rightButtonColor", @"dynamic", @"dark" ], @(0xFFEEEEEE) ],
+        @"a side of a color pair" : @[ @[ @"topBar", @"rightButtonColor", @"dark" ], @(0xFFEEEEEE) ],
         @"a number" : @[ @[ @"topBar", @"height" ], @45 ],
         @"an image" : @[ @[ @"topBar", @"rightButtons", @0, @"icon", @"system" ], @"heart" ],
         @"a boolean" : @[ @[ @"topBar", @"rightButtons", @0, @"enabled" ], @NO ],

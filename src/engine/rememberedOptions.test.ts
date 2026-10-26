@@ -197,7 +197,7 @@ describe('the merged options of the last root, set again for a new launch', () =
   });
 
   it('take a color or an image whole, as the native side does', () => {
-    const own = { topBar: { background: { color: { dynamic: { light: 1, dark: 2 } } } } };
+    const own = { topBar: { background: { color: { light: 1, dark: 2 } } } };
     const merged = { topBar: { background: { color: { semantic: ['systemBackground'] } } } };
 
     expect(mergeNativeOptions<object>(own, merged)).toEqual(merged);
