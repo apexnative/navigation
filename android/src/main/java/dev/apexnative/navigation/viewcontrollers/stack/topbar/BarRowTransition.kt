@@ -7,14 +7,15 @@ import dev.apexnative.navigation.viewcontrollers.stack.StackDisplay.BarMotion
  * row and the large title lies over them and the real row turns transparent; then the picture goes with the old screen
  * and the row comes with the new one ([RowTimeline]). Each change of the stack's current child owns the bar: a newer
  * one takes it over (the older picture goes, its animator stops), and only the end of the transition that owns it puts
- * the row back at rest. Without a picture (a `HARDWARE` bitmap in the bar) the old row just hides. Main thread only.
+ * the row back at rest. Without a picture (a `HARDWARE` bitmap in the bar on Android 8) the old row just hides. Main
+ * thread only.
  */
 internal class BarRowTransition(private val target: Target) {
     /** What the transition moves: the bar's views, or the unit tests' fake. */
     interface Target {
         /**
          * Lays a picture of the row and the large title over them, laid out at once and taking the touches; false when
-         * the bar can't be drawn in software (a `HARDWARE` bitmap): no picture then.
+         * the bar can't be recorded (a `HARDWARE` bitmap on Android 8): no picture then.
          */
         fun takeSnapshot(): Boolean
 

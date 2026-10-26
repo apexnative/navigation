@@ -7,7 +7,6 @@ import android.app.Activity
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.graphics.Color
-import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.view.Menu
 import android.view.MenuItem
@@ -212,8 +211,8 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
      * bar as it is goes with [leaving], and the bar, which takes [incoming]'s options next, is drawn flat as [incoming]
      * moves — under [leaving] on a pop ([StackDisplay.BarTravel.Back]) (`StackLayout.barTravels`). No picture when the
      * bar doesn't show. Nothing travels when the new top hides the bar by a side of its own
-     * (`animations.*.topBar.exit`), which plays instead, or when the bar can't be drawn in software (a `HARDWARE`
-     * bitmap in it): the bar takes the options in its place.
+     * (`animations.*.topBar.exit`), which plays instead, or when the bar can't be recorded (a `HARDWARE` bitmap in it
+     * on Android 8): the bar takes the options in its place.
      */
     private fun beginTravel(
         bar: TopBar,
@@ -238,10 +237,10 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
 
     // The bar's picture where the bar is in the stack, its moves counted.
     private fun pictureOfBar(bar: TopBar): Drawable? {
-        val bitmap = bar.picture() ?: return null
+        val picture = bar.picture() ?: return null
         val left = (bar.left + bar.translationX).roundToInt()
         val top = (bar.top + bar.translationY).roundToInt()
-        return BitmapDrawable(bar.resources, bitmap).apply { setBounds(left, top, left + bitmap.width, top + bitmap.height) }
+        return picture.apply { setBounds(left, top, left + intrinsicWidth, top + intrinsicHeight) }
     }
 
     // The bar's travel ends: the picture goes, the bar is drawn in its place again with its shadow.
@@ -719,15 +718,14 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
 
     private fun pictureUnderRow(bar: TopBar, leaving: ViewController<*>) {
         val view = leaving.peekView() ?: return
-        val (bitmap, top) = bar.pictureUnderRow() ?: return
+        val (picture, top) = bar.pictureUnderRow() ?: return
         val barPlace = IntArray(2)
         val viewPlace = IntArray(2)
         bar.getLocationInWindow(barPlace)
         view.getLocationInWindow(viewPlace)
-        val picture = BitmapDrawable(bar.resources, bitmap)
         val left = barPlace[0] - viewPlace[0]
         val y = barPlace[1] + top - viewPlace[1]
-        picture.setBounds(left, y, left + bitmap.width, y + bitmap.height)
+        picture.setBounds(left, y, left + picture.intrinsicWidth, y + picture.intrinsicHeight)
         view.overlay.add(picture)
         underRow = leaving to picture
     }
