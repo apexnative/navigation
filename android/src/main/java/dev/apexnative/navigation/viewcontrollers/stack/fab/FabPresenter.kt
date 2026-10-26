@@ -42,8 +42,8 @@ internal class FabPresenter(
         get() = menu ?: fab
 
     /**
-     * The screen on top became [source], with its resolved [options]: the same id updates the FAB that shows and grows
-     * it again, another id replaces it, none takes it away; the scroll of [scroll] hides it with `hideOnScroll`.
+     * The screen on top became [source], with its resolved [options]: the same id updates the FAB that shows, where it
+     * stays as it is, another id replaces it, none takes it away; the scroll of [scroll] hides it with `hideOnScroll`.
      * Nothing when [source] already shows it.
      */
     fun showFor(layout: StackLayout, source: ViewController<*>?, options: FabOptions, scroll: ScrollEventListener?) {
@@ -66,10 +66,7 @@ internal class FabPresenter(
                     fab?.show()
                     menu?.show()
                 }
-                view?.let {
-                    it.bringToFront()
-                    grow(it)
-                }
+                view?.bringToFront()
             }
         }
     }
@@ -255,7 +252,7 @@ internal class FabPresenter(
         shownId = null
     }
 
-    // It comes to the top and grows from 60 % in 200 ms.
+    // A new FAB comes to the top and grows from 60 % in 200 ms.
     private fun grow(view: View) {
         val target = (view as? FabMenu)?.main ?: view
         target.animate().cancel()
