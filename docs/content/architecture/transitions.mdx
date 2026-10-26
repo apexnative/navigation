@@ -167,6 +167,10 @@ The same goes for `pop`, `showModal`, `dismissModal`, `setStackRoot` and `setRoo
 
 The top bar goes its platform's way in a preset or an animation of your own. <Os name="Android" /> It goes with its screen, as if it were part of it: with `slideUp` the new screen comes up with its bar over the old one and its bar, and on the way back it goes down with its bar, uncovering the bar below. With `fade` or `scale` the bar fades or grows with its screen. <Os name="iOS" /> UIKit keeps the bar in place and changes its title and buttons as the transition starts; only the screens under it move.
 
+### When the user reduces motion {#reduce-motion}
+
+The system's setting to reduce motion wins over a move of your own, with nothing to set. <Os name="iOS" /> With Reduce Motion on, the move becomes a fade of the same length: the screen that comes fades in on a push, a modal's show and `setRoot`, and the screen that goes fades out on a pop and a dismissal. No element moves. <Os name="Android" /> With Remove animations on, every animation of the app ends at once: the move jumps to its end, no element moves and the push doesn't wait for one, and a side menu opens and closes without its slide.
+
 ## Which to pick {#which}
 
 | The move | Pick | What it costs |

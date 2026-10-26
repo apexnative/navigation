@@ -1,6 +1,7 @@
 package dev.apexnative.navigation.viewcontrollers.sidemenu
 
 import dev.apexnative.navigation.react.events.AppearanceDispatcher
+import dev.apexnative.navigation.utils.SystemAnimations
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.ViewController
 
 /**
@@ -26,6 +27,8 @@ import dev.apexnative.navigation.viewcontrollers.viewcontroller.ViewController
 internal class SideMenuMotion(
     private val drawer: () -> Drawer,
     private val host: Host,
+    /** The system's animations are off ([SystemAnimations]): a command or back moves the drawer at once. */
+    private val animationsOff: () -> Boolean = { SystemAnimations.areOff() },
 ) {
     /** A side of the side menu: physical, `left` stays on the left in RTL too. */
     enum class Side(
@@ -242,11 +245,14 @@ internal class SideMenuMotion(
         drawer.lock(side, locked = !isOnScreen(side) && !host.isEnabled(side))
     }
 
-    // The drawer opens or closes [side]; one that doesn't call back has its result recorded here.
+    // The drawer opens or closes [side]; one that doesn't call back has its result recorded here. With the system's
+    // animations off it jumps, unless it moves: the drag and the settle aren't animators, and it can't jump while it
+    // settles.
     private fun move(side: Side, open: Boolean, animate: Boolean) {
         val drawer = drawer()
+        val animated = animate && (moving || !animationsOff())
         val silent = !drawer.callsBack
-        if (open) drawer.open(side, animate) else drawer.close(side, animate)
+        if (open) drawer.open(side, animated) else drawer.close(side, animated)
         if (silent) record(side, open)
     }
 

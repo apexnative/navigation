@@ -35,7 +35,8 @@ FOUNDATION_EXPORT CGFloat ANNCameraDistance(void);
 /// disappearing from it to `to`, or both ends given.
 - (instancetype)initWithView:(UIView *)view element:(ANNElementTransitionOptions *)element;
 
-/// A linear fade of `view`'s alpha (a dismissed popover with nothing to play); `restore` puts back `alphaBefore`.
+/// A linear fade of `view`'s alpha (a dismissed popover with nothing to play, a transition under Reduce Motion);
+/// `restore` puts back `alphaBefore`.
 - (instancetype)initWithView:(UIView *)view
                     fadeFrom:(CGFloat)from
                           to:(CGFloat)to

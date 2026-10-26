@@ -533,18 +533,36 @@ static __weak ANNRootShow *ANNAnimatingShow;
     NSMutableArray<ANNViewTracks *> *tracks = [NSMutableArray new];
     ANNViewAnimationOptions *enter = [ANNAnimationRules playingSide:animation.enter];
     ANNViewAnimationOptions *exit = [ANNAnimationRules playingSide:animation.exit];
-    if (enter && rootView) {
-        [tracks addObject:[[ANNViewTracks alloc] initWithView:rootView
-                                                         side:enter
-                                                  alphaBefore:rootView.alpha]];
-    }
-    if (exit && snapshot) {
-        [tracks addObject:[[ANNViewTracks alloc] initWithView:snapshot
-                                                         side:exit
-                                                  alphaBefore:snapshot.alpha]];
-    }
     NSTimeInterval length =
         MAX([ANNAnimationRules lengthOfSide:enter], [ANNAnimationRules lengthOfSide:exit]);
+    if (UIAccessibilityIsReduceMotionEnabled() && length > 0) {
+        // With the system's Reduce Motion on, nothing moves: the new root fades in over the snapshot in the same
+        // length, or the snapshot fades out without a new root's view.
+        if (rootView) {
+            [tracks addObject:[[ANNViewTracks alloc] initWithView:rootView
+                                                         fadeFrom:0
+                                                               to:rootView.alpha
+                                                         duration:length
+                                                      alphaBefore:rootView.alpha]];
+        } else if (snapshot) {
+            [tracks addObject:[[ANNViewTracks alloc] initWithView:snapshot
+                                                         fadeFrom:snapshot.alpha
+                                                               to:0
+                                                         duration:length
+                                                      alphaBefore:snapshot.alpha]];
+        }
+    } else {
+        if (enter && rootView) {
+            [tracks addObject:[[ANNViewTracks alloc] initWithView:rootView
+                                                             side:enter
+                                                      alphaBefore:rootView.alpha]];
+        }
+        if (exit && snapshot) {
+            [tracks addObject:[[ANNViewTracks alloc] initWithView:snapshot
+                                                             side:exit
+                                                      alphaBefore:snapshot.alpha]];
+        }
+    }
     show.tracks = tracks;
     show.animating = YES;
     ANNAnimatingShow = show;

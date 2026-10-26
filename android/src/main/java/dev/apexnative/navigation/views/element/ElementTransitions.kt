@@ -14,6 +14,7 @@ import dev.apexnative.navigation.options.SharedElementTransitionOptions
 import dev.apexnative.navigation.react.events.AppearanceDispatcher
 import dev.apexnative.navigation.utils.DevelopmentLog
 import dev.apexnative.navigation.utils.NavigationLog
+import dev.apexnative.navigation.utils.SystemAnimations
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.ViewController
 import dev.apexnative.navigation.views.animations.AnimationLayer
 import dev.apexnative.navigation.views.animations.SideAnimator
@@ -225,8 +226,8 @@ internal class ElementTransition private constructor(private val layer: Transiti
 
         /**
          * The elements of [animation] from [from] to [to], moved into a layer that joins [host] at [layerIndex] (its
-         * top without one); none when none of them is found. A shared element without a duration takes
-         * [fallbackDuration], the screen's fade.
+         * top without one); none when none of them is found or the system's animations are off. A shared element
+         * without a duration takes [fallbackDuration], the screen's fade.
          */
         fun start(
             animation: LayoutAnimation,
@@ -236,6 +237,7 @@ internal class ElementTransition private constructor(private val layer: Transiti
             layerIndex: Int?,
             fallbackDuration: Long,
         ): ElementTransition? {
+            if (SystemAnimations.areOff(host.context)) return null
             val fromView = from?.let { AppearanceDispatcher.visibleNode(it).peekView() }
             val toView = AppearanceDispatcher.visibleNode(to).peekView()
             val transitions = animation.elementTransitions.transitions
