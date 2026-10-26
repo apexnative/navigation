@@ -1,4 +1,4 @@
-import { presets } from '../controls';
+import { color, presets } from '../controls';
 import { defineScenario } from '../scenario';
 import { md } from '../../ui/icons';
 
@@ -48,6 +48,8 @@ export default defineScenario({
         { id: 'done', text: 'Done', style: 'prominent', pinned: true },
       ],
     }),
+    'topBar.menuBackgroundColor': color({ platform: 'android' }),
+    'topBar.menuTextColor': color({ platform: 'android' }),
   },
-  keywords: ['overflowMenu', 'pinned'],
+  keywords: ['overflowMenu', 'pinned', 'menuBackgroundColor', 'menuTextColor'],
 });

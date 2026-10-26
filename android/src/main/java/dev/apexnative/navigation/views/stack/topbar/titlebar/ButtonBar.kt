@@ -16,13 +16,10 @@ import android.transition.TransitionManager
 import android.util.TypedValue
 import android.view.ContextThemeWrapper
 import android.view.Gravity
-import android.view.Menu
 import android.view.View
 import androidx.appcompat.R as AppCompatR
 import androidx.appcompat.content.res.AppCompatResources
-import androidx.appcompat.widget.PopupMenu
 import androidx.core.graphics.drawable.DrawableCompat
-import androidx.core.view.MenuItemCompat
 import dev.apexnative.navigation.R
 import dev.apexnative.navigation.options.ButtonMenuOptions
 import dev.apexnative.navigation.options.ButtonOptions
@@ -54,6 +51,9 @@ internal class ButtonBar(
 
         /** The menu of the button [buttonId] as the screen's options give it now; none. */
         fun menuOf(buttonId: String): ButtonMenuOptions?
+
+        /** The colors of the bar's menus as the screen's options give them now (`topBar.menu*Color`). */
+        fun menuColors(): BarMenu.Colors
     }
 
     /** One button as the bar shows it: its options with the side's colors on them, and its React cell if it has one. */
@@ -65,8 +65,8 @@ internal class ButtonBar(
     private var views = HashMap<String, BarButtonView>()
     private var overflowMenu: ButtonMenuOptions? = null
     private var inOverflow: List<ButtonOptions> = emptyList()
-    private var popup: PopupMenu? = null
-    private var overflowPopup: PopupMenu? = null
+    private var popup: BarMenu? = null
+    private var overflowPopup: BarMenu? = null
 
     /**
      * The buttons of the side: [line] in the bar, in the line's order from its start; [inOverflow] in "⋮" (the right
@@ -95,12 +95,11 @@ internal class ButtonBar(
         }
         row.setOverflowShown(showsOverflow)
         // An open "⋮" shows what it holds now.
-        overflowPopup?.let {
+        overflowPopup?.let { menu ->
             if (showsOverflow) {
-                it.menu.clear()
-                fillOverflow(it.menu)
+                menu.update(overflowEntries(menu.context, menu.colors.text), overflowIcons())
             } else {
-                it.dismiss()
+                menu.dismiss()
             }
         }
     }
@@ -157,32 +156,35 @@ internal class ButtonBar(
         closeMenus()
         val popupTheme = MaterialTheme.popupTheme(context)
         val themed = if (popupTheme != 0) ContextThemeWrapper(context, popupTheme) else context
-        val menu = PopupMenu(themed, anchor, Gravity.END, AppCompatR.attr.actionOverflowMenuStyle, 0)
-        fillOverflow(menu.menu)
-        menu.setOnDismissListener { if (overflowPopup === menu) overflowPopup = null }
+        val colors = host.menuColors()
+        val menu = BarMenu(themed, anchor, Gravity.END, AppCompatR.attr.actionOverflowMenuStyle, colors)
+        menu.onDismiss = { if (overflowPopup === menu) overflowPopup = null }
         overflowPopup = menu
-        menu.show()
+        menu.show(overflowEntries(themed, colors.text), overflowIcons())
     }
 
-    // The `overflowMenu` items, then the buttons that don't fit in the bar, in the list's order.
-    private fun fillOverflow(menu: Menu) {
-        var order = 0
-        overflowMenu?.let {
-            ButtonMenus.fill(context, menu, OVERFLOW_GROUP, 0, it, null, loadIcon) { id -> host.picked(null, id) }
-            order = it.items.size
-        }
-        inOverflow.forEachIndexed { index, options ->
-            val id = options.id.get(null) ?: return@forEachIndexed
+    // The icons of "⋮" show when an `overflowMenu` item has one, the moved buttons' icons with them.
+    private fun overflowIcons(): Boolean = overflowMenu?.items.orEmpty().any { it.icon != null }
+
+    // The `overflowMenu` items, then the buttons that don't fit in the bar, in the list's order; a button keeps its own
+    // color.
+    private fun overflowEntries(themed: Context, textColor: Int?): List<BarMenu.Entry> {
+        val items = overflowMenu?.let {
+            ButtonMenus.entries(themed, it, textColor, loadIcon) { id -> host.picked(null, id) }
+        }.orEmpty()
+        val buttons = inOverflow.mapNotNull { options ->
+            val id = options.id.get(null) ?: return@mapNotNull null
             val enabled = !options.enabled.isFalse
-            val item = menu.add(BUTTONS_GROUP, Menu.NONE, order + index, titleOf(options))
-            item.isEnabled = enabled
-            iconOf(options, enabled)?.let { item.icon = it }
-            options.accessibilityLabel.get(null)?.let { MenuItemCompat.setContentDescription(item, it) }
-            item.setOnMenuItemClickListener {
-                press(id, options, null)
-                true
-            }
+            BarMenu.Entry(
+                titleOf(options),
+                iconOf(options, enabled),
+                enabled = enabled,
+                testId = options.testID.get(null),
+                label = options.accessibilityLabel.get(null),
+                onPick = { press(id, options, null) },
+            )
         }
+        return items + buttons
     }
 
     // The text of a button: its font (missing weight or italic made synthetically), its size in sp, its color, its
@@ -247,15 +249,12 @@ internal class ButtonBar(
         if (options.items.isEmpty()) return
         popup?.dismiss()
         val themed = MaterialTheme.context(context)
-        val menu = if (anchor != null) {
-            PopupMenu(themed, anchor)
-        } else {
-            PopupMenu(themed, row, Gravity.END)
-        }
-        ButtonMenus.fill(themed, menu.menu, Menu.NONE, 0, options, null, loadIcon) { id -> host.picked(buttonId, id) }
-        menu.setOnDismissListener { if (popup === menu) popup = null }
+        val colors = host.menuColors()
+        val gravity = if (anchor != null) Gravity.START else Gravity.END
+        val menu = BarMenu(themed, anchor ?: row, gravity, AppCompatR.attr.popupMenuStyle, colors)
+        menu.onDismiss = { if (popup === menu) popup = null }
         popup = menu
-        menu.show()
+        menu.show(ButtonMenus.entries(themed, options, colors.text, loadIcon) { id -> host.picked(buttonId, id) })
     }
 
     // A font of the options on a button's text, with the weight and the slant the typeface lacks drawn synthetically.
@@ -274,8 +273,6 @@ internal class ButtonBar(
     }
 
     private companion object {
-        const val BUTTONS_GROUP = 1
-        const val OVERFLOW_GROUP = 2
         const val CLOSE = "close"
         const val BOLD_WEIGHT = 600
         const val ITALIC_SKEW = -0.25f

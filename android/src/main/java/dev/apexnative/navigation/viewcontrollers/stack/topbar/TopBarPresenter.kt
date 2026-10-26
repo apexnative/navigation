@@ -55,6 +55,7 @@ import dev.apexnative.navigation.views.stack.topbar.TitleBar
 import dev.apexnative.navigation.views.stack.topbar.TopBar
 import dev.apexnative.navigation.views.stack.topbar.TopBarDefaults
 import dev.apexnative.navigation.views.stack.topbar.titlebar.BarButtonComponentCell
+import dev.apexnative.navigation.views.stack.topbar.titlebar.BarMenu
 import dev.apexnative.navigation.views.stack.topbar.titlebar.ButtonBar
 import dev.apexnative.navigation.views.stack.topbar.titlebar.IconBackgroundDrawable
 import kotlin.math.roundToInt
@@ -280,6 +281,8 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
         val bar = bar ?: return
         val screen = host.optionsScreen(entry)
         if (screen !== shownScreen) return apply(entry)
+        // An open menu has the colors of before.
+        if (delta.topBar.menuBackgroundColor.hasValue() || delta.topBar.menuTextColor.hasValue()) closeMenus()
         val options = host.resolvedOf(entry)
         applyAll(bar, entry, screen, options, merge = true, delta = delta)
     }
@@ -289,6 +292,8 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
      * now.
      */
     fun repaint(entry: ViewController<*>?) {
+        // An open menu has the old colors: it closes.
+        closeMenus()
         keys.clear()
         apply(entry)
         val options = entry?.let(host::resolvedOf) ?: return
@@ -1023,6 +1028,18 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
             val buttons = host.resolvedOf(entry).topBar.buttons
             return (buttons.left.orEmpty() + buttons.right.orEmpty()).firstOrNull { it.id.get(null) == buttonId }?.menu
         }
+
+        // Read as a menu opens, so they follow light and dark mode: `menuBackgroundColor`, else the bar's color as it
+        // shows (none when it lets something through), and then `menuTextColor` or else the title's color, the pair
+        // the bar shows; with neither, the theme's.
+        override fun menuColors(): BarMenu.Colors {
+            val topBar = shownEntry?.let(host::resolvedOf)?.topBar ?: return BarMenu.Colors(null, null)
+            val context = bar?.context ?: activity
+            val text = topBar.menuTextColor.get(context, null)
+            topBar.menuBackgroundColor.get(context, null)?.let { return BarMenu.Colors(it, text) }
+            val barColor = bar?.barColor?.takeIf { Color.alpha(it) == OPAQUE } ?: return BarMenu.Colors(null, text)
+            return BarMenu.Colors(barColor, text ?: topBar.title.color.get(context, null))
+        }
     }
 
     // The large title follows the list of the screen on top: the bar moves up by the list's offset, the large title
@@ -1163,6 +1180,7 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
 
     private companion object {
         const val DEFAULT_HEIGHT_DP = 64.0
+        const val OPAQUE = 255
         const val DEFAULT_TITLE_SP = 22.0
         const val DEFAULT_SUBTITLE_SP = 14.0
         const val CENTER = "center"

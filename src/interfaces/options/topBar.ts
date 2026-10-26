@@ -655,6 +655,20 @@ export interface OptionsTopBar {
   /** (iOS 16+) The color of the disabled center buttons that have no `disabledColor` of their own. */
   centerButtonDisabledColor?: Color;
   /**
+   * (Android) The background of the bar's menus: "⋮" and the menus of the buttons, their submenus too. Without it the
+   * bar's color (`background.color`, else the theme's surface), unless the bar lets something through; then the
+   * theme's surface container color. It follows light and dark mode; an open menu closes as the mode switches. iOS
+   * draws its system menus in the system's colors.
+   */
+  menuBackgroundColor?: Color;
+  /**
+   * (Android) The color of the text and the icons of the items of the bar's menus, and of the titles of their
+   * submenus. Without it the title's color (`title.color`) when the menu takes the bar's color, else the theme's
+   * colors. A destructive item stays red, and a button moved into "⋮" keeps its own color or the side's
+   * (`rightButtonColor`). A disabled item is dimmed. An open menu closes when either menu color is merged.
+   */
+  menuTextColor?: Color;
+  /**
    * Whether the content of the screen goes under the bar, starting at the top of the screen. The screen goes under the
    * bar by itself in some cases (a large title that may show, `hideOnScroll`, a hidden bar, an explicit translucent
    * background on iOS). A change by `mergeOptions` applies at once on iOS, on the next layout on Android.

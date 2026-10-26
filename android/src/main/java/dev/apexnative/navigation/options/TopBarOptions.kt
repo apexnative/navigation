@@ -34,6 +34,8 @@ class TopBarOptions {
     @JvmField var rightButtonDisabledColor: ThemeColour = NullThemeColour()
     @JvmField var centerButtonColor: ThemeColour = NullThemeColour()
     @JvmField var centerButtonDisabledColor: ThemeColour = NullThemeColour()
+    @JvmField var menuBackgroundColor: ThemeColour = NullThemeColour()
+    @JvmField var menuTextColor: ThemeColour = NullThemeColour()
     @JvmField var drawBehind: Bool = NullBool()
     @JvmField var testID: Text = NullText()
     @JvmField var title = TitleOptions()
@@ -63,7 +65,8 @@ class TopBarOptions {
         hideOnTap.hasValue() || hideOnKeyboard.hasValue() || leftButtonColor.hasValue() ||
         rightButtonColor.hasValue() || leftButtonBackgroundColor.hasValue() || rightButtonBackgroundColor.hasValue() ||
         leftButtonDisabledColor.hasValue() || rightButtonDisabledColor.hasValue() || centerButtonColor.hasValue() ||
-        centerButtonDisabledColor.hasValue() || drawBehind.hasValue() || testID.hasValue() || title.hasValue() ||
+        centerButtonDisabledColor.hasValue() || menuBackgroundColor.hasValue() || menuTextColor.hasValue() ||
+        drawBehind.hasValue() || testID.hasValue() || title.hasValue() ||
         subtitle.hasValue() || buttons.hasValue() || customizationId.hasValue() || overflowMenu != null ||
         verticalBarKeeps.hasValue() || background.hasValue() || scrollEdgeAppearance.hasValue() ||
         barStyle.hasValue() || style.hasValue() || noBorder.hasValue() || searchBar.hasAnyValue() ||
@@ -85,6 +88,8 @@ class TopBarOptions {
         rightButtonDisabledColor = rightButtonDisabledColor.mergeWith(other.rightButtonDisabledColor)
         centerButtonColor = centerButtonColor.mergeWith(other.centerButtonColor)
         centerButtonDisabledColor = centerButtonDisabledColor.mergeWith(other.centerButtonDisabledColor)
+        menuBackgroundColor = menuBackgroundColor.mergeWith(other.menuBackgroundColor)
+        menuTextColor = menuTextColor.mergeWith(other.menuTextColor)
         if (other.drawBehind.hasValue()) drawBehind = other.drawBehind
         if (other.testID.hasValue()) testID = other.testID
         title.mergeWith(other.title)
@@ -127,6 +132,8 @@ class TopBarOptions {
         rightButtonDisabledColor = rightButtonDisabledColor.withDefault(defaults.rightButtonDisabledColor)
         centerButtonColor = centerButtonColor.withDefault(defaults.centerButtonColor)
         centerButtonDisabledColor = centerButtonDisabledColor.withDefault(defaults.centerButtonDisabledColor)
+        menuBackgroundColor = menuBackgroundColor.withDefault(defaults.menuBackgroundColor)
+        menuTextColor = menuTextColor.withDefault(defaults.menuTextColor)
         if (!drawBehind.hasValue()) drawBehind = defaults.drawBehind
         if (!testID.hasValue()) testID = defaults.testID
         title.mergeWithDefault(defaults.title)
@@ -178,6 +185,8 @@ class TopBarOptions {
             options.rightButtonDisabledColor = ThemeColour.parse(context, map, "rightButtonDisabledColor")
             options.centerButtonColor = ThemeColour.parse(context, map, "centerButtonColor")
             options.centerButtonDisabledColor = ThemeColour.parse(context, map, "centerButtonDisabledColor")
+            options.menuBackgroundColor = ThemeColour.parse(context, map, "menuBackgroundColor")
+            options.menuTextColor = ThemeColour.parse(context, map, "menuTextColor")
             options.drawBehind = BoolParser.parse(map, "drawBehind")
             options.testID = TextParser.parse(map, "testID")
             options.title = map.group("title") { TitleOptions.parse(context, it) }

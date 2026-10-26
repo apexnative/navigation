@@ -1,4 +1,4 @@
-import { presets } from '../controls';
+import { color, presets } from '../controls';
 import { defineScenario } from '../scenario';
 import { md } from '../../ui/icons';
 
@@ -17,7 +17,7 @@ export default defineScenario({
   id: '2.6',
   title: 'Menus',
   check:
-    "A `menu` opens on a tap: the system menu on iOS, Material's popup menu under the button on Android; a pick sends `buttonPressed` with the id of the item. With `menuOnLongPress` a tap is the button press and a long press opens the menu. A `singleSelection` menu keeps its check on the picked item. Android leaves out the title of the menu.",
+    "A `menu` opens on a tap: the system menu on iOS, Material's popup menu under the button on Android; a pick sends `buttonPressed` with the id of the item. With `menuOnLongPress` a tap is the button press and a long press opens the menu. A `singleSelection` menu keeps its check on the picked item. Android leaves out the title of the menu; `menuBackgroundColor` and `menuTextColor` paint its menus.",
   controls: {
     'topBar.rightButtons': presets({
       'Menu on tap': [
@@ -76,6 +76,8 @@ export default defineScenario({
         },
       ],
     }),
+    'topBar.menuBackgroundColor': color({ platform: 'android' }),
+    'topBar.menuTextColor': color({ platform: 'android' }),
   },
-  keywords: ['menu', 'menuOnLongPress', 'singleSelection'],
+  keywords: ['menu', 'menuOnLongPress', 'singleSelection', 'menuBackgroundColor', 'menuTextColor'],
 });

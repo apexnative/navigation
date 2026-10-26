@@ -85,7 +85,8 @@ top-level folder. Main thread only, unless a line says otherwise.
   `TopBarVisibility.kt`, `BarComponents.kt`, `ButtonPlaces.kt`, `LargeTitleCollapse.kt`, `BarRowTransition.kt`;
   `views/stack/topbar/TopBar.kt`, `TitleBar.kt`, `titlebar/ButtonRow.kt` (the views of a side: back, buttons,
   magnifier, "⋮"), `titlebar/ButtonBar.kt` (the buttons from the options, "⋮"'s popup), `titlebar/BarButtonView.kt`,
-  `titlebar/ButtonMenus.kt`.
+  `titlebar/BarMenu.kt` (the bar's menus: a `ListPopupWindow` with the theme's popup style and the options' colors),
+  `titlebar/ButtonMenus.kt` (menu options to its items).
 - Search: `viewcontrollers/stack/search/StackSearchPresenter.kt`, `ScreenSearch.kt`, `SearchPanel.kt`;
   `views/stack/topbar/search/`.
 - Tabs: `viewcontrollers/bottomtabs/BottomTabsController.kt`, `BottomTabsPresenter.kt`, `TabSelection.kt`,

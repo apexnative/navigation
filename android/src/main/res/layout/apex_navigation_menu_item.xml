@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+An item of a menu of the top bar (BarMenu), as AppCompat lays out a popup menu's item: the icon, the title, the
+submenu's arrow, the check mark of a checkable item. The inflater of the activity turns the check box and the radio
+button into Material ones, as it does for AppCompat's menus.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="?attr/listPreferredItemHeightSmall"
+    android:gravity="center_vertical"
+    android:minWidth="196dp"
+    android:orientation="horizontal"
+    android:paddingEnd="16dp">
+
+    <ImageView
+        android:id="@+id/apex_navigation_menu_icon"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="-8dp"
+        android:layout_marginBottom="8dp"
+        android:duplicateParentState="true"
+        android:importantForAccessibility="no"
+        android:scaleType="centerInside"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/apex_navigation_menu_title"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_weight="1"
+        android:duplicateParentState="true"
+        android:ellipsize="end"
+        android:singleLine="true"
+        android:textAlignment="viewStart"
+        android:textAppearance="?attr/textAppearanceLargePopupMenu" />
+
+    <ImageView
+        android:id="@+id/apex_navigation_menu_arrow"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:duplicateParentState="true"
+        android:importantForAccessibility="no"
+        android:scaleType="center"
+        android:src="@drawable/apex_navigation_ic_arrow_right"
+        android:visibility="gone" />
+
+    <CheckBox
+        android:id="@+id/apex_navigation_menu_check"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:clickable="false"
+        android:duplicateParentState="true"
+        android:focusable="false"
+        android:visibility="gone" />
+
+    <RadioButton
+        android:id="@+id/apex_navigation_menu_radio"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:clickable="false"
+        android:duplicateParentState="true"
+        android:focusable="false"
+        android:visibility="gone" />
+</LinearLayout>
