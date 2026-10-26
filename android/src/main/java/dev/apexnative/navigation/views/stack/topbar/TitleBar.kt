@@ -7,15 +7,14 @@ import android.util.TypedValue
 import android.view.View
 import android.view.ViewGroup
 import androidx.appcompat.widget.AppCompatTextView
-import com.google.android.material.appbar.MaterialToolbar
-import dev.apexnative.navigation.utils.MaterialTheme
 import dev.apexnative.navigation.utils.UiUtils
+import dev.apexnative.navigation.views.stack.topbar.titlebar.ButtonRow
 import kotlin.math.max
 import kotlin.math.min
 
 /**
  * The row of the bar: the left buttons with the back button at the start ([leftButtonBar]), the right buttons and "⋮"
- * at the end ([rightButtonBar]), both Material 3 toolbars, and between them the title and the subtitle, or a React
+ * at the end ([rightButtonBar]), each a [ButtonRow], and between them the title and the subtitle, or a React
  * title ([titleComponent]). It lays them out in its own coordinates, so a shift of the row (`topBar.title.topMargin`)
  * moves them all; [sideInsets] keep them off the system bars and the cutout at the sides. Right to left, everything
  * mirrors. Main thread only.
@@ -26,10 +25,10 @@ class TitleBar(context: Context) : ViewGroup(context) {
     enum class Alignment { Start, Center, Fill }
 
     /** The back button (its navigation button) and the left buttons. */
-    val leftButtonBar = MaterialToolbar(context).also(::plain)
+    val leftButtonBar = ButtonRow(context)
 
     /** The right buttons, the search's magnifier and "⋮". */
-    val rightButtonBar = MaterialToolbar(context).also(::plain)
+    val rightButtonBar = ButtonRow(context)
 
     /** The title's text: one line, cut with "…" at its end (`topBar.title.text`). */
     val titleView = AppCompatTextView(context).apply {
@@ -118,8 +117,6 @@ class TitleBar(context: Context) : ViewGroup(context) {
         val height = MeasureSpec.getSize(heightMeasureSpec)
         val inner = max(width - sideInsetsBox[0] - sideInsetsBox[1], 0)
         val exactHeight = MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY)
-        alignButtons(leftButtonBar, height)
-        alignButtons(rightButtonBar, height)
         leftButtonBar.measure(MeasureSpec.makeMeasureSpec(inner, MeasureSpec.AT_MOST), exactHeight)
         val rightRoom = max(inner - leftButtonBar.measuredWidth, 0)
         rightButtonBar.measure(MeasureSpec.makeMeasureSpec(rightRoom, MeasureSpec.AT_MOST), exactHeight)
@@ -154,7 +151,7 @@ class TitleBar(context: Context) : ViewGroup(context) {
             view.layout(x, top, x + w, top + view.measuredHeight)
         }
         // The back button and the left buttons at the start of the line, the right buttons at its end: right to left
-        // the whole row mirrors, and each toolbar mirrors what it holds.
+        // the whole row mirrors, and each side mirrors what it holds.
         val startBar = leftButtonBar.measuredWidth
         val endBar = rightButtonBar.measuredWidth
         place(leftButtonBar, 0, 0)
@@ -192,22 +189,6 @@ class TitleBar(context: Context) : ViewGroup(context) {
     private fun centered(width: Int, inner: Int, startBar: Int, endBar: Int): Int {
         val middle = (inner - width) / 2
         return min(max(middle, startBar), max(inner - endBar - width, startBar))
-    }
-
-    // A toolbar stands its back button and its menu at the top of its minimum height, centered in it (`buttonGravity`
-    // is top): with the row's height as that minimum, they stand in the middle of the row, as the title does.
-    private fun alignButtons(toolbar: MaterialToolbar, height: Int) {
-        if (toolbar.minimumHeight != height) toolbar.minimumHeight = height
-    }
-
-    // A toolbar that holds only buttons: no insets of its own around them (the row places them).
-    private fun plain(toolbar: MaterialToolbar) {
-        // Before the toolbar makes its menu, which takes the popup theme once: "⋮" in the current mode.
-        toolbar.popupTheme = MaterialTheme.popupTheme(toolbar.context)
-        toolbar.setContentInsetsRelative(0, 0)
-        toolbar.contentInsetStartWithNavigation = 0
-        toolbar.contentInsetEndWithActions = 0
-        toolbar.setPadding(0, 0, 0, 0)
     }
 
     private companion object {

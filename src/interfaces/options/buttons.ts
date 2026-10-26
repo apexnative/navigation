@@ -159,7 +159,7 @@ export interface OptionsTopBarButtonMenu {
  * A button of the top bar (`leftButtons`, `rightButtons`, `centerButtons`) or of the toolbar (`toolbar.buttons`). The
  * kinds are picked by the fields that are set. On iOS, the first that fits wins: a `component`, then an icon with text
  * and `showText`, then an icon with `iconBackground` or `iconInsets`, then an SF Symbol, an image `icon`, a `text`,
- * a `systemItem`; a button with none of them is not shown. On Android a button is a menu item of the bar: text, icon
+ * a `systemItem`; a button with none of them is not shown. On Android a button is a button of the bar's row: text, icon
  * or a component. Lists of buttons are replaced as a whole and take nothing from the lists of lower layers.
  *
  * Text, icon, color and similar fields are the same in all four places; where a place or a side differs, the field
@@ -204,7 +204,7 @@ export interface OptionsTopBarButton {
   systemItem?: SystemItemIcon;
   /**
    * The text of the button. A button with an icon keeps it as a label for the overflow menu, the customization panel
-   * and VoiceOver (iOS) or as the text of the menu item (Android, where it also shows when there is room).
+   * and VoiceOver (iOS), or for TalkBack, the tooltip of a long press and the overflow menu (Android).
    */
   text?: string;
   /** The text a screen reader says for the button. */

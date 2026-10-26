@@ -1,6 +1,5 @@
 package dev.apexnative.navigation.views.stack.topbar.titlebar
 
-import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Color
 import android.graphics.Paint
@@ -15,20 +14,15 @@ import android.text.style.MetricAffectingSpan
 import android.transition.AutoTransition
 import android.transition.TransitionManager
 import android.util.TypedValue
+import android.view.ContextThemeWrapper
 import android.view.Gravity
 import android.view.Menu
-import android.view.MenuItem
 import android.view.View
-import android.view.ViewGroup
 import androidx.appcompat.R as AppCompatR
 import androidx.appcompat.content.res.AppCompatResources
-import androidx.appcompat.view.menu.MenuView
-import androidx.appcompat.widget.ActionMenuView
 import androidx.appcompat.widget.PopupMenu
-import androidx.appcompat.widget.TooltipCompat
 import androidx.core.graphics.drawable.DrawableCompat
 import androidx.core.view.MenuItemCompat
-import com.google.android.material.appbar.MaterialToolbar
 import dev.apexnative.navigation.R
 import dev.apexnative.navigation.options.ButtonMenuOptions
 import dev.apexnative.navigation.options.ButtonOptions
@@ -36,19 +30,17 @@ import dev.apexnative.navigation.options.parsers.TypefaceLoader
 import dev.apexnative.navigation.utils.MaterialTheme
 import dev.apexnative.navigation.utils.TestIds
 import dev.apexnative.navigation.utils.UiUtils
-import java.util.WeakHashMap
 import kotlin.math.roundToInt
 
 /**
- * The buttons of one side of the bar in its toolbar: each button a menu item — a text, an icon (on its background), or
- * a React button's cell as the item's action view —, in the bar or in "⋮" as [set] says, with the `overflowMenu` items
- * first in "⋮". A press sends the button's id; a button with a `menu` opens it under the button (in "⋮" or not laid
- * out: at the bar's end), or on a long press with `menuOnLongPress`. The views of the items get their `testID`s after
- * each layout of the toolbar, which makes them again. Main thread only.
+ * The buttons of one side of the bar in its [ButtonRow]: each button a view of its own — a text or an icon (on its
+ * background) as a toolbar draws its items ([BarButtonView]), or a React button's cell —, in the bar or in "⋮" as
+ * [set] says, with the `overflowMenu` items first in "⋮". A press sends the button's id; a button with a `menu` opens
+ * it under the button (in "⋮": at the bar's end), or on a long press with `menuOnLongPress`. A button keeps its view
+ * while its id stays, and the view takes its `testID` as it is set. Main thread only.
  */
 internal class ButtonBar(
-    private val toolbar: MaterialToolbar,
-    private val left: Boolean,
+    private val row: ButtonRow,
     private val loadIcon: (String) -> Drawable?,
     private val host: Host,
 ) {
@@ -62,97 +54,134 @@ internal class ButtonBar(
 
         /** The menu of the button [buttonId] as the screen's options give it now; none. */
         fun menuOf(buttonId: String): ButtonMenuOptions?
-
-        /** The `testID` of an item the side holds besides its buttons (the search's magnifier); none. */
-        fun testIdOf(item: MenuItem): String? = null
     }
 
     /** One button as the bar shows it: its options with the side's colors on them, and its React cell if it has one. */
     class Button(val options: ButtonOptions, val cell: BarButtonComponentCell?)
 
-    private val context: Context = toolbar.context
+    private val context: Context = row.context
     private val typefaces = TypefaceLoader(context)
-    private val itemIds = HashMap<MenuItem, ButtonOptions>()
-    private var overflowTestId: String? = null
+    // The views of the buttons in the bar by their ids, kept from one set to the next.
+    private var views = HashMap<String, BarButtonView>()
+    private var overflowMenu: ButtonMenuOptions? = null
+    private var inOverflow: List<ButtonOptions> = emptyList()
     private var popup: PopupMenu? = null
-    private var watched: ActionMenuView? = null
-    // The item views that have the long press of a menu.
-    private val hooked = WeakHashMap<View, Boolean>()
-
-    init {
-        toolbar.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> applyViewIds() }
-    }
+    private var overflowPopup: PopupMenu? = null
 
     /**
-     * The buttons of the side: [inBar] in the bar, [inOverflow] in "⋮" (the right side; the left one keeps all in
-     * the bar), each in the list's order; [overflow], the items of `overflowMenu` (right side). [animated]: the change
-     * goes with an `AutoTransition` (`animateLeftButtons` / `animateRightButtons`).
+     * The buttons of the side: [line] in the bar, in the line's order from its start; [inOverflow] in "⋮" (the right
+     * side; the left one keeps all in the bar), in the list's order; [overflow], the items of `overflowMenu` (right
+     * side). [animated]: the change goes with an `AutoTransition` (`animateLeftButtons` / `animateRightButtons`).
      */
-    fun set(inBar: List<Button>, inOverflow: List<Button>, overflow: ButtonMenuOptions?, animated: Boolean) {
-        if (animated && toolbar.isLaidOut) TransitionManager.beginDelayedTransition(toolbar, AutoTransition())
-        val menu = toolbar.menu
-        menu.clear()
-        itemIds.clear()
-        var order = 0
-        overflow?.let {
-            ButtonMenus.fill(context, menu, OVERFLOW_GROUP, 0, it, MenuItem.SHOW_AS_ACTION_NEVER, loadIcon) { id ->
-                host.picked(null, id)
+    fun set(line: List<Button>, inOverflow: List<Button>, overflow: ButtonMenuOptions?, animated: Boolean) {
+        if (animated && row.isLaidOut) TransitionManager.beginDelayedTransition(row, AutoTransition())
+        val kept = this.views
+        this.views = HashMap()
+        val views = line.mapNotNull { button ->
+            val id = button.options.id.get(null) ?: return@mapNotNull null
+            button.cell?.let { return@mapNotNull cellOf(it, button.options) }
+            val view = kept.remove(id)?.takeIf { id !in this.views } ?: BarButtonView(context)
+            this.views[id] = view
+            bind(view, id, button.options)
+        }
+        row.setButtons(views)
+        overflowMenu = overflow
+        this.inOverflow = inOverflow.map { it.options }.filter { it.id.get(null) != null }
+        val showsOverflow = overflow != null || this.inOverflow.isNotEmpty()
+        if (showsOverflow) {
+            val button = row.overflowButton
+            button.setOnClickListener { openOverflow(it) }
+            TestIds.apply(button, overflow?.testID)
+        }
+        row.setOverflowShown(showsOverflow)
+        // An open "⋮" shows what it holds now.
+        overflowPopup?.let {
+            if (showsOverflow) {
+                it.menu.clear()
+                fillOverflow(it.menu)
+            } else {
+                it.dismiss()
             }
-            order = it.items.size
         }
-        overflowTestId = overflow?.testID
-        inOverflow.forEachIndexed { index, button -> add(menu, button, OVERFLOW_ORDER + order + index, false) }
-        inBar.forEachIndexed { index, button ->
-            // The first right button is the last of the line: the menu lays its items out in their order.
-            val place = if (left) index else inBar.size - 1 - index
-            add(menu, button, BAR_ORDER + place, true)
-        }
-        toolbar.post { applyViewIds() }
     }
 
     /** The color of "⋮" (`rightButtonColor`, else `colorOnSurfaceVariant`). */
-    fun setOverflowColor(color: Int) {
-        val icon = toolbar.overflowIcon ?: return
-        val tinted = DrawableCompat.wrap(icon.mutate())
-        DrawableCompat.setTint(tinted, color)
-        toolbar.overflowIcon = tinted
-    }
+    fun setOverflowColor(color: Int) = row.setOverflowColor(color)
 
     /** An open menu of the side closes: the bar shows another screen. */
     fun closeMenus() {
         popup?.dismiss()
         popup = null
-        toolbar.dismissPopupMenus()
+        overflowPopup?.dismiss()
+        overflowPopup = null
     }
 
-    private fun add(menu: Menu, button: Button, order: Int, inBar: Boolean) {
-        val options = button.options
-        val id = options.id.get(null) ?: return
-        val item = menu.add(BUTTONS_GROUP, Menu.NONE, order, titleOf(options))
-        itemIds[item] = options
+    // A React button's cell: its label and its `testID` on the cell, the press its content's own.
+    private fun cellOf(cell: BarButtonComponentCell, options: ButtonOptions): View {
+        cell.contentDescription = options.accessibilityLabel.get(null)
+        TestIds.apply(cell, options.testID.get(null))
+        return cell
+    }
+
+    // A text or icon button: its look, its press and long press, its `testID`. The long press shows the tooltip, or
+    // opens the menu of a button with `menuOnLongPress`.
+    private fun bind(view: BarButtonView, id: String, options: ButtonOptions): View {
         val enabled = !options.enabled.isFalse
-        item.isEnabled = enabled
-        if (inBar) {
-            item.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
-        } else {
-            item.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
+        view.isEnabled = enabled
+        view.restyle()
+        val longPressMenu = options.menuOnLongPress.isTrue && host.menuOf(id) != null
+        view.setOnLongClickListener(null)
+        // A listener, even none, makes the view long-clickable: TalkBack would offer a long press that does nothing.
+        view.isLongClickable = false
+        view.show(titleOf(options), iconOf(options, enabled), options.accessibilityLabel.get(null), !longPressMenu)
+        if (longPressMenu) {
+            view.setOnLongClickListener { pressed ->
+                val menu = host.menuOf(id) ?: return@setOnLongClickListener false
+                openMenu(id, menu, pressed)
+                true
+            }
         }
-        val cell = button.cell
-        if (cell != null) {
-            item.actionView = cell
-            cell.contentDescription = options.accessibilityLabel.get(null)
-        } else {
+        view.setOnClickListener { pressed -> press(id, options, pressed) }
+        TestIds.apply(view, options.testID.get(null))
+        return view
+    }
+
+    // A press: the button's menu opens under [anchor] (at the bar's end without one), or the press goes to the screen.
+    private fun press(id: String, options: ButtonOptions, anchor: View?) {
+        val menu = host.menuOf(id)
+        if (menu != null && !options.menuOnLongPress.isTrue) openMenu(id, menu, anchor) else host.pressed(id)
+    }
+
+    // "⋮" opens as a toolbar opens it: the theme's overflow popup from the end of the button, in the bar's popup theme.
+    private fun openOverflow(anchor: View) {
+        closeMenus()
+        val popupTheme = MaterialTheme.popupTheme(context)
+        val themed = if (popupTheme != 0) ContextThemeWrapper(context, popupTheme) else context
+        val menu = PopupMenu(themed, anchor, Gravity.END, AppCompatR.attr.actionOverflowMenuStyle, 0)
+        fillOverflow(menu.menu)
+        menu.setOnDismissListener { if (overflowPopup === menu) overflowPopup = null }
+        overflowPopup = menu
+        menu.show()
+    }
+
+    // The `overflowMenu` items, then the buttons that don't fit in the bar, in the list's order.
+    private fun fillOverflow(menu: Menu) {
+        var order = 0
+        overflowMenu?.let {
+            ButtonMenus.fill(context, menu, OVERFLOW_GROUP, 0, it, null, loadIcon) { id -> host.picked(null, id) }
+            order = it.items.size
+        }
+        inOverflow.forEachIndexed { index, options ->
+            val id = options.id.get(null) ?: return@forEachIndexed
+            val enabled = !options.enabled.isFalse
+            val item = menu.add(BUTTONS_GROUP, Menu.NONE, order + index, titleOf(options))
+            item.isEnabled = enabled
             iconOf(options, enabled)?.let { item.icon = it }
             options.accessibilityLabel.get(null)?.let { MenuItemCompat.setContentDescription(item, it) }
-        }
-        item.setOnMenuItemClickListener {
-            val menuOptions = host.menuOf(id)
-            if (cell == null && menuOptions != null && !options.menuOnLongPress.isTrue) {
-                openMenu(id, menuOptions, viewOf(item))
-            } else if (cell == null) {
-                host.pressed(id)
+            item.setOnMenuItemClickListener {
+                press(id, options, null)
+                true
             }
-            true
         }
     }
 
@@ -221,90 +250,12 @@ internal class ButtonBar(
         val menu = if (anchor != null) {
             PopupMenu(themed, anchor)
         } else {
-            PopupMenu(themed, toolbar, Gravity.END)
+            PopupMenu(themed, row, Gravity.END)
         }
         ButtonMenus.fill(themed, menu.menu, Menu.NONE, 0, options, null, loadIcon) { id -> host.picked(buttonId, id) }
         menu.setOnDismissListener { if (popup === menu) popup = null }
         popup = menu
         menu.show()
-    }
-
-    // The view of [item] in the bar; none in "⋮" or before the bar laid it out.
-    private fun viewOf(item: MenuItem): View? {
-        val menuView = actionMenuView() ?: return null
-        for (index in 0 until menuView.childCount) {
-            val child = menuView.getChildAt(index)
-            if (itemOf(child) === item || item.actionView === child) return child
-        }
-        return null
-    }
-
-    private fun actionMenuView(): ActionMenuView? {
-        for (index in 0 until toolbar.childCount) {
-            val child = toolbar.getChildAt(index)
-            if (child is ActionMenuView) return child
-        }
-        return null
-    }
-
-    // AppCompat gives an item's view no public way back to its item: the item view's own interface, which only
-    // AppCompat's own views implement, is read and never changed.
-    @SuppressLint("RestrictedApi")
-    private fun itemOf(view: View): MenuItem? = (view as? MenuView.ItemView)?.itemData
-
-    // The `testID`s of the item views: the bar makes its views again, so after every layout; a view used again without
-    // one loses the one it had. "⋮" by AppCompat's description of it. A long press opens the menu of a button with
-    // `menuOnLongPress`: the handler finds the item by the view pressed.
-    private fun applyViewIds() {
-        val menuView = actionMenuView() ?: return
-        if (watched !== menuView) {
-            watched = menuView
-            menuView.setOnHierarchyChangeListener(object : ViewGroup.OnHierarchyChangeListener {
-                override fun onChildViewAdded(parent: View?, child: View?) {
-                    toolbar.post { applyViewIds() }
-                }
-
-                override fun onChildViewRemoved(parent: View?, child: View?) = Unit
-            })
-        }
-        val overflowDescription = context.getString(AppCompatR.string.abc_action_menu_overflow_description)
-        for (index in 0 until menuView.childCount) {
-            val child = menuView.getChildAt(index)
-            val item = itemOf(child) ?: itemIds.keys.firstOrNull { it.actionView === child }
-            val options = item?.let(itemIds::get)
-            when {
-                options != null -> {
-                    TestIds.apply(child, options.testID.get(null))
-                    if (child !is BarButtonComponentCell) longPressOf(child, options)
-                }
-                child.contentDescription == overflowDescription -> TestIds.apply(child, overflowTestId)
-                item != null -> TestIds.apply(child, host.testIdOf(item))
-                else -> Unit
-            }
-        }
-    }
-
-    // The toolbar uses its item views again for other items: the handler finds the button by the view pressed, at the
-    // press, and a view that no longer needs it gets the toolbar's tooltip back.
-    private fun longPressOf(view: View, options: ButtonOptions) {
-        val id = options.id.get(null)
-        if (id != null && options.menuOnLongPress.isTrue && host.menuOf(id) != null) {
-            hooked[view] = true
-            view.setOnLongClickListener { pressed -> openOnLongPress(pressed) }
-            return
-        }
-        if (hooked.remove(view) == null) return
-        view.setOnLongClickListener(null)
-        itemOf(view)?.let { TooltipCompat.setTooltipText(view, MenuItemCompat.getTooltipText(it) ?: it.title) }
-    }
-
-    private fun openOnLongPress(pressed: View): Boolean {
-        val options = itemOf(pressed)?.let(itemIds::get) ?: return false
-        val id = options.id.get(null) ?: return false
-        if (!options.menuOnLongPress.isTrue) return false
-        val menu = host.menuOf(id) ?: return false
-        openMenu(id, menu, pressed)
-        return true
     }
 
     // A font of the options on a button's text, with the weight and the slant the typeface lacks drawn synthetically.
@@ -325,8 +276,6 @@ internal class ButtonBar(
     private companion object {
         const val BUTTONS_GROUP = 1
         const val OVERFLOW_GROUP = 2
-        const val OVERFLOW_ORDER = 100
-        const val BAR_ORDER = 1000
         const val CLOSE = "close"
         const val BOLD_WEIGHT = 600
         const val ITALIC_SKEW = -0.25f

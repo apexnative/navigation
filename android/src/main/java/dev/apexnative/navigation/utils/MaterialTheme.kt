@@ -28,7 +28,7 @@ internal object MaterialTheme {
     private val wrappers = WeakHashMap<Context, WeakReference<Context>>()
     // Themes of the navigation's own views, each made once over the activity's with a style of its own.
     private val followers = WeakHashMap<Context, Int>()
-    // The popup theme of the bar's toolbars per activity: the app's theme doesn't change while the activity lives.
+    // The popup theme of the bar's "⋮" per activity: the app's theme doesn't change while the activity lives.
     private val popupThemes = WeakHashMap<Activity, Int>()
 
     fun context(context: Context): Context {
@@ -38,11 +38,10 @@ internal object MaterialTheme {
     }
 
     /**
-     * The popup theme of the top bar's toolbars, for "⋮", set on them before their menu is made. None when the app's
-     * theme follows light and dark: the menu takes the bar's own theme, which [rebase] keeps in the current mode, with
-     * the app's colors. With a Material 3 theme fixed to light or to dark, a day/night overlay that gives the menu the
-     * current mode's colors where the theme shows the other mode. Android makes the menu's theme from it at the menu's
-     * first opening, in the mode of that moment, and no public API makes it again for a later switch.
+     * The popup theme of the top bar's "⋮", over the bar's theme at each opening of its popup, in the mode of that
+     * moment. None when the app's theme follows light and dark: the menu takes the bar's own theme, which [rebase]
+     * keeps in the current mode, with the app's colors. With a Material 3 theme fixed to light or to dark, a day/night
+     * overlay that gives the menu the current mode's colors where the theme shows the other mode.
      */
     fun popupTheme(context: Context): Int {
         val activity = activityOf(context) ?: return 0

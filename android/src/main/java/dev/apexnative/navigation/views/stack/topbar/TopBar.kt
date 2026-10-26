@@ -18,10 +18,10 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import androidx.appcompat.widget.AppCompatImageView
-import com.google.android.material.appbar.MaterialToolbar
 import dev.apexnative.navigation.R
 import dev.apexnative.navigation.utils.MaterialTheme
 import dev.apexnative.navigation.utils.UiUtils
+import dev.apexnative.navigation.views.stack.topbar.titlebar.ButtonRow
 
 /**
  * The top bar of a stack: one per stack, showing what its screen on top sets. Top to bottom: the strip under the status
@@ -60,12 +60,12 @@ class TopBar(context: Context) : FrameLayout(themed(context)) {
     // `topBar.elevation`, in pixels: the bar's elevation unless it is flat.
     private var shadow = 0f
 
-    /** The toolbar of the right buttons: its menu holds them, the overflow items and the search's magnifier. */
-    val rightButtonBar: MaterialToolbar
+    /** The right buttons, the search's magnifier and "⋮". */
+    val rightButtonBar: ButtonRow
         get() = titleBar.rightButtonBar
 
-    /** The toolbar of the back button and the left buttons. */
-    val leftButtonBar: MaterialToolbar
+    /** The back button and the left buttons. */
+    val leftButtonBar: ButtonRow
         get() = titleBar.leftButtonBar
 
     /** The strip under the status bar at the top of the bar, in pixels: the bar is under the status bar. */

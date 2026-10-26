@@ -1,11 +1,11 @@
 package dev.apexnative.navigation.viewcontrollers.stack.topbar
 
 /**
- * Where the right buttons of the bar go: the bar has as many places as AppCompat gives a toolbar for the window now
- * ([maxActionButtons]), one less for "⋮" when it shows; the pinned buttons take theirs first, then the buttons with the
- * highest `priority` (ties by the list's order); the rest go into "⋮". The core counts it, not AppCompat: AppCompat
- * would share the places in the menu's order, where the first button of the list is the last, and keep the count of the
- * orientation before a rotation. A pure function.
+ * Where the buttons of the bar go. The right ones: the bar has as many places as AppCompat gives a toolbar for the
+ * window now ([maxActionButtons]), one less for "⋮" when it shows; the pinned buttons take theirs first, then the
+ * buttons with the highest `priority` (ties by the list's order); the rest go into "⋮". In the line ([line]) the left
+ * buttons stand from its start in the list's order, and the right ones toward its end, the first one last. A pure
+ * function.
  */
 internal object ButtonPlaces {
     /** A right button as the count sees it: its `priority` ([HIGH], [STANDARD], [LOW]) and `pinned`. */
@@ -35,6 +35,12 @@ internal object ButtonPlaces {
         widthDp >= 360 -> 3
         else -> 2
     }
+
+    /**
+     * The buttons of a side in the bar, [inBar] in the list's order, in the line's order from its start: the left ones
+     * as they are, the right ones the other way round, so the first right button stands at the end of the line.
+     */
+    fun <T> line(inBar: List<T>, left: Boolean): List<T> = if (left) inBar else inBar.reversed()
 
     /**
      * The plan for [buttons] with [maxPlaces] places, [taken] of them already used by what the core always puts in the

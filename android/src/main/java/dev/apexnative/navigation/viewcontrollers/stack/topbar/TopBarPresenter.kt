@@ -8,15 +8,12 @@ import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.graphics.Color
 import android.graphics.drawable.Drawable
-import android.view.Menu
-import android.view.MenuItem
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.LinearInterpolator
 import android.view.animation.PathInterpolator
 import android.widget.FrameLayout
-import android.widget.ImageView
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.core.graphics.drawable.DrawableCompat
 import androidx.core.view.WindowInsetsCompat
@@ -141,8 +138,8 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
         this.layout = layout
         val bar = layout.topBar
         this.bar = bar
-        leftButtons = ButtonBar(bar.leftButtonBar, true, ::loadIcon, Buttons())
-        rightButtons = ButtonBar(bar.rightButtonBar, false, ::loadIcon, Buttons())
+        leftButtons = ButtonBar(bar.leftButtonBar, ::loadIcon, Buttons())
+        rightButtons = ButtonBar(bar.rightButtonBar, ::loadIcon, Buttons())
         visibility = TopBarVisibility(VisibilityTarget(bar) { collapse?.reset() })
         rowTransition = BarRowTransition(RowTarget(bar).also { rowTarget = it })
         collapse = TopBarCollapseBehavior(bar)
@@ -581,16 +578,15 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
             keys[Part.Left] = leftKey
             reportWithoutId(topBar.buttons.left, "leftButtons")
             leftButtons?.set(
-                left.map { button(screen, it, roots) },
+                ButtonPlaces.line(left, left = true).map { button(screen, it, roots) },
                 emptyList(),
                 null,
                 merge && topBar.animateLeftButtons.isTrue,
             )
         }
         val overflow = topBar.overflowMenu?.takeIf { it.items.isNotEmpty() }
-        val menu = bar.rightButtonBar.menu
         search.applyMagnifier()
-        val taken = (0 until menu.size()).count { menu.getItem(it).itemId != Menu.NONE }
+        val taken = if (bar.rightButtonBar.trailingView != null) 1 else 0
         val configuration = context.resources.configuration
         val plan = ButtonPlaces.plan(
             right.map { ButtonPlaces.Button(ButtonPlaces.priorityOf(it.priority.get(null)), it.pinned.isTrue) },
@@ -611,12 +607,11 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
             keys[Part.Right] = rightKey
             reportWithoutId(topBar.buttons.right, "rightButtons")
             rightButtons?.set(
-                plan.inBar.map { button(screen, right[it], roots) },
+                ButtonPlaces.line(plan.inBar, left = false).map { button(screen, right[it], roots) },
                 plan.inOverflow.map { button(screen, right[it], roots) },
                 overflow,
                 merge && topBar.animateRightButtons.isTrue,
             )
-            search.applyMagnifier()
             rightButtons?.setOverflowColor(overflowColor)
         }
     }
@@ -638,9 +633,9 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
         ).joinToString()
         if (keys[Part.Back] == key) return
         keys[Part.Back] = key
-        val toolbar = bar.leftButtonBar
+        val row = bar.leftButtonBar
         if (!shown) {
-            toolbar.navigationIcon = null
+            row.navigationIcon = null
             return
         }
         val own = back.icon.get(null)?.let(::loadIcon)?.mutate()
@@ -667,19 +662,13 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
                 dp(background.height.get(0.0)),
             )
         } ?: icon
-        toolbar.navigationIcon = drawable
-        // Taking the icon, the navigation button gives it its own direction, which is stale while the button is new
-        // or the bar's direction has just changed; the toolbar corrects it only after the icon was drawn. So the arrow
-        // gets the bar's direction at once, on the drawable the button shows; a background passes it to the arrow.
-        val held = toolbar.navigationIcon ?: drawable
-        DrawableCompat.setLayoutDirection(held, arrowDirection)
-        if (held !== drawable) DrawableCompat.setLayoutDirection(drawable, arrowDirection)
-        toolbar.navigationContentDescription = label
-        // The toolbar uses its navigation button again from screen to screen: its id is set every time.
-        for (index in 0 until toolbar.childCount) {
-            val child = toolbar.getChildAt(index)
-            if ((child as? ImageView)?.drawable === held) TestIds.apply(child, testId)
-        }
+        row.navigationIcon = drawable
+        // Taking the icon, the back button gives it its own direction, which is stale while the button is new or the
+        // bar's direction has just changed; the button corrects it only once its direction is resolved again. So the
+        // arrow gets the bar's direction at once; a background passes it to the arrow.
+        DrawableCompat.setLayoutDirection(drawable, arrowDirection)
+        row.navigationContentDescription = label
+        row.navigationButton?.let { TestIds.apply(it, testId) }
     }
 
     // The background (`topBar.background.component`).
@@ -1033,13 +1022,6 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
             val entry = shownEntry ?: return null
             val buttons = host.resolvedOf(entry).topBar.buttons
             return (buttons.left.orEmpty() + buttons.right.orEmpty()).firstOrNull { it.id.get(null) == buttonId }?.menu
-        }
-
-        // The search's magnifier, the one item of the bar with an id of its own: `<topBar.searchBar.testID>.button`.
-        override fun testIdOf(item: MenuItem): String? {
-            if (item.itemId == Menu.NONE) return null
-            val entry = shownEntry ?: return null
-            return host.resolvedOf(entry).topBar.searchBar.testID.get(null)?.let { "$it.button" }
         }
     }
 

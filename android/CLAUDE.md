@@ -83,7 +83,9 @@ top-level folder. Main thread only, unless a line says otherwise.
 - Stack FAB: `viewcontrollers/stack/fab/FabPresenter.kt`, `FabPlan.kt`, `FabPlacement.kt`; `views/stack/fab/`.
 - Top bar (title, buttons, menus, large title): `viewcontrollers/stack/topbar/TopBarPresenter.kt`, `TopBarRoom.kt`,
   `TopBarVisibility.kt`, `BarComponents.kt`, `ButtonPlaces.kt`, `LargeTitleCollapse.kt`, `BarRowTransition.kt`;
-  `views/stack/topbar/TopBar.kt`, `TitleBar.kt`, `titlebar/ButtonBar.kt`, `titlebar/ButtonMenus.kt`.
+  `views/stack/topbar/TopBar.kt`, `TitleBar.kt`, `titlebar/ButtonRow.kt` (the views of a side: back, buttons,
+  magnifier, "⋮"), `titlebar/ButtonBar.kt` (the buttons from the options, "⋮"'s popup), `titlebar/BarButtonView.kt`,
+  `titlebar/ButtonMenus.kt`.
 - Search: `viewcontrollers/stack/search/StackSearchPresenter.kt`, `ScreenSearch.kt`, `SearchPanel.kt`;
   `views/stack/topbar/search/`.
 - Tabs: `viewcontrollers/bottomtabs/BottomTabsController.kt`, `BottomTabsPresenter.kt`, `TabSelection.kt`,
@@ -200,8 +202,11 @@ top-level folder. Main thread only, unless a line says otherwise.
 - The bar measures to its children: a picture laid into it for a transition that is taller than the bar the incoming
   screen gives holds the bar at that height to the end (the row's picture of a pop from a large title). What doesn't
   stay in the bar rides with the leaving screen (`TopBarPresenter.pictureUnderRow`).
-- A `Toolbar` centers its navigation button and its menu in `min(minimumHeight, height)` (`buttonGravity` is top):
-  the row's toolbars take the row's height as their minimum (`TitleBar`); 0 pins the buttons to the row's top.
+- The bar's buttons are plain views of the row (`ButtonRow`), not a toolbar's menu: a button keeps its view while its id
+  stays, and its `testID` is set when it is bound. They copy a Material 3 toolbar's look through the theme's
+  attributes (`actionButtonStyle`, `actionMenuTextAppearance`, `actionOverflowButtonStyle`,
+  `toolbarNavigationButtonStyle`) and its `maxButtonHeight` of 56 dp; the count of places is AppCompat's
+  (`ButtonPlaces.maxActionButtons`).
 - A screen's overlay is clipped to the screen, and a screen without a large title is laid out under the bar (its `top`
   is the bar's height): a picture of the bar in its overlay doesn't show. The bar's picture in a transition of the
   stack's own is drawn by the stack's view with the screen's transform (`StackLayout.barTravels`).

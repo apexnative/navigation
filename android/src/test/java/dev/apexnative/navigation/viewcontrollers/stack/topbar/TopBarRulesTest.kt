@@ -78,6 +78,32 @@ class TopBarRulesTest {
     }
 
     @Test
+    fun leftButtonsStandFromTheStartOfTheLineInTheirOrder() {
+        assertEquals(listOf("Home", "Profile"), ButtonPlaces.line(listOf("Home", "Profile"), left = true))
+    }
+
+    @Test
+    fun theFirstRightButtonStandsAtTheEndOfTheLine() {
+        assertEquals(listOf("Profile", "Home"), ButtonPlaces.line(listOf("Home", "Profile"), left = false))
+    }
+
+    @Test
+    fun theLineKeepsTheListsOrderOfTheButtonsThatStay() {
+        val plan = ButtonPlaces.plan(
+            buttons(
+                ButtonPlaces.LOW, ButtonPlaces.HIGH, ButtonPlaces.STANDARD, ButtonPlaces.STANDARD, ButtonPlaces.LOW,
+                pinned = setOf(0),
+            ),
+            maxPlaces = 4,
+            taken = 0,
+            overflowItems = 0,
+        )
+        assertEquals(listOf(0, 1, 2), plan.inBar)
+        assertEquals(listOf(3, 4), plan.inOverflow)
+        assertEquals(listOf(2, 1, 0), ButtonPlaces.line(plan.inBar, left = false))
+    }
+
+    @Test
     fun aWiderWindowCountsAgain() {
         val list = buttons(1, 1, 1, 1)
         val narrow = ButtonPlaces.plan(list, ButtonPlaces.maxActionButtons(411, 891, 411), 0, 0)
