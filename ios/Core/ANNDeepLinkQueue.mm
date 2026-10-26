@@ -71,19 +71,19 @@ static ANNLaunchLinkCompletion ANNWaitingLaunchLinkCompletion;
                                            selector:@selector(applicationDidBecomeActive:)
                                                name:UIApplicationDidBecomeActiveNotification
                                              object:nil];
+    // Started once the app is active (an app that starts React Native later, on demand), the queue missed the scene's
+    // connection and the notification: the links that launched the app went elsewhere, and none waits for them.
+    if (UIApplication.sharedApplication.applicationState == UIApplicationStateActive) {
+        [self launchLinksKnown];
+    }
 }
 
 + (void)dispatchURL:(NSURL *)url {
-    ANNAssertMainQueue();
     // The URL of the scene's link keeps its context; one the app delegate changed is a URL of its own.
     ANNDeepLink *link = [ANNForwardedSceneLink.url isEqual:url]
                             ? ANNForwardedSceneLink
                             : [[ANNDeepLink alloc] initWithURL:url context:nil activity:nil scene:nil];
-    if (ANNReactContentAppeared && ANNWaitingLaunchLinkCompletion == nil) {
-        [self openLink:link];
-        return;
-    }
-    [ANNPendingDeepLinks addObject:link];
+    [self dispatchLink:link];
 }
 
 + (void)forwardURLContext:(UIOpenURLContext *)context
@@ -104,15 +104,18 @@ static ANNLaunchLinkCompletion ANNWaitingLaunchLinkCompletion;
               through:forward];
 }
 
-+ (void)openURLContext:(UIOpenURLContext *)context ofScene:(UIScene *)scene {
-    [self openLink:[[ANNDeepLink alloc] initWithURL:context.URL context:context activity:nil scene:scene]];
++ (void)dispatchURLContext:(UIOpenURLContext *)context ofScene:(UIScene *)scene {
+    [self dispatchLink:[[ANNDeepLink alloc] initWithURL:context.URL context:context activity:nil scene:scene]];
 }
 
-+ (void)openUserActivity:(NSUserActivity *)activity ofScene:(UIScene *)scene {
++ (void)dispatchUserActivity:(NSUserActivity *)activity ofScene:(UIScene *)scene {
     if (activity.webpageURL == nil) {
         return;
     }
-    [self openLink:[[ANNDeepLink alloc] initWithURL:activity.webpageURL context:nil activity:activity scene:scene]];
+    [self dispatchLink:[[ANNDeepLink alloc] initWithURL:activity.webpageURL
+                                                context:nil
+                                               activity:activity
+                                                  scene:scene]];
 }
 
 + (void)windowSceneDidConnect {
@@ -189,6 +192,15 @@ static ANNLaunchLinkCompletion ANNWaitingLaunchLinkCompletion;
     NSURL *url = ANNPendingDeepLinks.lastObject.url;
     [ANNPendingDeepLinks removeAllObjects];
     completion(url);
+}
+
++ (void)dispatchLink:(ANNDeepLink *)link {
+    ANNAssertMainQueue();
+    if (ANNReactContentAppeared && ANNWaitingLaunchLinkCompletion == nil) {
+        [self openLink:link];
+        return;
+    }
+    [ANNPendingDeepLinks addObject:link];
 }
 
 + (void)forwardLink:(ANNDeepLink *)link through:(NS_NOESCAPE dispatch_block_t)forward {

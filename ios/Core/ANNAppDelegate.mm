@@ -71,8 +71,6 @@ static BOOL ANNAppUsesScenes(void) {
     rootViewFactory.reactHost = host;
     [ApexNavigation bootstrapWithHost:host];
     self.window = ApexNavigation.mainWindow;
-    // The links that come before React content wait for it; the launch link waits for the scene.
-    [ANNDeepLinkQueue start];
     if (!ANNAppUsesScenes()) {
         [self.window makeKeyAndVisible];
     }

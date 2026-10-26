@@ -77,7 +77,7 @@
                                       [appDelegate application:application openURL:context.URL options:options];
                                     }];
     } else {
-        [ANNDeepLinkQueue openURLContext:context ofScene:scene];
+        [ANNDeepLinkQueue dispatchURLContext:context ofScene:scene];
     }
 }
 
@@ -95,7 +95,7 @@
                                                }];
                                       }];
     } else if ([activity.activityType isEqualToString:NSUserActivityTypeBrowsingWeb]) {
-        [ANNDeepLinkQueue openUserActivity:activity ofScene:scene];
+        [ANNDeepLinkQueue dispatchUserActivity:activity ofScene:scene];
     }
 }
 

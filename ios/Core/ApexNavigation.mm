@@ -45,8 +45,9 @@ static UIWindowScene *ANNConnectedWindowScene(void) {
     }
 }
 
-// Once, on the main queue: the generated native screens before any other part, then the core's parts, the `<Modal>`
-// replacement before any React content, the window with the copy of the launch screen, and the watch of the bundles.
+// Once, on the main queue: the generated native screens before any other part, then the core's parts, the queue of the
+// links, the `<Modal>` replacement before any React content, the window with the copy of the launch screen, and the
+// watch of the bundles.
 + (void)bootstrapWithHost:(RCTHost *)host {
     ANNAssertMainQueue();
     if (ANNBootstrapped) {
@@ -55,6 +56,9 @@ static UIWindowScene *ANNConnectedWindowScene(void) {
     ANNBootstrapped = YES;
     [self registerGeneratedScreens];
     ANNHost = host;
+    // The links that come before React content wait for it; the launch link waits for the scene. Here, not in
+    // `ANNAppDelegate`, so an app delegate of the app's own keeps its launch link.
+    [ANNDeepLinkQueue start];
     // React Native lets a class with the descriptor of `ModalHostView` stand in for its own.
     [ANNModalHostViewComponentView registerForModalHostView];
     [self makeMainWindowInScene:nil];
