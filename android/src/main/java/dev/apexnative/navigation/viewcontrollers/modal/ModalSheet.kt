@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Color
 import android.graphics.Outline
+import android.os.SystemClock
 import android.view.GestureDetector
 import android.view.Gravity
 import android.view.MotionEvent
@@ -130,6 +131,15 @@ internal class ModalSheet(
     private var heard: IReactView? = null
     private var contentBody: Int? = null
     private var appliedContentHeight: Int? = null
+    // When the content was measured last after a mount, and whether a measure waits ([contentMounted]).
+    private var lastMeasure = 0L
+    private var measureWaits = false
+    private val measureLater = Runnable {
+        measureWaits = false
+        lastMeasure = SystemClock.uptimeMillis()
+        measureContent()
+        contentChanged()
+    }
 
     // The stops stand in pixels: they follow the layout's height (a rotation, a resize).
     private val layoutHeight = View.OnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom ->
@@ -280,6 +290,7 @@ internal class ModalSheet(
         layout.removeOnLayoutChangeListener(layoutHeight)
         followed?.setOnContentMounted(CONTENT_KEY, null)
         followed = null
+        container.removeCallbacks(measureLater)
         heard?.setOnContentMounted(SCROLL_KEY, null)
         heard = null
         container.removeView(content)
@@ -499,12 +510,24 @@ internal class ModalSheet(
             followed?.setOnContentMounted(CONTENT_KEY, null)
             followed = content
             // The last height stays until the new content has one: a push in the sheet doesn't jump it to the top.
-            content?.setOnContentMounted(CONTENT_KEY) {
-                measureContent()
-                contentChanged()
-            }
+            content?.setOnContentMounted(CONTENT_KEY) { contentMounted() }
         }
         measureContent()
+    }
+
+    // Fabric tells every mount of the app: the content is measured at most once per [MEASURE_INTERVAL_MS], the last
+    // mount of a burst included, so a screen that renders each frame elsewhere doesn't lay the sheet's tree out each
+    // frame too.
+    private fun contentMounted() {
+        val wait = lastMeasure + MEASURE_INTERVAL_MS - SystemClock.uptimeMillis()
+        if (wait > 0) {
+            if (!measureWaits) {
+                measureWaits = true
+                container.postDelayed(measureLater, wait)
+            }
+            return
+        }
+        measureLater.run()
     }
 
     // The content's own height at the width it has (the sheet's, before it is laid out); kept until a measure gives
@@ -625,7 +648,7 @@ internal class ModalSheet(
     // React Native mounts the lists of the shown screen after the sheet's layout, and its views take no layout of their
     // own: the sheet hears each mount of the content and turns a new list to scroll nested there.
     private fun hearContent() {
-        val content = shownContent()
+        val content = if (behavior.dragAnywhere) shownContent() else null
         if (content !== heard) {
             heard?.setOnContentMounted(SCROLL_KEY, null)
             heard = content
@@ -712,6 +735,9 @@ internal class ModalSheet(
 
         // The key of the sheet's handler of its content's mounts.
         private const val CONTENT_KEY = "sheet.content"
+
+        // The least time between two measures of the content after its mounts.
+        private const val MEASURE_INTERVAL_MS = 100L
 
         // The key of the sheet's handler that turns its content's lists to scroll nested.
         private const val SCROLL_KEY = "sheet.scroll"
