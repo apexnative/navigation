@@ -2,6 +2,7 @@ package dev.apexnative.navigation.viewcontrollers.stack
 
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
+import android.animation.StateListAnimator
 import android.animation.ValueAnimator
 import android.content.res.Configuration
 import android.graphics.Bitmap
@@ -29,7 +30,7 @@ import dev.apexnative.navigation.views.stack.StackLayout
  * The preview of a pop while the user's back gesture runs (predictive back), as the system shows the activity under
  * the one that closes: the screen on top with its bar, a picture taken as the gesture starts, shrinks toward the
  * gesture's side with rounded corners and follows the finger up and down; the screen under it shows behind it with
- * its own bar, smaller and dimmed. Released, the pop plays its end ([commit]); cancelled, everything goes back
+ * its own bar and FAB, smaller and dimmed. Released, the pop plays its end ([commit]); cancelled, everything goes back
  * ([cancel]). The values are those of the system's cross-activity back animation (WMShell
  * `DefaultCrossActivityBackAnimation` of Android 15 and 16, the smallest scale as Android 17 shows it), also on Android
  * 14, whose own preview differs. Main thread only.
@@ -46,8 +47,13 @@ internal class BackPreview(
      * corners, while the tab bar stays, as Gmail shows it.
      */
     private val bottomRoom: Int,
-    /** The picture is there: the stack shows the screen under the top, with its bar, before the preview draws. */
+    /**
+     * The picture is there: the stack shows the screen under the top, with its bar and its FAB, before the preview
+     * draws.
+     */
     private val onReveal: () -> Unit,
+    /** The view of the FAB the stack shows now, which goes with the screen under the top; none. */
+    private val fab: () -> View? = { null },
 ) {
     private val density = layout.resources.displayMetrics.density
     private val bar = layout.topBar
@@ -58,6 +64,11 @@ internal class BackPreview(
     private var animator: Animator? = null
     private var ended = false
     private var topAlpha = 1f
+    // The FAB that shows with the screen under the top, drawn flat under the dim and the picture, its own Z and the
+    // animator of its Z by its state.
+    private var flatFab: View? = null
+    private var fabZ = 0f
+    private var fabZByState: StateListAnimator? = null
     // What puts the stack as it was after a cancel: once, as the preview ends.
     private var onCancelled: (() -> Unit)? = null
     // Forward is to the end of the line: right to left, the screens move the other way, as the stack's pop does.
@@ -175,10 +186,17 @@ internal class BackPreview(
         card = null
         (scrim.parent as? ViewGroup)?.removeView(scrim)
         top.alpha = topAlpha
+        flatFab?.let {
+            flatFab = null
+            it.translationZ = fabZ
+            it.stateListAnimator = fabZByState
+            fabZByState = null
+        }
         entering(1f, 0f)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             target.resetPivot()
             bar.resetPivot()
+            fab()?.resetPivot()
         }
         onCancelled?.let {
             onCancelled = null
@@ -190,6 +208,16 @@ internal class BackPreview(
     // the top's place, cut to rounded corners.
     private fun show(picture: Bitmap) {
         onReveal()
+        // A child with a Z draws over those without, whatever their order: the FAB, raised by its elevation, would lie
+        // over the dim and the picture. Its state's animator, which Material's FAB sets on the frame after it joins the
+        // window (and on a press, focus or hover), would raise it again: it stays off while the preview draws.
+        fab()?.takeIf { it.z > 0f }?.let {
+            flatFab = it
+            fabZ = it.translationZ
+            fabZByState = it.stateListAnimator
+            it.stateListAnimator = null
+            it.translationZ = -it.elevation
+        }
         val dark = layout.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK ==
             Configuration.UI_MODE_NIGHT_YES
         scrim.setBackgroundColor(Color.BLACK)
@@ -235,9 +263,9 @@ internal class BackPreview(
         entering(scale, -SystemTransition.DISTANCE_DP * density * forward)
     }
 
-    // The screen under the top and its bar at [scale] around the stack's center, [x] along the line.
+    // The screen under the top, its bar and its FAB at [scale] around the stack's center, [x] along the line.
     private fun entering(scale: Float, x: Float) {
-        for (view in listOf(target, bar)) {
+        for (view in listOfNotNull(target, bar, fab())) {
             view.pivotX = layout.width / 2f - view.left
             view.pivotY = areaHeight / 2f - view.top
             view.scaleX = scale

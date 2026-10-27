@@ -200,7 +200,7 @@ internal class StackViews(private val stack: StackController) : StackDisplay {
 
     /**
      * Starts the preview of a back gesture over [top], [target] under it (`BackPreview`): none without the stack's view
-     * or a window. [onReveal] shows [target] and its bar as the preview's picture is there.
+     * or a window. [onReveal] shows [target] with its bar and its FAB as the preview's picture is there.
      */
     fun startBackPreview(
         top: ViewController<*>,
@@ -215,7 +215,9 @@ internal class StackViews(private val stack: StackController) : StackDisplay {
         val window = stack.activity.window ?: return null
         val topView = top.peekView() ?: return null
         val targetView = target.peekView() ?: return null
-        val started = BackPreview(layout, topView, targetView, fromLeft, touchY, bottomRoom, onReveal)
+        val started = BackPreview(layout, topView, targetView, fromLeft, touchY, bottomRoom, onReveal) {
+            stack.fab.shownView
+        }
         preview = started
         previewScreens = top to target
         started.start(window)

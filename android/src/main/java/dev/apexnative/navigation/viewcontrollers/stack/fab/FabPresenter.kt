@@ -54,6 +54,18 @@ internal class FabPresenter(
     // The copies of the FABs that leave, each with its ride.
     private val copies = LinkedHashMap<FabCopy, Animator>()
 
+    // The top's FAB while a back gesture's preview shows the screen under the top with its own: out of the stack, as
+    // it was (hidden by the scroll, say).
+    private class Aside(
+        val fab: Fab?,
+        val menu: FabMenu?,
+        val shownId: String?,
+        var source: ViewController<*>?,
+        val alignStart: Boolean,
+    )
+
+    private var aside: Aside? = null
+
     private val view: View?
         get() = menu ?: fab
 
@@ -170,13 +182,55 @@ internal class FabPresenter(
         view.layoutParams = params
     }
 
+    /**
+     * A back gesture's preview shows the screen under the top: the FAB that shows goes aside, out of the stack but as it
+     * is, its menu closing, until [bringBack] or [dropAside]; the screen's own FAB shows next ([showFor]).
+     */
+    fun setAside() {
+        if (aside != null) return
+        dropCopies()
+        stopRide(rest = true)
+        menu?.close()
+        view?.let { (it.parent as? ViewGroup)?.removeView(it) }
+        aside = Aside(fab, menu, shownId, source, alignStart)
+        fab = null
+        menu = null
+        shownId = null
+        source = null
+    }
+
+    /** The gesture was cancelled: the FAB the preview showed goes, and the one set aside is back as it was. */
+    fun bringBack() {
+        val kept = aside ?: return
+        aside = null
+        val layout = layout ?: return discard(kept)
+        leave(layout, FabMotion.Move.AtOnce)
+        fab = kept.fab
+        menu = kept.menu
+        shownId = kept.shownId
+        source = kept.source
+        alignStart = kept.alignStart
+        view?.let { layout.addOverAll(it, it.layoutParams as? CoordinatorLayout.LayoutParams ?: params()) }
+        place()
+    }
+
+    /** The gesture was released: the FAB set aside goes with the top that leaves. */
+    fun dropAside() {
+        val kept = aside ?: return
+        aside = null
+        discard(kept)
+    }
+
     /** [node] was destroyed: a FAB it showed sends nothing more. */
     fun forget(node: ViewController<*>) {
         if (source === node) source = null
+        aside?.let { if (it.source === node) it.source = null }
     }
 
     /** The stack goes: the FAB and its menu go at once, the scrim first, and the copies that leave. */
     fun destroy() {
+        aside?.let(::discard)
+        aside = null
         dropCopies()
         stopRide(rest = false)
         disableCollapse()
@@ -195,7 +249,7 @@ internal class FabPresenter(
     private fun create(layout: StackLayout, options: FabOptions, scroll: ScrollEventListener?) {
         val id = FabPlan.idOf(options) ?: return
         shownId = id
-        val params = CoordinatorLayout.LayoutParams(WRAP, WRAP)
+        val params = params()
         if (FabPlan.isMenu(options)) {
             val menu = FabMenu(activity, id)
             this.menu = menu
@@ -372,6 +426,15 @@ internal class FabPresenter(
         animator.start()
         return animator
     }
+
+    // A FAB set aside that won't come back: it follows no scroll, its scrim goes.
+    private fun discard(kept: Aside) {
+        kept.fab?.disableCollapse()
+        kept.menu?.disableCollapse()
+        kept.menu?.removeScrim()
+    }
+
+    private fun params() = CoordinatorLayout.LayoutParams(WRAP, WRAP)
 
     private fun isRtl(layout: StackLayout): Boolean = layout.layoutDirection == View.LAYOUT_DIRECTION_RTL
 
