@@ -119,7 +119,7 @@ internal class ModalSheet(
     // A list inside the sheet scrolls with it, as the Material behavior expects: up at half height the sheet goes up
     // first, down at the top of the list the sheet comes down. The behavior follows views that scroll nested.
     private val scrollViews = ViewTreeObserver.OnGlobalLayoutListener {
-        if (behavior.dragAnywhere) enableNestedScrolling(container)
+        turnScrollViews()
         // The bars above the content may have taken their height.
         if (followed != null) contentChanged()
     }
@@ -127,6 +127,8 @@ internal class ModalSheet(
     // The shown screen's content that the `content` detent follows, its height without a height limit (pixels, none
     // before it is measured), and the height of the detent the behavior has now.
     private var followed: IReactView? = null
+    // The shown screen's content whose mounts turn the lists in it to scroll nested ([hearContent]).
+    private var heard: IReactView? = null
     private var contentBody: Int? = null
     private var appliedContentHeight: Int? = null
 
@@ -245,6 +247,7 @@ internal class ModalSheet(
         grabber.visibility = if (sheetOptions.grabber.isTrue) View.VISIBLE else View.GONE
         behavior.dragAnywhere = sheetOptions.expandsOnScroll.get(true)
         container.invalidateOutline()
+        hearContent()
         followContent()
         restop(settled, merge?.selectedDetent)
     }
@@ -276,6 +279,8 @@ internal class ModalSheet(
         layout.removeOnLayoutChangeListener(layoutHeight)
         followed?.setOnContentMounted(CONTENT_KEY, null)
         followed = null
+        heard?.setOnContentMounted(SCROLL_KEY, null)
+        heard = null
         container.removeView(content)
         layout.removeView(container)
         layout.removeView(scrim)
@@ -640,9 +645,35 @@ internal class ModalSheet(
 
     private fun cornerRadius(): Int = if (options.cornerRadius.hasValue()) options.cornerRadius.get().toFloat().dp else 28.dp
 
-    private fun enableNestedScrolling(view: View) {
-        if (view is ScrollView && !view.isNestedScrollingEnabled) view.isNestedScrollingEnabled = true
-        if (view is ViewGroup) for (i in 0 until view.childCount) enableNestedScrolling(view.getChildAt(i))
+    // React Native mounts the lists of the shown screen after the sheet's layout, and its views take no layout of their
+    // own: the sheet hears each mount of the content and turns a new list to scroll nested there.
+    private fun hearContent() {
+        val content = shownContent()
+        if (content !== heard) {
+            heard?.setOnContentMounted(SCROLL_KEY, null)
+            heard = content
+            content?.setOnContentMounted(SCROLL_KEY) { turnScrollViews() }
+        }
+        turnScrollViews()
+    }
+
+    // The behavior finds the lists that scroll nested only in its layout of the sheet: a list turned so gets the sheet
+    // one more, else the behavior knows no list and takes a drag down on a scrolled one for a drag of the sheet.
+    private fun turnScrollViews() {
+        if (behavior.dragAnywhere && enableNestedScrolling(container)) container.requestLayout()
+    }
+
+    // Whether a list was turned to scroll nested now.
+    private fun enableNestedScrolling(view: View): Boolean {
+        var turned = false
+        if (view is ScrollView && !view.isNestedScrollingEnabled) {
+            view.isNestedScrollingEnabled = true
+            turned = true
+        }
+        if (view is ViewGroup) {
+            for (i in 0 until view.childCount) turned = enableNestedScrolling(view.getChildAt(i)) || turned
+        }
+        return turned
     }
 
     /** With `expandsOnScroll: false` only the top of the sheet, around the grabber, drags it; the rest scrolls. */
@@ -706,5 +737,8 @@ internal class ModalSheet(
 
         // The key of the sheet's handler of its content's mounts.
         private const val CONTENT_KEY = "sheet.content"
+
+        // The key of the sheet's handler that turns its content's lists to scroll nested.
+        private const val SCROLL_KEY = "sheet.scroll"
     }
 }
