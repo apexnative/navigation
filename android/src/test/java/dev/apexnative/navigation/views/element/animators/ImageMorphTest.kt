@@ -1,6 +1,8 @@
 package dev.apexnative.navigation.views.element.animators
 
 import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ImageMorphTest {
@@ -35,6 +37,14 @@ class ImageMorphTest {
             ImageMorph.imageFromCenter(shown, 100, 100, 100f, 100f),
             DELTA,
         )
+    }
+
+    @Test
+    fun aThumbnailStandsForItsImageAndAnotherDoesnt() {
+        assertTrue(ImageMorph.sameAspect(100f, 75f, 1600f, 1200f))
+        assertTrue(ImageMorph.sameAspect(100f, 75f, 1600f, 1210f))
+        assertFalse(ImageMorph.sameAspect(100f, 100f, 1600f, 1200f))
+        assertFalse(ImageMorph.sameAspect(0f, 100f, 100f, 100f))
     }
 
     private companion object {

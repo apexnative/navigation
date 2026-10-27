@@ -1,6 +1,7 @@
 package dev.apexnative.navigation.views.element.animators
 
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
@@ -8,6 +9,8 @@ import android.graphics.RectF
 import android.graphics.drawable.Drawable
 import android.view.View
 import android.widget.ImageView
+import com.facebook.react.uimanager.BackgroundStyleApplicator
+import com.facebook.react.uimanager.style.LogicalEdge
 import com.facebook.react.views.image.ReactImageView
 import com.facebook.react.views.view.ReactViewGroup
 import dev.apexnative.navigation.utils.borderRadius
@@ -19,7 +22,9 @@ import kotlin.math.roundToInt
  * drawn in its screen ([FlightGeometry]), clipped to its corners, and the image of `to` in it goes from the part and
  * place `from` shows its image at (its fit, `resizeMode`) to those of `to`, keeping its proportions where both fits
  * do. The image is `to`'s own drawable, drawn on the layer's canvas and only read: an animated image plays on. The
- * corners are the image's own radius, else that of a parent that clips it (`overflow: hidden`) and that it fills.
+ * corners are the image's own radius, else that of a parent that clips it (`overflow: hidden`) and that it fills. A
+ * pair whose views draw more than their images (a background, a border) or whose images differ in proportions flies
+ * as pictures of the views ([ViewMorph]).
  */
 internal class ImageMorph private constructor(
     private val start: ImageEnd,
@@ -36,6 +41,8 @@ internal class ImageMorph private constructor(
     private val maskPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     // What is drawn over the mask keeps only the mask's pixels: the corners stay smooth.
     private val contentPaint = Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN) }
+
+    override val live: Boolean get() = true
 
     override fun update(time: Float, progress: Float) {
         this.progress = progress
@@ -78,13 +85,41 @@ internal class ImageMorph private constructor(
         private const val FILLS = 1
         private const val HIDDEN = "hidden"
 
-        /** The morph of [from] into [to] in [layer]; none when an image isn't there to fit. */
+        // How far the proportions of two images may differ for one to stand for the other, in parts of one.
+        private const val SAME_ASPECT = 0.02f
+
+        /**
+         * The morph of [from] into [to] in [layer]; none when an image isn't there to fit, the images differ in
+         * proportions, or a view draws more than its image.
+         */
         fun of(from: ImageView, to: ImageView, layer: View): ImageMorph? {
+            if (!onlyImage(from) || !onlyImage(to)) return null
             val image = to.drawable ?: return null
+            val drawn = drawnRect(to) ?: return null
+            val fromDrawn = drawnRect(from) ?: return null
+            if (!sameAspect(fromDrawn.width(), fromDrawn.height(), drawn.width(), drawn.height())) return null
             val start = endOf(from, layer) ?: return null
             val end = endOf(to, layer) ?: return null
-            val drawn = drawnRect(to) ?: return null
             return ImageMorph(start, end, image, drawn)
+        }
+
+        /** Whether an image of [width] × [height] has the proportions of one of [otherWidth] × [otherHeight]. */
+        internal fun sameAspect(width: Float, height: Float, otherWidth: Float, otherHeight: Float): Boolean {
+            if (width <= 0f || height <= 0f || otherWidth <= 0f || otherHeight <= 0f) return false
+            val aspect = width / height
+            val other = otherWidth / otherHeight
+            return abs(aspect - other) <= SAME_ASPECT * other
+        }
+
+        // The view draws nothing but its image: no background color, no border (React Native draws them as the
+        // view's background, around the image).
+        private fun onlyImage(view: View): Boolean = try {
+            val background = BackgroundStyleApplicator.getBackgroundColor(view)
+            (background == null || Color.alpha(background) == 0) && LogicalEdge.entries.none {
+                (BackgroundStyleApplicator.getBorderWidth(view, it) ?: 0f) > 0f
+            }
+        } catch (e: RuntimeException) {
+            false
         }
 
         private fun endOf(view: ImageView, layer: View): ImageEnd? {

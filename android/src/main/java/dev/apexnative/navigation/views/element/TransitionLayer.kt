@@ -11,9 +11,9 @@ import dev.apexnative.navigation.views.element.animators.FlightPicture
 /**
  * The layer the copies of a transition's shared elements fly in: full size over the screens' common parent (a stack's
  * view; for a modal, between the modals layer and the overlays layer), there only while the transition runs. It holds
- * no views: it draws the pictures of the flights ([FlightPicture]) in the order they are added, each while it is shown.
- * A picture whose drawing fails draws no more, and its [FlightPicture.onFailed] runs after the frame. It takes no
- * touches, accessibility doesn't see it. Main thread only.
+ * no views: it draws the pictures of the flights ([FlightPicture]) in the order they are added, each while it is shown,
+ * on every frame while one of them is [FlightPicture.live]. A picture whose drawing fails draws no more, and its
+ * [FlightPicture.onFailed] runs after the frame. It takes no touches, accessibility doesn't see it. Main thread only.
  */
 @SuppressLint("ViewConstructor")
 internal class TransitionLayer(context: Context) : View(context) {
@@ -50,8 +50,10 @@ internal class TransitionLayer(context: Context) : View(context) {
     }
 
     override fun onDraw(canvas: Canvas) {
+        var live = false
         for (picture in pictures) {
             if (!picture.shown) continue
+            live = live || picture.live
             val count = canvas.save()
             try {
                 picture.draw(canvas)
@@ -62,6 +64,8 @@ internal class TransitionLayer(context: Context) : View(context) {
                 canvas.restoreToCount(count)
             }
         }
+        // A landed copy gets no more frames from its flight: one that changes by itself asks for them.
+        if (live) postInvalidateOnAnimation()
     }
 
     @SuppressLint("ClickableViewAccessibility")

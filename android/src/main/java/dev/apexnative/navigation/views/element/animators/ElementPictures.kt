@@ -39,6 +39,9 @@ internal abstract class FlightPicture {
     /** Whether the layer draws it now. */
     var shown = false
 
+    /** Whether what it draws changes by itself (an animated image): the layer draws it on every frame while shown. */
+    open val live: Boolean get() = false
+
     /** What runs after its drawing failed: it is drawn no more, and the views of its pair show again. */
     var onFailed: (Exception) -> Unit = {}
 
