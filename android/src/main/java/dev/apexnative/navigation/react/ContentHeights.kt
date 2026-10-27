@@ -13,8 +13,9 @@ import dev.apexnative.navigation.utils.NavigationLog
  * The height of React content laid out at a width without a height limit, as iOS measures a sheet's `'content'`
  * detent: Fabric lays out a copy of the tree, so the shown layout stays as it is. A React root's surface measures
  * through `SurfaceHandler::measure`; a slot's content in the slot's own layout, once asked for ([requestSlot]), which
- * keeps the height for [slotHeight] (`ANNSlotContentHeights`, the C++ iOS shares). The native half is the library's own C++ (`android/src/main/jni`), in the codegen
- * library of its components; when that library doesn't load, nothing is measured. Main thread.
+ * keeps the height for [slotHeight] (`ANNSlotContentHeights`, the C++ iOS shares). The native half is the library's
+ * own C++ (`android/src/main/jni`), in the codegen library of its components; when that library doesn't load, nothing
+ * is measured. Main thread.
  */
 internal object ContentHeights {
     private const val LIBRARY = "react_codegen_ApexNavigationSpec"

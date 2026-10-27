@@ -121,7 +121,8 @@ internal class ModalViews(
     }
 
     // The root's view leaves the container and goes into the sheet's, in one turn; the sheet slides to its first
-    // detent, or stands there at once when not [animated]. Nobody sees the activity: the show counts as done now, the sheet's later end does nothing.
+    // detent, or stands there at once when not [animated]. Nobody sees the activity: the show counts as done now, the
+    // sheet's later end does nothing.
     private fun presentSheet(
         record: ModalRecord,
         parts: Parts,
