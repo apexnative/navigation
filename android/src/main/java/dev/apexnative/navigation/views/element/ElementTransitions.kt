@@ -177,7 +177,8 @@ internal class ElementTransition private constructor(private val layer: Transiti
 
         private fun pivotSetOf(view: View) = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && view.isPivotSet
 
-        // A view hidden for a flight shows again with its alpha, unless React gave it another one meanwhile.
+        // A view hidden for a flight shows again with its alpha, unless React gave it another one meanwhile. React
+        // writes the same alpha: an opacity it commits during the flight shows the view beside its copy until the end.
         private fun show(view: View, alpha: Float) {
             if (view.alpha == 0f) view.alpha = alpha
         }

@@ -138,7 +138,8 @@ private class TextPicture(
             val position = place.point(anchor.x, anchor.y)
             val scale = min(abs(place.scaleX), abs(place.scaleY))
             return TextPicture(
-                view.text.toString(), picture, anchor, PointF(position[0], position[1]), fontSize, scale, place.rotation,
+                view.text.toString(), picture, anchor, PointF(position[0], position[1]), fontSize, scale,
+                place.rotation,
                 mirrorX = if (place.scaleX < 0) -1f else 1f,
                 mirrorY = if (place.scaleY < 0) -1f else 1f,
                 alpha = view.alpha,
