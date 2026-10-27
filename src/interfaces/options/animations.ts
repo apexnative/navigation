@@ -478,7 +478,7 @@ export interface ModalAnimationOptions extends EnterExitAnimationOptions {
  * transition of these keys is a fade of the same length: the screen that comes fades in (a push, `setStackRoot`, a
  * modal's show, `setRoot`), the screen that goes fades out (a pop, a dismissal); no element moves. (Android) With
  * Remove animations on (or the animator duration scale at 0), the transitions end at once, no element moves and none
- * is waited for, and a side menu opens and closes without its slide.
+ * is waited for, a side menu opens and closes without its slide, and a sheet shows and closes without it.
  *
  * ```ts
  * const options: Options = {

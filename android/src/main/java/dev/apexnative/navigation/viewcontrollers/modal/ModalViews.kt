@@ -99,7 +99,7 @@ internal class ModalViews(
         val container = parts.container
         container.isWaiting = false
         container.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
-        if (record.isSheet) return presentSheet(record, parts, options, seen, events, onEnd)
+        if (record.isSheet) return presentSheet(record, parts, options, animated, seen, events, onEnd)
         applyTestIds(record, parts, options)
         if (!animated || !seen) {
             SideAnimator.rest(container)
@@ -121,11 +121,12 @@ internal class ModalViews(
     }
 
     // The root's view leaves the container and goes into the sheet's, in one turn; the sheet slides to its first
-    // detent. Nobody sees the activity: the show counts as done now, the sheet's later end does nothing.
+    // detent, or stands there at once when not [animated]. Nobody sees the activity: the show counts as done now, the sheet's later end does nothing.
     private fun presentSheet(
         record: ModalRecord,
         parts: Parts,
         options: Options,
+        animated: Boolean,
         seen: Boolean,
         events: ModalSheet.Events,
         onEnd: () -> Unit,
@@ -144,7 +145,7 @@ internal class ModalViews(
                 onEnd()
             }
         }
-        sheet.show(options.modal.sheet, swipeToDismissOf(options)) { shown() }
+        sheet.show(options.modal.sheet, swipeToDismissOf(options), animated) { shown() }
         if (!seen) shown()
         return { told = true }
     }
@@ -169,7 +170,7 @@ internal class ModalViews(
         if (sheet != null) {
             if (!seen) return none(onEnd)
             var told = false
-            sheet.close {
+            sheet.close(animated) {
                 if (!told) {
                     told = true
                     onEnd()

@@ -25,6 +25,7 @@ import com.google.android.material.bottomsheet.BottomSheetDragHandleView
 import dev.apexnative.navigation.options.SheetDetent
 import dev.apexnative.navigation.options.SheetOptions
 import dev.apexnative.navigation.utils.MaterialTheme
+import dev.apexnative.navigation.utils.SystemAnimations
 import dev.apexnative.navigation.utils.TestIds
 import dev.apexnative.navigation.utils.dp
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.IReactView
@@ -188,8 +189,11 @@ internal class ModalSheet(
         container.viewTreeObserver.addOnGlobalLayoutListener(scrollViews)
     }
 
-    /** Slides the sheet up to its selected detent; [onShown] once it is there. */
-    fun show(sheetOptions: SheetOptions, swipeToDismiss: Boolean, onShown: () -> Unit) {
+    /**
+     * Slides the sheet up to its selected detent; [onShown] once it is there. Not [animated], or with the system's
+     * animations off ([SystemAnimations]), it stands there at once.
+     */
+    fun show(sheetOptions: SheetOptions, swipeToDismiss: Boolean, animated: Boolean, onShown: () -> Unit) {
         topGap = ViewCompat.getRootWindowInsets(layout)?.getInsets(WindowInsetsCompat.Type.systemBars())?.top ?: 0
         layout.addView(scrim, CoordinatorLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         // As tall as its largest detent (maxHeight), not moved down by a margin: the behavior counts its states from
@@ -204,6 +208,13 @@ internal class ModalSheet(
         shown = onShown
         update(sheetOptions, swipeToDismiss, merge = null)
         selected = sheetOptions.selectedDetent?.takeIf { it in stops }
+        if (!animated || SystemAnimations.areOff(context)) {
+            // The behavior lays the sheet out at the state it has before its first layout, with no slide, and tells
+            // no state then: the sheet stands at its detent once laid out.
+            behavior.state = stateOf(selected ?: stops.first())
+            container.post { if (closing == null) onState(behavior.state) }
+            return
+        }
         // Laid out hidden first, so it slides up from the bottom.
         container.post { if (closing == null) behavior.state = stateOf(selected ?: stops.first()) }
     }
@@ -234,10 +245,11 @@ internal class ModalSheet(
         updateScrim()
     }
 
-    /** Slides the sheet down; [onClosed] once it is out of sight. */
-    fun close(onClosed: () -> Unit) {
+    /** Slides the sheet down; [onClosed] once it is out of sight. Not [animated], or with animations off, at once. */
+    fun close(animated: Boolean, onClosed: () -> Unit) {
         closing = onClosed
-        if (isClosed) {
+        if (isClosed || !animated || SystemAnimations.areOff(context)) {
+            stopBackPreview()
             finishClosing()
             return
         }
@@ -337,6 +349,12 @@ internal class ModalSheet(
         if (!swipeToDismiss) {
             events.onCloseAttempted()
             return
+        }
+        // With animations off the modal goes at once, and its close takes the sheet away with no slide.
+        if (SystemAnimations.areOff(context)) {
+            if (closing != null) return
+            closing = {}
+            return events.onClosedByUser()
         }
         behavior.isHideable = true
         behavior.state = BottomSheetBehavior.STATE_HIDDEN
