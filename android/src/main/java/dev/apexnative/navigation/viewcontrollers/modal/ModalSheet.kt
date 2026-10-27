@@ -1,6 +1,5 @@
 package dev.apexnative.navigation.viewcontrollers.modal
 
-import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Color
@@ -14,7 +13,6 @@ import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.view.ViewOutlineProvider
 import android.view.ViewTreeObserver
-import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
 import android.widget.ScrollView
 import androidx.activity.BackEventCompat
@@ -86,8 +84,6 @@ internal class ModalSheet(
     // `selectedDetent` a merge named meanwhile ([pendingArrived]).
     private var restopPending = false
     private var pendingArrived: SheetDetent? = null
-    // The slide of a sheet at rest from where it stood to where a new height put it (`glide`); none otherwise.
-    private var glider: ValueAnimator? = null
     private var selected: SheetDetent? = null
     private var topGap = 0
     private var dragged = false
@@ -255,7 +251,6 @@ internal class ModalSheet(
     /** Slides the sheet down; [onClosed] once it is out of sight. Not [animated], or with animations off, at once. */
     fun close(animated: Boolean, onClosed: () -> Unit) {
         closing = onClosed
-        stopGlide()
         if (isClosed || !animated || SystemAnimations.areOff(context)) {
             stopBackPreview()
             finishClosing()
@@ -272,7 +267,6 @@ internal class ModalSheet(
     fun remove() {
         // A slide down of back's release that ends after this tells nothing: the modal went already.
         behavior.removeBottomSheetCallback(sheetCallback)
-        stopGlide()
         stopBackPreview()
         stopBackFrames()
         container.viewTreeObserver.removeOnGlobalLayoutListener(scrollViews)
@@ -299,7 +293,6 @@ internal class ModalSheet(
 
     override fun startBackPreview(event: BackEventCompat): SheetBack.Gesture? {
         if (!hidesOnBack || backPreview != null) return null
-        stopGlide()
         val preview = BackPreview()
         backPreview = preview
         startBackFrames()
@@ -403,8 +396,6 @@ internal class ModalSheet(
      */
     private fun restop(settled: SheetDetent? = detentOf(behavior.state), arrived: SheetDetent? = null) {
         if (container.parent == null) return
-        // Where it is drawn: a glide still running counts.
-        val top = (container.top + container.translationY).roundToInt()
         val relayout = configure()
         updateScrim()
         if (closing != null || backFinishing) return
@@ -429,7 +420,7 @@ internal class ModalSheet(
             return
         }
         // The new height comes with the sheet's next layout, where the behavior puts a sheet at rest at its state's
-        // offset at once: it glides there from where it stood, before that frame is drawn.
+        // offset at once; a move to another stop follows it.
         afterNextLayout {
             val gone = closing != null || backFinishing || container.parent == null
             if (gone || backPreview != null) return@afterNextLayout
@@ -438,9 +429,7 @@ internal class ModalSheet(
                 if (target != settled) pendingArrived = target
                 return@afterNextLayout
             }
-            val stays = behavior.state == stateOf(target)
             behavior.state = stateOf(target)
-            if (stays) glide(top)
         }
     }
 
@@ -458,31 +447,6 @@ internal class ModalSheet(
                 OneShotPreDrawListener.add(view, step)
             }
         })
-    }
-
-    // The sheet slides from [from] (its old top) to where it is laid out now, by its translation; at once with the
-    // system's animations off. A drag or back's preview stops it ([stopGlide]).
-    private fun glide(from: Int) {
-        stopGlide()
-        val distance = (from - container.top).toFloat()
-        if (distance == 0f || SystemAnimations.areOff(context)) return
-        container.translationY = distance
-        glider = ValueAnimator.ofFloat(distance, 0f).apply {
-            duration = GLIDE_DURATION
-            interpolator = DecelerateInterpolator()
-            addUpdateListener {
-                container.translationY = it.animatedValue as Float
-                updateScrim()
-            }
-            start()
-        }
-    }
-
-    private fun stopGlide() {
-        val animator = glider ?: return
-        glider = null
-        animator.cancel()
-        container.translationY = 0f
     }
 
     private fun stateOf(detent: SheetDetent): Int = when (detent) {
@@ -571,10 +535,7 @@ internal class ModalSheet(
 
     private fun onState(state: Int) {
         when (state) {
-            BottomSheetBehavior.STATE_DRAGGING -> {
-                dragged = true
-                stopGlide()
-            }
+            BottomSheetBehavior.STATE_DRAGGING -> dragged = true
             BottomSheetBehavior.STATE_HIDDEN -> {
                 backFinishing = false
                 when {
@@ -632,7 +593,7 @@ internal class ModalSheet(
     // The top of the sheet as drawn: its offset, and while back's preview moves it, its slide and its scale toward
     // the bottom (the behavior's pivot).
     private fun sheetTop(): Int {
-        if (backFramesObserver == null) return (container.top + container.translationY).roundToInt()
+        if (backFramesObserver == null) return container.top
         val scaled = container.pivotY * (1f - container.scaleY)
         return (container.top + container.translationY + scaled).roundToInt()
     }
@@ -732,8 +693,6 @@ internal class ModalSheet(
         private const val SCRIM_ALPHA = 0.32f
         private const val GRAB_AREA_DP = 48
         private const val ATTEMPT_DISTANCE_DP = 48
-
-        private const val GLIDE_DURATION = 250L
 
         // The key of the sheet's handler of its content's mounts.
         private const val CONTENT_KEY = "sheet.content"
