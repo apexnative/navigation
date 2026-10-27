@@ -70,8 +70,8 @@ export interface OptionsModalSheet {
    * height and repeats dropped. On iOS `'medium'` counts as half of `'large'` there, and `'content'` takes its place by
    * the height of the content, again whenever that changes; a list left empty by unsupported values gives
    * `['large']`. On Android the Material sheet has three resting places at most: the lowest stop of the list, the
-   * highest, and `'medium'` between them when the list has both `'medium'` and `'large'`. A stop without a place is
-   * dropped.
+   * highest, and one between them, `selectedDetent` when it stands there, else the lowest of the others; the rest are
+   * dropped. Stops of the same height there are one.
    * @default ['large']
    */
   detents?: OptionsModalSheetDetent[];

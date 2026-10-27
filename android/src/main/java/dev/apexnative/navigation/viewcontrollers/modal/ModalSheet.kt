@@ -33,7 +33,8 @@ import kotlin.math.roundToInt
  * A modal shown as a Material bottom sheet (`pageSheet`, `formSheet`, `popover`, or `modal.sheet` without a style): the
  * modal's view in a container with a [BottomSheetBehavior], in the modals' CoordinatorLayout, over a scrim. It stops at
  * the detents of its options — `medium` at half the height, `large` at the full height under the status bar, a number
- * at that height in dp — and the user drags it between them. In a window wider than [MAX_WIDTH_DP] it stands in the
+ * at that height in dp — and the user drags it between them; at three of them at most, the Material behavior's
+ * resting states ([SheetStops]). In a window wider than [MAX_WIDTH_DP] it stands in the
  * middle at that width. A drag down past the smallest one closes it, unless `swipeToDismiss` is false: then the sheet
  * stays, and the try is told. The screen under it stays in place. On Android 14+ the back gesture previews its hide
  * ([SheetBack]): the Material behavior shrinks it with the progress and slides it down at the release.
@@ -63,6 +64,8 @@ internal class ModalSheet(
     private var options = SheetOptions()
     private var swipeToDismiss = true
     private var detents: List<SheetDetent> = listOf(SheetDetent.Large)
+    // The detents the sheet rests at, from the lowest (`SheetStops.stops`): the behavior's states.
+    private var stops: List<SheetDetent> = listOf(SheetDetent.Large)
     private var selected: SheetDetent? = null
     private var topGap = 0
     private var dragged = false
@@ -95,6 +98,11 @@ internal class ModalSheet(
     // first, down at the top of the list the sheet comes down. The behavior follows views that scroll nested.
     private val scrollViews = ViewTreeObserver.OnGlobalLayoutListener {
         if (behavior.dragAnywhere) enableNestedScrolling(container)
+    }
+
+    // The stops stand in pixels: they follow the layout's height (a rotation, a resize).
+    private val layoutHeight = View.OnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom ->
+        if (bottom - top != oldBottom - oldTop) container.post { restop() }
     }
 
     /** The sheet is down, out of sight: the modal can go at once. */
@@ -163,11 +171,12 @@ internal class ModalSheet(
         params.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
         params.behavior = behavior
         layout.addView(container, params)
+        layout.addOnLayoutChangeListener(layoutHeight)
         shown = onShown
         update(sheetOptions, swipeToDismiss, merge = null)
-        selected = sheetOptions.selectedDetent?.takeIf { it in detents }
+        selected = sheetOptions.selectedDetent?.takeIf { it in stops }
         // Laid out hidden first, so it slides up from the bottom.
-        container.post { if (closing == null) behavior.state = stateOf(selected ?: detents.first()) }
+        container.post { if (closing == null) behavior.state = stateOf(selected ?: stops.first()) }
     }
 
     /**
@@ -177,15 +186,15 @@ internal class ModalSheet(
     fun update(sheetOptions: SheetOptions, swipeToDismiss: Boolean, merge: SheetOptions?) {
         options = sheetOptions
         this.swipeToDismiss = swipeToDismiss
-        detents = sheetOptions.detents?.takeIf { it.isNotEmpty() }?.sortedBy { heightOf(it) } ?: listOf(SheetDetent.Large)
+        detents = sheetOptions.detents?.takeIf { it.isNotEmpty() } ?: listOf(SheetDetent.Large)
         grabber.visibility = if (sheetOptions.grabber.isTrue) View.VISIBLE else View.GONE
         behavior.dragAnywhere = sheetOptions.expandsOnScroll.get(true)
         container.invalidateOutline()
         configure()
         if (merge == null || closing != null || backFinishing) return
         val settled = detentOf(behavior.state)
-        if (settled != null) behavior.isHideable = swipeToDismiss && settled == detents.first()
-        val target = SheetStops.target(settled, detents, merge.selectedDetent, sheetOptions.selectedDetent)
+        if (settled != null) behavior.isHideable = swipeToDismiss && settled == stops.first()
+        val target = SheetStops.target(settled, stops, merge.selectedDetent, sheetOptions.selectedDetent)
         // A merge that moves the sheet or keeps it from going down ends a preview of back on it.
         if (target != null || !behavior.isHideable) stopBackPreview()
         if (target != null) {
@@ -216,6 +225,7 @@ internal class ModalSheet(
         stopBackPreview()
         stopBackFrames()
         container.viewTreeObserver.removeOnGlobalLayoutListener(scrollViews)
+        layout.removeOnLayoutChangeListener(layoutHeight)
         container.removeView(content)
         layout.removeView(container)
         layout.removeView(scrim)
@@ -300,38 +310,50 @@ internal class ModalSheet(
         behavior.state = BottomSheetBehavior.STATE_HIDDEN
     }
 
-    // How the Material behavior stops at the detents: with half and full height both, at its three states (the
-    // smallest at the collapsed one); otherwise at the collapsed state (the smaller detent) and the expanded one, which
-    // is only as tall as the largest detent.
+    // The stops of the detents and how the Material behavior rests at them (`SheetStops.material`): at one or two it
+    // fits the sheet to its highest stop, at three it stops half expanded between them. The detent the options select
+    // stays the middle one when there are more.
     private fun configure() {
-        val height = detents.filterIsInstance<SheetDetent.Height>().firstOrNull()
-        val halfAndFull = SheetDetent.Medium in detents && SheetDetent.Large in detents
-        behavior.isFitToContents = !halfAndFull
-        behavior.expandedOffset = topGap
-        behavior.maxHeight = heightOf(detents.last())
-        val collapsed = if (halfAndFull) height else detents.takeIf { it.size > 1 }?.first()
-        behavior.skipCollapsed = collapsed == null
-        // Without a detent of its own the collapsed state is the smallest detent: a sheet that isn't hideable settles
-        // there, not at Material's peek height.
-        behavior.peekHeight = heightOf(collapsed ?: detents.first())
+        stops = SheetStops.stops(detents, ::heightOf, options.selectedDetent)
+        val material = SheetStops.material(stops.map(::heightOf), parentHeight())
+        behavior.isFitToContents = material.fitToContents
+        material.halfExpandedRatio?.takeIf { it > 0f && it < 1f }?.let { behavior.halfExpandedRatio = it }
+        behavior.expandedOffset = material.expandedOffset
+        behavior.maxHeight = material.maxHeight
+        behavior.skipCollapsed = material.skipCollapsed
+        behavior.peekHeight = material.peekHeight
     }
 
-    private fun stateOf(detent: SheetDetent): Int = when {
-        detent == detents.last() -> BottomSheetBehavior.STATE_EXPANDED
-        detent == SheetDetent.Medium && !behavior.isFitToContents -> BottomSheetBehavior.STATE_HALF_EXPANDED
-        else -> BottomSheetBehavior.STATE_COLLAPSED
+    // The heights of the stops changed: the behavior takes them, and a sheet at rest goes to where its stop stands now
+    // (the one it rests at, else the selected one, else the lowest, when its stop is gone).
+    private fun restop() {
+        if (container.parent == null) return
+        val settled = detentOf(behavior.state)
+        configure()
+        if (settled == null || closing != null || backFinishing || backPreview != null) return
+        val target = settled.takeIf { it in stops } ?: selected?.takeIf { it in stops } ?: stops.first()
+        behavior.isHideable = swipeToDismiss && target == stops.first()
+        behavior.state = stateOf(target)
+    }
+
+    private fun stateOf(detent: SheetDetent): Int = when (detent) {
+        stops.last() -> BottomSheetBehavior.STATE_EXPANDED
+        stops.first() -> BottomSheetBehavior.STATE_COLLAPSED
+        else -> BottomSheetBehavior.STATE_HALF_EXPANDED
     }
 
     private fun detentOf(state: Int): SheetDetent? = when (state) {
-        BottomSheetBehavior.STATE_EXPANDED -> detents.last()
-        BottomSheetBehavior.STATE_HALF_EXPANDED -> SheetDetent.Medium
-        BottomSheetBehavior.STATE_COLLAPSED -> detents.first()
+        BottomSheetBehavior.STATE_EXPANDED -> stops.last()
+        BottomSheetBehavior.STATE_HALF_EXPANDED -> stops.getOrNull(1)?.takeIf { stops.size == SheetStops.MAX_STOPS }
+        BottomSheetBehavior.STATE_COLLAPSED -> stops.first()
         else -> null
     }
 
+    private fun parentHeight(): Int = if (layout.height > 0) layout.height else layout.rootView.height
+
     /** The height of the sheet at the detent, in px. */
     private fun heightOf(detent: SheetDetent): Int {
-        val full = (if (layout.height > 0) layout.height else layout.rootView.height) - topGap
+        val full = parentHeight() - topGap
         return when (detent) {
             SheetDetent.Large -> full
             SheetDetent.Medium -> (full + topGap) / 2
@@ -357,7 +379,7 @@ internal class ModalSheet(
                 if (closing != null) return
                 val detent = detentOf(state)
                 // A drag down closes the sheet from its smallest detent only; from a larger one it stops at the next.
-                behavior.isHideable = swipeToDismiss && detent == detents.first()
+                behavior.isHideable = swipeToDismiss && detent == stops.first()
                 shown?.let {
                     shown = null
                     it()
@@ -384,9 +406,9 @@ internal class ModalSheet(
         // Hidden at the end of back's slide, it still stands at its detent until the next layout.
         if (behavior.state == BottomSheetBehavior.STATE_HIDDEN) return setDim(0f)
         val height = layout.height - sheetTop()
-        val undimmed = options.largestUndimmedDetent?.takeIf { it in detents }
+        val undimmed = options.largestUndimmedDetent?.takeIf { it in stops }
         val from = undimmed?.let { heightOf(it) } ?: 0
-        val to = detents.firstOrNull { heightOf(it) > from }?.let { heightOf(it) } ?: return run { setDim(0f) }
+        val to = stops.firstOrNull { heightOf(it) > from }?.let { heightOf(it) } ?: return run { setDim(0f) }
         setDim(((height - from).toFloat() / (to - from)).coerceIn(0f, 1f))
     }
 
@@ -424,7 +446,7 @@ internal class ModalSheet(
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     downY = event.rawY
-                    downAtSmallest = detentOf(state) == detents.first()
+                    downAtSmallest = detentOf(state) == stops.first()
                 }
                 MotionEvent.ACTION_UP -> {
                     if (!swipeToDismiss && closing == null && downAtSmallest && event.rawY - downY > ATTEMPT_DISTANCE_DP.dp) {
