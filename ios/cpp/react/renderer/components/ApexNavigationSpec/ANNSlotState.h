@@ -82,20 +82,11 @@ class ANNSlotContentHeights final {
     }
 
   private:
-    static std::mutex &mutex() {
-        static std::mutex value;
-        return value;
-    }
-
-    static std::unordered_map<std::string, Float> &heights() {
-        static std::unordered_map<std::string, Float> value;
-        return value;
-    }
-
-    static std::atomic<int> &requested() {
-        static std::atomic<int> value{0};
-        return value;
-    }
+    // One store for the whole app, in ANNSlotState.cpp: on Android the slot's layout runs in the app's library and the
+    // native side reads the heights from the library's own, and an inline static would give each its own copy.
+    static std::mutex &mutex();
+    static std::unordered_map<std::string, Float> &heights();
+    static std::atomic<int> &requested();
 };
 
 } // namespace facebook::react

@@ -15,6 +15,7 @@ import com.facebook.react.uimanager.ThemedReactContext
 import com.facebook.react.uimanager.UIManagerHelper
 import com.facebook.react.uimanager.events.EventDispatcher
 import com.facebook.react.views.view.ReactViewGroup
+import dev.apexnative.navigation.react.ContentHeights
 
 /**
  * The React children of a slot. They live outside the views of the host's surface, in the container of a screen, so
@@ -79,6 +80,8 @@ class SlotView(reactContext: ThemedReactContext) : ReactViewGroup(reactContext) 
         }
     private var lastWidth = -1f
     private var lastHeight = -1f
+    // The slot was laid out once more, at the same size, for the measure of its content (`ContentHeights`).
+    private var measureAsked = false
 
     private val slotId: String?
         get() = getTag(R.id.view_tag_native_id) as? String
@@ -116,7 +119,11 @@ class SlotView(reactContext: ThemedReactContext) : ReactViewGroup(reactContext) 
         if (container != null && state != null && container.width > 0 && container.height > 0) {
             val width = container.width.toFloat().pxToDp()
             val height = container.height.toFloat().pxToDp()
-            if (width != lastWidth || height != lastHeight) {
+            // A container that measures the content gets one layout more for it, with the same size, until the height
+            // came.
+            val measures = !measureAsked && ContentHeights.isSlotRequested(id) && ContentHeights.slotHeight(id) == null
+            if (width != lastWidth || height != lastHeight || measures) {
+                measureAsked = measureAsked || measures
                 lastWidth = width
                 lastHeight = height
                 state.updateState(
@@ -136,6 +143,7 @@ class SlotView(reactContext: ThemedReactContext) : ReactViewGroup(reactContext) 
     }
 
     fun drop() {
+        measureAsked = false
         SlotContainers.unregister(this)
         (content.parent as? ViewGroup)?.removeView(content)
     }

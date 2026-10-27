@@ -1,10 +1,12 @@
 // The height of React content laid out at a width without a height limit, for the Kotlin side
 // (`dev.apexnative.navigation.react.ContentHeights`): a sheet with the 'content' detent. Fabric lays out a copy of the
-// tree for it, so the shown layout stays as it is.
+// tree for it, so the shown layout stays as it is: a React root's surface here, a slot's content in the slot's own
+// layout (`ANNSlotShadowNode`), which keeps the height in `ANNSlotContentHeights`.
 
 #include <fbjni/fbjni.h>
 #include <jni.h>
 #include <react/fabric/SurfaceHandlerBinding.h>
+#include <react/renderer/components/ApexNavigationSpec/ANNSlotState.h>
 #include <react/renderer/core/LayoutConstraints.h>
 #include <react/renderer/core/LayoutContext.h>
 
@@ -13,6 +15,10 @@
 using namespace facebook;
 
 namespace {
+
+std::string slotIdOf(jstring slotId) {
+    return slotId ? jni::wrap_alias(slotId)->toStdString() : std::string{};
+}
 
 // A React root's surface: React Native keeps the getter of its surface handler unmangled for the native side.
 struct JReactSurfaceImpl : jni::JavaClass<JReactSurfaceImpl> {
@@ -49,4 +55,28 @@ extern "C" JNIEXPORT jfloat JNICALL Java_dev_apexnative_navigation_react_Content
         jni::translatePendingCppExceptionToJavaException();
         return -1;
     }
+}
+
+/** The slot's content is measured from its next layout on (`ANNSlotContentHeights::request`). */
+extern "C" JNIEXPORT void JNICALL Java_dev_apexnative_navigation_react_ContentHeights_nativeRequestSlot(
+    JNIEnv * /*env*/, jclass /*type*/, jstring slotId) {
+    react::ANNSlotContentHeights::request(slotIdOf(slotId));
+}
+
+/** Whether the slot's content is measured. */
+extern "C" JNIEXPORT jboolean JNICALL Java_dev_apexnative_navigation_react_ContentHeights_nativeIsSlotRequested(
+    JNIEnv * /*env*/, jclass /*type*/, jstring slotId) {
+    return react::ANNSlotContentHeights::isRequested(slotIdOf(slotId));
+}
+
+/** The height of the slot's content at its last layout, in points; negative before it. */
+extern "C" JNIEXPORT jfloat JNICALL Java_dev_apexnative_navigation_react_ContentHeights_nativeSlotHeight(
+    JNIEnv * /*env*/, jclass /*type*/, jstring slotId) {
+    return react::ANNSlotContentHeights::height(slotIdOf(slotId));
+}
+
+/** The slot's screen went: nothing more is measured for it. */
+extern "C" JNIEXPORT void JNICALL Java_dev_apexnative_navigation_react_ContentHeights_nativeForgetSlot(
+    JNIEnv * /*env*/, jclass /*type*/, jstring slotId) {
+    react::ANNSlotContentHeights::forget(slotIdOf(slotId));
 }
