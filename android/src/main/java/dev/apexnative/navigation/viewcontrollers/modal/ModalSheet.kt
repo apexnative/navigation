@@ -82,8 +82,10 @@ internal class ModalSheet(
     private var stopHeights: List<Int> = emptyList()
     // The part of the keyboard over the navigation bar, in pixels; 0 without the keyboard.
     private var keyboard = 0
-    // The stops' heights changed while the sheet moved (a drag, a slide): it takes them once it rests.
+    // The stops' heights changed while the sheet moved (a drag, a slide): it takes them once it rests, and goes to the
+    // `selectedDetent` a merge named meanwhile ([pendingArrived]).
     private var restopPending = false
+    private var pendingArrived: SheetDetent? = null
     // The slide of a sheet at rest from where it stood to where a new height put it (`glide`); none otherwise.
     private var glider: ValueAnimator? = null
     private var selected: SheetDetent? = null
@@ -396,16 +398,21 @@ internal class ModalSheet(
      */
     private fun restop(settled: SheetDetent? = detentOf(behavior.state), arrived: SheetDetent? = null) {
         if (container.parent == null) return
-        val top = container.top
+        // Where it is drawn: a glide still running counts.
+        val top = (container.top + container.translationY).roundToInt()
         val relayout = configure()
         updateScrim()
         if (closing != null || backFinishing) return
-        val state = behavior.state
-        if (state == BottomSheetBehavior.STATE_DRAGGING || state == BottomSheetBehavior.STATE_SETTLING) {
+        if (isMoving()) {
             restopPending = true
+            if (arrived != null) pendingArrived = arrived
             return
         }
-        if (settled == null) return
+        // Not shown yet: the show slides it to the stop a merge names.
+        if (settled == null) {
+            if (arrived != null && arrived in stops) selected = arrived
+            return
+        }
         val target = SheetStops.target(settled, stops, arrived, options.selectedDetent) ?: settled
         behavior.isHideable = swipeToDismiss && target == stops.first()
         // A move, or a sheet that can no longer go down, ends a preview of back on it.
@@ -416,14 +423,36 @@ internal class ModalSheet(
             behavior.state = stateOf(target)
             return
         }
-        // The new height comes with the layout, where the behavior puts a sheet at rest at its state's offset at once:
-        // it glides there from where it stood.
-        OneShotPreDrawListener.add(container) {
-            if (closing != null || container.parent == null || backPreview != null) return@add
+        // The new height comes with the sheet's next layout, where the behavior puts a sheet at rest at its state's
+        // offset at once: it glides there from where it stood, before that frame is drawn.
+        afterNextLayout {
+            val gone = closing != null || backFinishing || container.parent == null
+            if (gone || backPreview != null) return@afterNextLayout
+            if (isMoving()) {
+                restopPending = true
+                if (target != settled) pendingArrived = target
+                return@afterNextLayout
+            }
             val stays = behavior.state == stateOf(target)
             behavior.state = stateOf(target)
             if (stays) glide(top)
         }
+    }
+
+    private fun isMoving(): Boolean =
+        behavior.state == BottomSheetBehavior.STATE_DRAGGING || behavior.state == BottomSheetBehavior.STATE_SETTLING
+
+    // Runs [step] on the pre-draw of the frame of the sheet's next layout: the behavior has placed it by then.
+    private fun afterNextLayout(step: () -> Unit) {
+        container.addOnLayoutChangeListener(object : View.OnLayoutChangeListener {
+            override fun onLayoutChange(
+                view: View, left: Int, top: Int, right: Int, bottom: Int,
+                oldLeft: Int, oldTop: Int, oldRight: Int, oldBottom: Int,
+            ) {
+                view.removeOnLayoutChangeListener(this)
+                OneShotPreDrawListener.add(view, step)
+            }
+        })
     }
 
     // The sheet slides from [from] (its old top) to where it is laid out now, by its translation; at once with the
@@ -567,8 +596,10 @@ internal class ModalSheet(
                 }
                 dragged = false
                 if (restopPending) {
+                    val arrived = pendingArrived
                     restopPending = false
-                    container.post { restop() }
+                    pendingArrived = null
+                    container.post { restop(arrived = arrived) }
                 }
             }
         }
