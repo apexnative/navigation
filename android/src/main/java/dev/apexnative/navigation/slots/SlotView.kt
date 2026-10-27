@@ -121,7 +121,10 @@ class SlotView(reactContext: ThemedReactContext) : ReactViewGroup(reactContext) 
             val height = container.height.toFloat().pxToDp()
             // A container that measures the content gets one layout more for it, with the same size, until the height
             // came.
-            val measures = !measureAsked && ContentHeights.isSlotRequested(id) && ContentHeights.slotHeight(id) == null
+            val requested = ContentHeights.isSlotRequested(id)
+            // A request that went (its screen did) and comes again gets its layout again.
+            if (!requested) measureAsked = false
+            val measures = !measureAsked && requested && ContentHeights.slotHeight(id) == null
             if (width != lastWidth || height != lastHeight || measures) {
                 measureAsked = measureAsked || measures
                 lastWidth = width
