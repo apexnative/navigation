@@ -83,6 +83,10 @@ typedef NS_ENUM(NSInteger, ANNRootShowState) {
 @property(nonatomic, strong, nullable) ANNFrameDriver *driver;
 @property(nonatomic, copy, nullable) NSArray<ANNViewTracks *> *tracks;
 @property(nonatomic) BOOL animating;
+// The new root's view takes no touches while it animates, and whether it took them before: Core Animation draws it
+// elsewhere than where it is (the view itself stays in place), so a tap on the old screen would reach it.
+@property(nonatomic, weak, nullable) UIView *untouchableRoot;
+@property(nonatomic) BOOL rootTouchesBefore;
 @property(nonatomic) BOOL layersShown;
 @end
 
@@ -565,6 +569,11 @@ static __weak ANNRootShow *ANNAnimatingShow;
     }
     show.tracks = tracks;
     show.animating = YES;
+    if (rootView) {
+        show.untouchableRoot = rootView;
+        show.rootTouchesBefore = rootView.userInteractionEnabled;
+        rootView.userInteractionEnabled = NO;
+    }
     ANNAnimatingShow = show;
     show.driver = [[ANNFrameDriver alloc] initWithClients:tracks length:length];
     // The layers' state from here on: the chain may start and a newer `setRoot` stops it.
@@ -601,8 +610,8 @@ static __weak ANNRootShow *ANNAnimatingShow;
     [self finishLayersOf:show];
 }
 
-// The animation stops at its end state (its end, a newer `setRoot`, a reload, a failure): the views get back what they
-// had and the snapshot goes.
+// The animation stops (its end, a newer `setRoot`, a reload, a failure): its animations go, the views get back what
+// they had and the snapshot goes.
 + (void)stopAnimationOf:(ANNRootShow *)show {
     if (!show.animating) {
         return;
@@ -610,13 +619,16 @@ static __weak ANNRootShow *ANNAnimatingShow;
     show.animating = NO;
     [show.driver cancel];
     show.driver = nil;
+    show.untouchableRoot.userInteractionEnabled = show.rootTouchesBefore;
+    show.untouchableRoot = nil;
     for (ANNViewTracks *tracks in show.tracks) {
         [tracks restore];
     }
     show.tracks = nil;
-    // UIKit works out the safe area of the window's root view from where the view is drawn: moved away from the top
-    // edge by `enter` (from the bottom, scaled down) it has no top inset, and putting the transform back doesn't make
-    // UIKit work it out again. A layout now gives the root, its bars and its screens the window's safe area back.
+    // UIKit works out the safe area of the window's root view from where the view is: moved away from the top edge by
+    // a transform it has no top inset, and putting the transform back doesn't make UIKit work it out again. `enter`
+    // moves only what Core Animation draws now; the layout stays, so the root, its bars and its screens end with the
+    // window's safe area whatever moved them.
     UIView *rootView = show.root.viewIfLoaded;
     [rootView setNeedsLayout];
     [rootView layoutIfNeeded];

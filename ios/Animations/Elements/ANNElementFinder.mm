@@ -182,13 +182,13 @@ BOOL ANNElementStep(NSString *element, NS_NOESCAPE dispatch_block_t work) {
 
 #pragma mark - ANNFrameClient
 
-- (void)applyAtTime:(NSTimeInterval)time {
+- (void)addAnimationsWithLength:(NSTimeInterval)length {
     if (_failed) {
         return;
     }
     id<ANNFrameClient> client = _client;
     if (!ANNElementStep(_name, ^{
-          [client applyAtTime:time];
+          [client addAnimationsWithLength:length];
         })) {
         _failed = YES;
         [self restore];

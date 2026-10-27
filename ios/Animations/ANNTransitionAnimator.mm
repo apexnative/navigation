@@ -187,8 +187,9 @@ static void ANNUpdateRootLayoutOf(UIViewController *node) {
                                                    duration:_plan.length
                                                 alphaBefore:_leavingAlpha];
     }
-    // The arriving view shows from the start with its own alpha unless a track moves it.
-    if (_arriving && !arrivingTracks.animatesAlpha) {
+    // The arriving view gets its own alpha back: an `opacity` animation of its tracks shows over it from the start, in
+    // the same transaction.
+    if (_arriving) {
         _arriving.alpha = _arrivingAlpha;
     }
     if (arrivingTracks.hasTracks) {
@@ -197,7 +198,7 @@ static void ANNUpdateRootLayoutOf(UIViewController *node) {
     if (leavingTracks.hasTracks) {
         [clients addObject:leavingTracks];
     }
-    // Each element plays on its own: one whose frame fails goes back and stops, the others and the screens go on.
+    // Each element plays on its own: one whose animations fail goes back and stays, the others and the screens go on.
     for (ANNElementTransition *element in elements) {
         [clients addObject:[[ANNIsolatedElement alloc] initWithClient:element name:element.name]];
     }

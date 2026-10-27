@@ -20,13 +20,14 @@ FOUNDATION_EXPORT CGFloat ANNCameraDistance(void);
 /// position and bounds, never its frame) moved by its own translation, `alpha` its alpha before any hide, the
 /// translations, scales and rotations those of its own transform (React Native's `transform`, split into its parts as
 /// Android's views hold it: the shorter angle, −180…180). A property that doesn't play keeps the view's own value, its
-/// skew and perspective stay. Each frame writes only what plays: `alpha` only with an `alpha` track, `layer.transform`
-/// only when a property of the transform plays; with `translationX` and `x` on one side the translation wins. The frame
-/// is never changed (React keeps the layout). `restore` puts back the alpha and the transform as they were read.
+/// skew and perspective stay. Only what plays animates, in Core Animation (`ANNKeyframes`): `opacity` only with an
+/// `alpha` track, `transform` only when a property of the transform plays; with `translationX` and `x` on one side the
+/// translation wins. The view's own values (its frame, alpha and transform) are never written: the animations show
+/// over them, and `restore` removes the animations.
 @interface ANNViewTracks : NSObject <ANNFrameClient>
 
 /// The playing properties of `side` on `view`. `alphaBefore`: the view's alpha before the core hid it for the
-/// transition (the arriving screen), else its alpha now; it is also what `restore` puts back.
+/// transition (the arriving screen), else its alpha now.
 - (instancetype)initWithView:(UIView *)view
                         side:(ANNViewAnimationOptions *)side
                  alphaBefore:(CGFloat)alphaBefore;
@@ -35,8 +36,7 @@ FOUNDATION_EXPORT CGFloat ANNCameraDistance(void);
 /// disappearing from it to `to`, or both ends given.
 - (instancetype)initWithView:(UIView *)view element:(ANNElementTransitionOptions *)element;
 
-/// A linear fade of `view`'s alpha (a dismissed popover with nothing to play, a transition under Reduce Motion);
-/// `restore` puts back `alphaBefore`.
+/// A linear fade of `view`'s alpha (a dismissed popover with nothing to play, a transition under Reduce Motion).
 - (instancetype)initWithView:(UIView *)view
                     fadeFrom:(CGFloat)from
                           to:(CGFloat)to

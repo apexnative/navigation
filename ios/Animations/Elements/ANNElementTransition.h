@@ -6,9 +6,9 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-/// One `elementTransitions[]` item on its React view: the view's own `transform` and `alpha` animate in place, its
-/// parents clip it as usual; at the end, at a cancel and at a destroy the values read before come back. Nothing else of
-/// the React view changes (no frame, no subview, never `layer.zPosition`).
+/// One `elementTransitions[]` item on its React view: its `transform` and `opacity` animate in place, its parents clip
+/// it as usual; at the end, at a cancel and at a destroy the animations go and the view shows its own values. Nothing
+/// of the React view is written (no value, no frame, no subview, never `layer.zPosition`).
 @interface ANNElementTransition : NSObject <ANNFrameClient>
 
 /// The items found: each `id` first in the leaving screen's React view, then in the arriving one; an item not found or

@@ -12,9 +12,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// above the leaving one (push, `setStackRoot`, show) or below it (pop, dismissal), gets its final frame and lays out
 /// (React gets its final size), and hides (alpha 0) until the start; a forward transition starts after its wait
 /// (`ANNTransitionWait`), a backward one at once. Then one frame driver moves the sides that play, the elements in
-/// place and the shared elements' copies; a side that doesn't play doesn't move. At the end, before
-/// `completeTransition:`, the elements get their values back, the copies go and the React views show again, and both
-/// views get back the transform and the alpha they had. Never interactive, never cancelled; `completeTransition:` never
+/// place and the shared elements' copies, in Core Animation; a side that doesn't play doesn't move. At the end, before
+/// `completeTransition:`, the animations go, the copies go and the React views show again, and both views get back the
+/// transform and the alpha they had. Never interactive, never cancelled; `completeTransition:` never
 /// comes inside `animateTransition:`. Main queue.
 @interface ANNTransitionAnimator : NSObject <UIViewControllerAnimatedTransitioning>
 
