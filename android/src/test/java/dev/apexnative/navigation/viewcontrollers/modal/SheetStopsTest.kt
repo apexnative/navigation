@@ -21,6 +21,7 @@ class SheetStopsTest {
         when (it) {
             Medium -> 1000
             Large -> 1900
+            SheetDetent.Content -> 600
             is SheetDetent.Height -> it.dp.toInt().coerceAtMost(1900)
         }
     }

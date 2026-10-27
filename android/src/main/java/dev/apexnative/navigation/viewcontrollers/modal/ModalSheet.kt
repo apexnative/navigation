@@ -27,15 +27,17 @@ import dev.apexnative.navigation.options.SheetOptions
 import dev.apexnative.navigation.utils.MaterialTheme
 import dev.apexnative.navigation.utils.TestIds
 import dev.apexnative.navigation.utils.dp
+import dev.apexnative.navigation.viewcontrollers.viewcontroller.IReactView
 import kotlin.math.roundToInt
 
 /**
  * A modal shown as a Material bottom sheet (`pageSheet`, `formSheet`, `popover`, or `modal.sheet` without a style): the
  * modal's view in a container with a [BottomSheetBehavior], in the modals' CoordinatorLayout, over a scrim. It stops at
  * the detents of its options — `medium` at half the height, `large` at the full height under the status bar, a number
- * at that height in dp — and the user drags it between them; at three of them at most, the Material behavior's
- * resting states ([SheetStops]). In a window wider than [MAX_WIDTH_DP] it stands in the
- * middle at that width. A drag down past the smallest one closes it, unless `swipeToDismiss` is false: then the sheet
+ * at that height in dp, `content` at the height of the shown screen's content — and the user drags it between them; at
+ * three of them at most, the Material behavior's resting states ([SheetStops]). The content is measured without a
+ * height limit, as on iOS ([IReactView.contentSize]), again after each of its mounts, and the stops follow it. In a
+ * window wider than [MAX_WIDTH_DP] it stands in the middle at that width. A drag down past the smallest one closes it, unless `swipeToDismiss` is false: then the sheet
  * stays, and the try is told. The screen under it stays in place. On Android 14+ the back gesture previews its hide
  * ([SheetBack]): the Material behavior shrinks it with the progress and slides it down at the release.
  */
@@ -43,6 +45,8 @@ internal class ModalSheet(
     private val layout: CoordinatorLayout,
     private val content: View,
     private val events: Events,
+    /** The content of the screen the modal shows now, which the `content` detent measures; none without one. */
+    private val shownContent: () -> IReactView?,
 ) : SheetBack {
     interface Events {
         /** The user dragged the sheet to another detent. */
@@ -98,7 +102,15 @@ internal class ModalSheet(
     // first, down at the top of the list the sheet comes down. The behavior follows views that scroll nested.
     private val scrollViews = ViewTreeObserver.OnGlobalLayoutListener {
         if (behavior.dragAnywhere) enableNestedScrolling(container)
+        // The bars above the content may have taken their height.
+        if (followed != null) contentChanged()
     }
+
+    // The shown screen's content that the `content` detent follows, its height without a height limit (pixels, none
+    // before it is measured), and the height of the detent the behavior has now.
+    private var followed: IReactView? = null
+    private var contentBody: Int? = null
+    private var appliedContentHeight: Int? = null
 
     // The stops stand in pixels: they follow the layout's height (a rotation, a resize).
     private val layoutHeight = View.OnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom ->
@@ -190,6 +202,7 @@ internal class ModalSheet(
         grabber.visibility = if (sheetOptions.grabber.isTrue) View.VISIBLE else View.GONE
         behavior.dragAnywhere = sheetOptions.expandsOnScroll.get(true)
         container.invalidateOutline()
+        followContent()
         configure()
         if (merge == null || closing != null || backFinishing) return
         val settled = detentOf(behavior.state)
@@ -226,6 +239,8 @@ internal class ModalSheet(
         stopBackFrames()
         container.viewTreeObserver.removeOnGlobalLayoutListener(scrollViews)
         layout.removeOnLayoutChangeListener(layoutHeight)
+        followed?.setOnContentMounted(CONTENT_KEY, null)
+        followed = null
         container.removeView(content)
         layout.removeView(container)
         layout.removeView(scrim)
@@ -314,6 +329,7 @@ internal class ModalSheet(
     // fits the sheet to its highest stop, at three it stops half expanded between them. The detent the options select
     // stays the middle one when there are more.
     private fun configure() {
+        appliedContentHeight = contentHeight()
         stops = SheetStops.stops(detents, ::heightOf, options.selectedDetent)
         val material = SheetStops.material(stops.map(::heightOf), parentHeight())
         behavior.isFitToContents = material.fitToContents
@@ -357,8 +373,64 @@ internal class ModalSheet(
         return when (detent) {
             SheetDetent.Large -> full
             SheetDetent.Medium -> (full + topGap) / 2
+            SheetDetent.Content -> contentHeight()?.coerceAtMost(full) ?: full
             is SheetDetent.Height -> detent.dp.toFloat().dp.coerceAtMost(full)
         }
+    }
+
+    // The `content` detent follows the content of the screen shown now, and measures it after each of its mounts; a
+    // sheet without the detent follows nothing.
+    private fun followContent() {
+        val content = if (SheetDetent.Content in detents) shownContent() else null
+        if (content !== followed) {
+            followed?.setOnContentMounted(CONTENT_KEY, null)
+            followed = content
+            contentBody = null
+            content?.setOnContentMounted(CONTENT_KEY) {
+                measureContent()
+                contentChanged()
+            }
+        }
+        measureContent()
+    }
+
+    // The content's own height at the width it has (the sheet's, before it is laid out); kept until a measure gives
+    // one again.
+    private fun measureContent() {
+        val content = followed ?: return
+        val width = content.asView().width.takeIf { it > 0 } ?: container.width.takeIf { it > 0 } ?: sheetWidth()
+        content.contentSize(width)?.let { contentBody = it.height }
+    }
+
+    // The height of the `content` detent: the content's own, the bars above it in the sheet (a stack's top bar), and
+    // the navigation bar below it, which a detent leaves room for as UIKit adds the bottom safe area; none before the
+    // content is measured.
+    private fun contentHeight(): Int? {
+        val body = contentBody ?: return null
+        val insets = ViewCompat.getRootWindowInsets(layout)
+        val bottom = insets?.getInsets(WindowInsetsCompat.Type.navigationBars())?.bottom ?: 0
+        return offsetAbove() + body + bottom
+    }
+
+    // How far below the sheet's top the content stands, by layout: the views between them, without their transforms.
+    private fun offsetAbove(): Int {
+        var view: View = followed?.asView() ?: return 0
+        var top = 0
+        while (view !== container) {
+            top += view.top
+            view = view.parent as? View ?: return 0
+        }
+        return top
+    }
+
+    // The content may have changed its height: the stops follow it.
+    private fun contentChanged() {
+        if (contentHeight() != appliedContentHeight) restop()
+    }
+
+    private fun sheetWidth(): Int {
+        val width = if (layout.width > 0) layout.width else layout.rootView.width
+        return width.coerceAtMost(MAX_WIDTH_DP.dp)
     }
 
     private fun onState(state: Int) {
@@ -489,5 +561,8 @@ internal class ModalSheet(
         private const val SCRIM_ALPHA = 0.32f
         private const val GRAB_AREA_DP = 48
         private const val ATTEMPT_DISTANCE_DP = 48
+
+        // The key of the sheet's handler of its content's mounts.
+        private const val CONTENT_KEY = "sheet.content"
     }
 }

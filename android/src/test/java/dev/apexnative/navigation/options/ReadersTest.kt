@@ -260,6 +260,8 @@ class ReadersTest {
             assertNull("$other", SheetDetent.parse(other))
         }
         assertEquals(SheetDetent.Medium, SheetDetent.parse("medium"))
+        assertEquals(SheetDetent.Content, SheetDetent.parse("content"))
+        assertEquals("content", SheetDetent.Content.toValue())
         val sheet = SheetOptions.parse(JavaOnlyMap.of("detents", JavaOnlyArray.of("medium", -1, Double.NaN, 200)))
         assertEquals(listOf(SheetDetent.Medium, SheetDetent.Height(200.0)), sheet.detents)
     }

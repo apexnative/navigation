@@ -22,8 +22,9 @@ top-level folder. Main thread only, unless a line says otherwise.
   `Variant`, `ThemeColour`); `parsers/` reads them tolerantly from React Native data.
 - `react/`: the way in and out: `NavigationTurboModule`, `CommandRunner`, `CommandAnswer`, `ErrorTexts`,
   `OptionsCommands`, `PendingCalls` (a task behind the calls JavaScript made), `ReloadCoordinator`, `ReactGateway`,
-  `ReactView` (a React root), the stores (`ScreenEnvironment`: a screen's insets, padding, regions and pair state;
-  `Hinge`, `StartInfo`), `ScreenRegions` (measures a screen's regions), `LaunchLink`, `ScrollEvents`.
+  `ReactView` (a React root), `ContentHeights` (content measured without a height limit, through JNI), the stores
+  (`ScreenEnvironment`: a screen's insets, padding, regions and pair state; `Hinge`, `StartInfo`), `ScreenRegions`
+  (measures a screen's regions), `LaunchLink`, `ScrollEvents`.
 - `react/events/`: `AppearanceDispatcher`, `ScreenAppearance`, `EventEmitter`, `EventContract` (made by
   `scripts/contract.mjs`), `NavigationState`, `ComponentType`.
 - `viewcontrollers/viewcontroller/`: `ViewController` (the base of every node), `Presenter`, `IReactView` (what a
@@ -58,7 +59,8 @@ top-level folder. Main thread only, unless a line says otherwise.
   `DevelopmentLog`).
 - `android/src/main/jni/`: `CMakeLists.txt` builds the codegen target with the C++ of `ios/cpp` (the slot's and the
   safe area view's shadow nodes); `ApexNavigationSpec.h` replaces the generated header so autolinking sees their
-  descriptors.
+  descriptors; `ANNContentHeights.cpp` measures React content without a height limit for `react/ContentHeights.kt`
+  (a sheet's `'content'` detent).
 - `android/src/main/res/`: theme `Theme.ApexNavigation` (and `values-night`), `attrs.xml` (splash attributes),
   `ids.xml`, `dimens*.xml`, text colors, icons.
 - `android/src/test/java/…`: unit tests, one package per main package; fakes beside them (`Fakes.kt`,
