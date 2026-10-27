@@ -207,8 +207,9 @@ Modules are the feature classes that plug into the core through its contract (th
   custom row (`BottomTabsCustomRowOptions`).
 - **Views and helpers:** tabs bar (`BottomTabs`, `BottomTabItem`, `BottomTabsCollapseBehavior`, `scrollToTop`), slots
   (`SlotHost`, `SlotView`, `SlotContainers`), safe area (`SafeAreaView`), native screens (`nativescreen/`), splash
-  (`splash/`), animations (`FadeThrough`, `SystemTransition`, `TransitionTargets`, three element animators), utils
-  (`MaterialTheme`, `NavigationLog`, `awaitBarComponents`, `whenDrawn`).
+  (`splash/`), animations (`FadeThrough`, `SystemTransition`, `TransitionTargets`, the copies of shared elements:
+  `TextMorph`, `ViewMorph`, `ImageMorph`), utils (`MaterialTheme`, `NavigationLog`, `awaitBarComponents`,
+  `whenDrawn`).
 - **Stores and singletons:** a screen's environment (`ScreenEnvironment`: its insets and padding, its regions as
   `ScreenRegions` measures them, its pair state), the window (`Hinge`, `WindowFolds`), links (`LaunchLink`,
   `StartInfo`), events (`NavigationState`), commands (`BackCallbackState`), stack (`PreparedFrame`).
