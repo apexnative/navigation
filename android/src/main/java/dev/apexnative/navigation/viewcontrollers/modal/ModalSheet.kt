@@ -83,6 +83,9 @@ internal class ModalSheet(
     // The stops' heights changed while the sheet moved (a drag, a slide): it takes them once it rests, and goes to the
     // `selectedDetent` a merge named meanwhile ([pendingArrived]).
     private var restopPending = false
+    // The sheet showed while its `content` detent had no height yet: once it has one, the sheet goes where the show
+    // would have taken it ([showTarget]), unless the user moved it first.
+    private var awaiting = false
     private var pendingArrived: SheetDetent? = null
     private var selected: SheetDetent? = null
     private var topGap = 0
@@ -218,17 +221,21 @@ internal class ModalSheet(
         layout.addOnLayoutChangeListener(layoutHeight)
         shown = onShown
         update(sheetOptions, swipeToDismiss, merge = null)
-        selected = sheetOptions.selectedDetent?.takeIf { it in stops }
+        selected = sheetOptions.selectedDetent?.takeIf { it in detents }
+        awaiting = SheetDetent.Content in detents && contentHeight() == null
         if (!animated || SystemAnimations.areOff(context)) {
             // The behavior lays the sheet out at the state it has before its first layout, with no slide, and tells
             // no state then: the sheet stands at its detent once laid out.
-            behavior.state = stateOf(selected ?: stops.first())
+            behavior.state = stateOf(showTarget())
             container.post { if (closing == null) onState(behavior.state) }
             return
         }
         // Laid out hidden first, so it slides up from the bottom.
-        container.post { if (closing == null) behavior.state = stateOf(selected ?: stops.first()) }
+        container.post { if (closing == null) behavior.state = stateOf(showTarget()) }
     }
+
+    // The stop the show goes to: the selected one when it is a stop already, else the lowest.
+    private fun showTarget(): SheetDetent = selected?.takeIf { it in stops } ?: stops.first()
 
     /**
      * New resolved options: the detents and the look. The sheet moves only as [SheetStops] says, after a `mergeOptions`
@@ -372,7 +379,10 @@ internal class ModalSheet(
     // behavior measures the sheet and counts a fitted sheet's top in its layout. It says whether a layout comes.
     private fun configure(): Boolean {
         appliedContentHeight = contentHeight()
-        stops = SheetStops.stops(detents, ::heightOf, options.selectedDetent)
+        // A `content` detent not measured yet has no height: it stays out of the stops until it has one, or it would
+        // count as the full height and take the place of `large`.
+        val measured = detents.filter { it != SheetDetent.Content || contentHeight() != null }.ifEmpty { detents }
+        stops = SheetStops.stops(measured, ::heightOf, options.selectedDetent)
         val lift = if (adjustsForKeyboard()) keyboard else 0
         stopHeights = SheetStops.lifted(stops.map(::heightOf), lift, fullHeight())
         val material = SheetStops.material(stopHeights, parentHeight())
@@ -409,7 +419,10 @@ internal class ModalSheet(
             if (arrived != null && arrived in stops) selected = arrived
             return
         }
-        val target = SheetStops.target(settled, stops, arrived, options.selectedDetent) ?: settled
+        val shows = awaiting && contentHeight() != null
+        if (shows) awaiting = false
+        val wanted = arrived ?: if (shows) showTarget() else null
+        val target = SheetStops.target(settled, stops, wanted, options.selectedDetent) ?: settled
         behavior.isHideable = swipeToDismiss && target == stops.first()
         // A move, or a sheet that can no longer go down, ends a preview of back on it.
         if (target != settled || !behavior.isHideable) stopBackPreview()
@@ -485,7 +498,7 @@ internal class ModalSheet(
         if (content !== followed) {
             followed?.setOnContentMounted(CONTENT_KEY, null)
             followed = content
-            contentBody = null
+            // The last height stays until the new content has one: a push in the sheet doesn't jump it to the top.
             content?.setOnContentMounted(CONTENT_KEY) {
                 measureContent()
                 contentChanged()
@@ -535,7 +548,10 @@ internal class ModalSheet(
 
     private fun onState(state: Int) {
         when (state) {
-            BottomSheetBehavior.STATE_DRAGGING -> dragged = true
+            BottomSheetBehavior.STATE_DRAGGING -> {
+                dragged = true
+                awaiting = false
+            }
             BottomSheetBehavior.STATE_HIDDEN -> {
                 backFinishing = false
                 when {
