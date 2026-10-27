@@ -294,15 +294,16 @@ export interface ElementTransition {
  * A view that flies from the screen that goes to the screen that comes, changing its place, size, corners and look on
  * the way. A pair whose view is not found on either screen is skipped while the rest plays, and the transition waits
  * until the views are found. A pair that fails on the way (an error in its start or its flight) is skipped too, with a
- * warning in the log: its views show and hide with their screens, and the transition and its command go on. (iOS) So is
- * a pair with a view without a size, or one whose picture can't be taken. Without an animation of the screens of its
- * own, the screen that comes fades in (or the one that goes fades out) in 300 ms around the pair. Text keeps its
- * proportions and changes its picture within a quarter of the flight. A view turned or scaled by its own `transform` or
- * by a parent's flies from where it shows, and its angle goes to the other view's along the shorter arc. The angle is
- * the one React Native draws, from −180° to 180°: `rotate: '270deg'` turns back a quarter, and no pair spins a full
- * turn. (Android) A picture that doesn't load within a second drops out of the transition, and so does a pair with a
- * view whose parent is a React view with `removeClippedSubviews` turned on: it counts as not found. A skew and a tilt
- * (`skewX`, `rotateX`, …) don't fly: the view flies without them and has them again at the end.
+ * warning in the log: its views show and hide with their screens, and the transition and its command go on. So is a
+ * pair with a view without a size, or one whose picture can't be taken. Without an animation of the screens of its
+ * own, the screen that comes fades in (or the one that goes fades out) in 300 ms around the pair. What flies is a copy:
+ * pictures of the two views taken as the transition starts, while the views stay hidden in their places; what changes
+ * in them meanwhile shows when they are back. Text keeps its proportions and changes its picture within a quarter of
+ * the flight. A view turned or scaled by its own `transform` or by a parent's flies from where it shows, and its angle
+ * goes to the other view's along the shorter arc. The angle is the one React Native draws, from −180° to 180°:
+ * `rotate: '270deg'` turns back a quarter, and no pair spins a full turn. (Android) A picture that doesn't load within
+ * a second drops out of the transition. A skew and a tilt (`skewX`, `rotateX`, …) don't fly: the view flies without
+ * them and has them again at the end.
  */
 export interface SharedElementTransition {
   /** The `nativeID` of the view on the screen that goes. */

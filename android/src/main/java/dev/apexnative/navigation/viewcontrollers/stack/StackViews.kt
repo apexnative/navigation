@@ -150,8 +150,9 @@ internal class StackViews(private val stack: StackController) : StackDisplay {
         }
     }
 
-    // The elements go into a layer over the screens, and back as the screen's animator ends or stops. A shared element
-    // without a duration takes the screen's fade: its own single `alpha`, else 300 ms.
+    // The elements play in their screens and the pairs' copies fly in a layer over them, all done as the screen's
+    // animator ends or stops. A shared element without a duration takes the screen's fade: its own single `alpha`,
+    // else 300 ms.
     override fun animateCustom(screen: ViewController<*>, custom: StackDisplay.Custom, done: () -> Unit) {
         stop(screen)
         val view = screen.peekView() ?: return done()

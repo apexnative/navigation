@@ -58,7 +58,7 @@ private typealias Node = ViewController<*>
  * made in the commit of that mount (its `mergeOptions`), so the transition starts with the options of that commit —
  * content mounted already goes that way too. A push or a `setStackRoot` with elements waits for its targets after
  * that, a wait like the others, within what is left of its limit without `waitForRender`: a cut or a replace during it
- * interrupts the push, which moves no view into a layer.
+ * interrupts the push, which starts no element.
  *
  * The transition is the screens' own when the options say so (`AnimationRules.stackIsOwn`): the display plays each
  * screen's side ([StackDisplay.animateCustom]) with the same owners as the default transitions; the bar's row then
