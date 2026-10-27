@@ -44,7 +44,7 @@ Top-level files: `Package.swift` (SwiftPM; `headerFolders` lists every folder wh
 - Screen: React root, slot, native screen — `Layouts/Screen/`: `ANNComponentViewController`; `React/`: `ANNReactView`, `ANNReactViewCreator`, `Slots/`; `Layouts/External/`
 - Screen: insets, background, keyboard focus — `Layouts/Screen/`: `ANNScreenEnvironment`, `ANNScreenSafeArea`, `ANNScreenBars`, `ANNScreenPlace` (the safe area of a parked screen), `ANNComponentPresenter` (background, status bar blur), `ANNComponentViewController` (key commands)
 - Safe area view — `React/`: `ANNSafeAreaViewComponentView`; `Layouts/Screen/`: `ANNScreenReadiness`; `cpp/`
-- Stack: queue, commands, back, gestures — `Layouts/Stack/`: `ANNStackQueue`, `ANNStackCommands`, `ANNStackController`, `InteractivePopGestureDelegate`, `ANNStackAnimatingDelegate`
+- Stack: queue, commands, back, gestures — `Layouts/Stack/`: `ANNStackQueue`, `ANNStackCommands`, `ANNStackController`, `InteractivePopGestureDelegate`, `ANNStackAnimatingDelegate`, `ANNSwipePopInteraction`
 - Top bar: title, buttons, menus, large title — `TopBar/`: `ANNTopBarPresenter`, `ANNBarButtons`, `ANNBarAppearance`, `ANNLargeTitlePresenter`, `ANNBackButtonPresenter`, `ANNTitleView`, `ANNTitleGlassView`
 - Top bar: components, waits — `TopBar/`: `ANNBarComponentsWait`, `ANNBarBackgroundComponent`, `ANNTitleComponentView`, `ANNBarButtonComponentView`; `React/`: `ANNReactComponentRegistry`
 - Search — `TopBar/`: `ANNSearchPresenter`, `ANNSearchResultsViewController`
@@ -146,7 +146,8 @@ Top-level files: `Package.swift` (SwiftPM; `headerFolders` lists every folder wh
 - A custom transition runs in Core Animation (`ANNFrameDriver`): each client samples its values once, at the start,
   into keyframe animations under the core's keys (`ANNAnimationKey`), and `restore` removes them. It never writes a
   view's own alpha or transform for a frame; a value the core writes for the transition (the arriving view's hide, a
-  hidden flag, a depth) goes back as before.
+  hidden flag, a depth) goes back as before. A pop that follows the swipe back also stops the time of the transition's
+  container (`startPausedOn:done:`), and the container gets its time back before the clients restore.
 - An `ANNCommandAnswer` that goes away unanswered rejects (`notAnswered:`), but only once nothing holds it: a record,
   list or queue that keeps an answer still answers it on every exit, or the promise waits as long as the record lives.
 - On iOS 26 UIKit draws a screen's large title, for a whole pop or swipe back, inside the scroll view the bar follows

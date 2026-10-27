@@ -163,7 +163,39 @@ Details rises 300 points as it fades in. Each property animates from a value to 
 
 <Os name="iOS" /> Once the move starts, the system draws it on its own, as it draws UIKit's animations: work on the main thread, such as a screen that mounts a long list, doesn't stop it.
 
-The same goes for `pop`, `showModal`, `dismissModal`, `setStackRoot` and `setRoot`. The swipe back is the exception: <Os name="iOS" /> it always follows the finger with the system's slide, so a custom `pop` plays for the back button and `pop()` only. <Os name="Android" /> A pop with an animation of its own shows no preview under the swipe: the screen pops when the swipe ends.
+The same goes for `pop`, `showModal`, `dismissModal`, `setStackRoot` and `setRoot`. The swipe back is the exception: <Os name="iOS" /> by default it follows the finger with the system's slide, so a custom `pop` plays for the back button and `pop()` only. <Os name="Android" /> A pop with an animation of its own shows no preview under the swipe: the screen pops when the swipe ends.
+
+### The swipe back with a pop of your own {#custom-swipe}
+
+<Os name="iOS" /> A screen that leaves with a move of its own, such as a card that shrinks away, looks wrong when the swipe back slides it out like any other screen. `interactive` on its pop plays its own move under the finger instead:
+
+```ts
+navigation.push('Details', {
+  options: {
+    animations: {
+      pop: {
+        interactive: true,
+        content: {
+          exit: {
+            scaleX: { from: 1, to: 0.8, duration: 400 },
+            scaleY: { from: 1, to: 0.8, duration: 400 },
+            alpha: { from: 1, to: 0, duration: 400 },
+          },
+        },
+      },
+    },
+  },
+});
+```
+
+The swipe from the edge now shrinks Details as far as the finger has gone across the screen. The user can stop halfway; letting go past half way, or a flick back, finishes the pop, and letting go before half way, or a flick the other way, grows the screen back. After a quick flick the rest plays faster, never slower. The elements and the shared elements of the pop move with it, so a [shared element](#views) flies home under the finger.
+
+- It applies only to a pop with an animation of its own, and `transition` presets get it through `options.animations.pop.interactive`.
+- The swipe moves the time of the animation, not a point: a move with an easing doesn't stay exactly under the finger.
+- On iOS 26 the swipe from the content stays off for a screen with a pop of its own; the swipe from the edge works.
+- While the finger is down, the system's animations inside the two screens, such as an activity indicator, hold still.
+
+<Os name="Android" /> It doesn't apply: a pop with an animation of its own plays when the back gesture ends.
 
 ### The top bar {#custom-bar}
 
@@ -178,10 +210,10 @@ The system's setting to reduce motion wins over a move of your own, with nothing
 | The move | Pick | What it costs |
 | --- | --- | --- |
 | Most moves | The platform's | Nothing: it follows the finger and the system. |
-| A move that means something else, such as a fading modal | A preset | The swipe back on iOS still slides. |
+| A move that means something else, such as a fading modal | A preset | The swipe back on iOS still slides, unless the pop is [`interactive`](#custom-swipe). |
 | A view that becomes the next screen | Shared elements, or the zoom on iOS 18+ | A `nativeID` on both views. The zoom shows on iOS 18+ only. |
 | A look at a screen before opening it | The preview | iOS only. |
-| A move no preset has | `options.animations` | Every property spelled out; the swipe back on iOS still slides. |
+| A move no preset has | `options.animations` | Every property spelled out; the swipe back on iOS still slides, unless the pop is [`interactive`](#custom-swipe). |
 
 ## Waiting for the content {#wait}
 
