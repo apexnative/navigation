@@ -1,5 +1,6 @@
 package dev.apexnative.navigation.viewcontrollers.modal
 
+import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Color
@@ -13,11 +14,13 @@ import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.view.ViewOutlineProvider
 import android.view.ViewTreeObserver
+import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
 import android.widget.ScrollView
 import androidx.activity.BackEventCompat
 import androidx.coordinatorlayout.widget.CoordinatorLayout
 import androidx.core.graphics.Insets
+import androidx.core.view.OneShotPreDrawListener
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.google.android.material.bottomsheet.BottomSheetBehavior
@@ -76,6 +79,10 @@ internal class ModalSheet(
     private var stopHeights: List<Int> = emptyList()
     // The part of the keyboard over the navigation bar, in pixels; 0 without the keyboard.
     private var keyboard = 0
+    // The stops' heights changed while the sheet moved (a drag, a slide): it takes them once it rests.
+    private var restopPending = false
+    // The slide of a sheet at rest from where it stood to where a new height put it (`glide`); none otherwise.
+    private var glider: ValueAnimator? = null
     private var selected: SheetDetent? = null
     private var topGap = 0
     private var dragged = false
@@ -224,6 +231,8 @@ internal class ModalSheet(
      * of [merge]; without one (the shown screen changed, the show) it stays where it is.
      */
     fun update(sheetOptions: SheetOptions, swipeToDismiss: Boolean, merge: SheetOptions?) {
+        // The stop it rests at, by the stops it has now: the new ones may give its state another detent.
+        val settled = detentOf(behavior.state)
         options = sheetOptions
         this.swipeToDismiss = swipeToDismiss
         detents = sheetOptions.detents?.takeIf { it.isNotEmpty() } ?: listOf(SheetDetent.Large)
@@ -231,23 +240,13 @@ internal class ModalSheet(
         behavior.dragAnywhere = sheetOptions.expandsOnScroll.get(true)
         container.invalidateOutline()
         followContent()
-        configure()
-        if (merge == null || closing != null || backFinishing) return
-        val settled = detentOf(behavior.state)
-        if (settled != null) behavior.isHideable = swipeToDismiss && settled == stops.first()
-        val target = SheetStops.target(settled, stops, merge.selectedDetent, sheetOptions.selectedDetent)
-        // A merge that moves the sheet or keeps it from going down ends a preview of back on it.
-        if (target != null || !behavior.isHideable) stopBackPreview()
-        if (target != null) {
-            selected = target
-            behavior.state = stateOf(target)
-        }
-        updateScrim()
+        restop(settled, merge?.selectedDetent)
     }
 
     /** Slides the sheet down; [onClosed] once it is out of sight. Not [animated], or with animations off, at once. */
     fun close(animated: Boolean, onClosed: () -> Unit) {
         closing = onClosed
+        stopGlide()
         if (isClosed || !animated || SystemAnimations.areOff(context)) {
             stopBackPreview()
             finishClosing()
@@ -264,6 +263,7 @@ internal class ModalSheet(
     fun remove() {
         // A slide down of back's release that ends after this tells nothing: the modal went already.
         behavior.removeBottomSheetCallback(sheetCallback)
+        stopGlide()
         stopBackPreview()
         stopBackFrames()
         container.viewTreeObserver.removeOnGlobalLayoutListener(scrollViews)
@@ -288,6 +288,7 @@ internal class ModalSheet(
 
     override fun startBackPreview(event: BackEventCompat): SheetBack.Gesture? {
         if (!hidesOnBack || backPreview != null) return null
+        stopGlide()
         val preview = BackPreview()
         backPreview = preview
         startBackFrames()
@@ -363,29 +364,86 @@ internal class ModalSheet(
     // The stops of the detents and how the Material behavior rests at them (`SheetStops.material`): at one or two it
     // fits the sheet to its highest stop, at three it stops half expanded between them. The detent the options select
     // stays the middle one when there are more.
-    private fun configure() {
+    // A new height of the sheet (`maxHeight`), of its collapsed state, or a change of the mode is laid out: the
+    // behavior measures the sheet and counts a fitted sheet's top in its layout. It says whether a layout comes.
+    private fun configure(): Boolean {
         appliedContentHeight = contentHeight()
         stops = SheetStops.stops(detents, ::heightOf, options.selectedDetent)
         stopHeights = SheetStops.lifted(stops.map(::heightOf), keyboard, fullHeight())
         val material = SheetStops.material(stopHeights, parentHeight())
+        val relayout = behavior.maxHeight != material.maxHeight || behavior.peekHeight != material.peekHeight ||
+            behavior.isFitToContents != material.fitToContents
         behavior.isFitToContents = material.fitToContents
         material.halfExpandedRatio?.takeIf { it > 0f && it < 1f }?.let { behavior.halfExpandedRatio = it }
         behavior.expandedOffset = material.expandedOffset
         behavior.maxHeight = material.maxHeight
         behavior.skipCollapsed = material.skipCollapsed
         behavior.peekHeight = material.peekHeight
+        if (relayout) container.requestLayout()
+        return relayout
     }
 
-    // The heights of the stops changed (the layout, the content, the keyboard): the behavior takes them, and a sheet at rest goes to where its stop stands now
-    // (the one it rests at, else the selected one, else the lowest, when its stop is gone).
-    private fun restop() {
+    /**
+     * The stops or their heights changed (the options, the layout, the content, the keyboard): the behavior takes them,
+     * and a sheet at rest goes to [arrived] (a `selectedDetent` a merge names) when it is a stop, else stays at the
+     * stop it rested at ([settled], by the stops before the change) where it stands now, else goes to the selected one
+     * or the lowest (`SheetStops.target`). A sheet on the move takes them once it rests.
+     */
+    private fun restop(settled: SheetDetent? = detentOf(behavior.state), arrived: SheetDetent? = null) {
         if (container.parent == null) return
-        val settled = detentOf(behavior.state)
-        configure()
-        if (settled == null || closing != null || backFinishing || backPreview != null) return
-        val target = settled.takeIf { it in stops } ?: selected?.takeIf { it in stops } ?: stops.first()
+        val top = container.top
+        val relayout = configure()
+        updateScrim()
+        if (closing != null || backFinishing) return
+        val state = behavior.state
+        if (state == BottomSheetBehavior.STATE_DRAGGING || state == BottomSheetBehavior.STATE_SETTLING) {
+            restopPending = true
+            return
+        }
+        if (settled == null) return
+        val target = SheetStops.target(settled, stops, arrived, options.selectedDetent) ?: settled
         behavior.isHideable = swipeToDismiss && target == stops.first()
-        behavior.state = stateOf(target)
+        // A move, or a sheet that can no longer go down, ends a preview of back on it.
+        if (target != settled || !behavior.isHideable) stopBackPreview()
+        if (backPreview != null) return
+        if (target != settled) selected = target
+        if (!relayout) {
+            behavior.state = stateOf(target)
+            return
+        }
+        // The new height comes with the layout, where the behavior puts a sheet at rest at its state's offset at once:
+        // it glides there from where it stood.
+        OneShotPreDrawListener.add(container) {
+            if (closing != null || container.parent == null || backPreview != null) return@add
+            val stays = behavior.state == stateOf(target)
+            behavior.state = stateOf(target)
+            if (stays) glide(top)
+        }
+    }
+
+    // The sheet slides from [from] (its old top) to where it is laid out now, by its translation; at once with the
+    // system's animations off. A drag or back's preview stops it ([stopGlide]).
+    private fun glide(from: Int) {
+        stopGlide()
+        val distance = (from - container.top).toFloat()
+        if (distance == 0f || SystemAnimations.areOff(context)) return
+        container.translationY = distance
+        glider = ValueAnimator.ofFloat(distance, 0f).apply {
+            duration = GLIDE_DURATION
+            interpolator = DecelerateInterpolator()
+            addUpdateListener {
+                container.translationY = it.animatedValue as Float
+                updateScrim()
+            }
+            start()
+        }
+    }
+
+    private fun stopGlide() {
+        val animator = glider ?: return
+        glider = null
+        animator.cancel()
+        container.translationY = 0f
     }
 
     private fun stateOf(detent: SheetDetent): Int = when (detent) {
@@ -474,7 +532,10 @@ internal class ModalSheet(
 
     private fun onState(state: Int) {
         when (state) {
-            BottomSheetBehavior.STATE_DRAGGING -> dragged = true
+            BottomSheetBehavior.STATE_DRAGGING -> {
+                dragged = true
+                stopGlide()
+            }
             BottomSheetBehavior.STATE_HIDDEN -> {
                 backFinishing = false
                 when {
@@ -500,6 +561,10 @@ internal class ModalSheet(
                     events.onDetentChanged(detent)
                 }
                 dragged = false
+                if (restopPending) {
+                    restopPending = false
+                    container.post { restop() }
+                }
             }
         }
         updateScrim()
@@ -526,7 +591,7 @@ internal class ModalSheet(
     // The top of the sheet as drawn: its offset, and while back's preview moves it, its slide and its scale toward
     // the bottom (the behavior's pivot).
     private fun sheetTop(): Int {
-        if (backFramesObserver == null) return container.top
+        if (backFramesObserver == null) return (container.top + container.translationY).roundToInt()
         val scaled = container.pivotY * (1f - container.scaleY)
         return (container.top + container.translationY + scaled).roundToInt()
     }
@@ -600,6 +665,8 @@ internal class ModalSheet(
         private const val SCRIM_ALPHA = 0.32f
         private const val GRAB_AREA_DP = 48
         private const val ATTEMPT_DISTANCE_DP = 48
+
+        private const val GLIDE_DURATION = 250L
 
         // The key of the sheet's handler of its content's mounts.
         private const val CONTENT_KEY = "sheet.content"

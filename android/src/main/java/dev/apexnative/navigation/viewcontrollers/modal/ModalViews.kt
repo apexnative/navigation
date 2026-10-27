@@ -20,7 +20,6 @@ import dev.apexnative.navigation.utils.TestIds
 import dev.apexnative.navigation.utils.dp
 import dev.apexnative.navigation.viewcontrollers.component.ComponentViewController
 import dev.apexnative.navigation.viewcontrollers.parent.ParentController
-import dev.apexnative.navigation.viewcontrollers.viewcontroller.IReactView
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.ViewController
 import dev.apexnative.navigation.views.animations.AnimationLayer
 import dev.apexnative.navigation.views.animations.AnimationRules
@@ -134,7 +133,7 @@ internal class ModalViews(
         val container = parts.container
         val view = record.root.view
         container.removeView(view)
-        val sheet = ModalSheet(container, view, events) { shownContent(record.root) }
+        val sheet = ModalSheet(container, view, events) { (shownScreen(record.root) as? ComponentViewController)?.content }
         parts.sheet = sheet
         container.alpha = 1f
         applyTestIds(record, parts, options)
@@ -150,11 +149,11 @@ internal class ModalViews(
         return { told = true }
     }
 
-    // The content of the screen a layout shows now: down through the child each parent shows.
-    private fun shownContent(root: ViewController<*>): IReactView? {
+    // The screen a layout shows now: down through the child each parent shows.
+    private fun shownScreen(root: ViewController<*>): ViewController<*>? {
         var node = root
         while (node is ParentController<*>) node = node.currentChild ?: return null
-        return (node as? ComponentViewController)?.content
+        return node
     }
 
     override fun dismiss(
