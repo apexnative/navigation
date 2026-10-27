@@ -230,7 +230,7 @@ The sheet is <Os name="iOS" /> UIKit's sheet, and on <Os name="Android" /> the M
 | How many stops | Every detent of the list. | Three at most: the lowest, the highest, and one between them (`selectedDetent` when it stands there, else the lowest of the others). |
 | `'content'` | The height of the content. iOS 16+: iOS 15 leaves it out. | The height of the content. |
 | The screen under it | Shrinks back a little at full height, as UIKit does. | Stays in place. |
-| The keyboard | The sheet rises and stands on it. | The sheet rises and stands on it at every stop. |
+| The keyboard | The sheet rises and stands on it. | The sheet rises and stands on it at every stop, unless the screen in it has `layout.adjustResize: false`. |
 
 ## The whole code {#files}
 

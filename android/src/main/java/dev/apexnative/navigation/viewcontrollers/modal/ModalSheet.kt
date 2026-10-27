@@ -42,9 +42,10 @@ import kotlin.math.roundToInt
  * three of them at most, the Material behavior's resting states ([SheetStops]). The content is measured without a
  * height limit, as on iOS ([IReactView.contentSize]), again after each of its mounts, and the stops follow it. In a
  * window wider than [MAX_WIDTH_DP] it stands in the middle at that width. While the keyboard shows, the sheet stands
- * on it at every stop, as on iOS. A drag down past the smallest one closes it, unless `swipeToDismiss` is false: then
- * the sheet stays, and the try is told. The screen under it stays in place. On Android 14+ the back gesture previews
- * its hide ([SheetBack]): the Material behavior shrinks it with the progress and slides it down at the release.
+ * on it at every stop, as on iOS, unless its screen keeps its size for it. A drag down past the smallest one closes
+ * it, unless `swipeToDismiss` is false: then the sheet stays, and the try is told. The screen under it stays in place.
+ * On Android 14+ the back gesture previews its hide ([SheetBack]): the Material behavior shrinks it with the progress
+ * and slides it down at the release.
  */
 internal class ModalSheet(
     private val layout: CoordinatorLayout,
@@ -52,6 +53,8 @@ internal class ModalSheet(
     private val events: Events,
     /** The content of the screen the modal shows now, which the `content` detent measures; none without one. */
     private val shownContent: () -> IReactView?,
+    /** The screen the modal shows now moves its content out of the keyboard's way (`layout.adjustResize`). */
+    private val adjustsForKeyboard: () -> Boolean,
 ) : SheetBack {
     interface Events {
         /** The user dragged the sheet to another detent. */
@@ -147,7 +150,8 @@ internal class ModalSheet(
         })
         scrim.setOnTouchListener { _, event -> taps.onTouchEvent(event) }
         // The keyboard covers the bottom of the window: the sheet stands on it, by the keyboard's part over the
-        // navigation bar (the detents count that bar already). The scrim, under the sheet, hears the window's insets.
+        // navigation bar (the detents count that bar already), unless the screen in it keeps its size for the keyboard
+        // (`layout.adjustResize: false`). The scrim, under the sheet, hears the window's insets.
         ViewCompat.setOnApplyWindowInsetsListener(scrim) { _, insets ->
             val ime = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
             val bar = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
@@ -369,7 +373,8 @@ internal class ModalSheet(
     private fun configure(): Boolean {
         appliedContentHeight = contentHeight()
         stops = SheetStops.stops(detents, ::heightOf, options.selectedDetent)
-        stopHeights = SheetStops.lifted(stops.map(::heightOf), keyboard, fullHeight())
+        val lift = if (adjustsForKeyboard()) keyboard else 0
+        stopHeights = SheetStops.lifted(stops.map(::heightOf), lift, fullHeight())
         val material = SheetStops.material(stopHeights, parentHeight())
         val relayout = behavior.maxHeight != material.maxHeight || behavior.peekHeight != material.peekHeight ||
             behavior.isFitToContents != material.fitToContents

@@ -14,6 +14,7 @@ import android.widget.FrameLayout
 import androidx.coordinatorlayout.widget.CoordinatorLayout
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import dev.apexnative.navigation.options.DefaultOptions
 import dev.apexnative.navigation.options.ModalAnimationOptions
 import dev.apexnative.navigation.options.Options
 import dev.apexnative.navigation.utils.TestIds
@@ -133,7 +134,16 @@ internal class ModalViews(
         val container = parts.container
         val view = record.root.view
         container.removeView(view)
-        val sheet = ModalSheet(container, view, events) { (shownScreen(record.root) as? ComponentViewController)?.content }
+        val sheet = ModalSheet(
+            container,
+            view,
+            events,
+            shownContent = { (shownScreen(record.root) as? ComponentViewController)?.content },
+            adjustsForKeyboard = {
+                val screen = shownScreen(record.root)
+                screen == null || !screen.resolveCurrentOptions(DefaultOptions.current).layout.adjustResize.isFalse
+            },
+        )
         parts.sheet = sheet
         container.alpha = 1f
         applyTestIds(record, parts, options)
