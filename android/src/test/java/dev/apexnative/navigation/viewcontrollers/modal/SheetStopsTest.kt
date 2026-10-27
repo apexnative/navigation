@@ -87,6 +87,14 @@ class SheetStopsTest {
     }
 
     @Test
+    fun theKeyboardLiftsEveryStopAndKeepsThemApartUnderTheTop() {
+        assertEquals(listOf(300, 1000, 1900), SheetStops.lifted(listOf(300, 1000, 1900), 0, 1900))
+        assertEquals(listOf(1100, 1800, 1900), SheetStops.lifted(listOf(300, 1000, 1900), 800, 1900))
+        // Lifted past the top, the stops stand a pixel apart: the behavior keeps its three states.
+        assertEquals(listOf(1898, 1899, 1900), SheetStops.lifted(listOf(300, 1000, 1900), 1700, 1900))
+    }
+
+    @Test
     fun aMergeWithoutSelectedDetentLeavesTheStopTheUserDraggedTo() {
         // Opened at medium, dragged to large: the resolved `selectedDetent` is still medium.
         assertNull(SheetStops.target(settled = Large, detents = stops, arrived = null, selected = Medium))

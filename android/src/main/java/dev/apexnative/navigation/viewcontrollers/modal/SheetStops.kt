@@ -58,6 +58,14 @@ internal object SheetStops {
     }
 
     /**
+     * The heights of stops [heights] tall (from the lowest, each higher) lifted by [lift] pixels, the part of the
+     * keyboard over the navigation bar: the sheet stands on the keyboard as it stood on the bottom. At most [full]
+     * each, and each still higher than the one below, so the behavior keeps all of its states.
+     */
+    fun lifted(heights: List<Int>, lift: Int, full: Int): List<Int> =
+        heights.mapIndexed { i, height -> (height + lift).coerceAtMost(full - (heights.lastIndex - i)) }
+
+    /**
      * The stop to move to, or null to stay: [arrived] (the `selectedDetent` the merge names) when it is among
      * [detents]; else, when [settled] (the stop the sheet rests at) is no longer one of them, [selected] (the resolved
      * `selectedDetent`) when it is, or the lowest.

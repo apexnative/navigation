@@ -37,9 +37,10 @@ import kotlin.math.roundToInt
  * at that height in dp, `content` at the height of the shown screen's content — and the user drags it between them; at
  * three of them at most, the Material behavior's resting states ([SheetStops]). The content is measured without a
  * height limit, as on iOS ([IReactView.contentSize]), again after each of its mounts, and the stops follow it. In a
- * window wider than [MAX_WIDTH_DP] it stands in the middle at that width. A drag down past the smallest one closes it, unless `swipeToDismiss` is false: then the sheet
- * stays, and the try is told. The screen under it stays in place. On Android 14+ the back gesture previews its hide
- * ([SheetBack]): the Material behavior shrinks it with the progress and slides it down at the release.
+ * window wider than [MAX_WIDTH_DP] it stands in the middle at that width. While the keyboard shows, the sheet stands
+ * on it at every stop, as on iOS. A drag down past the smallest one closes it, unless `swipeToDismiss` is false: then
+ * the sheet stays, and the try is told. The screen under it stays in place. On Android 14+ the back gesture previews
+ * its hide ([SheetBack]): the Material behavior shrinks it with the progress and slides it down at the release.
  */
 internal class ModalSheet(
     private val layout: CoordinatorLayout,
@@ -70,6 +71,10 @@ internal class ModalSheet(
     private var detents: List<SheetDetent> = listOf(SheetDetent.Large)
     // The detents the sheet rests at, from the lowest (`SheetStops.stops`): the behavior's states.
     private var stops: List<SheetDetent> = listOf(SheetDetent.Large)
+    // The heights the behavior has for the stops, in pixels: lifted by the keyboard (`SheetStops.lifted`).
+    private var stopHeights: List<Int> = emptyList()
+    // The part of the keyboard over the navigation bar, in pixels; 0 without the keyboard.
+    private var keyboard = 0
     private var selected: SheetDetent? = null
     private var topGap = 0
     private var dragged = false
@@ -133,6 +138,18 @@ internal class ModalSheet(
             }
         })
         scrim.setOnTouchListener { _, event -> taps.onTouchEvent(event) }
+        // The keyboard covers the bottom of the window: the sheet stands on it, by the keyboard's part over the
+        // navigation bar (the detents count that bar already). The scrim, under the sheet, hears the window's insets.
+        ViewCompat.setOnApplyWindowInsetsListener(scrim) { _, insets ->
+            val ime = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
+            val bar = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
+            val lift = (ime - bar).coerceAtLeast(0)
+            if (lift != keyboard) {
+                keyboard = lift
+                restop()
+            }
+            insets
+        }
         // The sheet keeps a touch that lands on it and no view in it takes (its bar, an empty part), as Material's
         // BottomSheetDialog does: else the touch falls to the scrim under it, and a tap there closes a dimmed sheet;
         // past an undimmed scrim it reaches the behavior, which takes the sheet into its drag state at the touch's
@@ -331,7 +348,8 @@ internal class ModalSheet(
     private fun configure() {
         appliedContentHeight = contentHeight()
         stops = SheetStops.stops(detents, ::heightOf, options.selectedDetent)
-        val material = SheetStops.material(stops.map(::heightOf), parentHeight())
+        stopHeights = SheetStops.lifted(stops.map(::heightOf), keyboard, fullHeight())
+        val material = SheetStops.material(stopHeights, parentHeight())
         behavior.isFitToContents = material.fitToContents
         material.halfExpandedRatio?.takeIf { it > 0f && it < 1f }?.let { behavior.halfExpandedRatio = it }
         behavior.expandedOffset = material.expandedOffset
@@ -340,7 +358,7 @@ internal class ModalSheet(
         behavior.peekHeight = material.peekHeight
     }
 
-    // The heights of the stops changed: the behavior takes them, and a sheet at rest goes to where its stop stands now
+    // The heights of the stops changed (the layout, the content, the keyboard): the behavior takes them, and a sheet at rest goes to where its stop stands now
     // (the one it rests at, else the selected one, else the lowest, when its stop is gone).
     private fun restop() {
         if (container.parent == null) return
@@ -367,9 +385,12 @@ internal class ModalSheet(
 
     private fun parentHeight(): Int = if (layout.height > 0) layout.height else layout.rootView.height
 
+    // The tallest a sheet is: the layout under the status bar.
+    private fun fullHeight(): Int = parentHeight() - topGap
+
     /** The height of the sheet at the detent, in px. */
     private fun heightOf(detent: SheetDetent): Int {
-        val full = parentHeight() - topGap
+        val full = fullHeight()
         return when (detent) {
             SheetDetent.Large -> full
             SheetDetent.Medium -> (full + topGap) / 2
@@ -478,9 +499,9 @@ internal class ModalSheet(
         // Hidden at the end of back's slide, it still stands at its detent until the next layout.
         if (behavior.state == BottomSheetBehavior.STATE_HIDDEN) return setDim(0f)
         val height = layout.height - sheetTop()
-        val undimmed = options.largestUndimmedDetent?.takeIf { it in stops }
-        val from = undimmed?.let { heightOf(it) } ?: 0
-        val to = stops.firstOrNull { heightOf(it) > from }?.let { heightOf(it) } ?: return run { setDim(0f) }
+        val undimmed = stops.indexOf(options.largestUndimmedDetent).takeIf { it >= 0 }
+        val from = undimmed?.let { stopHeights.getOrNull(it) } ?: 0
+        val to = stopHeights.firstOrNull { it > from } ?: return run { setDim(0f) }
         setDim(((height - from).toFloat() / (to - from)).coerceIn(0f, 1f))
     }
 
