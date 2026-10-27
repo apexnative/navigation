@@ -21,6 +21,7 @@ import dev.apexnative.navigation.viewcontrollers.stack.StackDisplay.Custom
 import dev.apexnative.navigation.viewcontrollers.stack.StackDisplay.Elements
 import dev.apexnative.navigation.viewcontrollers.stack.StackDisplay.Fade
 import dev.apexnative.navigation.viewcontrollers.stack.StackDisplay.Motion
+import dev.apexnative.navigation.viewcontrollers.stack.fab.FabMotion
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.ViewController
 import dev.apexnative.navigation.views.animations.AnimationRules
 import java.util.WeakHashMap
@@ -102,6 +103,12 @@ internal class StackQueue(
          * `bottomTabs` with [TabBarMotion.Move.Slide].
          */
         fun tabBarTransition(move: TabBarMotion.Move, side: BottomTabsEnterExitAnimationOptions?) = Unit
+
+        /**
+         * The current child is about to change, right after [barTransition]: [move] is how the FAB goes, the new top's
+         * arriving with its screen and the old one's leaving with its own from the start of the transition.
+         */
+        fun fabTransition(move: FabMotion.Move) = Unit
 
         /** [node] was accepted to show as the top (a push, the new top of a replace). */
         fun willShow(node: Node) = Unit
@@ -546,6 +553,7 @@ internal class StackQueue(
         val ended = takeOver(listOfNotNull(covered, node), op)
         host.tabBarTransition(TabBarMotion.Move.AtOnce, null)
         host.barTransition(null, BarVisibility.AT_ONCE)
+        host.fabTransition(FabMotion.Move.AtOnce)
         host.currentChildChanged()
         finishTakenOver(ended)
         if (display.hasView && covered != null) display.detach(covered)
@@ -785,6 +793,7 @@ internal class StackQueue(
             val ended = takeOver(old + top, op)
             host.tabBarTransition(TabBarMotion.Move.AtOnce, null)
             host.barTransition(null, BarVisibility.AT_ONCE)
+            host.fabTransition(FabMotion.Move.AtOnce)
             host.currentChildChanged()
             finishTakenOver(ended)
             op.done = true
@@ -1124,6 +1133,7 @@ internal class StackQueue(
         reject(op, text)
         host.tabBarTransition(TabBarMotion.Move.AtOnce, null)
         host.barTransition(null, BarVisibility.AT_ONCE)
+        host.fabTransition(FabMotion.Move.AtOnce)
         host.currentChildChanged()
         settled()
         drain()
@@ -1174,7 +1184,7 @@ internal class StackQueue(
     // The bars with a change of the current child. The row goes with the default transition; with an animation of its
     // own the top bar goes with the screens ([travel]). The tab bar rides with the system's [system] move, slides with an
     // animation of its own or a side of its own, and is where the new top wants it at once without animation; with
-    // elements every bar changes at once.
+    // elements every bar changes at once. The FAB goes with its screen, by Material's swap with an animation of its own.
     private fun tellBars(
         animated: Boolean,
         own: Boolean,
@@ -1183,7 +1193,8 @@ internal class StackQueue(
         system: TabBarMotion.Move,
         row: BarMotion,
         travel: BarTravel,
-        // The top bar shows the new top already (a back gesture's preview): it changes at once, the tab bar still moves.
+        // The top bar and the FAB show the new top already (a back gesture's preview): they change at once, the tab bar
+        // still moves.
         barAtOnce: Boolean = false,
     ) {
         val tabs = animation.bottomTabs
@@ -1200,6 +1211,7 @@ internal class StackQueue(
             barVisibility(barMoves && !elements, animation.topBar),
             travel.takeIf { barMoves && own && !elements },
         )
+        host.fabTransition(FabMotion.moveOf(animated, own, row, shown = barAtOnce))
     }
 
     private fun barVisibility(animated: Boolean, side: TopBarEnterExitAnimationOptions): BarVisibility =

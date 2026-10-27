@@ -120,6 +120,19 @@ class FabMenu(context: Context, val fabId: String) : LinearLayout(context), FabA
         (view.parent as? ViewGroup)?.removeView(view)
     }
 
+    /**
+     * The menu closes and leaves its parent next: a scrim that shows fades out by itself and goes from the parent at
+     * the end of its fade, which the menu no longer owns; it takes no touches meanwhile, which belong to the new screen.
+     */
+    fun closeToLeave() {
+        close()
+        scrim?.apply {
+            setOnClickListener(null)
+            isClickable = false
+        }
+        scrim = null
+    }
+
     override fun show() = main.show()
 
     override fun hide() {

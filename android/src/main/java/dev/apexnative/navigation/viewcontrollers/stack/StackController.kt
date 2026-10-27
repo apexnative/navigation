@@ -31,6 +31,7 @@ import dev.apexnative.navigation.viewcontrollers.parent.OptionsScreen
 import dev.apexnative.navigation.viewcontrollers.parent.ParentController
 import dev.apexnative.navigation.viewcontrollers.parent.ReturnsScreenFromColumn
 import dev.apexnative.navigation.viewcontrollers.parent.nodeWith
+import dev.apexnative.navigation.viewcontrollers.stack.fab.FabMotion
 import dev.apexnative.navigation.viewcontrollers.stack.fab.FabPresenter
 import dev.apexnative.navigation.viewcontrollers.stack.topbar.LargeTitleCollapse
 import dev.apexnative.navigation.viewcontrollers.stack.topbar.TopBarPresenter
@@ -670,12 +671,12 @@ class StackController(
         topBar.apply(queue.currentChild)
     }
 
-    // The FAB follows the top at the end of a transition.
-    private fun showFab() {
+    // The FAB follows [top] (the current child) from the start of a transition by [move], with the screens; at rest, a
+    // FAB that comes by Material's swap.
+    private fun showFab(move: FabMotion.Move = FabMotion.Move.Swap, top: ViewController<*>? = queue.currentChild) {
         val layout = peekView() ?: return
-        val top = queue.currentChild
         val screen = top?.let(::optionsScreen)
-        fab.showFor(layout, screen, top?.let(::resolvedOf)?.fab ?: FabOptions(), scrollOf(screen))
+        fab.showFor(layout, screen, top?.let(::resolvedOf)?.fab ?: FabOptions(), scrollOf(screen), move)
     }
 
     private fun mergeFab() {
@@ -726,6 +727,9 @@ class StackController(
         override fun tabBarTransition(move: TabBarMotion.Move, side: BottomTabsEnterExitAnimationOptions?) {
             parentController?.tabBarTransition(this@StackController, move, side)
         }
+
+        // The FAB of the new top arrives with its screen, the old one leaves with its own.
+        override fun fabTransition(move: FabMotion.Move) = showFab(move)
 
         override fun operationEnded(topSettled: Boolean) {
             BackCallbackState.update()
