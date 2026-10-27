@@ -1,6 +1,7 @@
 package dev.apexnative.navigation.views.element.animators
 
 import android.view.View
+import android.widget.ImageView
 import com.facebook.react.views.text.ReactTextView
 import dev.apexnative.navigation.options.SharedElementTransitionOptions
 import dev.apexnative.navigation.views.animations.AnimationRules
@@ -10,10 +11,10 @@ import dev.apexnative.navigation.views.element.pairName
 
 /**
  * The flight of a shared pair, as on iOS: a copy drawn in the transition's layer, chosen by the kinds of the two views,
- * by explicit classes, never by reflection — texts ([TextMorph]), any other views ([ViewMorph]). The views themselves
- * are neither moved nor changed. The animator gets the pair's duration (else the fallback, the screen's fade), its
- * delay and its curve here, each of its own (a spring in real time); an `AnimatorSet` around it never sets them. Main
- * thread only.
+ * by explicit classes, never by reflection — texts ([TextMorph]), images ([ImageMorph]; one without an image to fit
+ * flies as a view), any other views ([ViewMorph]). The views themselves are neither moved nor changed. The animator
+ * gets the pair's duration (else the fallback, the screen's fade), its delay and its curve here, each of its own (a
+ * spring in real time); an `AnimatorSet` around it never sets them. Main thread only.
  */
 internal object SharedAnimatorFactory {
     /** A pair's animator and the copy it moves. */
@@ -41,7 +42,8 @@ internal object SharedAnimatorFactory {
             if (!text.changes) return null
             text
         } else {
-            ViewMorph.of(from, to, layer) ?: return noPicture(name, log)
+            val image = if (from is ImageView && to is ImageView) ImageMorph.of(from, to, layer) else null
+            image ?: ViewMorph.of(from, to, layer) ?: return noPicture(name, log)
         }
         val animator = MoveAnimator().apply {
             element = name

@@ -301,9 +301,10 @@ export interface ElementTransition {
  * in them meanwhile shows when they are back. Text keeps its proportions and changes its picture within a quarter of
  * the flight. A view turned or scaled by its own `transform` or by a parent's flies from where it shows, and its angle
  * goes to the other view's along the shorter arc. The angle is the one React Native draws, from −180° to 180°:
- * `rotate: '270deg'` turns back a quarter, and no pair spins a full turn. (Android) A picture that doesn't load within
- * a second drops out of the transition. A skew and a tilt (`skewX`, `rotateX`, …) don't fly: the view flies without
- * them and has them again at the end.
+ * `rotate: '270deg'` turns back a quarter, and no pair spins a full turn. (Android) An image flies as its own image,
+ * from the part and place its fit (`resizeMode`) shows in one view to those in the other, and an animated image plays
+ * on; an image that doesn't load within a second drops out of the transition. A skew and a tilt (`skewX`, `rotateX`,
+ * …) don't fly: the view flies without them and has them again at the end.
  */
 export interface SharedElementTransition {
   /** The `nativeID` of the view on the screen that goes. */
