@@ -262,8 +262,8 @@ export type ElementAnimation = AppearingElementAnimation | DisappearingElementAn
  * element's value, and a missing end is that value (a turn read from −180° to 180°, as React Native draws it). `x`
  * and `y` are the position in the parent of the element on both platforms. As on a side of a screen, don't set `x`
  * with `translationX` or `y` with `translationY` on one element: the translation plays and the position doesn't.
- * (Android) A view whose parent is a React view with `removeClippedSubviews` turned on, such as a child of a clipping
- * list, is not moved: it counts as not found.
+ * The element plays where it is, in its screen: it moves with its screen, its parents clip it, and the views drawn
+ * after it in its screen stay over it.
  */
 export interface ElementTransition {
   /** The `nativeID` of the view to animate. */
