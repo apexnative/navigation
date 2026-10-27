@@ -54,12 +54,32 @@ FOUNDATION_EXPORT NSString *ANNAnimationKey(NSString *keyPath);
 /// start values). `done` comes later, never inside this call.
 - (void)startWithDone:(dispatch_block_t)done;
 
-/// The transition stops (a destroy, a reload, a newer `setRoot`): `done` never runs. The caller restores the clients,
-/// which removes their animations.
+/// The start of a transition that follows a gesture: the clients add their animations as `startWithDone:` does, under
+/// the time of `clock` (the transition's container), which stops. `setProgress:` shows them at a part of the length;
+/// `finishWithSpeed:` plays the rest and `rewindWithSpeed:` plays them back to the start, both in Core Animation. The
+/// other animations under `clock` stop with it. Before `done`, which comes once after either of them (never inside a
+/// call) with whether the transition finished, `clock` gets its time back; the caller restores the clients inside
+/// `done` (one commit with it), or they would show at the clock's time for a frame.
+- (void)startPausedOn:(CALayer *)clock done:(void (^)(BOOL finished))done;
+
+/// The animations show at `progress` (0 to 1) of the length. Nothing once the end plays.
+- (void)setProgress:(CGFloat)progress;
+
+/// The rest of the animations plays from where they show, `speed` times as fast as they would (1 or more).
+- (void)finishWithSpeed:(CGFloat)speed;
+
+/// The animations play back to their start, `speed` times as fast as they would (1 or more).
+- (void)rewindWithSpeed:(CGFloat)speed;
+
+/// The transition stops (a destroy, a reload, a newer `setRoot`): `done` never runs, and a stopped `clock` gets its
+/// time back. The caller restores the clients, which removes their animations, in the same commit.
 - (void)cancel;
 
 /// The animations run.
 @property(nonatomic, readonly) BOOL isRunning;
+
+/// The seconds from the start to the end of the last client, the transition's own length at least.
+@property(nonatomic, readonly) NSTimeInterval length;
 
 @end
 

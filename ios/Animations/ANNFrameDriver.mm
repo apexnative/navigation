@@ -71,6 +71,15 @@ NSString *ANNAnimationKey(NSString *keyPath) {
     CFTimeInterval _start;
     // The driver keeps itself while its animations run: the transition that started it needn't.
     ANNFrameDriver *_keep;
+    // A transition that follows a gesture: the layer whose time stops, its timing before, the clock's time the
+    // animations started at, the `done` that tells how it ended, and whether its end plays.
+    CALayer *_clock;
+    float _clockSpeed;
+    CFTimeInterval _clockBegin;
+    CFTimeInterval _clockOffset;
+    CFTimeInterval _base;
+    void (^_pausedDone)(BOOL finished);
+    BOOL _ending;
 }
 
 - (instancetype)initWithClients:(NSArray<id<ANNFrameClient>> *)clients
@@ -90,13 +99,17 @@ NSString *ANNAnimationKey(NSString *keyPath) {
     return _running;
 }
 
+- (NSTimeInterval)length {
+    return _length;
+}
+
 - (void)startWithDone:(dispatch_block_t)done {
     ANNAssertMainQueue();
 #if DEBUG
     ANNCurveSelfCheck();
     ANNTransformPartsSelfCheck();
 #endif
-    if (_running || _done) {
+    if (_running || _done || _pausedDone) {
         return;
     }
     _done = [done copy];
@@ -153,7 +166,117 @@ NSString *ANNAnimationKey(NSString *keyPath) {
     }
     _running = NO;
     _done = nil;
+    _pausedDone = nil;
     _keep = nil;
+    [self releaseClock];
+}
+
+#pragma mark - Following a gesture
+
+- (void)startPausedOn:(CALayer *)clock done:(void (^)(BOOL finished))done {
+    ANNAssertMainQueue();
+    if (_running || _done || _pausedDone) {
+        return;
+    }
+    _pausedDone = [done copy];
+    _running = YES;
+    _keep = self;
+    _clock = clock;
+    _clockSpeed = clock.speed;
+    _clockBegin = clock.beginTime;
+    _clockOffset = clock.timeOffset;
+    // The clock stops at its time now: what else animates under it holds still, and the animations added now start
+    // there (Core Animation gives an animation without a begin time the layer's time at the commit).
+    _base = [clock convertTime:CACurrentMediaTime() fromLayer:nil];
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    clock.speed = 0;
+    clock.beginTime = 0;
+    clock.timeOffset = _base;
+    @try {
+        for (id<ANNFrameClient> client in _clients) {
+            [client addAnimationsWithLength:_length];
+        }
+    } @finally {
+        [CATransaction commit];
+    }
+}
+
+- (void)setProgress:(CGFloat)progress {
+    ANNAssertMainQueue();
+    if (!_running || !_pausedDone || _ending) {
+        return;
+    }
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    _clock.timeOffset = _base + MIN(MAX(progress, 0.0), 1.0) * _length;
+    [CATransaction commit];
+}
+
+- (void)finishWithSpeed:(CGFloat)speed {
+    [self playOnForward:YES speed:speed];
+}
+
+- (void)rewindWithSpeed:(CGFloat)speed {
+    [self playOnForward:NO speed:speed];
+}
+
+// The clock runs again from where it shows, forward or back, and `done` comes once it reached the end or the start.
+- (void)playOnForward:(BOOL)forward speed:(CGFloat)speed {
+    ANNAssertMainQueue();
+    if (!_running || !_pausedDone || _ending) {
+        return;
+    }
+    _ending = YES;
+    speed = MAX(speed, 1.0);
+    CALayer *clock = _clock;
+    CFTimeInterval at = clock.timeOffset - _base;
+    CFTimeInterval left = forward ? _length - at : at;
+    CALayer *parent = clock.superlayer;
+    CFTimeInterval now = parent ? [parent convertTime:CACurrentMediaTime() fromLayer:nil]
+                                : CACurrentMediaTime();
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    // The clock's time is (parent's time - beginTime) * speed + timeOffset: it goes on from where it shows.
+    clock.beginTime = now;
+    clock.speed = (float)(forward ? speed : -speed);
+    [CATransaction commit];
+    __weak ANNFrameDriver *weakSelf = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(MAX(left / speed, 0) * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+                     [weakSelf pausedEndedForward:forward];
+                   });
+}
+
+- (void)pausedEndedForward:(BOOL)forward {
+    if (!_running || !_pausedDone) {
+        return;
+    }
+    _running = NO;
+    void (^done)(BOOL) = _pausedDone;
+    _pausedDone = nil;
+    _keep = nil;
+    // The clock's time back and the caller's restore in one commit: between two, the animations would show at the
+    // clock's own time for a frame (past their end, or part way).
+    [CATransaction begin];
+    [self releaseClock];
+    done(forward);
+    [CATransaction commit];
+}
+
+// The clock gets back the timing it had before the gesture.
+- (void)releaseClock {
+    CALayer *clock = _clock;
+    _clock = nil;
+    if (!clock) {
+        return;
+    }
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    clock.speed = _clockSpeed;
+    clock.beginTime = _clockBegin;
+    clock.timeOffset = _clockOffset;
+    [CATransaction commit];
 }
 
 @end

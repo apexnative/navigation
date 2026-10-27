@@ -3,6 +3,7 @@
 #import "ANNOptions.h"
 #import "ANNSetStackRootAnimationOptions.h"
 #import "ANNStackAnimationOptions.h"
+#import "ANNStackPopAnimationOptions.h"
 #import "ANNStackPushAnimationOptions.h"
 
 NS_ASSUME_NONNULL_BEGIN
@@ -11,7 +12,7 @@ NS_ASSUME_NONNULL_BEGIN
 @interface ANNAnimationOptions : ANNOptions
 
 @property(nonatomic, strong) ANNStackPushAnimationOptions *push;
-@property(nonatomic, strong) ANNStackAnimationOptions *pop;
+@property(nonatomic, strong) ANNStackPopAnimationOptions *pop;
 @property(nonatomic, strong) ANNSetStackRootAnimationOptions *setStackRoot;
 @property(nonatomic, strong) ANNEnterExitScreenAnimationOptions *setRoot;
 @property(nonatomic, strong) ANNModalAnimationOptions *showModal;

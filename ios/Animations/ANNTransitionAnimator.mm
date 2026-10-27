@@ -33,6 +33,9 @@ static void ANNUpdateRootLayoutOf(UIViewController *node) {
     NSArray<id<ANNFrameClient>> *_clients;
     BOOL _began;
     BOOL _completed;
+    // The transition follows a gesture (`animateFollowingGesture:`), and its end was chosen.
+    BOOL _followsGesture;
+    BOOL _endChosen;
     // The container's views of the transition that got a depth for it, and the depth each had.
     NSArray<UIView *> *_depthViews;
     NSArray<NSNumber *> *_depthsBefore;
@@ -116,6 +119,33 @@ static void ANNUpdateRootLayoutOf(UIViewController *node) {
         return;
     }
     [self begin];
+}
+
+- (void)animateFollowingGesture:(id<UIViewControllerContextTransitioning>)transitionContext {
+    _followsGesture = YES;
+    [self animateTransition:transitionContext];
+}
+
+- (void)setProgress:(CGFloat)progress {
+    [_driver setProgress:progress];
+}
+
+- (void)finishWithSpeed:(CGFloat)speed {
+    _endChosen = YES;
+    [_driver finishWithSpeed:speed];
+}
+
+- (void)rewindWithSpeed:(CGFloat)speed {
+    _endChosen = YES;
+    [_driver rewindWithSpeed:speed];
+}
+
+- (NSTimeInterval)length {
+    return _driver ? _driver.length : _plan.length;
+}
+
+- (BOOL)isCompleted {
+    return _completed || !_context;
 }
 
 - (void)animationEnded:(BOOL)transitionCompleted {
@@ -211,6 +241,13 @@ static void ANNUpdateRootLayoutOf(UIViewController *node) {
     }
     __weak ANNTransitionAnimator *weakSelf = self;
     _driver = [[ANNFrameDriver alloc] initWithClients:clients length:_plan.length];
+    if (_followsGesture) {
+        [_driver startPausedOn:container.layer
+                          done:^(BOOL finished) {
+                            [weakSelf complete];
+                          }];
+        return;
+    }
     [_driver startWithDone:^{
       [weakSelf complete];
     }];
@@ -289,8 +326,16 @@ static BOOL ANNSideTilts(ANNViewAnimationOptions *side) {
     }
     [_wait cancel];
     _wait = nil;
+    // An interactive transition ends at its end state too: UIKit completes only one whose end was chosen.
+    if (_followsGesture && !_endChosen) {
+        _endChosen = YES;
+        [_context finishInteractiveTransition];
+    }
+    // A stopped clock gets its time back in the commit that removes the animations.
+    [CATransaction begin];
     [_driver cancel];
     [self complete];
+    [CATransaction commit];
 }
 
 @end

@@ -6,8 +6,8 @@ import { PEOPLE } from './people';
 
 /**
  * A list of people: a tap opens the profile, and the avatar and the name move from the row to the profile, the name
- * turning into the full name (`transition: { shared }` from the row's `nativeID`s to the profile's, and back on pop);
- * the bio fades in (`elementTransitions`).
+ * turning into the full name (`transition: { shared }` from the row's `nativeID`s to the profile's, and back on pop,
+ * on iOS also under the finger of the swipe back); the bio fades in (`elementTransitions`).
  */
 function People() {
   const t = useTheme();
@@ -23,7 +23,8 @@ function People() {
         ],
         duration: 400,
       },
-      // An animation of its own over the preset: the bio fades in after the avatar.
+      // An animation of its own over the preset: the bio fades in after the avatar. The swipe back on iOS moves the
+      // avatar and the name home under the finger.
       options: {
         animations: {
           push: {
@@ -31,6 +32,7 @@ function People() {
               { id: `person-bio-${index}`, alpha: { from: 0, duration: 300, startDelay: 200 } },
             ],
           },
+          pop: { interactive: true },
         },
       },
     });

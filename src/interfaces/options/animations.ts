@@ -416,14 +416,26 @@ export interface StackPushAnimationOptions extends StackAnimationOptions {
 }
 
 /**
- * The animation of a pop, read from the screen that goes. As {@link StackAnimationOptions}, with the preview of the
- * back gesture on Android.
+ * The animation of a pop, read from the screen that goes. As {@link StackAnimationOptions}, with the swipe back of iOS
+ * and the preview of the back gesture on Android.
  */
 export interface StackPopAnimationOptions extends StackAnimationOptions {
   /**
+   * (iOS) Whether the swipe back plays this pop under the finger. Without it, the swipe back plays UIKit's slide, and
+   * the pop's own animation plays only for the back button and `pop`. With `true`, the swipe from the edge plays the
+   * pop's own animation as far as the finger has gone across the screen: the user can stop halfway, and letting go
+   * finishes the pop or puts the screen back, the rest playing faster after a quick flick. It applies only when the pop
+   * has an animation of its own (`content`, `elementTransitions`, `sharedElementTransitions`). The top bar changes
+   * with the swipe as UIKit does it. On iOS 26 the swipe from the content stays off for a screen with an own pop.
+   * Android ignores it: a pop with an animation of its own plays when the back gesture ends.
+   * @default false
+   */
+  interactive?: boolean;
+  /**
    * (Android 14+) Whether the back gesture on a pushed screen previews its pop as the user swipes: the screen shrinks
    * and follows the finger, the screen under it shows behind. `false` pops the screen when the gesture is released,
-   * as on Android 13 and older; back still pops it. iOS ignores it: its swipe back is UIKit's.
+   * as on Android 13 and older; back still pops it. iOS ignores it: its swipe back is UIKit's, or the pop's own
+   * animation with `interactive`.
    * @default true
    */
   preview?: boolean;
@@ -500,7 +512,8 @@ export interface AnimationOptions {
   push?: StackPushAnimationOptions;
   /**
    * The pop of a screen, also `popTo` and `popToRoot`, read from the screen that goes. The swipe back of iOS is
-   * UIKit's; the back gesture of Android previews the pop (`preview`).
+   * UIKit's, or the pop's own animation under the finger (`interactive`); the back gesture of Android previews the pop
+   * (`preview`).
    */
   pop?: StackPopAnimationOptions;
   /** The replacing of the screens of a stack, read from the new top screen. */

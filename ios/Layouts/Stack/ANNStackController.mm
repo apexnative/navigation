@@ -12,7 +12,9 @@
 #import "ANNSheetPresenter.h"
 #import "ANNShownScreens.h"
 #import "ANNStackAnimatingDelegate.h"
+#import "ANNStackPopAnimationOptions.h"
 #import "ANNStackPresenter.h"
+#import "ANNSwipePopInteraction.h"
 #import "ANNSystemUI.h"
 #import "ANNTopBarPresenter.h"
 #import "ANNTransitionAnimator.h"
@@ -90,6 +92,8 @@ static BOOL ANNIsActive(UIGestureRecognizer *recognizer) {
     ANNTransitionPlan *_pendingPlan;
     ANNStackChange _pendingChange;
     __weak ANNTransitionAnimator *_runningAnimator;
+    // The interaction of the swipe back that plays the top's own pop, until UIKit asks for it.
+    __weak ANNSwipePopInteraction *_swipeInteraction;
     BOOL _gateUpdateScheduled;
     // The stack is made (its helper set up): its options can be resolved.
     BOOL _madeUp;
@@ -813,15 +817,20 @@ static BOOL ANNIsActive(UIGestureRecognizer *recognizer) {
 #pragma mark - The custom transitions
 
 // UIKit asks while it starts the change the queue asked for: the queue's plan when the operation and the arriving
-// entry are the plan's (the back button and the commands go through the queue, so its plan covers them); nil for
-// anything else — UIKit's own pops, the interactive swipe (UIKit never asks for it), a zoom alone.
+// entry are the plan's (the back button and the commands go through the queue, so its plan covers them); the swipe
+// back gets the top's own pop only with `animations.pop.interactive` (`swipeAnimatorFrom:to:`); nil for anything
+// else — UIKit's own pops, a zoom alone.
 - (id<UIViewControllerAnimatedTransitioning>)
     animatorForOperation:(UINavigationControllerOperation)operation
                     from:(UIViewController *)from
                       to:(UIViewController *)to {
+    if ([self isSwipingBack]) {
+        return operation == UINavigationControllerOperationPop
+                   ? [self swipeAnimatorFrom:from to:to]
+                   : nil;
+    }
     ANNTransitionPlan *plan = _pendingPlan;
-    if (!plan || operation == UINavigationControllerOperationNone || to != plan.toNode ||
-        [self isSwipingBack]) {
+    if (!plan || operation == UINavigationControllerOperationNone || to != plan.toNode) {
         return nil;
     }
     BOOL matches = _pendingChange == ANNStackChangeReplace ||
@@ -838,15 +847,79 @@ static BOOL ANNIsActive(UIGestureRecognizer *recognizer) {
     return animator;
 }
 
+// The swipe back of a top whose own pop follows the finger (`animations.pop.interactive`, not `enabled: false`): the pop
+// plays under UIKit's recognizer of the swipe that runs; the stack's own swipes only (the More navigation's delegate is
+// the tabs'). Nil otherwise: the swipe keeps UIKit's slide. So it does when UIKit won't ask for the interaction (the
+// gate hasn't seen the option yet: a change of the default options) and when the screen under hasn't settled in the
+// stack (a lower screen still rendering or parked, a view not made yet): UIKit asks for the transition before the
+// queue takes the swipe and moves those, and the frames take the views as they are now.
+- (nullable ANNTransitionAnimator *)swipeAnimatorFrom:(UIViewController *)from
+                                                   to:(UIViewController *)to {
+    if (!_animatingDelegate.answersInteraction || !to.isViewLoaded ||
+        [_lowerRendering objectForKey:to] || [_lowerToRender containsObject:to] ||
+        [[self parkedEntries] containsObject:to]) {
+        return nil;
+    }
+    UIGestureRecognizer *recognizer = nil;
+    if (ANNIsActive(self.interactivePopGestureRecognizer)) {
+        recognizer = self.interactivePopGestureRecognizer;
+    } else if (@available(iOS 26.0, *)) {
+        if (ANNIsActive(self.interactiveContentPopGestureRecognizer)) {
+            recognizer = self.interactiveContentPopGestureRecognizer;
+        }
+    }
+    if (![recognizer isKindOfClass:UIPanGestureRecognizer.class] || ![self isOwnViewController:from]) {
+        return nil;
+    }
+    ANNStackPopAnimationOptions *pop = [from resolveOptionsWithDefault].animations.pop;
+    if (![ANNStackController popFollowsSwipe:pop]) {
+        return nil;
+    }
+    ANNTransitionPlan *plan = [ANNTransitionPlan stackPlanOfKind:ANNTransitionKindPop
+                                                       animation:pop
+                                                   waitForRender:nil
+                                                       waitLimit:0
+                                                            from:from
+                                                              to:to];
+    if (!plan) {
+        return nil;
+    }
+    ANNTransitionAnimator *animator = [[ANNTransitionAnimator alloc] initWithPlan:plan];
+    // The interaction keeps itself while it follows the gesture; UIKit keeps it once it starts it.
+    ANNSwipePopInteraction *interaction =
+        [[ANNSwipePopInteraction alloc] initWithAnimator:animator
+                                              recognizer:(UIPanGestureRecognizer *)recognizer
+                                                    view:self.view];
+    _swipeInteraction = interaction;
+    _runningAnimator = animator;
+    return animator;
+}
+
++ (BOOL)popFollowsSwipe:(nullable ANNStackPopAnimationOptions *)pop {
+    return [ANNAnimationRules stackIsOwn:pop] && [pop.interactive withDefault:NO] &&
+           [pop.enabled withDefault:YES];
+}
+
+- (nullable id<UIViewControllerInteractiveTransitioning>)interactionForAnimator:
+    (id<UIViewControllerAnimatedTransitioning>)animator {
+    ANNSwipePopInteraction *interaction = _swipeInteraction;
+    return interaction && interaction.animator == animator ? interaction : nil;
+}
+
 // The animating delegate while a custom animation may be needed: a change with its own plan now, or a top whose
 // `animations.pop` is its own; the stack itself otherwise. UIKit reads the delegate's methods when it is set, so it is
-// set again at each change.
+// set again at each change, and again when the interaction of the swipe comes or goes with the top's
+// `animations.pop.interactive`.
 - (void)updateAnimationGateWith:(ANNTransitionPlan *)plan {
-    BOOL needed = plan != nil;
-    if (!needed) {
-        UIViewController *top = [self getCurrentChild];
-        needed = top && [ANNAnimationRules
-                            stackIsOwn:[top resolveOptionsWithDefault].animations.pop];
+    UIViewController *top = [self getCurrentChild];
+    ANNStackPopAnimationOptions *pop = top ? [top resolveOptionsWithDefault].animations.pop : nil;
+    BOOL needed = plan != nil || [ANNAnimationRules stackIsOwn:pop];
+    BOOL interactive = [ANNStackController popFollowsSwipe:pop];
+    if (_animatingDelegate.answersInteraction != interactive) {
+        _animatingDelegate.answersInteraction = interactive;
+        if (self.delegate == _animatingDelegate) {
+            self.delegate = self;
+        }
     }
     id<UINavigationControllerDelegate> delegate =
         needed ? (id<UINavigationControllerDelegate>)_animatingDelegate : self;
