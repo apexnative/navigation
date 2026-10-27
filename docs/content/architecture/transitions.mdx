@@ -161,6 +161,8 @@ navigation.push('Details', {
 
 Details rises 300 points as it fades in. Each property animates from a value to a value over a time, with a delay and an interpolation if it needs them; the [API](#api) lists every one.
 
+<Os name="iOS" /> Once the move starts, the system draws it on its own, as it draws UIKit's animations: work on the main thread, such as a screen that mounts a long list, doesn't stop it.
+
 The same goes for `pop`, `showModal`, `dismissModal`, `setStackRoot` and `setRoot`. The swipe back is the exception: <Os name="iOS" /> it always follows the finger with the system's slide, so a custom `pop` plays for the back button and `pop()` only. <Os name="Android" /> A pop with an animation of its own shows no preview under the swipe: the screen pops when the swipe ends.
 
 ### The top bar {#custom-bar}
