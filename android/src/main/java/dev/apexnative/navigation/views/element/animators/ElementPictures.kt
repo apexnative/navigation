@@ -5,7 +5,11 @@ import android.animation.AnimatorListenerAdapter
 import android.animation.TimeInterpolator
 import android.animation.ValueAnimator
 import android.graphics.Canvas
+import android.graphics.Paint
 import android.graphics.Picture
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
+import android.graphics.RectF
 import android.util.Log
 import android.view.View
 import android.view.animation.LinearInterpolator
@@ -50,6 +54,33 @@ internal abstract class FlightPicture {
 
     /** The copy, on the layer's canvas; the layer saves and restores the canvas around it. */
     abstract fun draw(canvas: Canvas)
+}
+
+/**
+ * The cut of a copy whose views' parents hide part of them ([FlightMask]): it keeps, of the mask the copy draws on its
+ * layer, only the part that shows. A layer of that part's rounded rect laid over the mask (`DST_IN`), not a clip path:
+ * its edges stay smooth.
+ */
+internal class MaskCut(private val mask: FlightMask) {
+    private val values = FloatArray(FlightMask.SIZE)
+    private val rect = RectF()
+    private val shape = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val cut = Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN) }
+
+    /** The cut at [time] (the part of the time), [progress] the curve's value. */
+    fun update(time: Float, progress: Float) = mask.at(progress, time, values)
+
+    /** Cuts the mask drawn so far on the copy's layer of [bounds], in the copy's coordinates (0, 0 its center). */
+    fun draw(canvas: Canvas, bounds: RectF) {
+        rect.set(values[0], values[1], values[2], values[3])
+        canvas.saveLayer(bounds, cut)
+        if (!rect.isEmpty) canvas.drawRoundRect(rect, values[RADIUS], values[RADIUS], shape)
+        canvas.restore()
+    }
+
+    private companion object {
+        const val RADIUS = 4
+    }
 }
 
 // Runs in linear time and keeps the curve it is given for the move: an element moves along the transition's curve,

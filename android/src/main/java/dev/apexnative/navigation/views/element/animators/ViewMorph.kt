@@ -14,15 +14,17 @@ import kotlin.math.roundToInt
  * A shared view moves as two pictures of itself, as on iOS: of the view that goes away and of the one that comes, each
  * with its children. The copy goes from where the one is drawn — its center, its size at the scale it is drawn at, its
  * angle and corner radius — to where the other is drawn in its screen ([FlightGeometry]), the angle along the shorter
- * arc; both pictures fill it, and the picture of the destination shows over the other on the way. The pictures are
- * drawing commands, taken before the views hide: an avatar's letter grows sharp, and what changes in the views
- * meanwhile shows when they are back.
+ * arc; both pictures fill it, and the picture of the destination shows over the other on the way. Where a parent cuts
+ * a view (`overflow: hidden`, a scroll view, the screen's edge), only the part that shows flies, the mask going from
+ * one end's part to the other's ([FlightMask]), as on iOS. The pictures are drawing commands, taken before the views
+ * hide: an avatar's letter grows sharp, and what changes in the views meanwhile shows when they are back.
  */
 internal class ViewMorph private constructor(
     private val start: ViewPicture,
     private val end: ViewPicture,
 ) : FlightPicture() {
     private val flight = FlightGeometry(start.end, end.end)
+    private val cut = FlightMask.of(start.visible, end.visible)?.let(::MaskCut)
     private var at = start.end
     private var progress = 0f
     private val rect = RectF()
@@ -34,6 +36,7 @@ internal class ViewMorph private constructor(
     override fun update(time: Float, progress: Float) {
         this.progress = progress
         at = flight.at(progress, time)
+        cut?.update(time, progress)
     }
 
     override fun draw(canvas: Canvas) {
@@ -46,6 +49,7 @@ internal class ViewMorph private constructor(
         canvas.scale(at.mirrorX, at.mirrorY)
         canvas.saveLayer(rect, null)
         canvas.drawRoundRect(rect, radius, radius, maskPaint)
+        cut?.draw(canvas, rect)
         canvas.saveLayer(rect, contentPaint)
         draw(canvas, start, start.alpha)
         draw(canvas, end, end.alpha * progress)
@@ -69,23 +73,36 @@ internal class ViewMorph private constructor(
     private fun lerp(from: Float, to: Float) = from + (to - from) * progress
 
     companion object {
-        /** The morph of [from] into [to] in [layer]; none when a picture of either can't be taken. */
-        fun of(from: View, to: View, layer: View): ViewMorph? {
-            val start = ViewPicture.of(from, LayerPlace.of(from, layer)) ?: return null
-            val end = ViewPicture.of(to, LayerPlace.of(to, layer)) ?: return null
+        /**
+         * The morph of [from] into [to] in [layer], each cut by its parents up to the view of its screen ([fromRoot],
+         * [toRoot]); none when a picture of either can't be taken.
+         */
+        fun of(from: View, to: View, fromRoot: View?, toRoot: View?, layer: View): ViewMorph? {
+            val start = ViewPicture.of(from, LayerPlace.of(from, layer, fromRoot)) ?: return null
+            val end = ViewPicture.of(to, LayerPlace.of(to, layer, toRoot)) ?: return null
             return ViewMorph(start, end)
         }
     }
 }
 
-// A view's picture, where it is drawn in the transition layer, its corner radius there and its opacity.
-private class ViewPicture(val picture: Picture, val end: FlightEnd, val radius: Float, val alpha: Float) {
+// A view's picture, where it is drawn in the transition layer, its corner radius there, its opacity and the part of it
+// that shows.
+private class ViewPicture(
+    val picture: Picture,
+    val end: FlightEnd,
+    val radius: Float,
+    val alpha: Float,
+    val visible: VisiblePart,
+) {
     companion object {
         fun of(view: View, place: LayerPlace): ViewPicture? {
             if (view.width <= 0 || view.height <= 0) return null
             val picture = recordPicture(view) ?: return null
             val end = place.end(view.width, view.height)
-            return ViewPicture(picture, end, view.borderRadius * end.scale, view.alpha)
+            val radius = view.borderRadius
+            return ViewPicture(
+                picture, end, radius * end.scale, view.alpha, place.visible(view.width, view.height, radius),
+            )
         }
     }
 }

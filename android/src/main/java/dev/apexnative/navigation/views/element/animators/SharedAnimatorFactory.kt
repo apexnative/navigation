@@ -21,12 +21,16 @@ internal object SharedAnimatorFactory {
     class Flight(val animator: MoveAnimator, val picture: FlightPicture)
 
     /**
-     * The flight of the pair [from] → [to] in [layer], its pictures taken now. None: the pair doesn't fly — a text that
-     * doesn't change, or, with a line in [log], a view without a size or a picture that can't be taken.
+     * The flight of the pair [from] → [to] in [layer], its pictures taken now; a view or an image shows only the part
+     * its parents up to the view of its screen ([fromRoot], [toRoot]) leave visible, a text shows whole, as on iOS.
+     * None: the pair doesn't fly — a text that doesn't change, or, with a line in [log], a view without a size or a
+     * picture that can't be taken.
      */
     fun create(
         from: View,
         to: View,
+        fromRoot: View?,
+        toRoot: View?,
         layer: View,
         options: SharedElementTransitionOptions,
         fallbackDuration: Long,
@@ -42,8 +46,12 @@ internal object SharedAnimatorFactory {
             if (!text.changes) return null
             text
         } else {
-            val image = if (from is ImageView && to is ImageView) ImageMorph.of(from, to, layer) else null
-            image ?: ViewMorph.of(from, to, layer) ?: return noPicture(name, log)
+            val image = if (from is ImageView && to is ImageView) {
+                ImageMorph.of(from, to, fromRoot, toRoot, layer)
+            } else {
+                null
+            }
+            image ?: ViewMorph.of(from, to, fromRoot, toRoot, layer) ?: return noPicture(name, log)
         }
         val animator = MoveAnimator().apply {
             element = name

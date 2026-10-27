@@ -32,7 +32,12 @@ import java.util.WeakHashMap
  * start of its flight. [finish] gives every element the values of its properties read before, shows the pairs' views
  * again and takes the layer away. Main thread only.
  */
-internal class ElementTransition private constructor(private val layer: TransitionLayer?) {
+internal class ElementTransition private constructor(
+    private val layer: TransitionLayer?,
+    // The views of the screens, as far as the parents that cut a pair's views count.
+    private val fromRoot: View?,
+    private val toRoot: View?,
+) {
     // An element playing where it is: what it was.
     private class InPlace(val view: View, val values: FloatArray, val pivotSet: Boolean)
 
@@ -121,7 +126,7 @@ internal class ElementTransition private constructor(private val layer: Transiti
     ) {
         val layer = layer ?: return
         val flight = SharedAnimatorFactory.create(
-            from, to, layer, options, fallbackDuration, DevelopmentLog::warn,
+            from, to, fromRoot, toRoot, layer, options, fallbackDuration, DevelopmentLog::warn,
         ) ?: return
         val fromAlpha = from.alpha
         val seenAgain = {
@@ -225,7 +230,7 @@ internal class ElementTransition private constructor(private val layer: Transiti
             }
             if (elements.isEmpty() && pairs.isEmpty()) return null
             val layer = if (pairs.isEmpty()) null else TransitionLayer(host.context)
-            val transition = ElementTransition(layer)
+            val transition = ElementTransition(layer, fromView, toView)
             try {
                 layer?.attachTo(host, layerIndex ?: host.childCount)
                 transition.fill(host, elements, pairs, fallbackDuration)

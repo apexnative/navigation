@@ -22,9 +22,10 @@ import kotlin.math.roundToInt
  * drawn in its screen ([FlightGeometry]), clipped to its corners, and the image of `to` in it goes from the part and
  * place `from` shows its image at (its fit, `resizeMode`) to those of `to`, keeping its proportions where both fits
  * do. The image is `to`'s own drawable, drawn on the layer's canvas and only read: an animated image plays on. The
- * corners are the image's own radius, else that of a parent that clips it (`overflow: hidden`) and that it fills. A
- * pair whose views draw more than their images (a background, a border) or whose images differ in proportions flies
- * as pictures of the views ([ViewMorph]).
+ * corners are the image's own radius, else that of a parent that clips it (`overflow: hidden`) and that it fills.
+ * Where a parent cuts the view, only the part that shows flies, as with a view ([ViewMorph]). A pair whose views draw
+ * more than their images (a background, a border) or whose images differ in proportions flies as pictures of the views
+ * ([ViewMorph]).
  */
 internal class ImageMorph private constructor(
     private val start: ImageEnd,
@@ -34,6 +35,7 @@ internal class ImageMorph private constructor(
     private val drawn: RectF,
 ) : FlightPicture() {
     private val flight = FlightGeometry(start.end, end.end)
+    private val cut = FlightMask.of(start.visible, end.visible)?.let(::MaskCut)
     private var at = start.end
     private var progress = 0f
     private val rect = RectF()
@@ -48,6 +50,7 @@ internal class ImageMorph private constructor(
         this.progress = progress
         at = flight.at(progress, time)
         for (i in 0 until RECT) imageRect[i] = lerp(start.image[i], end.image[i])
+        cut?.update(time, progress)
     }
 
     override fun draw(canvas: Canvas) {
@@ -64,6 +67,7 @@ internal class ImageMorph private constructor(
         canvas.scale(at.mirrorX, at.mirrorY)
         canvas.saveLayer(rect, null)
         canvas.drawRoundRect(rect, radius, radius, maskPaint)
+        cut?.draw(canvas, rect)
         contentPaint.alpha = alpha
         canvas.saveLayer(rect, contentPaint)
         canvas.translate(imageRect[0], imageRect[1])
@@ -75,8 +79,14 @@ internal class ImageMorph private constructor(
     private fun lerp(from: Float, to: Float) = from + (to - from) * progress
 
     // One end of the flight: where the view is drawn, where its image shows in it (left, top, right, bottom from the
-    // view's center, at the size it is drawn at), its corner radius there and its opacity.
-    private class ImageEnd(val end: FlightEnd, val image: FloatArray, val radius: Float, val alpha: Float)
+    // view's center, at the size it is drawn at), its corner radius there, its opacity and the part of it that shows.
+    private class ImageEnd(
+        val end: FlightEnd,
+        val image: FloatArray,
+        val radius: Float,
+        val alpha: Float,
+        val visible: VisiblePart,
+    )
 
     companion object {
         private const val RECT = 4
@@ -89,17 +99,18 @@ internal class ImageMorph private constructor(
         private const val SAME_ASPECT = 0.02f
 
         /**
-         * The morph of [from] into [to] in [layer]; none when an image isn't there to fit, the images differ in
-         * proportions, or a view draws more than its image.
+         * The morph of [from] into [to] in [layer], each cut by its parents up to the view of its screen ([fromRoot],
+         * [toRoot]); none when an image isn't there to fit, the images differ in proportions, or a view draws more
+         * than its image.
          */
-        fun of(from: ImageView, to: ImageView, layer: View): ImageMorph? {
+        fun of(from: ImageView, to: ImageView, fromRoot: View?, toRoot: View?, layer: View): ImageMorph? {
             if (!onlyImage(from) || !onlyImage(to)) return null
             val image = to.drawable ?: return null
             val drawn = drawnRect(to) ?: return null
             val fromDrawn = drawnRect(from) ?: return null
             if (!sameAspect(fromDrawn.width(), fromDrawn.height(), drawn.width(), drawn.height())) return null
-            val start = endOf(from, layer) ?: return null
-            val end = endOf(to, layer) ?: return null
+            val start = endOf(from, layer, fromRoot) ?: return null
+            val end = endOf(to, layer, toRoot) ?: return null
             return ImageMorph(start, end, image, drawn)
         }
 
@@ -122,15 +133,19 @@ internal class ImageMorph private constructor(
             false
         }
 
-        private fun endOf(view: ImageView, layer: View): ImageEnd? {
+        private fun endOf(view: ImageView, layer: View, root: View?): ImageEnd? {
             if (view.width <= 0 || view.height <= 0) return null
             val shown = shownRect(view) ?: return null
-            val end = LayerPlace.of(view, layer).end(view.width, view.height)
+            val place = LayerPlace.of(view, layer, root)
+            val end = place.end(view.width, view.height)
             val image = imageFromCenter(
                 floatArrayOf(shown.left, shown.top, shown.right, shown.bottom),
                 view.width, view.height, end.width, end.height,
             )
-            return ImageEnd(end, image, cornerRadius(view) * end.scale, view.alpha)
+            val radius = cornerRadius(view)
+            return ImageEnd(
+                end, image, radius * end.scale, view.alpha, place.visible(view.width, view.height, radius),
+            )
         }
 
         // Where the drawable draws the image when the view draws it: Fresco's image where its fit puts it in the
