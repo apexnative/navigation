@@ -84,6 +84,8 @@ A round button with a pencil floats at the bottom right; a press opens Compose. 
 | `backgroundColor`, `iconColor` | Its colors. Without them, the colors of the app's Material 3 theme. |
 | `visible: false` | Hides it. |
 
+The FAB belongs to its screen. A push brings the new screen's FAB in with it and takes the old one out with the screen it covers; a pop does the same the other way, and the back gesture shows the FAB of the screen under the top with that screen. Two screens with the same `id` share one button: it stays in place while the screens move.
+
 ### Actions {#fab-actions}
 
 A FAB with `actions` opens them above it on a press, each a small FAB with its own press:

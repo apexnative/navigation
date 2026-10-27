@@ -39,13 +39,18 @@ export interface HardwareBackButtonOptions {
 
 /**
  * (Android) A floating action button over the screen, or an entry of its menu. The button shows while its screen is
- * on top of the stack; without the option there is none. `mergeOptions` and the default options of the app apply, and
- * the colors of the theme are read again when the theme changes.
+ * on top of the stack; without the option there is none. It changes as a push or a pop starts and moves with its
+ * screen, as the tab bar does: the new screen's button comes in with it, the old one goes out with the screen it
+ * belongs to, and an open menu closes. With an animation of the screens' own the old button shrinks away and the new
+ * one grows as it starts; during the back gesture the button of the screen under the top shows with that screen.
+ * `mergeOptions` and the default options of the app apply, and the colors of the theme are read again when the theme
+ * changes.
  */
 export interface OptionsFab {
   /**
    * The identifier of the button. A press reports it, and the app finds the `onPress` of the button by it. A button
-   * without an `id` doesn't show. The same `id` on a later show or merge updates the button; another `id` replaces it.
+   * without an `id` doesn't show. The same `id` on a later show or merge updates the button, which stays in place
+   * while the screens move; another `id` replaces it.
    * For an entry of `actions` it is the id of that entry's own press.
    */
   id: string;

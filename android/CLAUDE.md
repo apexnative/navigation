@@ -82,7 +82,8 @@ top-level folder. Main thread only, unless a line says otherwise.
   preview of a pop during the back gesture (Android 14+): `StackController.BackGesture`, `BackPreview.kt`,
   `stackPoppedByBack` of the layouts; of a sheet's dismissal: `viewcontrollers/modal/SheetBack.kt`,
   `ModalCoordinator.backTargetSheet`, `ModalSheet.BackPreview`.
-- Stack FAB: `viewcontrollers/stack/fab/FabPresenter.kt`, `FabPlan.kt`, `FabPlacement.kt`; `views/stack/fab/`.
+- Stack FAB: `viewcontrollers/stack/fab/FabPresenter.kt`, `FabPlan.kt`, `FabPlacement.kt`, `FabMotion.kt` (how it goes
+  with a transition); `views/stack/fab/` (`FabCopy`: the picture of a FAB that leaves).
 - Top bar (title, buttons, menus, large title): `viewcontrollers/stack/topbar/TopBarPresenter.kt`, `TopBarRoom.kt`,
   `TopBarVisibility.kt`, `BarComponents.kt`, `ButtonPlaces.kt`, `LargeTitleCollapse.kt`, `BarRowTransition.kt`;
   `views/stack/topbar/TopBar.kt`, `TitleBar.kt`, `titlebar/ButtonRow.kt` (the views of a side: back, buttons,
