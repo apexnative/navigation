@@ -4,12 +4,12 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-/// The interaction of a swipe back that plays the screen's own pop (`animations.pop.interactive`). It follows UIKit's
-/// recognizer of the swipe, which keeps its delegate and every check of the stack, and shows the animator's frames as
-/// far as the finger went across `view`, toward the edge the screens go back to. Letting go finishes the pop after a
-/// flick back or past half way, and puts the screen back otherwise; the rest plays faster after a quick flick, never
-/// slower, and UIKit ends the bar's change at the same pace. A swipe UIKit never starts as interactive leaves it with
-/// the end of the gesture. Main queue.
+/// The interaction of a swipe back that plays the screen's own pop (`animations.pop.interactive`). It follows the
+/// stack's own swipe from the leading edge (UIKit runs its swipe without asking the delegate for a transition), and
+/// shows the animator's frames as far as the finger went across `view`, in the direction of the swipe back. Letting go
+/// finishes the pop after a flick back or past half way, and puts the screen back otherwise; the rest plays faster
+/// after a quick flick, never slower, and UIKit ends its part at the same pace. An interaction UIKit never starts goes
+/// with the end of the gesture. Main queue.
 @interface ANNSwipePopInteraction : NSObject <UIViewControllerInteractiveTransitioning>
 
 - (instancetype)initWithAnimator:(ANNTransitionAnimator *)animator

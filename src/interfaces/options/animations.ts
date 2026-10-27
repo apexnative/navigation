@@ -425,8 +425,9 @@ export interface StackPopAnimationOptions extends StackAnimationOptions {
    * the pop's own animation plays only for the back button and `pop`. With `true`, the swipe from the edge plays the
    * pop's own animation as far as the finger has gone across the screen: the user can stop halfway, and letting go
    * finishes the pop or puts the screen back, the rest playing faster after a quick flick. It applies only when the pop
-   * has an animation of its own (`content`, `elementTransitions`, `sharedElementTransitions`). The top bar changes
-   * with the swipe as UIKit does it. On iOS 26 the swipe from the content stays off for a screen with an own pop.
+   * has an animation of its own (`content`, `elementTransitions`, `sharedElementTransitions`). The top bar shows the
+   * screen under from the start of the swipe, as UIKit does in a transition of its own, and comes back when the swipe
+   * is given up. On iOS 26 the swipe from the content stays off for a screen with an own pop.
    * Android ignores it: a pop with an animation of its own plays when the back gesture ends.
    * @default false
    */

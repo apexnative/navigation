@@ -93,6 +93,14 @@ FOUNDATION_EXPORT NSString *_Nullable ANNStackKeyOfLayout(ANNLayoutNode *node);
 /// it), or UIKit's More navigation shows the stack's first screen only (its swipe goes back to the More list).
 - (BOOL)swipeBackIsUIKits:(UIGestureRecognizer *)recognizer;
 
+/// The swipe of `recognizer` may play the pop: the stack's own swipe (from the leading edge, toward the trailing side)
+/// only while the top's pop follows the finger (`animations.pop.interactive`) and the screen under is in place, UIKit's
+/// swipes of the stack's navigation only while it doesn't. Every other swipe may.
+- (BOOL)swipeBackTakes:(UIGestureRecognizer *)recognizer;
+
+/// `recognizer` is the stack's own swipe back, not one of UIKit's.
+- (BOOL)swipeBackIsStacks:(UIGestureRecognizer *)recognizer;
+
 /// The stack has one entry: there is nowhere to go back to.
 @property(nonatomic, readonly) BOOL hasOneEntry;
 

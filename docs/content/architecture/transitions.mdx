@@ -193,6 +193,7 @@ The swipe from the edge now shrinks Details as far as the finger has gone across
 - It applies only to a pop with an animation of its own, and `transition` presets get it through `options.animations.pop.interactive`.
 - The swipe moves the time of the animation, not a point: a move with an easing doesn't stay exactly under the finger.
 - On iOS 26 the swipe from the content stays off for a screen with a pop of its own; the swipe from the edge works.
+- The top bar shows the screen under from the start of the swipe, as it does in any move of your own, and comes back if the user gives the swipe up.
 - While the finger is down, the system's animations inside the two screens, such as an activity indicator, hold still.
 
 <Os name="Android" /> It doesn't apply: a pop with an animation of its own plays when the back gesture ends.

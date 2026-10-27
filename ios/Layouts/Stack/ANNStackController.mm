@@ -56,6 +56,10 @@ static BOOL ANNIsActive(UIGestureRecognizer *recognizer) {
     return state == UIGestureRecognizerStateBegan || state == UIGestureRecognizerStateChanged;
 }
 
+// How far from the leading edge of the stack's view the stack's own swipe back starts, in points: the strip the side
+// menu leaves to the swipe back (`ANNSideMenuEdgeWidth`).
+static const CGFloat ANNOwnSwipeEdgeWidth = 20;
+
 @interface ANNStackController () <ANNStackDisplay, ANNStackAnimating>
 @end
 
@@ -94,6 +98,10 @@ static BOOL ANNIsActive(UIGestureRecognizer *recognizer) {
     __weak ANNTransitionAnimator *_runningAnimator;
     // The interaction of the swipe back that plays the top's own pop, until UIKit asks for it.
     __weak ANNSwipePopInteraction *_swipeInteraction;
+    // The stack's own swipe from the leading edge, on while the top's pop follows the finger: UIKit runs its swipe
+    // without asking the delegate for a transition, so that one would only slide.
+    UIPanGestureRecognizer *_ownSwipe;
+    InteractivePopGestureDelegate *_ownSwipeDelegate;
     BOOL _gateUpdateScheduled;
     // The stack is made (its helper set up): its options can be resolved.
     BOOL _madeUp;
@@ -264,6 +272,16 @@ static BOOL ANNIsActive(UIGestureRecognizer *recognizer) {
                                                                  content:YES
                                                                 barSwipe:barSwipe];
     }
+    if (!_ownSwipe) {
+        _ownSwipe = [[UIPanGestureRecognizer alloc] initWithTarget:self
+                                                            action:@selector(ownSwipeBack:)];
+        _ownSwipe.enabled = _animatingDelegate.answersInteraction;
+        [self.view addGestureRecognizer:_ownSwipe];
+    }
+    _ownSwipeDelegate = [InteractivePopGestureDelegate installOn:_ownSwipe
+                                                           stack:self
+                                                         content:NO
+                                                        barSwipe:barSwipe];
     [self updateSwipeBack];
 }
 
@@ -524,6 +542,9 @@ static BOOL ANNIsActive(UIGestureRecognizer *recognizer) {
 
 - (BOOL)isSwipingBack {
     UINavigationController *navigation = self.shownNavigationController;
+    if (navigation == self && ANNIsActive(_ownSwipe)) {
+        return YES;
+    }
     if (ANNIsActive(navigation.interactivePopGestureRecognizer)) {
         return YES;
     }
@@ -847,28 +868,15 @@ static BOOL ANNIsActive(UIGestureRecognizer *recognizer) {
     return animator;
 }
 
-// The swipe back of a top whose own pop follows the finger (`animations.pop.interactive`, not `enabled: false`): the pop
-// plays under UIKit's recognizer of the swipe that runs; the stack's own swipes only (the More navigation's delegate is
-// the tabs'). Nil otherwise: the swipe keeps UIKit's slide. So it does when UIKit won't ask for the interaction (the
-// gate hasn't seen the option yet: a change of the default options) and when the screen under hasn't settled in the
-// stack (a lower screen still rendering or parked, a view not made yet): UIKit asks for the transition before the
-// queue takes the swipe and moves those, and the frames take the views as they are now.
+// The stack's own swipe back of a top whose pop follows the finger (`animations.pop.interactive`, not
+// `enabled: false`): the pop plays under it. Nil otherwise, also when UIKit won't ask for the interaction (the gate
+// hasn't seen the option yet: a change of the default options) or the screen under hasn't settled
+// (`revealedEntrySettled:`): UIKit asks for the transition before the queue takes the swipe and moves those, and the
+// frames take the views as they are now.
 - (nullable ANNTransitionAnimator *)swipeAnimatorFrom:(UIViewController *)from
                                                    to:(UIViewController *)to {
-    if (!_animatingDelegate.answersInteraction || !to.isViewLoaded ||
-        [_lowerRendering objectForKey:to] || [_lowerToRender containsObject:to] ||
-        [[self parkedEntries] containsObject:to]) {
-        return nil;
-    }
-    UIGestureRecognizer *recognizer = nil;
-    if (ANNIsActive(self.interactivePopGestureRecognizer)) {
-        recognizer = self.interactivePopGestureRecognizer;
-    } else if (@available(iOS 26.0, *)) {
-        if (ANNIsActive(self.interactiveContentPopGestureRecognizer)) {
-            recognizer = self.interactiveContentPopGestureRecognizer;
-        }
-    }
-    if (![recognizer isKindOfClass:UIPanGestureRecognizer.class] || ![self isOwnViewController:from]) {
+    if (!ANNIsActive(_ownSwipe) || !_animatingDelegate.answersInteraction ||
+        ![self isOwnViewController:from] || ![self revealedEntrySettled:to]) {
         return nil;
     }
     ANNStackPopAnimationOptions *pop = [from resolveOptionsWithDefault].animations.pop;
@@ -887,12 +895,17 @@ static BOOL ANNIsActive(UIGestureRecognizer *recognizer) {
     ANNTransitionAnimator *animator = [[ANNTransitionAnimator alloc] initWithPlan:plan];
     // The interaction keeps itself while it follows the gesture; UIKit keeps it once it starts it.
     ANNSwipePopInteraction *interaction =
-        [[ANNSwipePopInteraction alloc] initWithAnimator:animator
-                                              recognizer:(UIPanGestureRecognizer *)recognizer
-                                                    view:self.view];
+        [[ANNSwipePopInteraction alloc] initWithAnimator:animator recognizer:_ownSwipe view:self.view];
     _swipeInteraction = interaction;
     _runningAnimator = animator;
     return animator;
+}
+
+// The screen under is in place for the frames: its view made, not parked, not rendering as a lower screen.
+- (BOOL)revealedEntrySettled:(nullable UIViewController *)revealed {
+    return revealed.isViewLoaded && ![_lowerRendering objectForKey:revealed] &&
+           ![_lowerToRender containsObject:revealed] &&
+           ![[self parkedEntries] containsObject:revealed];
 }
 
 + (BOOL)popFollowsSwipe:(nullable ANNStackPopAnimationOptions *)pop {
@@ -921,6 +934,7 @@ static BOOL ANNIsActive(UIGestureRecognizer *recognizer) {
             self.delegate = self;
         }
     }
+    _ownSwipe.enabled = interactive;
     id<UINavigationControllerDelegate> delegate =
         needed ? (id<UINavigationControllerDelegate>)_animatingDelegate : self;
     if (self.delegate != delegate) {
@@ -1007,11 +1021,64 @@ static BOOL ANNIsActive(UIGestureRecognizer *recognizer) {
     if (top != nil && top != [self getCurrentChild]) {
         return YES;
     }
-    BOOL own = recognizer == self.interactivePopGestureRecognizer;
+    BOOL own = recognizer == self.interactivePopGestureRecognizer || recognizer == _ownSwipe;
     if (@available(iOS 26.0, *)) {
         own = own || recognizer == self.interactiveContentPopGestureRecognizer;
     }
     return !own && _queue.shown.count < 2;
+}
+
+- (BOOL)swipeBackIsStacks:(UIGestureRecognizer *)recognizer {
+    return recognizer != nil && recognizer == _ownSwipe;
+}
+
+- (BOOL)swipeBackTakes:(UIGestureRecognizer *)recognizer {
+    BOOL uikits = recognizer == self.interactivePopGestureRecognizer;
+    if (@available(iOS 26.0, *)) {
+        uikits = uikits || recognizer == self.interactiveContentPopGestureRecognizer;
+    }
+    if (recognizer != _ownSwipe && !uikits) {
+        return YES;
+    }
+    NSArray<UIViewController *> *shown = _queue.shown;
+    UIViewController *revealed = shown.count >= 2 ? shown[shown.count - 2] : nil;
+    // The options as they are now, as `swipeAnimatorFrom:to:` reads them: the gate may lag a change of the defaults,
+    // and a swipe of ours without the pop would be a pop the finger can't hold.
+    UIViewController *top = self.topViewController;
+    BOOL ownPlays = _ownSwipe.enabled && _animatingDelegate.answersInteraction && top &&
+                    top == [self getCurrentChild] && [self isOwnViewController:top] &&
+                    [ANNStackController
+                        popFollowsSwipe:[top resolveOptionsWithDefault].animations.pop] &&
+                    [self revealedEntrySettled:revealed];
+    if (uikits) {
+        return !ownPlays;
+    }
+    return ownPlays && [self panStartsAtLeadingEdge:_ownSwipe];
+}
+
+// A pan that starts near the leading edge of the stack's view and moves more across than along, toward the trailing
+// side: where UIKit's edge swipe starts.
+- (BOOL)panStartsAtLeadingEdge:(UIPanGestureRecognizer *)pan {
+    UIView *view = self.view;
+    CGPoint at = [pan locationInView:view];
+    CGPoint move = [pan translationInView:view];
+    BOOL rightToLeft =
+        view.effectiveUserInterfaceLayoutDirection == UIUserInterfaceLayoutDirectionRightToLeft;
+    CGFloat start = at.x - move.x;
+    CGFloat fromEdge = rightToLeft ? view.bounds.size.width - start : start;
+    if (move.x == 0 && move.y == 0) {
+        move = [pan velocityInView:view];
+    }
+    CGFloat along = rightToLeft ? -move.x : move.x;
+    return fromEdge <= ANNOwnSwipeEdgeWidth && along > fabs(move.y);
+}
+
+// The stack's own swipe began: a pop as UIKit's swipe makes it, which the stack follows as the swipe back
+// (`followUIKitTransition`); the transition asks for the top's pop and its interaction (`swipeAnimatorFrom:to:`).
+- (void)ownSwipeBack:(UIPanGestureRecognizer *)recognizer {
+    if (recognizer.state == UIGestureRecognizerStateBegan) {
+        [self popViewControllerAnimated:YES];
+    }
 }
 
 - (BOOL)hasOneEntry {
@@ -1056,6 +1123,7 @@ static BOOL ANNIsActive(UIGestureRecognizer *recognizer) {
     BOOL edge = !(isBool && ![value boolValue]);
     BOOL content = !value || (isBool && [value boolValue]);
     _edgeSwipeDelegate.enabled = edge;
+    _ownSwipeDelegate.enabled = edge;
     _moreEdgeSwipeDelegate.enabled = edge;
     _contentSwipeDelegate.enabled = content;
     _moreContentSwipeDelegate.enabled = content;
@@ -1065,6 +1133,7 @@ static BOOL ANNIsActive(UIGestureRecognizer *recognizer) {
 - (void)swipeBackFollowsBar {
     BOOL hidden = [ANNSystemUI barHiddenOf:self.shownNavigationController];
     _edgeSwipeDelegate.barHidden = hidden;
+    _ownSwipeDelegate.barHidden = hidden;
     _contentSwipeDelegate.barHidden = hidden;
     _moreEdgeSwipeDelegate.barHidden = hidden;
     _moreContentSwipeDelegate.barHidden = hidden;

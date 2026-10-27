@@ -139,7 +139,7 @@ Each of these owns one rule. Call it; do not copy it.
 - `ANNReloadCoordinator`: The generation of the JavaScript; the reset after a reload. Called by: Runner, emitter, answer.
 - Stack answer id: `ANNStackAnswerIdOf(entry, command)` in `ANNStackQueue.h`: the id a stack command answers with. `push` answers the node's own id (a pair's id); every other command, the entry's options screen (a pair's primary). Called by: The queue, `ANNStackCommands`, `ANNPreviewPush`, `ANNSplitViewCommands`.
 - Waited screens: `waitedComponentViewControllers`: the screens a wait is about (a pair: the ones it puts in the window). `ANNStackScreensOfEntry` is every screen of an entry, for what means all of them. Called by: `ANNRenderWait` owners: root, stack queue, modals, overlays, `ANNSplitViewCommands`.
-- Back: The stack: `ANNStackController` (`userGoBackTo:`, `backAction`, the hold) and `InteractivePopGestureDelegate`; UIKit's own pops are followed by `ANNStackQueue uikitShows:`. A swipe back of a top whose own pop is `interactive` plays that pop under the finger: `swipeAnimatorFrom:to:` and `ANNSwipePopInteraction`, on UIKit's recognizer. Called by: UIKit, the user.
+- Back: The stack: `ANNStackController` (`userGoBackTo:`, `backAction`, the hold) and `InteractivePopGestureDelegate`; UIKit's own pops are followed by `ANNStackQueue uikitShows:`. A top whose own pop is `interactive` gets the stack's own swipe from the leading edge instead of UIKit's (UIKit runs its swipe without asking the delegate for a transition): `swipeBackTakes:` picks the swipe, `ownSwipeBack:` pops, and `swipeAnimatorFrom:to:` and `ANNSwipePopInteraction` play the pop under the finger. Called by: UIKit, the user.
 
 ## Modules
 

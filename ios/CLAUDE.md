@@ -147,7 +147,9 @@ Top-level files: `Package.swift` (SwiftPM; `headerFolders` lists every folder wh
   into keyframe animations under the core's keys (`ANNAnimationKey`), and `restore` removes them. It never writes a
   view's own alpha or transform for a frame; a value the core writes for the transition (the arriving view's hide, a
   hidden flag, a depth) goes back as before. A pop that follows the swipe back also stops the time of the transition's
-  container (`startPausedOn:done:`), and the container gets its time back before the clients restore.
+  container (`startPausedOn:done:`), and the container gets its time back before the clients restore. UIKit runs its
+  swipe back without asking the navigation's delegate for a transition (iOS 26 checked), so that pop follows the
+  stack's own swipe from the leading edge, and UIKit's swipes stand aside meanwhile (`swipeBackTakes:`).
 - An `ANNCommandAnswer` that goes away unanswered rejects (`notAnswered:`), but only once nothing holds it: a record,
   list or queue that keeps an answer still answers it on every exit, or the promise waits as long as the record lives.
 - On iOS 26 UIKit draws a screen's large title, for a whole pop or swipe back, inside the scroll view the bar follows
