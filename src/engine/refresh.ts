@@ -61,24 +61,25 @@ const innerIds = new WeakMap<Family, string>();
 let innerCount = 0;
 
 /**
- * Puts the component a screen renders in a family of its own, once the screen's module ran and Metro has given the
- * screen its family: the next version of the screen registers its component under the same id, so React Refresh keeps
- * the component's state when the module runs again, also when the module doesn't export it. A component React Refresh
- * knows already (its module exports it, or Babel registered it) keeps its own family. Development only.
+ * Puts a component a screen or the app renders (`owner`: the screen, or the app made by createNavigation; `role`: which
+ * of its components) in a family of its own, once the owner's module ran and Metro has given the owner its family: the
+ * next version of the owner registers its component under the same id, so React Refresh keeps the component's state
+ * when the module runs again, also when the module doesn't export it. A component React Refresh knows already (its
+ * module exports it, or Babel registered it) keeps its own family. Development only.
  */
-export function keepStateOf(screen: object, component: unknown): void {
+export function keepStateOf(owner: object, component: unknown, role = 'component'): void {
   const refresh = reactRefresh();
-  if (!refresh?.register) return;
+  if (!refresh?.register || component === undefined) return;
   const register = refresh.register;
   Promise.resolve().then(() => {
-    const family = familyOf(screen);
+    const family = familyOf(owner);
     if (!family) return;
     let id = innerIds.get(family);
     if (id === undefined) {
-      id = `apexnative.navigation.screen#${++innerCount}`;
+      id = `apexnative.navigation#${++innerCount}`;
       innerIds.set(family, id);
     }
-    register(component, id);
+    register(component, `${id}.${role}`);
   });
 }
 

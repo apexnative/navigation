@@ -1,6 +1,7 @@
 import { commands as native } from '../../engine/native';
 import { isReactScreen, screenOptions } from '../../engine/screens';
-import { createNavigation, startApp } from './createNavigation';
+import { getTheme, setTheme } from '../theme/theme';
+import { createNavigation, noteReplacingApp, startApp } from './createNavigation';
 
 jest.mock('../../engine/native', () => ({
   commands: {
@@ -92,5 +93,28 @@ describe('the module of the app running again after an edit', () => {
     await startApp(other);
     expect(setRoot).toHaveBeenCalledTimes(2);
     expect(JSON.stringify(setRoot.mock.calls[1]![1])).toContain('Profile');
+  });
+
+  it('keeps the theme the app set since, when the edit leaves the theme as it was', async () => {
+    const first = createNavigation({ screens: { Home }, root: 'Home', theme: { colors: {} } });
+    register(first);
+    await startApp(first);
+    setTheme({ colors: { primary: 'red' } });
+    const second = createNavigation({ screens: { Home }, root: 'Home', theme: { colors: {} } });
+    register(second, first);
+    await Promise.resolve();
+    expect(getTheme()).toEqual({ colors: { primary: 'red' } });
+  });
+
+  it("takes an app the entry registers again under the app's name, one it doesn't export", async () => {
+    const willMount = jest.fn();
+    const first = createNavigation({ screens: { Home }, root: 'Home', willMount });
+    register(first);
+    await startApp(first);
+    const second = createNavigation({ screens: { Home, Profile }, root: 'Home', willMount });
+    noteReplacingApp(second);
+    await startApp(second);
+    expect(isReactScreen('Profile')).toBe(true);
+    expect(willMount).toHaveBeenCalledTimes(1);
   });
 });
