@@ -1,5 +1,6 @@
 import { commands as native } from '../../engine/native';
 import { isReactScreen, screenOptions } from '../../engine/screens';
+import type { ScreenOptions } from '../options/ScreenOptions';
 import { getDirection, getTheme, setDirection, setTheme } from '../theme/theme';
 import { createNavigation, noteReplacingApp, startApp } from './createNavigation';
 
@@ -8,6 +9,7 @@ jest.mock('../../engine/native', () => ({
     setRoot: jest.fn(),
     setDefaultOptions: jest.fn(),
     mergeOptions: jest.fn(),
+    clearOptions: jest.fn(),
   },
   getStartInfo: () => ({ coldStart: false, splashLogo: null, arrangements: false }),
   getLaunchLink: async () => null,
@@ -69,6 +71,66 @@ describe('the module of the app running again after an edit', () => {
     await startApp(second);
     expect(willMount).toHaveBeenCalledTimes(1);
     expect(setRoot).toHaveBeenCalledTimes(2);
+  });
+
+  it('gives the screens of a group that show what an edit changed in the options of the group', async () => {
+    const first = createNavigation({
+      groups: { main: { screens: { Home }, options: { topBar: { title: { text: 'Old' } } } } },
+      root: 'Home',
+    });
+    register(first);
+    await startApp(first);
+    const id = JSON.stringify(setRoot.mock.calls[0]![1]).match(/"(Component\d+)"/)![1]!;
+
+    // The module of the app ran again; Home, imported from its own module, is the same screen.
+    const second = createNavigation({
+      groups: { main: { screens: { Home }, options: { topBar: { title: { text: 'New' } } } } },
+      root: 'Home',
+    });
+    register(second, first);
+    await Promise.resolve();
+
+    expect(native.mergeOptions).toHaveBeenCalledWith(id, { topBar: { title: { text: 'New' } } });
+    expect(screenOptions('Home', {})).toEqual({ topBar: { title: { text: 'New' } } });
+  });
+
+  it('sends nothing when the options of a group, made again, are the same', async () => {
+    const options = (s: ScreenOptions) => s.title('Same');
+    const first = createNavigation({
+      groups: { main: { screens: { Home }, options } },
+      root: 'Home',
+    });
+    register(first);
+    await startApp(first);
+    // The start registers Home again over the test before: what that sends doesn't count.
+    (native.mergeOptions as jest.Mock).mockClear();
+    const second = createNavigation({
+      groups: { main: { screens: { Home }, options: (s: ScreenOptions) => options(s) } },
+      root: 'Home',
+    });
+    register(second, first);
+    await Promise.resolve();
+    expect(native.mergeOptions).not.toHaveBeenCalled();
+  });
+
+  it('gives a lazy screen of a group that shows what an edit changed in the options of the group', async () => {
+    const group = (text: string) => ({
+      main: {
+        screens: { Later: { load: () => ({ default: Home }) } },
+        options: { topBar: { title: { text } } },
+      },
+    });
+    const first = createNavigation({ groups: group('Old'), root: 'Later' });
+    register(first);
+    await startApp(first);
+    const id = JSON.stringify(setRoot.mock.calls[0]![1]).match(/"(Component\d+)"/)![1]!;
+    // Registered again, the lazy screen loads its module on its next show: the one loaded before stands for it.
+    for (const text of ['New', 'Newer']) {
+      const next = createNavigation({ groups: group(text), root: 'Later' });
+      register(next, first);
+      await Promise.resolve();
+      expect(native.mergeOptions).toHaveBeenLastCalledWith(id, { topBar: { title: { text } } });
+    }
   });
 
   it('keeps the default options when the theme and the options are the same', async () => {
