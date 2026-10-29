@@ -10,8 +10,7 @@ export interface OptionsChange {
 
 /**
  * What `next` changes of `previous`, both the options of one screen. Objects compare key by key; anything else, an
- * array such as buttons too, changes as a whole. Functions compare by their source: a module that ran again makes them
- * all anew.
+ * array such as buttons too, changes as a whole, and a function by identity (`sameValue`).
  */
 export function optionsChange(previous: Options, next: Options): OptionsChange {
   const removed: string[][] = [];
@@ -49,11 +48,11 @@ function isWholeValue(path: string[]): boolean {
 }
 
 /**
- * Whether two values are the same: plain objects key by key, arrays item by item, functions by their source (a module
- * that ran again makes them anew), anything else by identity.
+ * Whether two values are the same: plain objects key by key, arrays item by item, anything else, functions too, by
+ * identity. A module that ran again makes its functions anew, so they count as changed: Hermes keeps no source to tell
+ * an edited one, and sending a button's handler again costs little.
  */
 export function sameValue(a: unknown, b: unknown): boolean {
-  if (typeof a === 'function' && typeof b === 'function') return String(a) === String(b);
   if (Array.isArray(a) && Array.isArray(b)) {
     return a.length === b.length && a.every((item, index) => sameValue(item, b[index]));
   }

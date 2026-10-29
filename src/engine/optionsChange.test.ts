@@ -34,13 +34,14 @@ describe('the change of a screen’s options after an edit', () => {
     expect(optionsChange(before, after).merge).toEqual(after);
   });
 
-  it('compares functions by their source, as a module that ran again makes them anew', () => {
-    const make = () => ({ topBar: { rightButtons: [{ id: 'save', onPress: () => {} }] } });
-    expect(optionsChange(make(), make())).toEqual({ removed: [] });
-    const other = {
-      topBar: { rightButtons: [{ id: 'save', onPress: () => console.log('saved') }] },
-    };
-    expect(optionsChange(make(), other).merge).toEqual(other);
+  it('takes a function made anew as changed, as Hermes keeps no source to compare', () => {
+    const onPress = () => {};
+    // The options as a screen's chain gives them: a button's handler stays in them.
+    const make = (handler: () => void) =>
+      ({ topBar: { rightButtons: [{ id: 'save', onPress: handler }] } }) as unknown as Options;
+    expect(optionsChange(make(onPress), make(onPress))).toEqual({ removed: [] });
+    const next = make(() => {});
+    expect(optionsChange(make(onPress), next).merge).toEqual(next);
   });
 
   it('names the paths of the options taken out', () => {
