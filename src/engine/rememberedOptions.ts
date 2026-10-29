@@ -32,7 +32,7 @@ export function rememberMergedOptions(id: string, options: Options): void {
 /** Takes the options at the paths, such as `['topBar', 'subtitle']`, out of those remembered for the node with the id. */
 export function forgetMergedPaths(id: string, paths: readonly string[][]): void {
   const own = ownOptions.get(id);
-  if (own) ownOptions.set(id, withoutPaths(own, paths));
+  if (own) own.options = withoutPaths(own.options, paths);
   const options = remembered.get(id);
   if (options) remembered.set(id, withoutPaths(options, paths));
 }
@@ -76,22 +76,30 @@ export function forgetMergedOptions(id: string): void {
 
 // The own options of each screen as JavaScript sent them, in development: those it showed with, and every merge and
 // clear since. An edit of a screen's options (Fast Refresh) changes only what still has the old definition's value.
-const ownOptions = new Map<string, Options>();
+const ownOptions = new Map<string, { name: string; options: Options }>();
 
-/** Notes the own options a screen shows with (development). */
-export function noteOwnOptions(id: string, options: Options): void {
-  if (__DEV__) ownOptions.set(id, options);
+/** Notes the own options a screen of the name shows with (development). */
+export function noteOwnOptions(id: string, name: string, options: Options): void {
+  if (__DEV__) ownOptions.set(id, { name, options });
 }
 
 /** Notes a merge into a screen's own options (development). */
 export function noteMergedOwnOptions(id: string, options: Options): void {
-  const before = __DEV__ ? ownOptions.get(id) : undefined;
-  if (before) ownOptions.set(id, mergeOptions(before, options));
+  const noted = __DEV__ ? ownOptions.get(id) : undefined;
+  if (noted) noted.options = mergeOptions(noted.options, options);
 }
 
 /** The own options of a screen as JavaScript sent them (development); undefined for a screen it didn't note. */
 export function ownOptionsOf(id: string): Options | undefined {
-  return ownOptions.get(id);
+  return ownOptions.get(id)?.options;
+}
+
+/**
+ * The ids of the screens of the name the native side has, mounted in React or not yet (a tab not selected yet), as
+ * development notes them.
+ */
+export function notedScreens(name: string): string[] {
+  return [...ownOptions].filter(([, noted]) => noted.name === name).map(([id]) => id);
 }
 
 /** The options merged into the node with the id, as remembered; undefined without any. */

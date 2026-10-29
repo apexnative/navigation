@@ -25,7 +25,7 @@ import { mergeOptions } from '../../engine/mergeOptions';
 import { preparedPadding } from '../../engine/slots';
 import { clearOptions, mergeOptions as sendMergeOptions } from '../../engine/commands';
 import { changeOverOwn, optionsChange } from '../../engine/optionsChange';
-import { ownOptionsOf } from '../../engine/rememberedOptions';
+import { notedScreens, ownOptionsOf } from '../../engine/rememberedOptions';
 import { openNativeScreens } from '../../engine/nativeScreens';
 import { propsOf } from '../../engine/props';
 import { familyOf, newestType, onRedefined } from '../../engine/refresh';
@@ -131,9 +131,13 @@ function applyEdit(next: object) {
       DevSettings.reload('[navigation] A native screen changed its name or its useProps');
       return;
     }
+    // A screen the native side has but React hasn't mounted yet (a tab not selected yet) shows the edit too.
     const shown = native
       ? openNativeScreens(name)
-      : shownScreens(name).map((id) => ({ id, props: propsOf(id) }));
+      : [...new Set([...shownScreens(name), ...notedScreens(name)])].map((id) => ({
+          id,
+          props: propsOf(id),
+        }));
     for (const { id, props } of shown) {
       const options = (definition: { options?: ScreenOptionsInput<any> } | undefined) =>
         mergeOptions(

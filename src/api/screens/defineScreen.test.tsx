@@ -283,8 +283,8 @@ describe('an edit of the options of a screen that shows', () => {
     const before = defineScreen({ component: Order, options: (s) => s.title('Order') });
     register(before);
     registerScreens([{ source: 'screens', screens: { Order: before } }]);
-    noteOwnOptions('Component21', { topBar: { title: { text: 'Order' } } });
-    noteShown('Component21', 'Order');
+    // Shown by a command, not mounted in React yet.
+    noteOwnOptions('Component21', 'Order', { topBar: { title: { text: 'Order' } } });
     // The screen set its own title (useScreenOptions).
     mergeOptions('Component21', { topBar: { title: { text: 'Order 42' } } });
     sent.mockClear();
@@ -297,5 +297,24 @@ describe('an edit of the options of a screen that shows', () => {
     register(after, before);
     await Promise.resolve();
     expect(sent).not.toHaveBeenCalled();
+  });
+
+  it('reaches a screen the native side has that React has not mounted yet', async () => {
+    function Tab() {
+      return null;
+    }
+    const before = defineScreen({ component: Tab, options: (s) => s.title('Tab') });
+    register(before);
+    registerScreens([{ source: 'screens', screens: { Tab: before } }]);
+    noteOwnOptions('Component31', 'Tab', { topBar: { title: { text: 'Tab' } } });
+    const after = defineScreen({
+      component: function TabEdited() {
+        return null;
+      },
+      options: (s) => s.title('Inbox'),
+    });
+    register(after, before);
+    await Promise.resolve();
+    expect(sent.mock.calls).toEqual([['Component31', { topBar: { title: { text: 'Inbox' } } }]]);
   });
 });
