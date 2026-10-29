@@ -12,6 +12,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, strong) Text *openGestureMode;
 /// `'parallax'`, `'slide'`, `'slide-and-scale'` or `'door'`.
 @property(nonatomic, strong) Text *animationType;
+/// `'together'`, `'afterCenter'` or `'onOpen'`.
+@property(nonatomic, strong) Text *menusAttachMode;
 @property(nonatomic, strong) Text *testID;
 
 @end

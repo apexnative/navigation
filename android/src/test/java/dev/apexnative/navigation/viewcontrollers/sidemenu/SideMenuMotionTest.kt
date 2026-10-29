@@ -419,4 +419,32 @@ class SideMenuMotionTest {
         motion.command(Side.Left, visible = false, animate = true, shown = true)
         assertEquals(listOf("close:left:true"), moves())
     }
+
+    // A menu starts to show.
+
+    @Test
+    fun aMenuStartsToShowAtItsFirstMovementOnceUntilItRestsClosed() {
+        drawer.drag(Side.Left)
+        assertTrue(host.started.isEmpty())
+        drawer.frame(Side.Left, 0.2f)
+        drawer.frame(Side.Left, 0.6f)
+        assertEquals(listOf(Side.Left), host.started)
+        drawer.release(Side.Left, 0f)
+        drawer.settle(Side.Left)
+        drawer.drag(Side.Left)
+        drawer.frame(Side.Left, 0.1f)
+        assertEquals(listOf(Side.Left, Side.Left), host.started)
+    }
+
+    @Test
+    fun aMenuOpenedByACommandStartsBeforeTheDrawerMoves() {
+        motion.command(Side.Right, visible = true, animate = true, shown = true)
+        assertEquals(listOf(Side.Right), host.started)
+        drawer.frame(Side.Right, 0.5f)
+        motion.command(Side.Right, visible = true, animate = true, shown = true)
+        assertEquals(listOf(Side.Right), host.started)
+        // A close starts nothing.
+        motion.command(Side.Left, visible = false, animate = true, shown = true)
+        assertEquals(listOf(Side.Right), host.started)
+    }
 }

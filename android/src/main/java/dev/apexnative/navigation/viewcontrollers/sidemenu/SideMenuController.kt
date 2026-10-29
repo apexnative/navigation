@@ -29,7 +29,8 @@ import dev.apexnative.navigation.views.sidemenu.SideMenuView
  * - The current child is the open menu's node, else the center ([SideMenuMotion.openSide]: from the end of the
  *  opening to the end of the closing); the state, the options and back follow it.
  * - The center and the open menu show with the side menu ([visibleChildren]); a wait for the side menu to render
- *   waits for the center ([waitedChildren]); the menus' views are made with the side menu's.
+ *   waits for the center ([waitedChildren]); the menus' views join the drawer as `sideMenu.menusAttachMode` says
+ *   ([attached]): with the side menu's view, once it first appeared, or each as it first starts to show.
  * - Its options ([SideMenuPresenter]): from the resolution of [resolveShownOptions] at creation, at every appearance
  *   of a screen inside, and for the fields a merge names; `sideMenu.<side>.visible` acts once, from a merge or from the
  *  layout at the first show. What goes on up goes without `sideMenu`: the nearest side menu acts.
@@ -64,6 +65,12 @@ internal class SideMenuController(
     // From the end of its appearance's start until it disappears: the drawer's motion tells the menu screens then.
     private var appeared = false
     private var firstShown = false
+    private var firstAppeared = false
+
+    private val attachMode = SideMenuRules.attachModeOf(initialOptions.sideMenu, DefaultOptions.current.sideMenu)
+
+    /** The menus whose nodes' views are in the drawer, or join it as it is made. */
+    internal val attached = HashSet<Side>(2)
     // Its children go first as it is destroyed: nothing reacts to them, nor to the drawer, from the start.
     private var destroying = false
 
@@ -72,6 +79,7 @@ internal class SideMenuController(
 
     init {
         getChildControllers().forEach { it.parentController = this }
+        SideMenuRules.attachedAtCreation(attachMode).filter { childOf(it) != null }.forEach { attached += it }
     }
 
     override fun getChildControllers(): List<ViewController<*>> = listOfNotNull(center, left, right)
@@ -88,13 +96,16 @@ internal class SideMenuController(
 
     private fun childOf(side: Side): ViewController<*>? = if (side == Side.Left) left else right
 
-    // The drawer and its parts, each node's view in its part; the creation's options. An open menu recorded before the
-    // view existed is open in it from the start; the drawer is silent before its first layout.
+    // The drawer and its parts, the view of each node attached so far in its part; the creation's options. An open menu
+    // recorded before the view existed is open in it from the start; the drawer is silent before its first layout.
     override fun createView(): SideMenuView {
         val view = SideMenuView(activity)
         view.setCenter(center.view)
-        left?.let { view.addPart(Side.Left, it.view) }
-        right?.let { view.addPart(Side.Right, it.view) }
+        for (side in Side.entries) {
+            val child = childOf(side) ?: continue
+            view.addPart(side)
+            if (side in attached) view.fillPart(side, child.view)
+        }
         menus.applyOnCreation(view, resolveShownOptions(DefaultOptions.current))
         motion.openSide?.let { view.open(it, false) }
         view.follow(motion)
@@ -172,6 +183,14 @@ internal class SideMenuController(
         motion.containerAppeared()
     }
 
+    // `afterCenter`: the menus join once the side menu first appeared with its center.
+    override fun onViewDidAppear() {
+        super.onViewDidAppear()
+        if (firstAppeared || destroying || isDestroyed) return
+        firstAppeared = true
+        SideMenuRules.attachedAfterAppearance(attachMode).forEach(::attach)
+    }
+
     override fun onViewDisappear() {
         appeared = false
         motion.containerDisappeared()
@@ -222,6 +241,16 @@ internal class SideMenuController(
         if (child === currentChild) super.tabBarSettled(child)
     }
 
+    // The view of the menu on [side] joins its part, once, before its screens hear that they appear: a stack lays out
+    // its bar as it appears in the window. The drawer's first movement may come while it draws (a peek settles in
+    // `computeScroll`, before the drawer draws its children): the view joins the part then, measured and laid out at the
+    // next frame.
+    private fun attach(side: Side) {
+        val child = childOf(side) ?: return
+        if (destroying || isDestroyed || !attached.add(side)) return
+        peekView()?.fillPart(side, child.view)
+    }
+
     /** Destroys the side menu once: the drawer's callbacks stop first, then the children go. */
     override fun destroy() {
         if (isDestroyed) return
@@ -237,6 +266,8 @@ internal class SideMenuController(
             get() = this@SideMenuController.appeared && !destroying
 
         override fun child(side: Side): ViewController<*>? = childOf(side)
+
+        override fun starts(side: Side) = attach(side)
 
         override fun isEnabled(side: Side): Boolean =
             SideMenuRules.isEnabled(resolveShownOptions(DefaultOptions.current).sideMenu, side)

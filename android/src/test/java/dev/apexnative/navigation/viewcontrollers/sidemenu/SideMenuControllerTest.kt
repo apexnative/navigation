@@ -8,6 +8,7 @@ import dev.apexnative.navigation.options.DefaultOptions
 import dev.apexnative.navigation.options.Options
 import dev.apexnative.navigation.options.params.Bool
 import dev.apexnative.navigation.options.params.Fraction
+import dev.apexnative.navigation.options.params.Text
 import dev.apexnative.navigation.react.CommandListener
 import dev.apexnative.navigation.react.events.DispatcherFixture
 import dev.apexnative.navigation.react.events.EventJournal
@@ -421,6 +422,54 @@ class SideMenuControllerTest {
         override fun onSuccess(childId: String) = Unit
 
         override fun onError(message: String) = Unit
+    }
+
+    // `menusAttachMode`.
+
+    private fun attachMode(mode: String) = options { sideMenu.menusAttachMode = Text(mode) }
+
+    @Test
+    fun togetherAttachesTheMenusOfTheLayoutWithTheSideMenu() {
+        assertEquals(setOf(Side.Left, Side.Right), menu().attached)
+        assertEquals(setOf(Side.Left), menu(right = null, options = attachMode("together")).attached)
+    }
+
+    @Test
+    fun afterCenterAttachesTheMenusOnceTheSideMenuFirstAppeared() {
+        val menu = menu(options = attachMode("afterCenter"))
+        assertTrue(menu.attached.isEmpty())
+        menu.onViewWillAppear()
+        assertTrue(menu.attached.isEmpty())
+        menu.onViewDidAppear()
+        assertEquals(setOf(Side.Left, Side.Right), menu.attached)
+    }
+
+    @Test
+    fun theDefaultOptionsGiveTheModeWhenTheLayoutHasNone() {
+        DefaultOptions.set(attachMode("onOpen"))
+        val menu = shown(menu())
+        assertTrue(menu.attached.isEmpty())
+    }
+
+    @Test
+    fun onOpenAttachesAMenuAsItFirstStartsToShow() {
+        val menu = shown(menu(options = attachMode("onOpen")))
+        assertTrue(menu.attached.isEmpty())
+        drawer.drag(Side.Right)
+        drawer.frame(Side.Right, 0.3f)
+        assertEquals(setOf(Side.Right), menu.attached)
+        menu.mergeOptions(visible(Side.Left, true))
+        assertEquals(setOf(Side.Left, Side.Right), menu.attached)
+    }
+
+    @Test
+    fun onOpenAttachesAMenuTheLayoutOpensAtTheFirstShow() {
+        val menu = menu(options = options {
+            sideMenu.menusAttachMode = Text("onOpen")
+            sideMenu.left.visible = Bool(true)
+        })
+        menu.onViewWillAppear()
+        assertEquals(setOf(Side.Left), menu.attached)
     }
 
     private companion object {

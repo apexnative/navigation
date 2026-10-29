@@ -320,6 +320,7 @@ object OptionsFixture {
         "right", side("Right"),
         "openGestureMode", "bezel",
         "animationType", "door",
+        "menusAttachMode", "onOpen",
         "testID", "Menu",
     )
 

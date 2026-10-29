@@ -12,6 +12,24 @@ static const CGFloat ANNSideMenuDimAlpha = 0.5;
 static const CGFloat ANNSideMenuMaxStretch = 1.1;
 static const NSTimeInterval ANNSideMenuMinimumDuration = 0.1;
 
+// `sideMenu.menusAttachMode` of the side menu's own options, else of the defaults; any other value, and none, is
+// `together`.
+static ANNSideMenuAttachMode ANNSideMenuAttachModeOf(ANNNavigationOptions *options,
+                                                     ANNNavigationOptions *defaultOptions) {
+    Text *value = options.sideMenu.menusAttachMode;
+    if (!value.hasValue) {
+        value = defaultOptions.sideMenu.menusAttachMode;
+    }
+    NSString *mode = [value withDefault:nil];
+    if ([mode isEqualToString:@"afterCenter"]) {
+        return ANNSideMenuAttachModeAfterCenter;
+    }
+    if ([mode isEqualToString:@"onOpen"]) {
+        return ANNSideMenuAttachModeOnOpen;
+    }
+    return ANNSideMenuAttachModeTogether;
+}
+
 static UINavigationController *ANNStackOfResponder(UIResponder *responder) {
     for (; responder; responder = responder.nextResponder) {
         if ([responder isKindOfClass:UINavigationController.class]) {
@@ -65,6 +83,8 @@ typedef NS_ENUM(NSInteger, ANNSideMenuAppearance) {
 @property(nonatomic) BOOL glass;
 @property(nonatomic) ANNSideMenuAppearance appearance;
 @property(nonatomic, copy) NSString *scrimTestID;
+// The menu's part is in its container and renders (`menusAttachMode`).
+@property(nonatomic) BOOL attached;
 @end
 
 @implementation ANNSideMenuSideState
@@ -95,6 +115,8 @@ typedef NS_ENUM(NSInteger, ANNSideMenuAppearance) {
     ANNSideMenuSideState *_leftState;
     ANNSideMenuSideState *_rightState;
     ANNSideMenuOpenGestureMode _openGestureMode;
+    ANNSideMenuAttachMode _attachMode;
+    BOOL _firstAppeared;
     NSString *_animationType;
     UIView *_centerContainer;
     UIView *_leftContainer;
@@ -132,6 +154,7 @@ typedef NS_ENUM(NSInteger, ANNSideMenuAppearance) {
     _leftState = [ANNSideMenuSideState new];
     _rightState = [ANNSideMenuSideState new];
     _openGestureMode = ANNSideMenuOpenGestureModeBezel;
+    _attachMode = ANNSideMenuAttachModeOf(options, defaultOptions);
     [self setSideMenuChildren:childViewControllers];
 
     self.presenter = presenter;
@@ -181,10 +204,15 @@ typedef NS_ENUM(NSInteger, ANNSideMenuAppearance) {
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    _leftContainer = [self containerForChild:self.left];
-    _rightContainer = [self containerForChild:self.right];
-    _centerContainer = [self containerForChild:self.center];
+    _leftContainer = [self makeContainer];
+    _rightContainer = [self makeContainer];
+    _centerContainer = [self makeContainer];
+    [self putChild:self.center into:_centerContainer];
     _centerContainer.hidden = NO;
+    if (_attachMode == ANNSideMenuAttachModeTogether) {
+        [self attachMenu:ANNSideMenuSideLeft];
+        [self attachMenu:ANNSideMenuSideRight];
+    }
     [self applyGlassOf:ANNSideMenuSideLeft];
     [self applyGlassOf:ANNSideMenuSideRight];
 
@@ -200,30 +228,63 @@ typedef NS_ENUM(NSInteger, ANNSideMenuAppearance) {
     [self.view addGestureRecognizer:_pan];
 }
 
-// A child in a view of its own, which the menu moves; a menu's container is hidden while closed.
-- (UIView *)containerForChild:(UIViewController *)child {
+// The view of a part, which the menu moves; a menu's container is hidden while closed.
+- (UIView *)makeContainer {
     UIView *container = [[UIView alloc] initWithFrame:self.view.bounds];
     container.hidden = YES;
     [self.view addSubview:container];
-    if (child) {
-        [self addChildViewController:child];
-        child.view.frame = container.bounds;
-        child.view.autoresizingMask =
-            UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-        [container addSubview:child.view];
-        [child didMoveToParentViewController:self];
-    }
     return container;
 }
 
+// A part in its container, over the container's glass. Loading the part's view loads its node's, which renders.
+- (void)putChild:(UIViewController *)child into:(UIView *)container {
+    if (!child) {
+        return;
+    }
+    [self addChildViewController:child];
+    child.view.frame = container.bounds;
+    child.view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    [container addSubview:child.view];
+    [child didMoveToParentViewController:self];
+}
+
+// The menu's part goes into its container and renders, once: with the side menu's view (`together`), after its first
+// appearance (`afterCenter`), or as the menu first starts to open (`onOpen`, and any mode for a menu that opens
+// earlier). A menu not attached yet keeps its node and options; only its view and content wait.
+- (void)attachMenu:(ANNSideMenuSide)side {
+    ANNSideMenuChildViewController *menu = [self menuOf:side];
+    if (!menu || [self stateOf:side].attached || self.nodeHelper.destroyed) {
+        return;
+    }
+    [self loadViewIfNeeded];
+    ANNSideMenuSideState *state = [self stateOf:side];
+    if (state.attached) {
+        return;
+    }
+    state.attached = YES;
+    [self putChild:menu into:[self containerOf:side]];
+    [menu render];
+}
+
+// The current part renders, and every other part that is attached or will be with the side menu's view.
 - (void)render {
     [self.nodeHelper render];
     UIViewController *currentChild = self.getCurrentChild;
     for (UIViewController *vc in _sideMenuChildren) {
-        if (vc != currentChild) {
+        if (vc != currentChild && [self rendersPart:vc]) {
             [vc render];
         }
     }
+}
+
+- (BOOL)rendersPart:(UIViewController *)part {
+    if (part == self.left) {
+        return _attachMode == ANNSideMenuAttachModeTogether || _leftState.attached;
+    }
+    if (part == self.right) {
+        return _attachMode == ANNSideMenuAttachModeTogether || _rightState.attached;
+    }
+    return YES;
 }
 
 #pragma mark - Options
@@ -380,6 +441,7 @@ typedef NS_ENUM(NSInteger, ANNSideMenuAppearance) {
 
 // The menu on screen in its place under or over the center, its screens about to appear.
 - (void)show:(ANNSideMenuSide)side {
+    [self attachMenu:side];
     _side = side;
     [self orderSide:side];
     [self containerOf:side].hidden = NO;
@@ -585,6 +647,13 @@ typedef NS_ENUM(NSInteger, ANNSideMenuAppearance) {
     [self.center endAppearanceTransition];
     if (_side != ANNSideMenuSideNone) {
         [self side:_side transitionEnded:YES];
+    }
+    if (!_firstAppeared) {
+        _firstAppeared = YES;
+        if (_attachMode == ANNSideMenuAttachModeAfterCenter) {
+            [self attachMenu:ANNSideMenuSideLeft];
+            [self attachMenu:ANNSideMenuSideRight];
+        }
     }
 }
 

@@ -11,11 +11,23 @@ import kotlin.math.min
 
 /**
  * What the options of a side menu do on Android (`sideMenu.*`), without views: the values of each moment, `visible` as
- * a command, the sizes, the `testID`s. Android reads `enabled`, `width`, `height`, `visible`, `animate` and the
- * `testID`s of `sideMenu`; `openGestureMode`, `animationType`, `openMode`, `shouldStretchDrawer`, `animationVelocity`
- * and `glass` are iOS's.
+ * a command, the sizes, the `testID`s, when the menus join the drawer. Android reads `enabled`, `width`, `height`,
+ * `visible`, `animate`, `menusAttachMode` and the `testID`s of `sideMenu`; `openGestureMode`, `animationType`,
+ * `openMode`, `shouldStretchDrawer`, `animationVelocity` and `glass` are iOS's.
  */
 internal object SideMenuRules {
+    /** When the views of the menus' nodes join the drawer (`sideMenu.menusAttachMode`): their content renders then. */
+    enum class AttachMode {
+        /** With the side menu's view. */
+        Together,
+
+        /** Once the side menu first appeared, with its center. */
+        AfterCenter,
+
+        /** Each as it first starts to show: the drawer's first movement, or a command that opens it. */
+        OnOpen,
+    }
+
     /** A side's `visible` of one merge: open or close it, with its `animate`. */
     data class Command(val side: Side, val visible: Boolean, val animate: Boolean)
 
@@ -42,6 +54,26 @@ internal object SideMenuRules {
      * without animation whatever their `animate`.
      */
     fun firstShow(layout: SideMenuOptions): List<Side> = Side.entries.filter { sideOf(layout, it).visible.isTrue }
+
+    /**
+     * The mode of `sideMenu.menusAttachMode`: the side menu's [own] options, else the [defaults]; `together` without
+     * either. Read once, as the side menu is made.
+     */
+    fun attachModeOf(own: SideMenuOptions, defaults: SideMenuOptions): AttachMode {
+        val value = own.menusAttachMode.takeIf { it.hasValue() } ?: defaults.menusAttachMode
+        return when (value.get(null)) {
+            "afterCenter" -> AttachMode.AfterCenter
+            "onOpen" -> AttachMode.OnOpen
+            else -> AttachMode.Together
+        }
+    }
+
+    /** The menus that join as the side menu is made: both with `together`. */
+    fun attachedAtCreation(mode: AttachMode): List<Side> = if (mode == AttachMode.Together) Side.entries else emptyList()
+
+    /** The menus that join once the side menu first appeared: both with `afterCenter`. */
+    fun attachedAfterAppearance(mode: AttachMode): List<Side> =
+        if (mode == AttachMode.AfterCenter) Side.entries else emptyList()
 
     /** `enabled` of [side]: true unless `false`, from the side menu's resolved options. */
     fun isEnabled(options: SideMenuOptions, side: Side): Boolean = !sideOf(options, side).enabled.isFalse

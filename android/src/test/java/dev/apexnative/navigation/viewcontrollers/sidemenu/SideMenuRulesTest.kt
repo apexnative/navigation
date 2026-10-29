@@ -18,7 +18,7 @@ import org.junit.Test
 
 /**
  * The pure rules of a side menu's options on Android: `visible` as a command, the sizes, the `testID`s, what a merge
- * names, the pass-on without `sideMenu`.
+ * names, the pass-on without `sideMenu`, when the menus join the drawer.
  */
 class SideMenuRulesTest {
     private fun side(change: SideMenuSideOptions.() -> Unit) = SideMenuSideOptions().apply(change)
@@ -158,5 +158,30 @@ class SideMenuRulesTest {
     fun theDrawerLeavesBackToTheActivity() {
         assertTrue(SideMenuRules.leavesKeyToActivity(KeyEvent.KEYCODE_BACK))
         assertFalse(SideMenuRules.leavesKeyToActivity(KeyEvent.KEYCODE_ENTER))
+    }
+
+    // `menusAttachMode`.
+
+    @Test
+    fun theAttachModeIsTheOwnElseTheDefaultElseTogether() {
+        val none = menu {}
+        assertEquals(SideMenuRules.AttachMode.Together, SideMenuRules.attachModeOf(none, none))
+        val onOpen = menu { menusAttachMode = Text("onOpen") }
+        val afterCenter = menu { menusAttachMode = Text("afterCenter") }
+        assertEquals(SideMenuRules.AttachMode.OnOpen, SideMenuRules.attachModeOf(onOpen, afterCenter))
+        assertEquals(SideMenuRules.AttachMode.AfterCenter, SideMenuRules.attachModeOf(none, afterCenter))
+        val together = menu { menusAttachMode = Text("together") }
+        assertEquals(SideMenuRules.AttachMode.Together, SideMenuRules.attachModeOf(together, onOpen))
+    }
+
+    @Test
+    fun theMenusJoinWithTheSideMenuOrAfterItAppearedByTheMode() {
+        val both = listOf(Side.Left, Side.Right)
+        assertEquals(both, SideMenuRules.attachedAtCreation(SideMenuRules.AttachMode.Together))
+        assertTrue(SideMenuRules.attachedAtCreation(SideMenuRules.AttachMode.AfterCenter).isEmpty())
+        assertTrue(SideMenuRules.attachedAtCreation(SideMenuRules.AttachMode.OnOpen).isEmpty())
+        assertEquals(both, SideMenuRules.attachedAfterAppearance(SideMenuRules.AttachMode.AfterCenter))
+        assertTrue(SideMenuRules.attachedAfterAppearance(SideMenuRules.AttachMode.Together).isEmpty())
+        assertTrue(SideMenuRules.attachedAfterAppearance(SideMenuRules.AttachMode.OnOpen).isEmpty())
     }
 }
