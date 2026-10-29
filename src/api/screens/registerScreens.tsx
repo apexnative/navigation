@@ -27,6 +27,7 @@ import { clearOptions, mergeOptions as sendMergeOptions } from '../../engine/com
 import { changeOverOwn, optionsChange } from '../../engine/optionsChange';
 import { notedScreens, ownOptionsOf } from '../../engine/rememberedOptions';
 import { openNativeScreens } from '../../engine/nativeScreens';
+import { placeOf } from '../../engine/places';
 import { propsOf } from '../../engine/props';
 import { familyOf, newestType, onRedefined } from '../../engine/refresh';
 import {
@@ -136,7 +137,7 @@ function applyEdit(next: object) {
     // A screen the native side has but React hasn't mounted yet (a tab not selected yet) shows the edit too.
     const shown = native
       ? openNativeScreens(name)
-      : [...new Set([...shownScreens(name), ...notedScreens(name)])].map((id) => ({
+      : [...new Set([...shownScreens(name), ...notedScreens(name).filter(isPlaced)])].map((id) => ({
           id,
           props: propsOf(id),
         }));
@@ -153,6 +154,11 @@ function applyEdit(next: object) {
       if (merge) sendMergeOptions(id, merge);
     }
   }
+}
+
+// A screen the engine knows the place of: one whose command failed after its layout was built has none.
+function isPlaced(id: string): boolean {
+  return placeOf(id) !== undefined;
 }
 
 function madeOtherwise(before: NativeScreen<any>, after: NativeScreen<any>): boolean {

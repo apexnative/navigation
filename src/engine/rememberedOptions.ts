@@ -123,6 +123,8 @@ export function rootGoesOut(nodes: LayoutNode[], again: SentRoot | undefined): v
   const before = lastRoot;
   lastRoot = { nodes, ids: new Set(nodes.flatMap(idsOf)) };
   if (!before) return;
+  // The screens of the root before go with it, the tabs React never mounted too.
+  for (const id of before.ids) if (!lastRoot.ids.has(id)) ownOptions.delete(id);
   const moved = new Map<string, Options>();
   if (again === before) {
     pairNodes(before.nodes, nodes, (old, node) => {
