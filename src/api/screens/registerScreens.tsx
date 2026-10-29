@@ -134,26 +134,77 @@ function applyEdit(next: object) {
       DevSettings.reload('[navigation] A native screen changed its name or its useProps');
       return;
     }
-    // A screen the native side has but React hasn't mounted yet (a tab not selected yet) shows the edit too.
-    const shown = native
-      ? openNativeScreens(name)
-      : [...new Set([...shownScreens(name), ...notedScreens(name).filter(isPlaced)])].map((id) => ({
-          id,
-          props: propsOf(id),
-        }));
-    for (const { id, props } of shown) {
-      const options = (definition: { options?: ScreenOptionsInput<any> } | undefined) =>
-        mergeOptions(
-          buildScreenOptions(groupOptions, props),
-          buildScreenOptions(definition?.options, props)
-        );
-      const shownWith = options(before);
-      const change = optionsChange(shownWith, options(edited));
-      const { merge, removed } = changeOverOwn(change, shownWith, ownOptionsOf(id) ?? shownWith);
-      if (removed.length > 0) clearOptions(id, removed);
-      if (merge) sendMergeOptions(id, merge);
-    }
+    applyChange(
+      name,
+      native,
+      { group: groupOptions, definition: before },
+      { group: groupOptions, definition: edited }
+    );
   }
+}
+
+/** The options a screen is shown with: those of its group, and those of its definition over them. */
+interface ShownOptions {
+  group: ScreenOptionsInput<object> | undefined;
+  definition: { options?: ScreenOptionsInput<any> } | undefined;
+}
+
+// What an edit changed in a screen's options goes to every screen of it the native side has, a screen React hasn't
+// mounted yet too (a tab not selected yet), as a command would have shown it; only where the screen still has what
+// the definition before gave.
+function applyChange(name: string, native: boolean, before: ShownOptions, after: ShownOptions) {
+  const shown = native
+    ? openNativeScreens(name)
+    : [...new Set([...shownScreens(name), ...notedScreens(name).filter(isPlaced)])].map((id) => ({
+        id,
+        props: propsOf(id),
+      }));
+  for (const { id, props } of shown) {
+    const options = ({ group, definition }: ShownOptions) =>
+      mergeOptions(
+        buildScreenOptions(group, props),
+        buildScreenOptions(definition?.options, props)
+      );
+    const shownWith = options(before);
+    const change = optionsChange(shownWith, options(after));
+    const { merge, removed } = changeOverOwn(change, shownWith, ownOptionsOf(id) ?? shownWith);
+    if (removed.length > 0) clearOptions(id, removed);
+    if (merge) sendMergeOptions(id, merge);
+  }
+}
+
+// The screens map registered again (Fast Refresh ran the module of the app): a screen written in the map itself, a
+// definition no module exports, has no family to tell its edit, so its definition before and after are compared here.
+function applyRegisteredAgain(
+  name: string,
+  entry: unknown,
+  group: ScreenOptionsInput<object> | undefined
+) {
+  const previous = editable.get(name);
+  const before = previous?.screen();
+  if (before === undefined || before === entry) return;
+  if (isNativeScreen(before) && isNativeScreen(entry)) {
+    if (madeOtherwise(newestType(before), entry)) {
+      DevSettings.reload('[navigation] A native screen changed its name or its useProps');
+      return;
+    }
+    applyChange(
+      name,
+      true,
+      { group: previous!.groupOptions, definition: newestType(before) },
+      { group, definition: entry }
+    );
+    return;
+  }
+  const was = definitionOf(before);
+  const now = definitionOf(entry);
+  if (!was && !now && previous!.groupOptions === group) return;
+  applyChange(
+    name,
+    false,
+    { group: previous!.groupOptions, definition: was },
+    { group, definition: now }
+  );
 }
 
 // A screen the engine knows the place of: one whose command failed after its layout was built has none.
@@ -200,7 +251,10 @@ function registerScreen(
   if (isNativeScreen(entry)) {
     // Read on every show, the newest after Fast Refresh, as for a screen of defineScreen.
     const screen = () => newestType(entry);
-    if (__DEV__) editable.set(name, { screen: () => entry, groupOptions });
+    if (__DEV__) {
+      applyRegisteredAgain(name, entry, groupOptions);
+      editable.set(name, { screen: () => entry, groupOptions });
+    }
     registerEngineScreen(name, {
       nativeName: entry.nativeName,
       options: (props) =>
@@ -240,7 +294,10 @@ function registerScreen(
   }
   // Read on every show: after Fast Refresh a screen of defineScreen gives its new options, key and pair.
   const definition = () => toDefinition(entry);
-  if (__DEV__) editable.set(name, { screen: () => entry, groupOptions });
+  if (__DEV__) {
+    applyRegisteredAgain(name, entry, groupOptions);
+    editable.set(name, { screen: () => entry, groupOptions });
+  }
   registerEngineScreen(name, {
     component: () => wrapScreen(name, definition().component, wrapper),
     options: (props) =>

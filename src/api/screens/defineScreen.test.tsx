@@ -345,4 +345,28 @@ describe('an edit of the options of a screen that shows', () => {
     expect(id).toBe('Component41');
     expect(options.topBar.rightButtons[0].text).toBe('New post');
   });
+
+  it('reaches the screens of a definition written in the screens map, once the map is registered again', () => {
+    const Settings = () => null;
+    registerScreens([
+      {
+        source: 'screens',
+        screens: {
+          Settings: defineScreen({ component: Settings, options: (s) => s.title('One') }),
+        },
+      },
+    ]);
+    notePlaces(toNativeLayout({ component: { id: 'Component51', name: 'Settings' } }), 'root');
+    sent.mockClear();
+    // The app's module ran again: the map is new, its definitions too, and none of them has a family.
+    registerScreens([
+      {
+        source: 'screens',
+        screens: {
+          Settings: defineScreen({ component: Settings, options: (s) => s.title('Two') }),
+        },
+      },
+    ]);
+    expect(sent.mock.calls).toEqual([['Component51', { topBar: { title: { text: 'Two' } } }]]);
+  });
 });
