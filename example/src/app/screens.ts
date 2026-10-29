@@ -43,6 +43,7 @@ import { WaitForRenderDemoScreen } from '../demo/WaitForRenderDemoScreen';
 import { HeavyScreen } from '../demo/HeavyScreen';
 import { LoginDemoScreen } from '../demo/LoginDemoScreen';
 import { WelcomeDemoScreen } from '../demo/WelcomeDemoScreen';
+import { GradientScreen } from '../demo/GradientScreen';
 import { GroupFirstScreen } from '../demo/GroupFirstScreen';
 import { GroupSecondScreen } from '../demo/GroupSecondScreen';
 import { TabsAccessory } from '../demo/TabsAccessory';
@@ -149,6 +150,7 @@ export const screens = {
   // The screens of section 17.
   LateContent: LateContentScreen,
   Gallery: GalleryScreen,
+  Gradient: GradientScreen,
   GalleryItem: GalleryItemScreen,
   GalleryList: GalleryListScreen,
   People: PeopleScreen,

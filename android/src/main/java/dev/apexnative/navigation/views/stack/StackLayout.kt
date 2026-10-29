@@ -145,12 +145,15 @@ class StackLayout(context: Context) : CoordinatorLayout(context) {
 
     /**
      * [view] extends its start edge ([atStart]) or its end edge by [width] pixels while it moves, as the system's
-     * transitions between activities extend a window: its background fills the room it moves away from, so the screen
-     * under it never shows at its edge. [dropEdge] ends it. Each frame of the move calls [edgesMoved].
+     * transitions between activities extend a window: the pixels at its edge, stretched, fill the room it moves away
+     * from, so the screen under it never shows at its edge. [dropEdge] ends it. Each frame of the move calls
+     * [edgesMoved].
      */
     fun extendEdge(view: View, atStart: Boolean, width: Int) {
         val left = atStart != (layoutDirection == LAYOUT_DIRECTION_RTL)
-        val picture = ScreenEdge.pictureOf(view) ?: return
+        // A screen put back for a pop keeps the size of its last layout until the next one: after a rotation while it was
+        // out of the stack, its pixels are of another width.
+        val picture = ScreenEdge.pictureOf(view, left, laidOut = view.width == this.width) ?: return
         edges[view] = Edge(picture, width, left)
         invalidate()
     }
