@@ -4,7 +4,7 @@ import { setDefaultOptions, setRoot } from '../../engine/commands';
 import { type AppProvider, enableSlots, withSlots } from '../../engine/slots';
 import { listenToNativeScreens, startHost } from '../../engine/nativeScreens';
 import { sameValue } from '../../engine/optionsChange';
-import { familyOf, keepStateOf } from '../../engine/refresh';
+import { familyOf, keepStateOf, refreshRuns } from '../../engine/refresh';
 import { listenToSplitViews } from '../../engine/places';
 import { hasNativeScreenHooks } from '../../engine/screens';
 import type { LayoutRoot } from '../../interfaces/Layout';
@@ -27,6 +27,7 @@ import type { ErrorFallbackProps } from '../screens/ScreenBoundary';
 import { getAppContext, setAppContext } from '../context/appContext';
 import {
   type AppOptionsInput,
+  getDirection,
   getTheme,
   initTheme,
   setTheme,
@@ -572,13 +573,15 @@ export function createNavigation<
     config = next;
     if (screensRegistered) registerAppScreens();
     setActiveApp({ roots: config.roots, presentation: config.presentation, mounted });
+    // A direction the app set since stays too, unless the edit changes the config's.
     const defaultsBefore = themedDefaultOptions();
-    initTheme(getTheme(), appDefaults(), config.direction);
+    const direction = sameValue(before.direction, next.direction) ? getDirection() : next.direction;
+    initTheme(getTheme(), appDefaults(), direction);
     if (!sameValue(before.theme, next.theme)) {
       setTheme(next.theme ?? {});
     } else {
       const defaults = themedDefaultOptions();
-      if (defaults && !sameValue(defaultsBefore, defaults)) setDefaultOptions(defaults);
+      if (!sameValue(defaultsBefore, defaults)) setDefaultOptions(defaults ?? {});
     }
     if (listening) {
       removeListeners?.();
@@ -664,9 +667,10 @@ export function noteReplacingApp(app: unknown): void {
   }
 }
 
-// The app that launched, when React Refresh runs and a new app may be its module running again.
+// The app that launched, when React Refresh runs and a new app may be its module running again: one its module
+// exports (Metro gives it a family), or one the entry registers again under the app's name.
 function hotCandidate(): NavigationApp<any, any> | undefined {
-  return launchedApp && familyOf(launchedApp) ? launchedApp : undefined;
+  return launchedApp && refreshRuns() ? launchedApp : undefined;
 }
 
 // A willMount that never ends keeps the splash screen for good: in development the app hears of it.

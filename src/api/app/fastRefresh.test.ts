@@ -1,6 +1,6 @@
 import { commands as native } from '../../engine/native';
 import { isReactScreen, screenOptions } from '../../engine/screens';
-import { getTheme, setTheme } from '../theme/theme';
+import { getDirection, getTheme, setDirection, setTheme } from '../theme/theme';
 import { createNavigation, noteReplacingApp, startApp } from './createNavigation';
 
 jest.mock('../../engine/native', () => ({
@@ -108,13 +108,24 @@ describe('the module of the app running again after an edit', () => {
 
   it("takes an app the entry registers again under the app's name, one it doesn't export", async () => {
     const willMount = jest.fn();
+    // Not exported: Metro gives it no family.
     const first = createNavigation({ screens: { Home }, root: 'Home', willMount });
-    register(first);
     await startApp(first);
     const second = createNavigation({ screens: { Home, Profile }, root: 'Home', willMount });
     noteReplacingApp(second);
     await startApp(second);
     expect(isReactScreen('Profile')).toBe(true);
     expect(willMount).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the direction the app set since, when the edit leaves the direction as it was', async () => {
+    const first = createNavigation({ screens: { Home }, root: 'Home', direction: 'ltr' });
+    register(first);
+    await startApp(first);
+    setDirection('rtl');
+    const second = createNavigation({ screens: { Home }, root: 'Home', direction: 'ltr' });
+    register(second, first);
+    await Promise.resolve();
+    expect(getDirection()).toBe('rtl');
   });
 });

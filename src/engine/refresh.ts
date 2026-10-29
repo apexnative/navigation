@@ -26,6 +26,11 @@ function reactRefresh(): ReactRefresh | undefined {
     ReactRefresh | undefined;
 }
 
+/** Whether React Refresh runs: development with Metro. */
+export function refreshRuns(): boolean {
+  return reactRefresh()?.getFamilyByType !== undefined;
+}
+
 /** The family a component's versions are kept in; undefined in a release build or for a value Metro didn't export. */
 export function familyOf(type: unknown): Family | undefined {
   return reactRefresh()?.getFamilyByType?.(type);
