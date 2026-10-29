@@ -3,8 +3,6 @@ package dev.apexnative.navigation.viewcontrollers.stack.search
 import android.app.Activity
 import android.content.Context
 import android.graphics.drawable.Drawable
-import android.view.Menu
-import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import androidx.appcompat.R as AppCompatR
@@ -15,12 +13,14 @@ import androidx.core.view.WindowInsetsCompat
 import dev.apexnative.navigation.options.SearchBarOptions
 import dev.apexnative.navigation.options.params.ThemeColour
 import dev.apexnative.navigation.react.events.EventEmitter
+import dev.apexnative.navigation.utils.TestIds
 import dev.apexnative.navigation.utils.dp
 import dev.apexnative.navigation.viewcontrollers.parent.OptionsScreen
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.ViewController
 import dev.apexnative.navigation.views.stack.topbar.TopBar
 import dev.apexnative.navigation.views.stack.topbar.TopBarDefaults
 import dev.apexnative.navigation.views.stack.topbar.search.SearchStyle
+import dev.apexnative.navigation.views.stack.topbar.titlebar.BarButtonView
 
 /**
  * The search of the screens of a stack (`topBar.searchBar`): each screen has its own while it is in the stack, and the
@@ -38,6 +38,7 @@ class StackSearchPresenter(
     private var suggestions: View? = null
     private var wasActive = false
     private var onActiveChanged: Runnable? = null
+    private var magnifier: BarButtonView? = null
 
     /** The search of the screen on top opened or closed: the bar's hideOnScroll stops or goes on. */
     fun setOnActiveChanged(listener: Runnable?) {
@@ -49,6 +50,7 @@ class StackSearchPresenter(
 
     fun bindTopBar(topBar: TopBar) {
         this.topBar = topBar
+        magnifier = null
         // The suggestions hang from the bar: they follow its height as the search opens and its scopes show.
         topBar.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> topBar.post { positionSuggestions(topBar) } }
     }
@@ -91,28 +93,29 @@ class StackSearchPresenter(
         return true
     }
 
-    /** After the right buttons change: the magnifier of an integrated search goes back among them, last. */
+    /**
+     * After the right buttons change: the magnifier of an integrated search stands after them, before "⋮", as a button
+     * of the bar, with the id `<topBar.searchBar.testID>.button`.
+     */
     fun applyMagnifier() {
         val bar = topBar ?: return
-        val menu = bar.rightButtonBar.menu
-        val item = menu.findItem(MAGNIFIER_ID)
-        if (shown?.showsMagnifier != true) {
-            if (item != null) menu.removeItem(MAGNIFIER_ID)
+        val row = bar.rightButtonBar
+        val search = shown
+        if (search?.showsMagnifier != true) {
+            row.setTrailing(null)
             return
         }
-        if (item != null) return
-        val context = styleContext()
-        val label = context.getString(AppCompatR.string.abc_searchview_description_search)
-        menu.add(Menu.NONE, MAGNIFIER_ID, MAGNIFIER_ORDER, label).apply {
-            icon = AppCompatResources.getDrawable(context, AppCompatR.drawable.abc_ic_search_api_material)?.mutate()?.also {
-                it.setTint(TopBarDefaults.overflowIconColor(context))
-            }
-            setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
-            setOnMenuItemClickListener {
-                shown?.activate()
-                true
-            }
+        val button = magnifier ?: BarButtonView(row.context).also { button ->
+            val context = styleContext()
+            val icon = AppCompatResources.getDrawable(context, AppCompatR.drawable.abc_ic_search_api_material)?.mutate()
+            icon?.setTint(TopBarDefaults.overflowIconColor(context))
+            val label = context.getString(AppCompatR.string.abc_searchview_description_search)
+            button.show(label, icon, null, true)
+            button.setOnClickListener { shown?.activate() }
+            magnifier = button
         }
+        TestIds.apply(button, search.options.testID.get(null)?.let { "$it.button" })
+        row.setTrailing(button)
     }
 
     override fun refresh(search: ScreenSearch) {
@@ -132,7 +135,9 @@ class StackSearchPresenter(
     fun onConfigurationChanged(tint: ThemeColour) {
         shown?.takeTint(tint)
         searches.values.forEach { it.restyle() }
-        topBar?.rightButtonBar?.menu?.removeItem(MAGNIFIER_ID)
+        // The magnifier is made again in the new mode's colors.
+        magnifier = null
+        topBar?.rightButtonBar?.setTrailing(null)
         refresh()
     }
 
@@ -230,11 +235,5 @@ class StackSearchPresenter(
         if (lp.topMargin == top) return
         lp.topMargin = top
         card.layoutParams = lp
-    }
-
-    private companion object {
-        val MAGNIFIER_ID = View.generateViewId()
-        // The highest a menu order goes: after the screen's own buttons.
-        const val MAGNIFIER_ORDER = 0xFFFF
     }
 }

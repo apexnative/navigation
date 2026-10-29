@@ -6,32 +6,39 @@ import React, {
   lazy,
   type ReactNode,
   Suspense,
-  useEffect,
   useMemo,
   useState,
 } from 'react';
-import { Platform, StyleSheet } from 'react-native';
+import { DevSettings, Platform, StyleSheet } from 'react-native';
 import ANNTurboModule from '../../adapters/NativeANNTurboModule';
 import type { NativeControllerProps } from '../../engine/nativeScreens';
 import { isButtonRoot } from '../../engine/props';
 import {
   checkArrangements,
-  type EngineArrangement,
   onScreenUnmounted,
   registerScreen as registerEngineScreen,
   type ScreenRootProps,
+  shownScreens,
 } from '../../engine/screens';
 import { screenUnmounted } from '../events/screenLifecycle';
 import { mergeOptions } from '../../engine/mergeOptions';
 import { preparedPadding } from '../../engine/slots';
-import { buildScreenOptions, type ScreenDefinition, type ScreenOptionsInput } from './defineScreen';
-import { isNativeScreen, type NativeScreen } from './nativeScreens';
+import { clearOptions, mergeOptions as sendMergeOptions } from '../../engine/commands';
+import { changeOverOwn, optionsChange } from '../../engine/optionsChange';
+import { notedScreens, ownOptionsOf } from '../../engine/rememberedOptions';
+import { openNativeScreens } from '../../engine/nativeScreens';
+import { placeOf } from '../../engine/places';
+import { propsOf } from '../../engine/props';
+import { familyOf, newestType, onRedefined } from '../../engine/refresh';
 import {
-  type Arrangement,
-  isArrangement,
-  type ScreenArrangement,
-  toEngineArrangement,
-} from './arrangement';
+  buildScreenOptions,
+  definitionOf,
+  ownDefinitionOf,
+  type ScreenDefinition,
+  type ScreenOptionsInput,
+} from './defineScreen';
+import { isNativeScreen, type NativeScreen, type NativeScreenHookProps } from './nativeScreens';
+import { type Arrangement, isArrangement, toEngineArrangement } from './arrangement';
 import { type ErrorFallbackProps, ScreenBoundary } from './ScreenBoundary';
 import ANNSafeAreaView from '../safeArea/ANNSafeAreaViewNativeComponent';
 
@@ -98,6 +105,117 @@ export interface ScreenSet {
 // The root of a screen tells when it unmounts: what the screen left behind goes.
 onScreenUnmounted(screenUnmounted);
 
+// The screens of defineScreen by name, in development: what `screens` gives (a lazy screen's module once loaded) and
+// the options of its group.
+const editable = new Map<
+  string,
+  { screen: () => unknown; groupOptions: ScreenOptionsInput<object> | undefined }
+>();
+
+onRedefined(applyEdit);
+
+// Fast Refresh ran the module of a screen again: the screens of it that show take what the edit changed in their
+// options, as a command would have shown them. The family's newest is still the version before the edit here, as React
+// Refresh moves it on only after the update.
+function applyEdit(next: object) {
+  const family = familyOf(next);
+  const edited = ownDefinitionOf(next) ?? (isNativeScreen(next) ? next : undefined);
+  if (!family || !edited) return;
+  for (const [name, { screen, groupOptions }] of editable) {
+    const current = screen();
+    if (current === undefined || familyOf(current) !== family) continue;
+    const native = isNativeScreen(current);
+    const before = native ? newestType(current) : definitionOf(current);
+    // The screen as it was registered: its own module running, nothing edited yet.
+    if (before === edited) continue;
+    // What a native screen is made of goes to the native side when it is registered and shown: a change of it starts
+    // the app again.
+    if (native && isNativeScreen(edited) && madeOtherwise(newestType(current), edited)) {
+      DevSettings.reload('[navigation] A native screen changed its name or its useProps');
+      return;
+    }
+    applyChange(
+      name,
+      native,
+      { group: groupOptions, definition: before },
+      { group: groupOptions, definition: edited }
+    );
+  }
+}
+
+/** The options a screen is shown with: those of its group, and those of its definition over them. */
+interface ShownOptions {
+  group: ScreenOptionsInput<object> | undefined;
+  definition: { options?: ScreenOptionsInput<any> } | undefined;
+}
+
+// What an edit changed in a screen's options goes to every screen of it the native side has, a screen React hasn't
+// mounted yet too (a tab not selected yet), as a command would have shown it; only where the screen still has what
+// the definition before gave.
+function applyChange(name: string, native: boolean, before: ShownOptions, after: ShownOptions) {
+  const shown = native
+    ? openNativeScreens(name)
+    : [...new Set([...shownScreens(name), ...notedScreens(name).filter(isPlaced)])].map((id) => ({
+        id,
+        props: propsOf(id),
+      }));
+  for (const { id, props } of shown) {
+    const options = ({ group, definition }: ShownOptions) =>
+      mergeOptions(
+        buildScreenOptions(group, props),
+        buildScreenOptions(definition?.options, props)
+      );
+    const shownWith = options(before);
+    const change = optionsChange(shownWith, options(after));
+    const { merge, removed } = changeOverOwn(change, shownWith, ownOptionsOf(id) ?? shownWith);
+    if (removed.length > 0) clearOptions(id, removed);
+    if (merge) sendMergeOptions(id, merge);
+  }
+}
+
+// The screens map registered again (Fast Refresh ran the module of the app): a screen written in the map itself, a
+// definition no module exports, has no family to tell its edit, so its definition before and after are compared here.
+function applyRegisteredAgain(
+  name: string,
+  entry: unknown,
+  group: ScreenOptionsInput<object> | undefined
+) {
+  const previous = editable.get(name);
+  const before = previous?.screen();
+  if (before === undefined || before === entry) return;
+  if (isNativeScreen(before) && isNativeScreen(entry)) {
+    if (madeOtherwise(newestType(before), entry)) {
+      DevSettings.reload('[navigation] A native screen changed its name or its useProps');
+      return;
+    }
+    applyChange(
+      name,
+      true,
+      { group: previous!.groupOptions, definition: newestType(before) },
+      { group, definition: entry }
+    );
+    return;
+  }
+  const was = definitionOf(before);
+  const now = definitionOf(entry);
+  if (!was && !now && previous!.groupOptions === group) return;
+  applyChange(
+    name,
+    false,
+    { group: previous!.groupOptions, definition: was },
+    { group, definition: now }
+  );
+}
+
+// A screen the engine knows the place of: one whose command failed after its layout was built has none.
+function isPlaced(id: string): boolean {
+  return placeOf(id) !== undefined;
+}
+
+function madeOtherwise(before: NativeScreen<any>, after: NativeScreen<any>): boolean {
+  return before.nativeName !== after.nativeName || !before.useProps !== !after.useProps;
+}
+
 export function registerScreens(sets: ScreenSet[], wrapper: ScreenWrapper = {}) {
   // The screens of every set are in one namespace: a command names a screen without its group.
   const sources = new Map<string, string>();
@@ -131,21 +249,31 @@ function registerScreen(
     return;
   }
   if (isNativeScreen(entry)) {
+    // Read on every show, the newest after Fast Refresh, as for a screen of defineScreen.
+    const screen = () => newestType(entry);
+    if (__DEV__) {
+      applyRegisteredAgain(name, entry, groupOptions);
+      editable.set(name, { screen: () => entry, groupOptions });
+    }
     registerEngineScreen(name, {
       nativeName: entry.nativeName,
       options: (props) =>
         mergeOptions(
           buildScreenOptions(groupOptions, props),
-          buildScreenOptions(entry.options, props)
+          buildScreenOptions(screen().options, props)
         ),
-      controller: entry.useProps && wrapNativeScreen(name, entry.useProps, wrapper),
-      arrangement: pairOf(name, entry.arrangement),
+      controller: entry.useProps && wrapNativeScreen(name, entry, wrapper),
+      arrangement: () => {
+        const arrangement = screen().arrangement;
+        return arrangement && toEngineArrangement(name, arrangement);
+      },
     });
     return;
   }
   // React.memo and forwardRef components are objects, so the kind of entry is told by its keys.
   if (isObject(entry) && 'load' in entry) {
     const screen = lazyScreen(entry.load);
+    if (__DEV__) editable.set(name, { screen: screen.loaded, groupOptions });
     registerEngineScreen(name, {
       component: () => wrapScreen(name, screen.component, wrapper),
       // A command loads the screen before it reads its options.
@@ -164,32 +292,34 @@ function registerScreen(
     });
     return;
   }
-  const definition = toDefinition(entry);
+  // Read on every show: after Fast Refresh a screen of defineScreen gives its new options, key and pair.
+  const definition = () => toDefinition(entry);
+  if (__DEV__) {
+    applyRegisteredAgain(name, entry, groupOptions);
+    editable.set(name, { screen: () => entry, groupOptions });
+  }
   registerEngineScreen(name, {
-    component: () => wrapScreen(name, definition.component, wrapper),
+    component: () => wrapScreen(name, definition().component, wrapper),
     options: (props) =>
       mergeOptions(
         buildScreenOptions(groupOptions, props),
-        buildScreenOptions(definition.options, props)
+        buildScreenOptions(definition().options, props)
       ),
-    key: definition.key && ((props) => definition.key!(props)),
+    key: (props) => definition().key?.(props),
     ownRoot,
-    arrangement: pairOf(name, definition.arrangement),
+    arrangement: () => {
+      const arrangement = definition().arrangement;
+      return arrangement && toEngineArrangement(name, arrangement);
+    },
   });
 }
 
-// The pair of a screen whose `arrangement` is known at registration: checked and filled in once.
-function pairOf(
-  name: string,
-  arrangement: ScreenArrangement<any> | undefined
-): (() => EngineArrangement) | undefined {
-  if (!arrangement) return undefined;
-  const pair = toEngineArrangement(name, arrangement);
-  return () => pair;
-}
-
 function toDefinition(value: ScreenComponent | ScreenDefinition): ScreenDefinition {
-  return isObject(value) && 'component' in value ? value : { component: value };
+  // A screen of defineScreen renders as itself: React Refresh knows it by its module's export, and the version of the
+  // newest definition renders in its place.
+  const defined = definitionOf(value);
+  if (defined) return { ...defined, component: value as ScreenComponent };
+  return isObject(value) && 'component' in value ? value : { component: value as ScreenComponent };
 }
 
 /**
@@ -198,15 +328,17 @@ function toDefinition(value: ScreenComponent | ScreenDefinition): ScreenDefiniti
  * screen) waits for it in Suspense.
  */
 function lazyScreen(loadModule: () => ScreenModule | PromiseLike<ScreenModule>) {
-  let definition: ScreenDefinition | undefined;
+  // The screen the module gives; its definition is read from it each time, the newest after Fast Refresh.
+  let loaded: ScreenComponent | ScreenDefinition | undefined;
   let loading: Promise<void> | undefined;
+  const definition = () => (loaded ? toDefinition(loaded) : undefined);
   const load = (): Promise<void> | undefined => {
-    if (definition) return undefined;
+    if (loaded) return undefined;
     if (!loading) {
       loading = Promise.resolve()
         .then(loadModule)
         .then((module) => {
-          definition = toDefinition(unwrapModule(module));
+          loaded = unwrapModule(module);
         });
       loading.catch(() => {
         loading = undefined;
@@ -216,14 +348,14 @@ function lazyScreen(loadModule: () => ScreenModule | PromiseLike<ScreenModule>) 
   };
   const Loaded = lazy(async () => {
     await load();
-    return { default: definition!.component };
+    return { default: definition()!.component };
   });
   function LazyScreen(props: object) {
     // The same component for the life of the view, so that the load doesn't mount it again.
-    const [Screen] = useState(() => definition?.component ?? Loaded);
+    const [Screen] = useState(() => definition()?.component ?? Loaded);
     return <Screen {...props} />;
   }
-  return { load, definition: () => definition, component: LazyScreen };
+  return { load, definition, loaded: () => loaded, component: LazyScreen };
 }
 
 function unwrapModule(loaded: ScreenModule): ScreenComponent | ScreenDefinition {
@@ -297,15 +429,11 @@ function wrapScreen(name: string, Screen: ScreenComponent, wrapper: ScreenWrappe
  */
 function wrapNativeScreen(
   name: string,
-  useProps: (props: object) => object,
+  entry: NativeScreen<any>,
   { provider: Provider, onError }: ScreenWrapper
 ): ComponentType<NativeControllerProps> {
-  function Hook({ props, onProps }: Pick<NativeControllerProps, 'props' | 'onProps'>) {
-    const result = useProps(props);
-    // After each render React committed, so the native side never shows what the app did not.
-    useEffect(() => onProps(result));
-    return null;
-  }
+  // The screen's own component runs the hook: Fast Refresh puts a new version of it in place.
+  const Hook = entry as unknown as ComponentType<NativeScreenHookProps<object>>;
   function NativeScreenProps({
     componentId,
     props,

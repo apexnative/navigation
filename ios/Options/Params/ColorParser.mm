@@ -49,6 +49,24 @@ static UIColor *ANNOneColor(id value) {
     return nil;
 }
 
+// A pair comes as `{ light, dark }`, either side may be left out; an app's own `DynamicColorIOS` as
+// `{ dynamic: { light, dark } }`. Anything else is not a pair.
+static NSDictionary *ANNColorPair(id value) {
+    if (![value isKindOfClass:NSDictionary.class]) {
+        return nil;
+    }
+    id dynamic = value[@"dynamic"];
+    if (dynamic) {
+        return [dynamic isKindOfClass:NSDictionary.class] ? dynamic : nil;
+    }
+    for (id side in value) {
+        if (![side isEqual:@"light"] && ![side isEqual:@"dark"]) {
+            return nil;
+        }
+    }
+    return value;
+}
+
 @implementation ColorParser
 
 + (Color *)parse:(NSDictionary *)json key:(NSString *)key {
@@ -64,8 +82,8 @@ static UIColor *ANNOneColor(id value) {
         return [[Color alloc] initWithColor:color];
     }
     NSString *path = [ANNOptionsReader pathOfKey:key];
-    NSDictionary *pair = [value isKindOfClass:NSDictionary.class] ? value[@"dynamic"] : nil;
-    if ([pair isKindOfClass:NSDictionary.class]) {
+    NSDictionary *pair = ANNColorPair(value);
+    if (pair) {
         UIColor *light = [self side:pair[@"light"] name:@"light" path:path];
         UIColor *dark = [self side:pair[@"dark"] name:@"dark" path:path];
         if (light || dark) {
@@ -77,8 +95,8 @@ static UIColor *ANNOneColor(id value) {
     return [[Color alloc] initWithValue:nil];
 }
 
-// A side of `{ dynamic: { light, dark } }`. A side that is not there is a partial pair and is silent (the sides are
-// optional); a side that is there but can't be read is missing too, with a warning.
+// A side of `{ light, dark }`. A side that is not there is a partial pair and is silent (the sides are optional); a
+// side that is there but can't be read is missing too, with a warning.
 + (UIColor *)side:(id)value name:(NSString *)name path:(NSString *)path {
     if (!value || value == NSNull.null) {
         return nil;

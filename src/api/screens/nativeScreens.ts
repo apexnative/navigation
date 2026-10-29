@@ -1,3 +1,5 @@
+import { useEffect } from 'react';
+import { redefined, resetOnEdit } from '../../engine/refresh';
 import type { ScreenArrangement } from './arrangement';
 import type { ScreenOptionsInput } from './defineScreen';
 
@@ -30,7 +32,9 @@ export interface NativeScreenDefinition<Props extends object> {
 
 /**
  * A native screen for `screens`: commands and layouts name it like any other screen, and its props go to the native
- * creator. `nativeName` is the name it is registered under natively (`ApexNavigation.registerNativeScreen`).
+ * creator. `nativeName` is the name it is registered under natively (`ApexNavigation.registerNativeScreen`). It is a
+ * component that runs `useProps`, so a file that exports only its screens updates by Fast Refresh, the hook and the
+ * options too.
  *
  * @example
  * const Settings = nativeScreen('Settings', {
@@ -49,10 +53,42 @@ export function nativeScreen<Props extends object = {}>(
   nativeName: string,
   definition: NativeScreenDefinition<Props> = {}
 ): NativeScreen<Props> {
-  const { options, useProps, arrangement } = definition;
-  return { [NATIVE_SCREEN]: true, nativeName, options, useProps, arrangement };
+  const { options, useProps = noProps, arrangement } = definition;
+  // A component that runs the hook, so that a file exporting only its screens stays a boundary of Fast Refresh: React
+  // Refresh puts the new version in place, with the edited hook.
+  function NativeScreen({ props, onProps }: NativeScreenHookProps<Props>) {
+    const result = useProps(props);
+    // After each render React committed, so the native side never shows what the app did not.
+    useEffect(() => onProps(result));
+    return null;
+  }
+  const screen = Object.assign(NativeScreen, {
+    [NATIVE_SCREEN]: true as const,
+    nativeName,
+    options,
+    useProps: definition.useProps,
+    arrangement,
+  });
+  // The hook is the app's and may have other hooks after an edit: its new version mounts anew.
+  resetOnEdit(screen);
+  redefined(screen);
+  return screen;
+}
+
+function noProps(): object {
+  return {};
+}
+
+/** What the component of a native screen renders with: the props of the command, and where the hook's result goes. */
+export interface NativeScreenHookProps<Props> {
+  props: Props;
+  onProps(result: object): void;
 }
 
 export function isNativeScreen(value: unknown): value is NativeScreen<any> {
-  return typeof value === 'object' && value !== null && NATIVE_SCREEN in value;
+  return (
+    (typeof value === 'function' || typeof value === 'object') &&
+    value !== null &&
+    NATIVE_SCREEN in value
+  );
 }

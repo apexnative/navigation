@@ -34,12 +34,14 @@ class TopBarOptions {
     @JvmField var rightButtonDisabledColor: ThemeColour = NullThemeColour()
     @JvmField var centerButtonColor: ThemeColour = NullThemeColour()
     @JvmField var centerButtonDisabledColor: ThemeColour = NullThemeColour()
+    @JvmField var menuBackgroundColor: ThemeColour = NullThemeColour()
+    @JvmField var menuTextColor: ThemeColour = NullThemeColour()
     @JvmField var drawBehind: Bool = NullBool()
     @JvmField var testID: Text = NullText()
     @JvmField var title = TitleOptions()
     @JvmField var subtitle = SubtitleOptions()
     /** `backButton`, `leftButtons`, `rightButtons`, `centerButtons`. */
-    @JvmField var buttons = TopBarButtons()
+    @ReadFromParent @JvmField var buttons = TopBarButtons()
     @JvmField var customizationId: Text = NullText()
     /** Shared between copies, as its module wants. */
     @JvmField var overflowMenu: ButtonMenuOptions? = null
@@ -63,7 +65,8 @@ class TopBarOptions {
         hideOnTap.hasValue() || hideOnKeyboard.hasValue() || leftButtonColor.hasValue() ||
         rightButtonColor.hasValue() || leftButtonBackgroundColor.hasValue() || rightButtonBackgroundColor.hasValue() ||
         leftButtonDisabledColor.hasValue() || rightButtonDisabledColor.hasValue() || centerButtonColor.hasValue() ||
-        centerButtonDisabledColor.hasValue() || drawBehind.hasValue() || testID.hasValue() || title.hasValue() ||
+        centerButtonDisabledColor.hasValue() || menuBackgroundColor.hasValue() || menuTextColor.hasValue() ||
+        drawBehind.hasValue() || testID.hasValue() || title.hasValue() ||
         subtitle.hasValue() || buttons.hasValue() || customizationId.hasValue() || overflowMenu != null ||
         verticalBarKeeps.hasValue() || background.hasValue() || scrollEdgeAppearance.hasValue() ||
         barStyle.hasValue() || style.hasValue() || noBorder.hasValue() || searchBar.hasAnyValue() ||
@@ -85,6 +88,8 @@ class TopBarOptions {
         rightButtonDisabledColor = rightButtonDisabledColor.mergeWith(other.rightButtonDisabledColor)
         centerButtonColor = centerButtonColor.mergeWith(other.centerButtonColor)
         centerButtonDisabledColor = centerButtonDisabledColor.mergeWith(other.centerButtonDisabledColor)
+        menuBackgroundColor = menuBackgroundColor.mergeWith(other.menuBackgroundColor)
+        menuTextColor = menuTextColor.mergeWith(other.menuTextColor)
         if (other.drawBehind.hasValue()) drawBehind = other.drawBehind
         if (other.testID.hasValue()) testID = other.testID
         title.mergeWith(other.title)
@@ -127,6 +132,8 @@ class TopBarOptions {
         rightButtonDisabledColor = rightButtonDisabledColor.withDefault(defaults.rightButtonDisabledColor)
         centerButtonColor = centerButtonColor.withDefault(defaults.centerButtonColor)
         centerButtonDisabledColor = centerButtonDisabledColor.withDefault(defaults.centerButtonDisabledColor)
+        menuBackgroundColor = menuBackgroundColor.withDefault(defaults.menuBackgroundColor)
+        menuTextColor = menuTextColor.withDefault(defaults.menuTextColor)
         if (!drawBehind.hasValue()) drawBehind = defaults.drawBehind
         if (!testID.hasValue()) testID = defaults.testID
         title.mergeWithDefault(defaults.title)
@@ -178,6 +185,8 @@ class TopBarOptions {
             options.rightButtonDisabledColor = ThemeColour.parse(context, map, "rightButtonDisabledColor")
             options.centerButtonColor = ThemeColour.parse(context, map, "centerButtonColor")
             options.centerButtonDisabledColor = ThemeColour.parse(context, map, "centerButtonDisabledColor")
+            options.menuBackgroundColor = ThemeColour.parse(context, map, "menuBackgroundColor")
+            options.menuTextColor = ThemeColour.parse(context, map, "menuTextColor")
             options.drawBehind = BoolParser.parse(map, "drawBehind")
             options.testID = TextParser.parse(map, "testID")
             options.title = map.group("title") { TitleOptions.parse(context, it) }
@@ -212,13 +221,13 @@ class TopBarOptions {
  * don't give it; `[]` takes the buttons of the layers below away.
  */
 class TopBarButtons {
-    @JvmField var back = BackButtonOptions()
+    @OptionKey("backButton") @JvmField var back = BackButtonOptions()
     /** `topBar.leftButtons`; null when the options don't give them. */
-    @JvmField var left: List<ButtonOptions>? = null
+    @OptionKey("leftButtons") @JvmField var left: List<ButtonOptions>? = null
     /** `topBar.rightButtons`; null when the options don't give them. */
-    @JvmField var right: List<ButtonOptions>? = null
+    @OptionKey("rightButtons") @JvmField var right: List<ButtonOptions>? = null
     /** `topBar.centerButtons`; null when the options don't give them. */
-    @JvmField var center: List<ButtonOptions>? = null
+    @OptionKey("centerButtons") @JvmField var center: List<ButtonOptions>? = null
 
     fun hasValue(): Boolean = back.hasValue() || left != null || right != null || center != null
 
@@ -263,7 +272,7 @@ class BackButtonOptions {
     @JvmField var showTitle: Bool = NullBool()
     @JvmField var color: ThemeColour = NullThemeColour()
     @JvmField var fontSize: Fraction = NullFraction()
-    @JvmField var font = FontOptions()
+    @ReadFromParent @JvmField var font = FontOptions()
     @JvmField var iconBackground = IconBackgroundOptions()
     @JvmField var testID: Text = NullText()
     @JvmField var enableMenu: Bool = NullBool()

@@ -157,7 +157,7 @@ useNavigationButton('sort-name', () => setSort('name'));
 | Platform | The menu |
 | --- | --- |
 | <Os name="iOS" /> | The system menu, with SF Symbols, submenus and a check on the picked item. |
-| <Os name="Android" /> | The Material popup menu under the button, with the same items, without the `title` of the menu. |
+| <Os name="Android" /> | The Material popup menu under the button, with the same items, without the `title` of the menu. `topBar.menuBackgroundColor` and `topBar.menuTextColor` color it and "⋮"; without them it takes the bar's color and the title's color, in light and dark mode. |
 
 <DeviceVideo name="bar-menus" />
 

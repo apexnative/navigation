@@ -14,6 +14,7 @@
 #import "ANNScreenRegions.h"
 #import "ANNScreenSafeArea.h"
 #import "ANNStackController.h"
+#import "ANNSurfaceHostingView.h"
 #import "ANNSystemUI.h"
 #import "ANNTopBarPresenter.h"
 #import "ANNUtils.h"
@@ -103,10 +104,12 @@
 }
 
 // UIKit names the size transition as the moment the status bar's frame changes (a rotation, a new window size): the
-// blur follows it along the animation and takes the final frame at its end.
+// blur follows it along the animation and takes the final frame at its end. The React content takes its new size
+// without animation meanwhile, or what it draws itself is stretched along the animation (`ANNSurfaceHostingView`).
 - (void)viewWillTransitionToSize:(CGSize)size
        withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator {
     [super viewWillTransitionToSize:size withTransitionCoordinator:coordinator];
+    [ANNSurfaceHostingView followSizeTransition:coordinator];
     __weak ANNComponentViewController *weakSelf = self;
     [coordinator
         animateAlongsideTransition:^(id<UIViewControllerTransitionCoordinatorContext> context) {

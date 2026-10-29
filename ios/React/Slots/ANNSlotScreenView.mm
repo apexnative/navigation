@@ -3,6 +3,7 @@
 #import "ANNScreenAppearance.h"
 #import "ANNScreenReadiness.h"
 #import "ANNSlotHost.h"
+#import "ANNSurfaceHostingView.h"
 #import "../../cpp/react/renderer/components/ApexNavigationSpec/ANNSlotState.h"
 #import <React/RCTConstants.h>
 #import <React/RCTSurfacePresenter.h>
@@ -62,12 +63,17 @@
     return nil;
 }
 
-// The slot lays its content out at this size: every change goes to it (rotation, a sheet detent, the bars).
+// The slot lays its content out at this size: every change goes to it (rotation, a sheet detent, the bars). Its state
+// update mounts synchronously, here: during a rotation the content takes its new layout at once, as a screen's surface
+// does (`+[ANNSurfaceHostingView layOutContent:]`).
 - (void)layoutSubviews {
     [super layoutSubviews];
     if (!CGSizeEqualToSize(self.bounds.size, _lastSize)) {
         _lastSize = self.bounds.size;
-        [ANNSlotContainers containerDidChange:_componentId];
+        NSString *componentId = _componentId;
+        [ANNSurfaceHostingView layOutContent:^{
+          [ANNSlotContainers containerDidChange:componentId];
+        }];
     }
 }
 

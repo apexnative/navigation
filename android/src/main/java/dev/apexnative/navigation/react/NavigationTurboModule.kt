@@ -55,6 +55,10 @@ class NavigationTurboModule(reactContext: ReactApplicationContext) : NativeANNTu
     override fun mergeOptions(componentId: String, options: ReadableMap) =
         optionsCommands.mergeOptions(componentId, options)
 
+    // Development (Fast Refresh): the options an edit took out of a screen that shows; as mergeOptions without one.
+    override fun clearOptions(componentId: String, paths: ReadableArray) =
+        optionsCommands.clearOptions(componentId, paths)
+
     override fun push(commandId: String, componentId: String, layout: ReadableMap, promise: Promise) {
         val what = "push the screen '${LayoutReader.idOf(layout)}'"
         runner.run(

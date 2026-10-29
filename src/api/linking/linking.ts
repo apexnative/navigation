@@ -6,7 +6,11 @@ import { commandsStarted, whenCommandsSettle } from '../commands/errors';
 import { getAppContext, subscribeAppContext } from '../context/appContext';
 import { buildRoot, type RootLayout } from '../layout/Root';
 import { navigation } from '../navigation';
-import { getNavigationState, whenScreenAfter, type NavigationState } from '../state/navigationState';
+import {
+  getNavigationState,
+  whenScreenAfter,
+  type NavigationState,
+} from '../state/navigationState';
 import {
   compileRoutes,
   matchLink,
@@ -66,6 +70,23 @@ export function setupLinking(
   Linking.addEventListener('url', ({ url }) => receive(url));
   subscribeAppContext(openPendingWhenAllowed);
   setPendingLinkOpener((link) => run(link, routeOf(link), false));
+}
+
+/**
+ * Takes the routes, the roots and `onError` of an app whose module ran again after an edit (Fast Refresh, development):
+ * the links that come from now on find the new routes.
+ */
+export function updateLinking(
+  linking: Config,
+  options: {
+    roots: RootsMap | undefined;
+    onError: ((error: unknown, url: string) => void) | undefined;
+  }
+): void {
+  config = linking;
+  roots = options.roots;
+  onError = options.onError;
+  routes = compileRoutes(Object.keys(linking.routes));
 }
 
 /**

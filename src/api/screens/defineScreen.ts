@@ -1,5 +1,6 @@
-import type { ComponentType } from 'react';
+import { type ComponentType, createElement } from 'react';
 import type { Options } from '../../interfaces/Options';
+import { keepStateOf, newestType, redefined } from '../../engine/refresh';
 import { getAppContext } from '../context/appContext';
 import { readScreenOptions, ScreenOptions } from '../options/ScreenOptions';
 import { getTheme, type NavigationTheme } from '../theme/theme';
@@ -38,12 +39,55 @@ export interface ScreenDefinition<Props = any> {
   arrangement?: ScreenArrangement<Props & object>;
 }
 
+const SCREEN_DEFINITION = Symbol('apexnative.navigation.screenDefinition');
+
 /**
- * Describes a screen next to its component, so its registration stays one line. The same object can go right into
- * `screens` of createNavigation.
+ * A screen of `defineScreen`: a component of its own, which renders the screen's component and carries the screen's
+ * definition. It goes right into `screens` of createNavigation, and rendered on its own (a test) it renders the screen.
  */
-export function defineScreen<Props>(definition: ScreenDefinition<Props>): ScreenDefinition<Props> {
-  return definition;
+export type DefinedScreen<Props> = ComponentType<Props> & {
+  readonly [SCREEN_DEFINITION]: ScreenDefinition<Props>;
+};
+
+/**
+ * Describes a screen next to its component, so its registration stays one line. It gives a component that renders the
+ * screen and goes right into `screens` of createNavigation: a file that exports only its screens stays a boundary of
+ * Fast Refresh, so an edit of the screen, its options too, updates it in place instead of reloading the app.
+ */
+export function defineScreen<Props>(definition: ScreenDefinition<Props>): DefinedScreen<Props> {
+  const { component } = definition;
+  // A component of each definition, so the app's own component stays as it is for any other use of it.
+  const Component = component as ComponentType<object>;
+  function Screen(props: Props) {
+    return createElement(Component, props as object);
+  }
+  Screen.displayName = component.displayName ?? component.name;
+  Object.defineProperty(Screen, SCREEN_DEFINITION, { value: definition });
+  keepStateOf(Screen, component);
+  redefined(Screen);
+  return Screen as DefinedScreen<Props>;
+}
+
+/**
+ * The definition a screen of `defineScreen` carries, the newest one after Fast Refresh ran the screen's module again;
+ * undefined for anything else.
+ */
+export function definitionOf(value: unknown): ScreenDefinition | undefined {
+  return isDefinedScreen(value) ? ownDefinitionOf(newestType(value)) : undefined;
+}
+
+/** The definition a screen of `defineScreen` carries itself, not a newer one; undefined for anything else. */
+export function ownDefinitionOf(value: unknown): ScreenDefinition | undefined {
+  return isDefinedScreen(value) ? value[SCREEN_DEFINITION] : undefined;
+}
+
+/** Whether the value is a screen of `defineScreen`. */
+export function isDefinedScreen(value: unknown): value is DefinedScreen<any> {
+  return (
+    (typeof value === 'function' || typeof value === 'object') &&
+    value !== null &&
+    SCREEN_DEFINITION in value
+  );
 }
 
 export function buildScreenOptions<Props>(

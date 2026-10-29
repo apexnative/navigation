@@ -194,7 +194,7 @@ In an app as the React Native template makes it, the window shows <Mark>one Reac
 | `MainApplication.kt` | Extends `NavigationApplication`; keeps the template's `loadReactNative(this)` in `onCreate`, or adds it. | It keeps one React host for all screens, made after `loadReactNative(this)` loaded React Native. Native screens made by `codegen` are registered there, before JS opens them. |
 | `MainActivity.kt` | Extends `NavigationActivity`. | The activity holds the containers of the navigation instead of one React view. It gets the back press, edge-to-edge and configuration changes first. |
 | `AndroidManifest.xml` | Adds `android:enableOnBackInvokedCallback="true"` to `<application>`. | On the first screen the system plays its own animation back to the home screen as the user swipes back (predictive back). Android 16 turns it on for apps that target API 36; an app that targets less opts in here. A value the app set itself stays. See [Back to the home screen](../screen-ui/back-and-gestures#system-animation). |
-| `styles.xml` | `AppTheme` inherits `Theme.ApexNavigation`. | The bars, tabs and search are Material 3 views and take their colors from the app's theme. This one is Material 3 in neutral grays, light and dark; change any color in the same file. A theme of the app's own stays as it is. See [Android's colors](../architecture/theme-and-context#android). |
+| `styles.xml` | `AppTheme` inherits `Theme.ApexNavigation`. | The bars, tabs and search are Material 3 views and take their colors from the app's theme. This one is Material 3 in neutral grays, light and dark; change any color in the same file. A theme of the app's own stays as it is. See [Android's theme](../architecture/theme-and-context#android). |
 
 The main activity keeps the template's `android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"`. Without `orientation`, `screenSize`, `smallestScreenSize`, `screenLayout` or `uiMode` Android recreates the activity on a rotation, a resize, a fold or a light/dark switch, and every screen goes with it; `doctor` warns about it under Config changes.
 
@@ -215,7 +215,22 @@ These files are the same on both platforms.
 | `index.js` | Starts the app through the navigation. | `AppRegistry` of the package starts `createNavigation` instead of mounting one root component. |
 | `Navigation.ts` | New: shows `App` as the first screen. | The app keeps working as it was, now as the first screen of a stack. |
 | `App.tsx` | Takes out the template's `<StatusBar>`. | React Native's `StatusBar` logs an error on iOS once the screens set the status bar. |
+| `metro.config.js` | Wraps the exported config in `withApexNavigation`. | Fast Refresh: an edit of a screen updates the running app in place, with its state, instead of reloading it. See [Fast Refresh](#fast-refresh). |
 | `navigation-env.d.ts` | New: ties the commands to the screens of `Navigation.ts`. | The commands come from the package and can't see the app's screens. This declaration links them, so names and props are checked. See [Typed commands](#typed-commands). |
+
+### Fast Refresh {#fast-refresh}
+
+`setup` wraps your `metro.config.js` in `withApexNavigation`; in a new app `init` has done it. By hand:
+
+```js title="metro.config.js"
+const { withApexNavigation } = require('@apexnative/navigation/metro');
+
+module.exports = withApexNavigation(mergeConfig(getDefaultConfig(__dirname), config));
+```
+
+It does two things. React Native 0.87's transformer doesn't apply React Refresh's Babel plugin (Metro no longer passes it `hot`), and without the plugin a component that its module doesn't export loses its state at every edit. And it makes the module that imports `createNavigation` accept hot updates, so an edit of the `screens` map or of the app's config updates the running app without a reload: the screens, the default options (when `theme` or `options` changed), the roots, the listeners and the link routes. What only the start reads isn't run again: the first root, `willMount`, the splash and the context. The app's module itself runs again, as a component's module does in Fast Refresh: code at its top level (an SDK's `init`, a listener added there) runs again too, so keep such code in a module of its own that doesn't change, or make it safe to run twice. The same holds for a module the app's module imports that isn't a component, such as a store: its edit runs it and the app's module again instead of reloading the app, so a store made at the top of that module is made anew while the screens that didn't run again keep the old one. Reload the app (R) after such an edit.
+
+`doctor` warns under Fast Refresh when the Metro config doesn't use it. What to write in a screen file so that its edits update in place: [Fast Refresh](../fundamentals/screens-and-props#fast-refresh).
 
 ### Typed commands {#typed-commands}
 

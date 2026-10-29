@@ -12,25 +12,28 @@ import dev.apexnative.navigation.options.parsers.FractionParser
 import dev.apexnative.navigation.options.parsers.TextParser
 
 /**
- * A height a sheet stops at: about half the screen, the full height, or a height in dp. `content` stops at half the
- * screen on Android: the Material sheet has no height of its content.
+ * A height a sheet stops at: about half the screen, the full height, the height of the screen's content, or a height in
+ * dp.
  */
 sealed class SheetDetent {
     object Medium : SheetDetent()
     object Large : SheetDetent()
+    object Content : SheetDetent()
     data class Height(val dp: Double) : SheetDetent()
 
     /** The detent as the app names it, in `sheetDetentChanged`. */
     fun toValue(): Any = when (this) {
         Medium -> "medium"
         Large -> "large"
+        Content -> "content"
         is Height -> dp
     }
 
     companion object {
         fun parse(value: Any?): SheetDetent? = when (value) {
-            "medium", "content" -> Medium
+            "medium" -> Medium
             "large" -> Large
+            "content" -> Content
             // A number is a height only when it is finite and positive.
             is Number -> value.toDouble().takeIf { it.isFinite() && it > 0 }?.let { Height(it) }
             else -> null
@@ -47,7 +50,7 @@ class SheetOptions {
     @JvmField var selectedDetent: SheetDetent? = null
     @JvmField var largestUndimmedDetent: SheetDetent? = null
     /** The options give `largestUndimmedDetent`, `null` included. */
-    @JvmField var hasLargestUndimmedDetent = false
+    @OptionKey("largestUndimmedDetent") @JvmField var hasLargestUndimmedDetent = false
     @JvmField var grabber: Bool = NullBool()
     @JvmField var expandsOnScroll: Bool = NullBool()
     @JvmField var cornerRadius: Fraction = NullFraction()

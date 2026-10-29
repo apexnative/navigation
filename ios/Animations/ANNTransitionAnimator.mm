@@ -33,6 +33,9 @@ static void ANNUpdateRootLayoutOf(UIViewController *node) {
     NSArray<id<ANNFrameClient>> *_clients;
     BOOL _began;
     BOOL _completed;
+    // The transition follows a gesture (`animateFollowingGesture:`), and its end was chosen.
+    BOOL _followsGesture;
+    BOOL _endChosen;
     // The container's views of the transition that got a depth for it, and the depth each had.
     NSArray<UIView *> *_depthViews;
     NSArray<NSNumber *> *_depthsBefore;
@@ -118,6 +121,33 @@ static void ANNUpdateRootLayoutOf(UIViewController *node) {
     [self begin];
 }
 
+- (void)animateFollowingGesture:(id<UIViewControllerContextTransitioning>)transitionContext {
+    _followsGesture = YES;
+    [self animateTransition:transitionContext];
+}
+
+- (void)setProgress:(CGFloat)progress {
+    [_driver setProgress:progress];
+}
+
+- (void)finishWithSpeed:(CGFloat)speed {
+    _endChosen = YES;
+    [_driver finishWithSpeed:speed];
+}
+
+- (void)rewindWithSpeed:(CGFloat)speed {
+    _endChosen = YES;
+    [_driver rewindWithSpeed:speed];
+}
+
+- (NSTimeInterval)length {
+    return _driver ? _driver.length : _plan.length;
+}
+
+- (BOOL)isCompleted {
+    return _completed || !_context;
+}
+
 - (void)animationEnded:(BOOL)transitionCompleted {
     _wait = nil;
     _driver = nil;
@@ -187,8 +217,9 @@ static void ANNUpdateRootLayoutOf(UIViewController *node) {
                                                    duration:_plan.length
                                                 alphaBefore:_leavingAlpha];
     }
-    // The arriving view shows from the start with its own alpha unless a track moves it.
-    if (_arriving && !arrivingTracks.animatesAlpha) {
+    // The arriving view gets its own alpha back: an `opacity` animation of its tracks shows over it from the start, in
+    // the same transaction.
+    if (_arriving) {
         _arriving.alpha = _arrivingAlpha;
     }
     if (arrivingTracks.hasTracks) {
@@ -197,7 +228,7 @@ static void ANNUpdateRootLayoutOf(UIViewController *node) {
     if (leavingTracks.hasTracks) {
         [clients addObject:leavingTracks];
     }
-    // Each element plays on its own: one whose frame fails goes back and stops, the others and the screens go on.
+    // Each element plays on its own: one whose animations fail goes back and stays, the others and the screens go on.
     for (ANNElementTransition *element in elements) {
         [clients addObject:[[ANNIsolatedElement alloc] initWithClient:element name:element.name]];
     }
@@ -210,6 +241,13 @@ static void ANNUpdateRootLayoutOf(UIViewController *node) {
     }
     __weak ANNTransitionAnimator *weakSelf = self;
     _driver = [[ANNFrameDriver alloc] initWithClients:clients length:_plan.length];
+    if (_followsGesture) {
+        [_driver startPausedOn:container.layer
+                          done:^(BOOL finished) {
+                            [weakSelf complete];
+                          }];
+        return;
+    }
     [_driver startWithDone:^{
       [weakSelf complete];
     }];
@@ -288,8 +326,16 @@ static BOOL ANNSideTilts(ANNViewAnimationOptions *side) {
     }
     [_wait cancel];
     _wait = nil;
+    // An interactive transition ends at its end state too: UIKit completes only one whose end was chosen.
+    if (_followsGesture && !_endChosen) {
+        _endChosen = YES;
+        [_context finishInteractiveTransition];
+    }
+    // A stopped clock gets its time back in the commit that removes the animations.
+    [CATransaction begin];
     [_driver cancel];
     [self complete];
+    [CATransaction commit];
 }
 
 @end

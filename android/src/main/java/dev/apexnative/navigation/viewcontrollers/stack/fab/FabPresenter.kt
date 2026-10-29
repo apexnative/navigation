@@ -1,9 +1,16 @@
 package dev.apexnative.navigation.viewcontrollers.stack.fab
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.AnimatorSet
+import android.animation.ObjectAnimator
+import android.animation.PropertyValuesHolder
 import android.app.Activity
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.AccelerateDecelerateInterpolator
+import android.view.animation.LinearInterpolator
 import androidx.coordinatorlayout.widget.CoordinatorLayout
 import androidx.core.view.WindowInsetsCompat
 import dev.apexnative.navigation.options.FabOptions
@@ -11,16 +18,20 @@ import dev.apexnative.navigation.react.events.AppearanceDispatcher
 import dev.apexnative.navigation.utils.TestIds
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.ScrollEventListener
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.ViewController
+import dev.apexnative.navigation.views.animations.FadeThrough
+import dev.apexnative.navigation.views.animations.SystemTransition
 import dev.apexnative.navigation.views.stack.StackLayout
 import dev.apexnative.navigation.views.stack.fab.Fab
+import dev.apexnative.navigation.views.stack.fab.FabCopy
 import dev.apexnative.navigation.views.stack.fab.FabMenu
 
 /**
  * The FAB of one stack (`fab.*`), over the module's `Fab` and `FabMenu`: one FAB or one menu at a time, from the
  * resolved `fab` of the screen on top (its options over the stack's, its parents' and the defaults). It follows the top
- * at the end of each transition and the merges of `fab` into it; a press sends `ANN.NavigationButtonPressed` with the
- * screen whose options showed it, an action with its own id. Its views are children of the stack's view, over the
- * screens and the bar. Main thread only.
+ * from the start of each transition, going with the screens by [FabMotion], and the merges of `fab` into it; a press
+ * sends `ANN.NavigationButtonPressed` with the screen whose options showed it, an action with its own id. Its views are
+ * children of the stack's view, over the screens and the bar; a FAB that leaves goes as a copy ([FabCopy]). Main
+ * thread only.
  */
 internal class FabPresenter(
     private val activity: Activity,
@@ -38,38 +49,75 @@ internal class FabPresenter(
     var source: ViewController<*>? = null
         private set
 
+    // The ride of the FAB that shows as it arrives; none at rest.
+    private var ride: Animator? = null
+    // The copies of the FABs that leave, each with its ride.
+    private val copies = LinkedHashMap<FabCopy, Animator>()
+
+    // The top's FAB while a back gesture's preview shows the screen under the top with its own: out of the stack, as
+    // it was (hidden by the scroll, say).
+    private class Aside(
+        val fab: Fab?,
+        val menu: FabMenu?,
+        val shownId: String?,
+        var source: ViewController<*>?,
+        val alignStart: Boolean,
+    )
+
+    private var aside: Aside? = null
+
     private val view: View?
         get() = menu ?: fab
 
+    /** The view of the FAB or of its menu that shows; none. */
+    val shownView: View?
+        get() = view
+
     /**
-     * The screen on top became [source], with its resolved [options]: the same id updates the FAB that shows and grows
-     * it again, another id replaces it, none takes it away; the scroll of [scroll] hides it with `hideOnScroll`.
-     * Nothing when [source] already shows it.
+     * The screen on top became [source], with its resolved [options], in a transition that goes by [move]: the same id
+     * updates the FAB that shows, where it stays as it is, another id replaces it, none takes it away — the new FAB
+     * arrives and a copy of the old one leaves by [move]; the scroll of [scroll] hides it with `hideOnScroll`. An open
+     * menu closes. The copies of an older transition go, and with [FabMotion.Move.AtOnce] a FAB still riding comes to
+     * rest. Nothing when [source] already shows it.
      */
-    fun showFor(layout: StackLayout, source: ViewController<*>?, options: FabOptions, scroll: ScrollEventListener?) {
+    fun showFor(
+        layout: StackLayout,
+        source: ViewController<*>?,
+        options: FabOptions,
+        scroll: ScrollEventListener?,
+        move: FabMotion.Move = FabMotion.Move.Swap,
+    ) {
+        // At once, what still moves comes to rest, also when the top stays (a failed push).
+        if (move == FabMotion.Move.AtOnce) {
+            dropCopies()
+            stopRide(rest = true)
+        }
         if (source === this.source && this.layout === layout) return
         this.layout = layout
-        disableCollapse()
+        dropCopies()
         this.source = source
         when (FabPlan.step(shownId, menu != null, options)) {
             FabPlan.Step.None -> Unit
-            FabPlan.Step.Remove -> remove()
-            FabPlan.Step.Create -> create(layout, options, scroll)
-            FabPlan.Step.Replace -> {
-                remove()
+            FabPlan.Step.Remove -> leave(layout, move)
+            FabPlan.Step.Create -> {
                 create(layout, options, scroll)
+                arrive(move)
+            }
+            FabPlan.Step.Replace -> {
+                leave(layout, move)
+                create(layout, options, scroll)
+                arrive(move)
             }
             FabPlan.Step.Update -> {
+                disableCollapse()
+                menu?.close()
                 apply(options, scroll)
                 // A new top whose options don't hide it shows it, even where the screen before hid it.
                 if (!options.visible.isFalse) {
                     fab?.show()
                     menu?.show()
                 }
-                view?.let {
-                    it.bringToFront()
-                    grow(it)
-                }
+                view?.bringToFront()
             }
         }
     }
@@ -83,11 +131,15 @@ internal class FabPresenter(
         this.source = source
         when (FabPlan.step(shownId, menu != null, options)) {
             FabPlan.Step.None -> Unit
-            FabPlan.Step.Remove -> remove()
-            FabPlan.Step.Create -> create(layout, options, scroll)
-            FabPlan.Step.Replace -> {
-                remove()
+            FabPlan.Step.Remove -> leave(layout, FabMotion.Move.Swap)
+            FabPlan.Step.Create -> {
                 create(layout, options, scroll)
+                arrive(FabMotion.Move.Swap)
+            }
+            FabPlan.Step.Replace -> {
+                leave(layout, FabMotion.Move.Swap)
+                create(layout, options, scroll)
+                arrive(FabMotion.Move.Swap)
             }
             FabPlan.Step.Update -> apply(options, scroll)
         }
@@ -130,13 +182,57 @@ internal class FabPresenter(
         view.layoutParams = params
     }
 
+    /**
+     * A back gesture's preview shows the screen under the top: the FAB that shows goes aside, out of the stack but as it
+     * is, its menu closing, until [bringBack] or [dropAside]; the screen's own FAB shows next ([showFor]).
+     */
+    fun setAside() {
+        if (aside != null) return
+        dropCopies()
+        stopRide(rest = true)
+        menu?.close()
+        view?.let { (it.parent as? ViewGroup)?.removeView(it) }
+        aside = Aside(fab, menu, shownId, source, alignStart)
+        fab = null
+        menu = null
+        shownId = null
+        source = null
+    }
+
+    /** The gesture was cancelled: the FAB the preview showed goes, and the one set aside is back as it was. */
+    fun bringBack() {
+        val kept = aside ?: return
+        aside = null
+        val layout = layout ?: return discard(kept)
+        leave(layout, FabMotion.Move.AtOnce)
+        fab = kept.fab
+        menu = kept.menu
+        shownId = kept.shownId
+        source = kept.source
+        alignStart = kept.alignStart
+        view?.let { layout.addOverAll(it, it.layoutParams as? CoordinatorLayout.LayoutParams ?: params()) }
+        place()
+    }
+
+    /** The gesture was released: the FAB set aside goes with the top that leaves. */
+    fun dropAside() {
+        val kept = aside ?: return
+        aside = null
+        discard(kept)
+    }
+
     /** [node] was destroyed: a FAB it showed sends nothing more. */
     fun forget(node: ViewController<*>) {
         if (source === node) source = null
+        aside?.let { if (it.source === node) it.source = null }
     }
 
-    /** The stack goes: the FAB and its menu go at once, the scrim first. */
+    /** The stack goes: the FAB and its menu go at once, the scrim first, and the copies that leave. */
     fun destroy() {
+        aside?.let(::discard)
+        aside = null
+        dropCopies()
+        stopRide(rest = false)
         disableCollapse()
         menu?.let {
             it.removeScrim()
@@ -153,7 +249,7 @@ internal class FabPresenter(
     private fun create(layout: StackLayout, options: FabOptions, scroll: ScrollEventListener?) {
         val id = FabPlan.idOf(options) ?: return
         shownId = id
-        val params = CoordinatorLayout.LayoutParams(WRAP, WRAP)
+        val params = params()
         if (FabPlan.isMenu(options)) {
             val menu = FabMenu(activity, id)
             this.menu = menu
@@ -164,7 +260,6 @@ internal class FabPresenter(
             layout.addOverAll(fab, params)
         }
         apply(options, scroll)
-        view?.let(::grow)
     }
 
     // Every option of the FAB that shows; the collapse before the visibility, which `disableCollapse` would undo.
@@ -235,43 +330,120 @@ internal class FabPresenter(
         menu?.disableCollapse()
     }
 
-    // The FAB that shows goes: a button shrinks to 0 in 200 ms; a menu goes at once, its scrim first.
-    private fun remove() {
+    // The FAB that shows goes with its screen: a copy of it leaves by [move] while the button, or the menu, goes from the
+    // stack at once; an open menu closes, its scrim fading out by itself. At once nothing leaves, the scrim neither.
+    private fun leave(layout: StackLayout, move: FabMotion.Move) {
+        val view = view ?: return
+        val departure = FabMotion.departure(move, isRtl(layout))
+        val copy = departure?.let { FabCopy.of((view as? FabMenu)?.main ?: view, view, layout) }
+        stopRide(rest = false)
+        disableCollapse()
         menu?.let {
-            it.removeScrim()
+            if (departure != null) it.closeToLeave() else it.removeScrim()
             (it.parent as? ViewGroup)?.removeView(it)
         }
-        fab?.let { fab ->
-            fab.animate().cancel()
-            if (!fab.isAttachedToWindow) {
-                (fab.parent as? ViewGroup)?.removeView(fab)
-            } else {
-                fab.animate().scaleX(0f).scaleY(0f).setDuration(ANIMATION_MILLIS)
-                    .withEndAction { (fab.parent as? ViewGroup)?.removeView(fab) }.start()
-            }
-        }
+        fab?.let { (it.parent as? ViewGroup)?.removeView(it) }
         menu = null
         fab = null
         shownId = null
+        if (copy == null) return
+        copies[copy] = play(copy, departure, fromCurrent = true) { copies.remove(copy)?.let { removeCopy(copy) } }
     }
 
-    // It comes to the top and grows from 60 % in 200 ms.
-    private fun grow(view: View) {
-        val target = (view as? FabMenu)?.main ?: view
-        target.animate().cancel()
-        target.scaleX = GROW_FROM
-        target.scaleY = GROW_FROM
-        target.animate().scaleX(1f).scaleY(1f).setDuration(ANIMATION_MILLIS).start()
+    // The new FAB arrives with its screen by [move]; one its options hide (`visible: false`) has nothing to show.
+    private fun arrive(move: FabMotion.Move) {
+        val view = view ?: return
+        if (((view as? FabMenu)?.main ?: view).visibility != View.VISIBLE) return
+        val arrival = FabMotion.arrival(move, layout?.let(::isRtl) ?: false) ?: return
+        ride = play(view, arrival, fromCurrent = false) { animator -> if (ride === animator) ride = null }
     }
+
+    // A ride stops where it is; [rest]: the FAB is in its place again, opaque and whole.
+    private fun stopRide(rest: Boolean) {
+        val running = ride ?: return
+        ride = null
+        running.cancel()
+        if (!rest) return
+        view?.apply {
+            translationX = 0f
+            alpha = 1f
+            scaleX = 1f
+            scaleY = 1f
+        }
+    }
+
+    // The copies of an older transition go at once.
+    private fun dropCopies() {
+        if (copies.isEmpty()) return
+        val dropped = copies.toList()
+        copies.clear()
+        dropped.forEach { (copy, animator) ->
+            animator.cancel()
+            removeCopy(copy)
+        }
+    }
+
+    private fun removeCopy(copy: FabCopy) {
+        (copy.parent as? ViewGroup)?.removeView(copy)
+    }
+
+    // Plays [ride] on [view], from its start values or [fromCurrent] from where the view is; [end] at its end or stop.
+    private fun play(view: View, ride: FabMotion.Ride, fromCurrent: Boolean, end: (Animator) -> Unit): Animator {
+        val density = activity.resources.displayMetrics.density
+        if (!fromCurrent) {
+            view.translationX = ride.fromX * density
+            view.alpha = ride.fromAlpha
+            view.scaleX = ride.fromScale
+            view.scaleY = ride.fromScale
+        }
+        val move = ObjectAnimator.ofPropertyValuesHolder(
+            view,
+            PropertyValuesHolder.ofFloat(View.TRANSLATION_X, ride.toX * density),
+            PropertyValuesHolder.ofFloat(View.SCALE_X, ride.toScale),
+            PropertyValuesHolder.ofFloat(View.SCALE_Y, ride.toScale),
+        ).apply {
+            duration = ride.duration
+            interpolator = when (ride.curve) {
+                FabMotion.Curve.System -> SystemTransition.CURVE
+                FabMotion.Curve.FadeThrough -> FadeThrough.CURVE
+                FabMotion.Curve.Material -> AccelerateDecelerateInterpolator()
+            }
+        }
+        val animator = AnimatorSet()
+        if (ride.alphaDuration > 0) {
+            val fade = ObjectAnimator.ofFloat(view, View.ALPHA, ride.toAlpha).apply {
+                startDelay = ride.alphaDelay
+                duration = ride.alphaDuration
+                interpolator = LinearInterpolator()
+            }
+            animator.playTogether(move, fade)
+        } else {
+            animator.play(move)
+        }
+        animator.addListener(object : AnimatorListenerAdapter() {
+            override fun onAnimationEnd(animation: Animator) = end(animation)
+        })
+        animator.start()
+        return animator
+    }
+
+    // A FAB set aside that won't come back: it follows no scroll, its scrim goes.
+    private fun discard(kept: Aside) {
+        kept.fab?.disableCollapse()
+        kept.menu?.disableCollapse()
+        kept.menu?.removeScrim()
+    }
+
+    private fun params() = CoordinatorLayout.LayoutParams(WRAP, WRAP)
+
+    private fun isRtl(layout: StackLayout): Boolean = layout.layoutDirection == View.LAYOUT_DIRECTION_RTL
 
     companion object {
         private const val WRAP = ViewGroup.LayoutParams.WRAP_CONTENT
-        private const val ANIMATION_MILLIS = 200L
-        private const val GROW_FROM = 0.6f
 
         /**
          * A press on the FAB, or on an action of its menu, of [source] (EVT-NavigationButtonPressed): nothing once
-         * [source] is destroyed — its FAB still fades for 200 ms.
+         * [source] is destroyed.
          */
         fun press(source: ViewController<*>?, buttonId: String) {
             if (source == null || source.isDestroyed) return

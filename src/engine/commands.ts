@@ -13,6 +13,8 @@ import { columnOf, forgetPlace, layoutsOf, notePlaces, placeOf, stackOfColumn } 
 import { forgetProps } from './props';
 import {
   forgetMergedOptions,
+  forgetMergedPaths,
+  noteMergedOwnOptions,
   rememberMergedOptions,
   rootGoesOut,
   sentRoot,
@@ -144,7 +146,26 @@ export function mergeOptions(componentId: string, options: Options): void {
   const nativeOptions = toNativeOptions(options, componentId);
   const send = () => {
     rememberMergedOptions(componentId, options);
+    noteMergedOwnOptions(componentId, options);
     native.mergeOptions(componentId, nativeOptions);
+  };
+  const prepared =
+    preparedScreens.has(componentId) && !heldMerges.some(({ id }) => id === componentId);
+  if (waitingShows.size === 0 || prepared) send();
+  else heldMerges.push({ id: componentId, after: shows, send });
+}
+
+/**
+ * Takes the options at the paths, such as `['topBar', 'subtitle']`, out of the own options of a node, so it shows what
+ * the layouts around it and the defaults give there (Fast Refresh, development). It waits for the shows as a merge does.
+ */
+export function clearOptions(componentId: string, paths: readonly string[][]): void {
+  const send = () => {
+    forgetMergedPaths(componentId, paths);
+    native.clearOptions(
+      componentId,
+      paths.map((path) => path.join('.'))
+    );
   };
   const prepared =
     preparedScreens.has(componentId) && !heldMerges.some(({ id }) => id === componentId);

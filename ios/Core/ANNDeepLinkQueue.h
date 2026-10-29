@@ -14,7 +14,8 @@ typedef void (^ANNLaunchLinkCompletion)(NSURL *_Nullable url);
  */
 @interface ANNDeepLinkQueue : NSObject
 
-/// Starts the queue as the app launches (`ANNAppDelegate`). An app that never starts it has no launch link.
+/// Starts the queue as the app launches (`+[ApexNavigation bootstrapWithHost:]`, so also under an app delegate of the
+/// app's own). Once: a second call does nothing.
 + (void)start;
 
 /// Hands `url` to `Linking`, or keeps it until React content first appears and no `takeLaunchLink:` waits.
@@ -33,11 +34,11 @@ typedef void (^ANNLaunchLinkCompletion)(NSURL *_Nullable url);
                     ofScene:(UIScene *)scene
                     through:(NS_NOESCAPE dispatch_block_t)forward;
 
-/// Hands the scene's link to `Linking` at once, past the queue: for an app delegate that doesn't take links.
-+ (void)openURLContext:(UIOpenURLContext *)context ofScene:(UIScene *)scene;
+/// `dispatchURL:` for the scene's link, with its scene and context: for an app delegate that doesn't take links.
++ (void)dispatchURLContext:(UIOpenURLContext *)context ofScene:(UIScene *)scene;
 
-/// `openURLContext:ofScene:` for a web link (`webpageURL`) of the scene; an activity without one does nothing.
-+ (void)openUserActivity:(NSUserActivity *)activity ofScene:(UIScene *)scene;
+/// `dispatchURLContext:ofScene:` for a web link (`webpageURL`) of the scene; an activity without one does nothing.
++ (void)dispatchUserActivity:(NSUserActivity *)activity ofScene:(UIScene *)scene;
 
 /// The app's window scene connected (`+[ApexNavigation attachToWindowScene:]`).
 + (void)windowSceneDidConnect;

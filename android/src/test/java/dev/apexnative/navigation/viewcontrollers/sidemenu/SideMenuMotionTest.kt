@@ -397,4 +397,26 @@ class SideMenuMotionTest {
         assertTrue(commands().isEmpty())
         assertNull(motion.openSide)
     }
+
+    // The system's animations off.
+
+    @Test
+    fun withTheSystemsAnimationsOffACommandAndBackJumpButASettlingDrawerStillMoves() {
+        val drawer = FakeDrawer(calls, setOf(Side.Left))
+        val host = FakeMotionHost(journal, left, null)
+        val motion = SideMenuMotion({ drawer }, host, animationsOff = { true }).also { drawer.motion = it }
+        val moves = { commands().filterNot { it.startsWith("lock") } }
+        motion.command(Side.Left, visible = true, animate = true, shown = true)
+        assertEquals(listOf("open:left:false"), moves())
+        assertEquals(Side.Left, motion.openSide)
+        assertTrue(motion.back())
+        assertEquals(listOf("close:left:false"), moves())
+        assertNull(motion.openSide)
+        // The drag and the settle aren't animators: a command while the drawer settles goes on from where it is.
+        drawer.drag(Side.Left)
+        drawer.frame(Side.Left, 0.5f)
+        drawer.release(Side.Left, 1f)
+        motion.command(Side.Left, visible = false, animate = true, shown = true)
+        assertEquals(listOf("close:left:true"), moves())
+    }
 }

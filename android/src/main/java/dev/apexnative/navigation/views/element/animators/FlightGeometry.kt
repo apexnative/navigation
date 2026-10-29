@@ -2,11 +2,13 @@ package dev.apexnative.navigation.views.element.animators
 
 import android.view.View
 import android.view.ViewGroup
+import com.facebook.react.uimanager.ReactOverflowView
+import dev.apexnative.navigation.utils.borderRadius
 import dev.apexnative.navigation.views.animations.ValueInterpolation
 import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.max
 import kotlin.math.min
-import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /**
@@ -41,6 +43,23 @@ internal class ViewPlacement(
         )
     }
 
+    /**
+     * The point [x], [y] of the parent in the view's coordinates: [toParent] undone. None when a scale of 0 flattens
+     * the view.
+     */
+    fun toChild(x: Float, y: Float): FloatArray? {
+        if (scaleX == 0f || scaleY == 0f) return null
+        val dx = x - (pivotX + translationX + left - parentScrollX)
+        val dy = y - (pivotY + translationY + top - parentScrollY)
+        val radians = Math.toRadians(rotation.toDouble())
+        val cos = cos(radians).toFloat()
+        val sin = sin(radians).toFloat()
+        return floatArrayOf(
+            (dx * cos + dy * sin) / scaleX + pivotX,
+            (-dx * sin + dy * cos) / scaleY + pivotY,
+        )
+    }
+
     /** Whether the view shows mirrored: one of its scales is negative. */
     val mirrors: Boolean get() = scaleX * scaleY < 0
 
@@ -49,12 +68,12 @@ internal class ViewPlacement(
         private const val FLIP_TOLERANCE = 0.5f
         private const val HALF_TURN = 180f
 
-        /** [view] as it lies now; [frameOf] the view whose frame and parent it takes (a stand-in where it was). */
-        fun of(view: View, frameOf: View = view): ViewPlacement {
-            val parent = frameOf.parent as? View
+        /** [view] as it lies now. */
+        fun of(view: View): ViewPlacement {
+            val parent = view.parent as? View
             return withTilts(
-                left = frameOf.left.toFloat(),
-                top = frameOf.top.toFloat(),
+                left = view.left.toFloat(),
+                top = view.top.toFloat(),
                 translationX = view.translationX,
                 translationY = view.translationY,
                 scaleX = view.scaleX,
@@ -113,12 +132,13 @@ internal class ViewPlacement(
  * Where the points of a view are drawn in a transition's layer: through its own placement and each parent's ([chain],
  * the view first, up to the top view of the window but not it), then moved by [offsetX], [offsetY] (where the top view
  * is from the layer's corner). The angle and the scale are those of the whole chain: a turned or scaled parent turns
- * or scales what is in it.
+ * or scales what is in it. [clips] are the parents that cut what the view draws, the innermost first.
  */
 internal class LayerPlace(
     private val chain: List<ViewPlacement>,
     private val offsetX: Float,
     private val offsetY: Float,
+    private val clips: List<Clip> = emptyList(),
 ) {
     /** The angle the view is drawn at, degrees, clockwise: a mirrored parent turns what is in it the other way. */
     val rotation: Float = chain.fold(0f) { inner, placement ->
@@ -153,28 +173,158 @@ internal class LayerPlace(
         )
     }
 
+    /**
+     * The part of a view of [width] × [height] drawn here that its [clips] leave visible, as iOS works it out: the
+     * view's bounds cut by the bounds of each clip, brought into the view's coordinates (the box around them where a
+     * turn tilts them), with the corners of the last clip that cut something. Uncut, it is the whole view with its own
+     * [cornerRadius] (in its pixels).
+     */
+    fun visible(width: Int, height: Int, cornerRadius: Float): VisiblePart {
+        val w = width.toFloat()
+        val h = height.toFloat()
+        val visible = floatArrayOf(0f, 0f, w, h)
+        var radius = 0f
+        for (clip in clips) {
+            val cut = intersection(visible, boundsInView(clip))
+            if (!cut.contentEquals(visible)) radius = clip.radius
+            cut.copyInto(visible)
+        }
+        val clipped = abs(visible[0]) > SAME_RECT || abs(visible[1]) > SAME_RECT ||
+            abs(visible[2] - w) > SAME_RECT || abs(visible[3] - h) > SAME_RECT
+        val shown = if (clipped) visible else floatArrayOf(0f, 0f, w, h)
+        val scaleX = abs(scaleX)
+        val scaleY = abs(scaleY)
+        return VisiblePart(
+            left = (shown[0] - w / 2) * scaleX,
+            top = (shown[1] - h / 2) * scaleY,
+            right = (shown[2] - w / 2) * scaleX,
+            bottom = (shown[3] - h / 2) * scaleY,
+            radius = (if (clipped) radius else cornerRadius) * min(scaleX, scaleY),
+            clipped = clipped,
+        )
+    }
+
+    // The bounds of [clip] in the view's coordinates: the box around its corners brought down the chain. Empty when a
+    // placement on the way flattens the view.
+    private fun boundsInView(clip: Clip): FloatArray {
+        val box = floatArrayOf(Float.MAX_VALUE, Float.MAX_VALUE, -Float.MAX_VALUE, -Float.MAX_VALUE)
+        for (corner in 0 until CORNERS) {
+            var point: FloatArray? = floatArrayOf(
+                if (corner % 2 == 0) 0f else clip.width,
+                if (corner < 2) 0f else clip.height,
+            )
+            for (level in clip.level - 1 downTo 0) point = point?.let { chain[level].toChild(it[0], it[1]) }
+            point ?: return FloatArray(RECT)
+            box[0] = min(box[0], point[0])
+            box[1] = min(box[1], point[1])
+            box[2] = max(box[2], point[0])
+            box[3] = max(box[3], point[1])
+        }
+        return box
+    }
+
     companion object {
+        private const val CORNERS = 4
+        private const val RECT = 4
+
+        // How close two rects count as the same, in pixels: a visible part that is the whole view needs no mask.
+        private const val SAME_RECT = 0.5f
+        private const val VISIBLE = "visible"
+
         /**
-         * Where [view] is drawn in [layer]. With [standIn], [view] counts as lying where that one lies (its frame and
-         * parents) with its own properties: an element that moved into the layer, at the place it goes back to.
+         * Where [view] is drawn in [layer]. With [clipRoot] (the view of its screen), the parents up to it that cut
+         * what they draw are its clips: as on iOS, the parents above the screen don't count.
          */
-        fun of(view: View, layer: View, standIn: View? = null): LayerPlace {
-            val placed = standIn ?: view
-            val chain = arrayListOf(ViewPlacement.of(view, placed))
-            var parent = placed.parent as? View
+        fun of(view: View, layer: View, clipRoot: View? = null): LayerPlace {
+            val chain = arrayListOf(ViewPlacement.of(view))
+            val clips = ArrayList<Clip>()
+            var clipping = clipRoot != null
+            var parent = view.parent as? View
             while (parent != null) {
+                if (clipping) {
+                    clipOf(parent, chain.size)?.let(clips::add)
+                    clipping = parent !== clipRoot
+                }
                 val above = parent.parent as? View ?: break
                 chain += ViewPlacement.of(parent)
                 parent = above
             }
             // The window's top view (no parent view) lies where it is on the screen, with no properties of its own.
-            val base = parent ?: placed
+            val base = parent ?: view
             val screen = IntArray(2)
             base.getLocationOnScreen(screen)
             val origin = IntArray(2)
             layer.getLocationOnScreen(origin)
-            return LayerPlace(chain, (screen[0] - origin[0]).toFloat(), (screen[1] - origin[1]).toFloat())
+            return LayerPlace(chain, (screen[0] - origin[0]).toFloat(), (screen[1] - origin[1]).toFloat(), clips)
         }
+
+        /** The rect [a] cut by [b] (left, top, right, bottom); an empty one at 0, 0 when they don't meet, as on iOS. */
+        internal fun intersection(a: FloatArray, b: FloatArray): FloatArray {
+            val left = max(a[0], b[0])
+            val top = max(a[1], b[1])
+            val right = min(a[2], b[2])
+            val bottom = min(a[3], b[3])
+            return if (left < right && top < bottom) floatArrayOf(left, top, right, bottom) else FloatArray(RECT)
+        }
+
+        // The clip of [parent], at [level] of the chain, when it cuts what it draws to its bounds: a React Native view
+        // whose `overflow` isn't visible (a scroll view's is `scroll` unless set) with its corners, and any view whose
+        // own parent keeps its children in (`clipChildren`: Android cuts each child to its bounds, square), as the
+        // screen's own views do. React Native's views let their children out, so their `overflow` alone counts.
+        private fun clipOf(parent: View, level: Int): Clip? {
+            val overflows = parent is ReactOverflowView && parent.overflow.let { it != null && it != VISIBLE }
+            val keptIn = (parent.parent as? ViewGroup)?.clipChildren == true
+            if (!overflows && !keptIn) return null
+            val radius = if (overflows) parent.borderRadius else 0f
+            return Clip(level, parent.width.toFloat(), parent.height.toFloat(), radius)
+        }
+    }
+}
+
+/**
+ * A parent that cuts what a view draws to its bounds: its [level] in the view's chain (1 the view's parent: its
+ * coordinates come down to the view's through the placements before it), its size and its corner radius. Pixels.
+ */
+internal class Clip(val level: Int, val width: Float, val height: Float, val radius: Float = 0f)
+
+/**
+ * The part of a shared element's copy that shows at one end of its flight: left, top, right, bottom from the copy's
+ * center at the size it is drawn at, and its corner radius there. [clipped]: a parent cuts the view; else it is the
+ * whole copy with its own corners.
+ */
+internal class VisiblePart(
+    val left: Float,
+    val top: Float,
+    val right: Float,
+    val bottom: Float,
+    val radius: Float,
+    val clipped: Boolean,
+)
+
+/**
+ * The mask of a copy cut by its views' parents, as on iOS: a rounded rect that goes from the part of the copy that
+ * shows at one end to the part that shows at the other, evenly.
+ */
+internal class FlightMask private constructor(private val from: VisiblePart, private val to: VisiblePart) {
+    /**
+     * Fills [out] with the mask at [fraction] of the way (the curve's value), [time] the part of the time: left, top,
+     * right, bottom from the copy's center, then the corner radius.
+     */
+    fun at(fraction: Float, time: Float, out: FloatArray) {
+        out[0] = ValueInterpolation.number(from.left, to.left, fraction, time)
+        out[1] = ValueInterpolation.number(from.top, to.top, fraction, time)
+        out[2] = ValueInterpolation.number(from.right, to.right, fraction, time)
+        out[3] = ValueInterpolation.number(from.bottom, to.bottom, fraction, time)
+        out[4] = ValueInterpolation.number(from.radius, to.radius, fraction, time)
+    }
+
+    companion object {
+        /** The values [at] fills. */
+        const val SIZE = 5
+
+        /** The mask between [from] and [to]; none when neither is cut, and the copy shows whole. */
+        fun of(from: VisiblePart, to: VisiblePart): FlightMask? =
+            if (from.clipped || to.clipped) FlightMask(from, to) else null
     }
 }
 
@@ -191,48 +341,14 @@ internal class FlightEnd(
     val mirrorX: Float = 1f,
     val mirrorY: Float = 1f,
     val scale: Float = 1f,
-) {
-    /** Whether [other] is drawn at the same place, size, angle and mirror: within half a pixel and 0.1°. */
-    fun sameAs(other: FlightEnd): Boolean =
-        abs(centerX - other.centerX) < SAME_PLACE && abs(centerY - other.centerY) < SAME_PLACE &&
-            abs(width - other.width) < SAME_PLACE && abs(height - other.height) < SAME_PLACE &&
-            abs(rotation - other.rotation) < SAME_ANGLE && mirrorX == other.mirrorX && mirrorY == other.mirrorY
-
-    companion object {
-        private const val SAME_PLACE = 0.5f
-        private const val SAME_ANGLE = 0.1f
-
-        /**
-         * Whether `to` shows elsewhere in its screen than in the layer with its own properties alone ([standIn] is
-         * where it was): a parent of its scales or turns it. A flight that landed then keeps it where it lands until
-         * the transition gives it back, or it would jump to its place in the layer meanwhile.
-         */
-        fun holdsAtEnd(to: View, standIn: View?, layer: View): Boolean {
-            if (standIn == null) return false
-            val inScreen = LayerPlace.of(to, layer, standIn).end(to.width, to.height)
-            return !inScreen.sameAs(LayerPlace.of(to, layer).end(to.width, to.height))
-        }
-    }
-}
+)
 
 /**
- * Where a shared element flies in its transition's layer: from where `from` is drawn to where `to` is drawn once it
- * is back in its screen, both through their own and their parents' translation, scale and rotation. The center, the
- * size and the mirror go evenly, the angle along the shorter arc (as on iOS). `to` lies in the layer at its margins
- * ([toLeft], [toTop]) meanwhile.
+ * Where a shared element flies in its transition's layer: from where `from` is drawn to where `to` is drawn in its
+ * screen, both through their own and their parents' translation, scale and rotation. The center, the size and the
+ * mirror go evenly, the angle along the shorter arc (as on iOS).
  */
-internal class FlightGeometry(
-    val from: FlightEnd,
-    val to: FlightEnd,
-    val toLeft: Int,
-    val toTop: Int,
-    /** Whether `to` keeps the flight's last frame at the end ([FlightEnd.holdsAtEnd]). */
-    val holdsAtEnd: Boolean = false,
-) {
-    /** The width and height `to` is laid out at meanwhile: the larger of the two sizes. */
-    val largest: Pair<Int, Int>
-        get() = maxOf(from.width, to.width).roundToInt() to maxOf(from.height, to.height).roundToInt()
-
+internal class FlightGeometry(val from: FlightEnd, val to: FlightEnd) {
     /** The flight at [fraction] of the way (the curve's value), [time] the part of the time. */
     fun at(fraction: Float, time: Float): FlightEnd = FlightEnd(
         centerX = ValueInterpolation.number(from.centerX, to.centerX, fraction, time),
@@ -244,103 +360,4 @@ internal class FlightGeometry(
         mirrorY = ValueInterpolation.number(from.mirrorY, to.mirrorY, fraction, time),
         scale = ValueInterpolation.number(from.scale, to.scale, fraction, time),
     )
-
-    /**
-     * The translation and pivot that draw a view laid out at its margins with [width] × [height] (or showing that part
-     * of a larger layout from its corner) at [frame]'s center and angle, unscaled: x, y of the translation, then of
-     * the pivot.
-     */
-    fun moveOf(frame: FlightEnd, width: Int, height: Int): FloatArray = floatArrayOf(
-        frame.centerX - (toLeft + width / 2f),
-        frame.centerY - (toTop + height / 2f),
-        width / 2f,
-        height / 2f,
-    )
-
-    companion object {
-        /**
-         * The flight of [from] to [to], which is in [layer] already in place of [toStandIn] (the stub where it was);
-         * none when [to] has no place there.
-         */
-        fun of(from: View, to: View, toStandIn: View?, layer: View): FlightGeometry? {
-            val place = to.layoutParams as? ViewGroup.MarginLayoutParams ?: return null
-            val fromEnd = LayerPlace.of(from, layer).end(from.width, from.height)
-            val toEnd = LayerPlace.of(to, layer, toStandIn).end(to.width, to.height)
-            val holds = FlightEnd.holdsAtEnd(to, toStandIn, layer)
-            return FlightGeometry(fromEnd, toEnd, place.leftMargin, place.topMargin, holds)
-        }
-    }
-}
-
-/**
- * The properties a moving `to` is drawn with in the layer when its flight starts, put back when it ends: the
- * flight draws it unscaled (but mirrored where an end is) and untilted at the flight's angle about the middle of what
- * shows.
- */
-internal class MovedProperties(private val view: View) {
-    private val translationX = view.translationX
-    private val translationY = view.translationY
-    private val scaleX = view.scaleX
-    private val scaleY = view.scaleY
-    private val rotation = view.rotation
-    private val rotationX = view.rotationX
-    private val rotationY = view.rotationY
-    private val pivotX = view.pivotX
-    private val pivotY = view.pivotY
-    private val ownWidth = view.width
-    private val ownHeight = view.height
-
-    /** [view] at [frame], laid out at [width] × [height] from its margins (or showing that part from its corner). */
-    fun show(geometry: FlightGeometry, frame: FlightEnd, width: Int, height: Int) {
-        val move = geometry.moveOf(frame, width, height)
-        view.pivotX = move[2]
-        view.pivotY = move[3]
-        view.translationX = move[0]
-        view.translationY = move[1]
-        view.scaleX = frame.mirrorX
-        view.scaleY = frame.mirrorY
-        view.rotation = frame.rotation
-        view.rotationX = 0f
-        view.rotationY = 0f
-    }
-
-    /**
-     * [view] at the end of a flight that [landed]: kept at the flight's last frame, laid out by [layOut] at the size it
-     * shows, when the geometry holds it there; else as it was at the start, laid out by [layOut] at its own size.
-     */
-    fun end(geometry: FlightGeometry, landed: Boolean, layOut: (width: Int, height: Int) -> Unit) {
-        if (geometry.holdsAtEnd && landed) {
-            val width = geometry.to.width.roundToInt()
-            val height = geometry.to.height.roundToInt()
-            layOut(width, height)
-            show(geometry, geometry.to, width, height)
-        } else {
-            restore()
-            layOut(ownWidth, ownHeight)
-        }
-    }
-
-    /** [view] as it was at the start. */
-    fun restore() {
-        view.translationX = translationX
-        view.translationY = translationY
-        view.scaleX = scaleX
-        view.scaleY = scaleY
-        view.rotation = rotation
-        view.rotationX = rotationX
-        view.rotationY = rotationY
-        view.pivotX = pivotX
-        view.pivotY = pivotY
-    }
-}
-
-/** An outline of the size and corners a flying view shows meanwhile: its own bounds are larger. */
-internal class FlightOutline : android.view.ViewOutlineProvider() {
-    var width = 0
-    var height = 0
-    var radius = 0f
-
-    override fun getOutline(view: View, outline: android.graphics.Outline) {
-        outline.setRoundRect(0, 0, width, height, radius)
-    }
 }

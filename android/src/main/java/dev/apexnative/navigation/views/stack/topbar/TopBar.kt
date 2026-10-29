@@ -2,11 +2,12 @@ package dev.apexnative.navigation.views.stack.topbar
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Picture
 import android.graphics.Rect
 import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.PictureDrawable
 import android.os.Build
 import android.view.ContextThemeWrapper
 import android.view.Gravity
@@ -16,10 +17,11 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
-import com.google.android.material.appbar.MaterialToolbar
+import androidx.appcompat.widget.AppCompatImageView
 import dev.apexnative.navigation.R
 import dev.apexnative.navigation.utils.MaterialTheme
 import dev.apexnative.navigation.utils.UiUtils
+import dev.apexnative.navigation.views.stack.topbar.titlebar.ButtonRow
 
 /**
  * The top bar of a stack: one per stack, showing what its screen on top sets. Top to bottom: the strip under the status
@@ -47,7 +49,7 @@ class TopBar(context: Context) : FrameLayout(themed(context)) {
     private val largeTitleHolder = FrameLayout(this.context)
     private val searchHolder = FrameLayout(this.context)
     private val border = View(this.context)
-    private val snapshot = ImageView(this.context)
+    private val snapshot = Snapshot(this.context)
     private var searchArea: View? = null
     private var barHeight = UiUtils.dpToPx(this.context, DEFAULT_HEIGHT_DP)
     private var searchTakesBar = false
@@ -58,12 +60,12 @@ class TopBar(context: Context) : FrameLayout(themed(context)) {
     // `topBar.elevation`, in pixels: the bar's elevation unless it is flat.
     private var shadow = 0f
 
-    /** The toolbar of the right buttons: its menu holds them, the overflow items and the search's magnifier. */
-    val rightButtonBar: MaterialToolbar
+    /** The right buttons, the search's magnifier and "⋮". */
+    val rightButtonBar: ButtonRow
         get() = titleBar.rightButtonBar
 
-    /** The toolbar of the back button and the left buttons. */
-    val leftButtonBar: MaterialToolbar
+    /** The back button and the left buttons. */
+    val leftButtonBar: ButtonRow
         get() = titleBar.leftButtonBar
 
     /** The strip under the status bar at the top of the bar, in pixels: the bar is under the status bar. */
@@ -305,32 +307,27 @@ class TopBar(context: Context) : FrameLayout(themed(context)) {
         layoutParams = params
     }
 
-    // The row's picture in a transition.
+    // The row's picture in a transition: the drawing commands of the row as it is, not its pixels. Nothing as large
+    // as the bar is allocated or filled in on the main thread, and the renderer plays the commands each frame.
 
     /**
-     * Lays a picture of the row and the large title over them, laid out at once; false when the bar can't be drawn in
-     * software: no picture then.
+     * Lays a picture of the row and the large title over them, laid out at once; false when the bar can't be recorded:
+     * no picture then.
      */
     fun takeRowSnapshot(withLargeTitle: Boolean = true): Boolean {
         val width = rowArea.width
         val large = withLargeTitle && isLargeTitleShown
         val height = rowArea.height + if (large) largeTitleHolder.height else 0
         if (width <= 0 || height <= 0) return false
-        val picture = try {
-            Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also {
-                val canvas = Canvas(it)
-                rowArea.draw(canvas)
-                if (large) {
-                    canvas.translate(0f, rowArea.height.toFloat())
-                    largeTitleHolder.draw(canvas)
-                }
+        val picture = record(width, height) { canvas ->
+            rowArea.draw(canvas)
+            if (large) {
+                canvas.translate(0f, rowArea.height.toFloat())
+                largeTitleHolder.draw(canvas)
             }
-        } catch (e: IllegalArgumentException) {
-            // A HARDWARE bitmap in the bar: it can't be drawn on a software canvas.
-            return false
-        }
+        } ?: return false
         val top = content.top + rowArea.top
-        snapshot.setImageBitmap(picture)
+        snapshot.setImageDrawable(PictureDrawable(picture))
         snapshot.alpha = 1f
         snapshot.translationX = 0f
         snapshot.translationY = rowArea.translationY
@@ -348,29 +345,43 @@ class TopBar(context: Context) : FrameLayout(themed(context)) {
 
     /**
      * A picture of the bar under its row — the background, the large title, the search, the line — and where it starts
-     * in the bar, for a push to a screen without a large title; none when the bar can't be drawn in software.
+     * in the bar, for a push to a screen without a large title; none when the bar can't be recorded. Its intrinsic
+     * size is its size; it draws at the top left of its bounds.
      */
-    fun pictureUnderRow(): Pair<Bitmap, Int>? = pictureFrom(content.top + rowArea.bottom)
+    fun pictureUnderRow(): Pair<PictureDrawable, Int>? = pictureFrom(content.top + rowArea.bottom)
 
     /**
      * A picture of the whole bar, for the screen it leaves with in a transition of the stack's own; none when the bar
-     * can't be drawn in software.
+     * can't be recorded.
      */
-    fun picture(): Bitmap? = pictureFrom(0)?.first
+    fun picture(): PictureDrawable? = pictureFrom(0)?.first
 
-    private fun pictureFrom(top: Int): Pair<Bitmap, Int>? {
+    private fun pictureFrom(top: Int): Pair<PictureDrawable, Int>? {
         val width = width
         val height = height - top
         if (width <= 0 || height <= 0) return null
-        return try {
-            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(bitmap)
+        val picture = record(width, height) { canvas ->
             canvas.translate(0f, -top.toFloat())
             draw(canvas)
-            bitmap to top
-        } catch (e: IllegalArgumentException) {
-            null
+        } ?: return null
+        return PictureDrawable(picture) to top
+    }
+
+    // The commands [draw] gives, cut to [width] × [height]. A hardware bitmap in the bar is kept as it is from Android
+    // 9 on (the picture then plays only on the screen's hardware canvas, where the bar's pictures are drawn); Android 8
+    // can't record one, and there is no picture then.
+    private fun record(width: Int, height: Int, draw: (Canvas) -> Unit): Picture? = try {
+        Picture().also {
+            val canvas = it.beginRecording(width, height)
+            try {
+                canvas.clipRect(0, 0, width, height)
+                draw(canvas)
+            } finally {
+                it.endRecording()
+            }
         }
+    } catch (e: IllegalArgumentException) {
+        null
     }
 
     /** The row's picture goes. */
@@ -408,6 +419,12 @@ class TopBar(context: Context) : FrameLayout(themed(context)) {
         params.height = height
         rowArea.layoutParams = params
         heightChanged = true
+    }
+
+    // The row's picture: it fades as one image. Its commands overlap (a button's background under its icon), and drawn
+    // one by one at the view's opacity each would show through the next.
+    private class Snapshot(context: Context) : AppCompatImageView(context) {
+        override fun hasOverlappingRendering(): Boolean = true
     }
 
     // The area of the row: it takes the touches without passing them on while the row is transparent.

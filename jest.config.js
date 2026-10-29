@@ -4,7 +4,7 @@ module.exports = {
   transform: {
     '\\.[jt]sx?$': 'babel-jest',
   },
-  roots: ['<rootDir>/src/', '<rootDir>/cli/'],
+  roots: ['<rootDir>/src/', '<rootDir>/cli/', '<rootDir>/metro/'],
   testPathIgnorePatterns: ['/node_modules/', '<rootDir>/lib/'],
   modulePathIgnorePatterns: ['<rootDir>/example/node_modules', '<rootDir>/lib/'],
   moduleNameMapper: {

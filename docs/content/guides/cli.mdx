@@ -110,7 +110,7 @@ A new app doesn't have the package yet, so `init` runs through the package's nam
 
 ## setup {#setup}
 
-Sets the app you have up for the navigation: the native entry points of both platforms, `index.js`, a new `Navigation.ts` with your `App` as the first screen, and `navigation-env.d.ts`, the [typed commands](../start/installation#typed-commands). Each change and why: [What setup changes, and why](../start/installation#why-native).
+Sets the app you have up for the navigation: the native entry points of both platforms, `index.js`, a new `Navigation.ts` with your `App` as the first screen, `navigation-env.d.ts`, the [typed commands](../start/installation#typed-commands). It also wraps `metro.config.js` in `withApexNavigation`, for [Fast Refresh](../start/installation#fast-refresh). Each change and why: [What setup changes, and why](../start/installation#why-native).
 
 ```bash title="Terminal"
 npx apex-navigation setup
@@ -171,6 +171,8 @@ npx apex-navigation doctor --fix
 | --- | --- |
 | `--fix` | Makes the fixes the CLI has, for errors and warnings alike: `setup`, `links`, `icons`, `codegen` and `pod install`, asking before each. It needs a terminal to ask in. |
 | `--json` | `{ ok, checks: [{ group, title, status, detail, fix }] }`; `status` is `ok`, `warn`, `error` or `info`, and `fix` is `{ label, run }`, where `run` names the command `--fix` runs. Not with `--fix`. |
+
+It warns under Fast Refresh when the app's `metro.config.js` doesn't use `withApexNavigation`; the fix is `setup`.
 
 It exits with 1 when a check finds an error; warnings leave it at 0.
 

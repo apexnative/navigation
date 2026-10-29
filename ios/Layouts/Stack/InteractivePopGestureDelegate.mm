@@ -86,10 +86,11 @@ static BOOL ANNIsOwnQuestionOfUIKit(SEL selector) {
 
 #pragma mark - UIGestureRecognizerDelegate
 
-// The order: `popGesture` first (with `false` there is neither a swipe nor the hold's event), then one screen or a
-// stack not at rest, then the hold (its event instead of the swipe), then the edge swipe under a hidden bar begins
-// without UIKit's delegate, and otherwise UIKit's delegate decides (its direction, a vertical scroll of the content). A
-// top that isn't the stack's own (a column UIKit's split view moved in) is UIKit's.
+// The order: which of the stack's swipes plays first (`swipeBackTakes:`: the stack's own while the top's pop follows
+// the finger, UIKit's otherwise), then `popGesture` (with `false` there is neither a swipe nor the hold's event), then
+// one screen or a stack not at rest, then the hold (its event instead of the swipe), then the edge swipe under a hidden
+// bar begins without UIKit's delegate, and otherwise UIKit's delegate decides (its direction, a vertical scroll of the
+// content). A top that isn't the stack's own (a column UIKit's split view moved in) is UIKit's.
 //
 // Every pan in the content is offered to the content swipe, so it is first sorted: a pan that isn't a swipe back
 // (vertical, the other way) is no attempt, and neither is one on a list that scrolls sideways, which takes the pan
@@ -97,6 +98,10 @@ static BOOL ANNIsOwnQuestionOfUIKit(SEL selector) {
 // hidden bar it refuses them all, and the swipe sorts them itself, as the edge swipe begins there without it.
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gestureRecognizer {
     ANNStackController *stack = _stack;
+    // One swipe plays the pop: the stack's own while the top's pop follows the finger, UIKit's otherwise.
+    if (stack && ![stack swipeBackTakes:gestureRecognizer]) {
+        return NO;
+    }
     if (stack && ![stack swipeBackIsUIKits:gestureRecognizer]) {
         if (!_enabled || ![stack swipeBackMayBegin]) {
             return NO;
@@ -189,6 +194,25 @@ static BOOL ANNIsOwnQuestionOfUIKit(SEL selector) {
         return [systemDelegate gestureRecognizer:gestureRecognizer shouldReceiveTouch:touch];
     }
     return YES;
+}
+
+// A list under the stack's own swipe waits for it, as for UIKit's edge swipe: a swipe from the edge goes back, also on
+// a list that scrolls sideways. UIKit's swipes keep UIKit's answer.
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer
+    shouldBeRequiredToFailByGestureRecognizer:(UIGestureRecognizer *)otherGestureRecognizer {
+    ANNStackController *stack = _stack;
+    if (stack && [stack swipeBackIsStacks:gestureRecognizer]) {
+        UIView *view = otherGestureRecognizer.view;
+        return [view isKindOfClass:UIScrollView.class] &&
+               otherGestureRecognizer == ((UIScrollView *)view).panGestureRecognizer;
+    }
+    id<UIGestureRecognizerDelegate> systemDelegate = _systemDelegate;
+    SEL question = @selector(gestureRecognizer:shouldBeRequiredToFailByGestureRecognizer:);
+    if ([systemDelegate respondsToSelector:question]) {
+        return [systemDelegate gestureRecognizer:gestureRecognizer
+            shouldBeRequiredToFailByGestureRecognizer:otherGestureRecognizer];
+    }
+    return NO;
 }
 
 #pragma mark - The rest goes to UIKit's delegate

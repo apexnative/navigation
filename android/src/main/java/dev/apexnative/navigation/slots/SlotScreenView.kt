@@ -2,9 +2,13 @@ package dev.apexnative.navigation.slots
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.util.Size
 import android.view.MotionEvent
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import com.facebook.react.uimanager.PixelUtil.dpToPx
+import dev.apexnative.navigation.react.ContentHeights
+import dev.apexnative.navigation.react.ContentMounts
 import dev.apexnative.navigation.react.events.AppearanceDispatcher
 import dev.apexnative.navigation.react.events.ComponentType
 import dev.apexnative.navigation.react.events.ScreenAppearance
@@ -16,9 +20,10 @@ import dev.apexnative.navigation.viewcontrollers.viewcontroller.ScrollEventListe
  * What a slot screen (`slot:<Name>`) shows: the empty container its slot of the app's React tree moves its children
  * into, under the screen's id ([SlotContainers]), told of each change of its size. It is the screen's content for the
  * core: ready once the slot's content has mounted into it and, when the screen has a safe area view, the screen
- * rendered into that view; its mounted handlers run at each mount. Its appearance events go through its record to the
- * core's dispatcher (`AppearanceDispatcher`), which holds them until it is ready or the hold limit. Destroyed while the
- * id is still its own, it tells JavaScript to take the slot's content away (`ANN.SlotDestroyed`).
+ * rendered into that view; its mounted handlers run at each mount of Fabric and as the content mounts into it. Its
+ * content measures without a height limit in the slot's own layout ([contentSize]). Its appearance events go through
+ * its record to the core's dispatcher (`AppearanceDispatcher`), which holds them until it is ready or the hold limit.
+ * Destroyed while the id is still its own, it tells JavaScript to take the slot's content away (`ANN.SlotDestroyed`).
  */
 @SuppressLint("ViewConstructor")
 class SlotScreenView(
@@ -30,7 +35,7 @@ class SlotScreenView(
     private val scrollEventListener = ScrollEventListener()
     private val whenMounted = mutableListOf<Runnable>()
     private val whenRendered = mutableListOf<Runnable>()
-    private val mountedHandlers = LinkedHashMap<String, Runnable>()
+    private val mounts = ContentMounts { !destroyed && isAttachedToWindow }
     private var listening = false
 
     // The safe area view of a slot renders in the app's one React tree: every signal of the id is the screen's.
@@ -84,10 +89,11 @@ class SlotScreenView(
         destroyed = true
         whenMounted.clear()
         whenRendered.clear()
-        mountedHandlers.clear()
+        mounts.clear()
         stopListening()
         // A later screen with the same id keeps the slot.
         if (SlotContainers.get(componentId) !== this) return
+        ContentHeights.forgetSlot(componentId)
         SlotContainers.remove(componentId)
         if (!isPreparedPush) AppearanceDispatcher.slotDestroyed(componentId, appearance.generation)
     }
@@ -120,7 +126,21 @@ class SlotScreenView(
     }
 
     override fun setOnContentMounted(key: String, handler: Runnable?) {
-        if (handler == null) mountedHandlers.remove(key) else mountedHandlers[key] = handler
+        if (!destroyed) mounts.set(key, handler)
+    }
+
+    // The slot measures its content in its own layout: the first question asks for it and lays the slot out again; the
+    // height comes with that layout, before the mount the handlers hear. The width is the container's, at which the
+    // slot lays its content out.
+    override fun contentSize(maxWidth: Int): Size? {
+        if (destroyed) return null
+        if (!ContentHeights.isSlotRequested(componentId)) {
+            ContentHeights.requestSlot(componentId)
+            SlotContainers.changed(componentId)
+            return null
+        }
+        val height = ContentHeights.slotHeight(componentId)?.takeIf { it > 0f } ?: return null
+        return Size(if (width > 0) width else maxWidth, Math.round(height.dpToPx()))
     }
 
     // Only the container that holds the slot of the id: a destroyed one, or one a later screen replaced, takes no
@@ -136,7 +156,7 @@ class SlotScreenView(
         val waiting = whenMounted.toList()
         whenMounted.clear()
         waiting.forEach { it.run() }
-        mountedHandlers.values.toList().forEach { it.run() }
+        mounts.run()
         checkReadiness()
     }
 

@@ -95,8 +95,8 @@ export interface SheetDetentChangedEvent {
   /** The id of the visible screen of the modal. */
   componentId: string;
   /**
-   * The detent the sheet stopped at: `'medium'`, `'large'`, or a height (points on iOS, dp on Android). `'content'`
-   * is sent on iOS for a detent that fits the content; Android names such a detent `'medium'`.
+   * The detent the sheet stopped at: `'medium'`, `'large'`, `'content'` (the detent that fits the content), or a
+   * height (points on iOS, dp on Android).
    */
   detent: 'medium' | 'large' | 'content' | number;
 }

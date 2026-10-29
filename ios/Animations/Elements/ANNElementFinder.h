@@ -69,8 +69,8 @@ FOUNDATION_EXPORT BOOL ANNElementStep(NSString *element, NS_NOESCAPE dispatch_bl
 /// The line in the log for the element named `element`, skipped for `reason`: it shows and hides with its screen.
 FOUNDATION_EXPORT void ANNElementSkipped(NSString *element, NSString *reason);
 
-/// An element's frames, each in `ANNElementStep`: after a frame that fails, the element's values go back
-/// (`-restore`), and it gets no frame more.
+/// An element's animations, made in `ANNElementStep`: when making them fails, the element's values go back
+/// (`-restore`) and it doesn't move; the rest of the transition plays.
 @interface ANNIsolatedElement : NSObject <ANNFrameClient>
 
 - (instancetype)initWithClient:(id<ANNFrameClient>)client

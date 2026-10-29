@@ -166,10 +166,16 @@ export function onNavigationEvent<Name extends NavigationEventName>(
   return onNativeEvent(nativeName, deliver);
 }
 
-/** Listens to the events of `listeners`, for as long as the app runs. */
-export function addNavigationListeners(listeners: NavigationListeners) {
+/** Listens to the events of `listeners` until the function it gives is called. */
+export function addNavigationListeners(listeners: NavigationListeners): () => void {
+  const removers: (() => void)[] = [];
   for (const name of Object.keys(listeners) as NavigationEventName[]) {
     const handler = listeners[name];
-    if (handler) onNavigationEvent(name, handler as (event: NavigationEvents[typeof name]) => void);
+    if (handler) {
+      removers.push(
+        onNavigationEvent(name, handler as (event: NavigationEvents[typeof name]) => void)
+      );
+    }
   }
+  return () => removers.forEach((remove) => remove());
 }

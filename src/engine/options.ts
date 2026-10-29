@@ -1,4 +1,4 @@
-import { DynamicColorIOS, Image, Platform, processColor } from 'react-native';
+import { Image, Platform, processColor } from 'react-native';
 import type { ColorValue, ImageSourcePropType } from 'react-native';
 import { nextId } from './ids';
 import { rememberButtonRoot, rememberOptionsComponent, setProps } from './props';
@@ -162,19 +162,17 @@ function nativeColor(value: unknown): unknown {
   return Platform.OS === 'ios' ? iosColor(value) : androidColor(value);
 }
 
-// One color, a pair for the light and the dark appearance, or a semantic color; null takes the color away.
+// One color, a pair for the light and the dark appearance, or a semantic color; null takes the color away. A pair goes
+// as `{ light, dark }`, an app's `DynamicColorIOS` too; a side without a color is left out and shows the platform's.
 function iosColor(value: unknown): unknown {
   if (value === null) return 'NoColor';
   if (!isFields(value)) return processColor(value as ColorValue);
   if ('semantic' in value) return value;
   const pair = ('dynamic' in value ? value.dynamic : value) as {
-    light: ColorValue;
-    dark: ColorValue;
+    light?: ColorValue;
+    dark?: ColorValue;
   };
-  return DynamicColorIOS({
-    light: processColor(pair.light) as ColorValue,
-    dark: processColor(pair.dark) as ColorValue,
-  });
+  return { light: processColor(pair.light), dark: processColor(pair.dark) };
 }
 
 // Android always takes a pair; one color goes to both, and the side without a color has none.

@@ -43,6 +43,16 @@ static const NSTimeInterval ANNElementsScreenFade = 0.3;
         length = MAX(length, [ANNAnimationRules lengthOfElements:_elements shared:_sharedElements]);
         length = MAX(length, _screenFadeDuration);
         _length = length;
+        // With the system's Reduce Motion on, nothing moves: the transition is a fade of the same length, the arriving
+        // screen in going forward, the leaving one out otherwise.
+        if (UIAccessibilityIsReduceMotionEnabled() && length > 0) {
+            _enter = nil;
+            _exit = nil;
+            _elements = @[];
+            _sharedElements = @[];
+            _screenFade = _isForward ? ANNScreenFadeArrivingIn : ANNScreenFadeLeavingOut;
+            _screenFadeDuration = length;
+        }
     }
     return self;
 }

@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Color
 import android.graphics.Outline
+import android.os.SystemClock
 import android.view.GestureDetector
 import android.view.Gravity
 import android.view.MotionEvent
@@ -18,6 +19,7 @@ import android.widget.ScrollView
 import androidx.activity.BackEventCompat
 import androidx.coordinatorlayout.widget.CoordinatorLayout
 import androidx.core.graphics.Insets
+import androidx.core.view.OneShotPreDrawListener
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.google.android.material.bottomsheet.BottomSheetBehavior
@@ -25,23 +27,33 @@ import com.google.android.material.bottomsheet.BottomSheetDragHandleView
 import dev.apexnative.navigation.options.SheetDetent
 import dev.apexnative.navigation.options.SheetOptions
 import dev.apexnative.navigation.utils.MaterialTheme
+import dev.apexnative.navigation.utils.SystemAnimations
 import dev.apexnative.navigation.utils.TestIds
 import dev.apexnative.navigation.utils.dp
+import dev.apexnative.navigation.viewcontrollers.viewcontroller.IReactView
 import kotlin.math.roundToInt
 
 /**
  * A modal shown as a Material bottom sheet (`pageSheet`, `formSheet`, `popover`, or `modal.sheet` without a style): the
  * modal's view in a container with a [BottomSheetBehavior], in the modals' CoordinatorLayout, over a scrim. It stops at
  * the detents of its options — `medium` at half the height, `large` at the full height under the status bar, a number
- * at that height in dp — and the user drags it between them. In a window wider than [MAX_WIDTH_DP] it stands in the
- * middle at that width. A drag down past the smallest one closes it, unless `swipeToDismiss` is false: then the sheet
- * stays, and the try is told. The screen under it stays in place. On Android 14+ the back gesture previews its hide
- * ([SheetBack]): the Material behavior shrinks it with the progress and slides it down at the release.
+ * at that height in dp, `content` at the height of the shown screen's content — and the user drags it between them; at
+ * three of them at most, the Material behavior's resting states ([SheetStops]). The content is measured without a
+ * height limit, as on iOS ([IReactView.contentSize]), again after each of its mounts, and the stops follow it. In a
+ * window wider than [MAX_WIDTH_DP] it stands in the middle at that width. While the keyboard shows, the sheet stands
+ * on it at every stop, as on iOS, unless its screen keeps its size for it. A drag down past the smallest one closes
+ * it, unless `swipeToDismiss` is false: then the sheet stays, and the try is told. The screen under it stays in place.
+ * On Android 14+ the back gesture previews its hide ([SheetBack]): the Material behavior shrinks it with the progress
+ * and slides it down at the release.
  */
 internal class ModalSheet(
     private val layout: CoordinatorLayout,
     private val content: View,
     private val events: Events,
+    /** The content of the screen the modal shows now, which the `content` detent measures; none without one. */
+    private val shownContent: () -> IReactView?,
+    /** The screen the modal shows now moves its content out of the keyboard's way (`layout.adjustResize`). */
+    private val adjustsForKeyboard: () -> Boolean,
 ) : SheetBack {
     interface Events {
         /** The user dragged the sheet to another detent. */
@@ -63,6 +75,19 @@ internal class ModalSheet(
     private var options = SheetOptions()
     private var swipeToDismiss = true
     private var detents: List<SheetDetent> = listOf(SheetDetent.Large)
+    // The detents the sheet rests at, from the lowest (`SheetStops.stops`): the behavior's states.
+    private var stops: List<SheetDetent> = listOf(SheetDetent.Large)
+    // The heights the behavior has for the stops, in pixels: lifted by the keyboard (`SheetStops.lifted`).
+    private var stopHeights: List<Int> = emptyList()
+    // The part of the keyboard over the navigation bar, in pixels; 0 without the keyboard.
+    private var keyboard = 0
+    // The stops' heights changed while the sheet moved (a drag, a slide): it takes them once it rests, and goes to the
+    // `selectedDetent` a merge named meanwhile ([pendingArrived]).
+    private var restopPending = false
+    // The sheet showed while its `content` detent had no height yet: once it has one, the sheet goes where the show
+    // would have taken it ([showTarget]), unless the user moved it first.
+    private var awaiting = false
+    private var pendingArrived: SheetDetent? = null
     private var selected: SheetDetent? = null
     private var topGap = 0
     private var dragged = false
@@ -94,7 +119,31 @@ internal class ModalSheet(
     // A list inside the sheet scrolls with it, as the Material behavior expects: up at half height the sheet goes up
     // first, down at the top of the list the sheet comes down. The behavior follows views that scroll nested.
     private val scrollViews = ViewTreeObserver.OnGlobalLayoutListener {
-        if (behavior.dragAnywhere) enableNestedScrolling(container)
+        turnScrollViews()
+        // The bars above the content may have taken their height.
+        if (followed != null) contentChanged()
+    }
+
+    // The shown screen's content that the `content` detent follows, its height without a height limit (pixels, none
+    // before it is measured), and the height of the detent the behavior has now.
+    private var followed: IReactView? = null
+    // The shown screen's content whose mounts turn the lists in it to scroll nested ([hearContent]).
+    private var heard: IReactView? = null
+    private var contentBody: Int? = null
+    private var appliedContentHeight: Int? = null
+    // When the content was measured last after a mount, and whether a measure waits ([contentMounted]).
+    private var lastMeasure = 0L
+    private var measureWaits = false
+    private val measureLater = Runnable {
+        measureWaits = false
+        lastMeasure = SystemClock.uptimeMillis()
+        measureContent()
+        contentChanged()
+    }
+
+    // The stops stand in pixels: they follow the layout's height (a rotation, a resize).
+    private val layoutHeight = View.OnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom ->
+        if (bottom - top != oldBottom - oldTop) container.post { restop() }
     }
 
     /** The sheet is down, out of sight: the modal can go at once. */
@@ -113,6 +162,19 @@ internal class ModalSheet(
             }
         })
         scrim.setOnTouchListener { _, event -> taps.onTouchEvent(event) }
+        // The keyboard covers the bottom of the window: the sheet stands on it, by the keyboard's part over the
+        // navigation bar (the detents count that bar already), unless the screen in it keeps its size for the keyboard
+        // (`layout.adjustResize: false`). The scrim, under the sheet, hears the window's insets.
+        ViewCompat.setOnApplyWindowInsetsListener(scrim) { _, insets ->
+            val ime = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
+            val bar = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
+            val lift = (ime - bar).coerceAtLeast(0)
+            if (lift != keyboard) {
+                keyboard = lift
+                restop()
+            }
+            insets
+        }
         // The sheet keeps a touch that lands on it and no view in it takes (its bar, an empty part), as Material's
         // BottomSheetDialog does: else the touch falls to the scrim under it, and a tap there closes a dimmed sheet;
         // past an undimmed scrim it reaches the behavior, which takes the sheet into its drag state at the touch's
@@ -151,8 +213,11 @@ internal class ModalSheet(
         container.viewTreeObserver.addOnGlobalLayoutListener(scrollViews)
     }
 
-    /** Slides the sheet up to its selected detent; [onShown] once it is there. */
-    fun show(sheetOptions: SheetOptions, swipeToDismiss: Boolean, onShown: () -> Unit) {
+    /**
+     * Slides the sheet up to its selected detent; [onShown] once it is there. Not [animated], or with the system's
+     * animations off ([SystemAnimations]), it stands there at once.
+     */
+    fun show(sheetOptions: SheetOptions, swipeToDismiss: Boolean, animated: Boolean, onShown: () -> Unit) {
         topGap = ViewCompat.getRootWindowInsets(layout)?.getInsets(WindowInsetsCompat.Type.systemBars())?.top ?: 0
         layout.addView(scrim, CoordinatorLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         // As tall as its largest detent (maxHeight), not moved down by a margin: the behavior counts its states from
@@ -163,42 +228,48 @@ internal class ModalSheet(
         params.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
         params.behavior = behavior
         layout.addView(container, params)
+        layout.addOnLayoutChangeListener(layoutHeight)
         shown = onShown
         update(sheetOptions, swipeToDismiss, merge = null)
         selected = sheetOptions.selectedDetent?.takeIf { it in detents }
+        awaiting = SheetDetent.Content in detents && contentHeight() == null
+        if (!animated || SystemAnimations.areOff(context)) {
+            // The behavior lays the sheet out at the state it has before its first layout, with no slide, and tells
+            // no state then: the sheet stands at its detent once laid out.
+            behavior.state = stateOf(showTarget())
+            container.post { if (closing == null) onState(behavior.state) }
+            return
+        }
         // Laid out hidden first, so it slides up from the bottom.
-        container.post { if (closing == null) behavior.state = stateOf(selected ?: detents.first()) }
+        container.post { if (closing == null) behavior.state = stateOf(showTarget()) }
     }
+
+    // The stop the show goes to: the selected one when it is a stop already, else the lowest.
+    private fun showTarget(): SheetDetent = selected?.takeIf { it in stops } ?: stops.first()
 
     /**
      * New resolved options: the detents and the look. The sheet moves only as [SheetStops] says, after a `mergeOptions`
      * of [merge]; without one (the shown screen changed, the show) it stays where it is.
      */
     fun update(sheetOptions: SheetOptions, swipeToDismiss: Boolean, merge: SheetOptions?) {
+        // The stop it rests at, by the stops it has now: the new ones may give its state another detent.
+        val settled = detentOf(behavior.state)
         options = sheetOptions
         this.swipeToDismiss = swipeToDismiss
-        detents = sheetOptions.detents?.takeIf { it.isNotEmpty() }?.sortedBy { heightOf(it) } ?: listOf(SheetDetent.Large)
+        detents = sheetOptions.detents?.takeIf { it.isNotEmpty() } ?: listOf(SheetDetent.Large)
         grabber.visibility = if (sheetOptions.grabber.isTrue) View.VISIBLE else View.GONE
         behavior.dragAnywhere = sheetOptions.expandsOnScroll.get(true)
         container.invalidateOutline()
-        configure()
-        if (merge == null || closing != null || backFinishing) return
-        val settled = detentOf(behavior.state)
-        if (settled != null) behavior.isHideable = swipeToDismiss && settled == detents.first()
-        val target = SheetStops.target(settled, detents, merge.selectedDetent, sheetOptions.selectedDetent)
-        // A merge that moves the sheet or keeps it from going down ends a preview of back on it.
-        if (target != null || !behavior.isHideable) stopBackPreview()
-        if (target != null) {
-            selected = target
-            behavior.state = stateOf(target)
-        }
-        updateScrim()
+        hearContent()
+        followContent()
+        restop(settled, merge?.selectedDetent)
     }
 
-    /** Slides the sheet down; [onClosed] once it is out of sight. */
-    fun close(onClosed: () -> Unit) {
+    /** Slides the sheet down; [onClosed] once it is out of sight. Not [animated], or with animations off, at once. */
+    fun close(animated: Boolean, onClosed: () -> Unit) {
         closing = onClosed
-        if (isClosed) {
+        if (isClosed || !animated || SystemAnimations.areOff(context)) {
+            stopBackPreview()
             finishClosing()
             return
         }
@@ -216,6 +287,12 @@ internal class ModalSheet(
         stopBackPreview()
         stopBackFrames()
         container.viewTreeObserver.removeOnGlobalLayoutListener(scrollViews)
+        layout.removeOnLayoutChangeListener(layoutHeight)
+        followed?.setOnContentMounted(CONTENT_KEY, null)
+        followed = null
+        container.removeCallbacks(measureLater)
+        heard?.setOnContentMounted(SCROLL_KEY, null)
+        heard = null
         container.removeView(content)
         layout.removeView(container)
         layout.removeView(scrim)
@@ -296,52 +373,208 @@ internal class ModalSheet(
             events.onCloseAttempted()
             return
         }
+        // With animations off the modal goes at once, and its close takes the sheet away with no slide.
+        if (SystemAnimations.areOff(context)) {
+            if (closing != null) return
+            closing = {}
+            return events.onClosedByUser()
+        }
         behavior.isHideable = true
         behavior.state = BottomSheetBehavior.STATE_HIDDEN
     }
 
-    // How the Material behavior stops at the detents: with half and full height both, at its three states (the
-    // smallest at the collapsed one); otherwise at the collapsed state (the smaller detent) and the expanded one, which
-    // is only as tall as the largest detent.
-    private fun configure() {
-        val height = detents.filterIsInstance<SheetDetent.Height>().firstOrNull()
-        val halfAndFull = SheetDetent.Medium in detents && SheetDetent.Large in detents
-        behavior.isFitToContents = !halfAndFull
-        behavior.expandedOffset = topGap
-        behavior.maxHeight = heightOf(detents.last())
-        val collapsed = if (halfAndFull) height else detents.takeIf { it.size > 1 }?.first()
-        behavior.skipCollapsed = collapsed == null
-        // Without a detent of its own the collapsed state is the smallest detent: a sheet that isn't hideable settles
-        // there, not at Material's peek height.
-        behavior.peekHeight = heightOf(collapsed ?: detents.first())
+    // The stops of the detents and how the Material behavior rests at them (`SheetStops.material`): at one or two it
+    // fits the sheet to its highest stop, at three it stops half expanded between them. The detent the options select
+    // stays the middle one when there are more.
+    // A new height of the sheet (`maxHeight`), of its collapsed state, or a change of the mode is laid out: the
+    // behavior measures the sheet and counts a fitted sheet's top in its layout. It says whether a layout comes.
+    private fun configure(): Boolean {
+        appliedContentHeight = contentHeight()
+        // A `content` detent not measured yet has no height: it stays out of the stops until it has one, or it would
+        // count as the full height and take the place of `large`.
+        val measured = detents.filter { it != SheetDetent.Content || contentHeight() != null }.ifEmpty { detents }
+        stops = SheetStops.stops(measured, ::heightOf, options.selectedDetent)
+        val lift = if (adjustsForKeyboard()) keyboard else 0
+        stopHeights = SheetStops.lifted(stops.map(::heightOf), lift, fullHeight())
+        val material = SheetStops.material(stopHeights, parentHeight())
+        val relayout = behavior.maxHeight != material.maxHeight || behavior.peekHeight != material.peekHeight ||
+            behavior.isFitToContents != material.fitToContents
+        behavior.isFitToContents = material.fitToContents
+        material.halfExpandedRatio?.takeIf { it > 0f && it < 1f }?.let { behavior.halfExpandedRatio = it }
+        behavior.expandedOffset = material.expandedOffset
+        behavior.maxHeight = material.maxHeight
+        behavior.skipCollapsed = material.skipCollapsed
+        behavior.peekHeight = material.peekHeight
+        if (relayout) container.requestLayout()
+        return relayout
     }
 
-    private fun stateOf(detent: SheetDetent): Int = when {
-        detent == detents.last() -> BottomSheetBehavior.STATE_EXPANDED
-        detent == SheetDetent.Medium && !behavior.isFitToContents -> BottomSheetBehavior.STATE_HALF_EXPANDED
-        else -> BottomSheetBehavior.STATE_COLLAPSED
+    /**
+     * The stops or their heights changed (the options, the layout, the content, the keyboard): the behavior takes them,
+     * and a sheet at rest goes to [arrived] (a `selectedDetent` a merge names) when it is a stop, else stays at the
+     * stop it rested at ([settled], by the stops before the change) where it stands now, else goes to the selected one
+     * or the lowest (`SheetStops.target`). A sheet on the move takes them once it rests.
+     */
+    private fun restop(settled: SheetDetent? = detentOf(behavior.state), arrived: SheetDetent? = null) {
+        if (container.parent == null) return
+        val relayout = configure()
+        updateScrim()
+        if (closing != null || backFinishing) return
+        if (isMoving()) {
+            restopPending = true
+            if (arrived != null) pendingArrived = arrived
+            return
+        }
+        // Not shown yet: the show slides it to the stop a merge names.
+        if (settled == null) {
+            if (arrived != null && arrived in stops) selected = arrived
+            return
+        }
+        val shows = awaiting && contentHeight() != null
+        if (shows) awaiting = false
+        val wanted = arrived ?: if (shows) showTarget() else null
+        val target = SheetStops.target(settled, stops, wanted, options.selectedDetent) ?: settled
+        behavior.isHideable = swipeToDismiss && target == stops.first()
+        // A move, or a sheet that can no longer go down, ends a preview of back on it.
+        if (target != settled || !behavior.isHideable) stopBackPreview()
+        if (backPreview != null) return
+        if (target != settled) selected = target
+        if (!relayout) {
+            behavior.state = stateOf(target)
+            return
+        }
+        // The new height comes with the sheet's next layout, where the behavior puts a sheet at rest at its state's
+        // offset at once; a move to another stop follows it.
+        afterNextLayout {
+            val gone = closing != null || backFinishing || container.parent == null
+            if (gone || backPreview != null) return@afterNextLayout
+            if (isMoving()) {
+                restopPending = true
+                if (target != settled) pendingArrived = target
+                return@afterNextLayout
+            }
+            behavior.state = stateOf(target)
+        }
+    }
+
+    private fun isMoving(): Boolean =
+        behavior.state == BottomSheetBehavior.STATE_DRAGGING || behavior.state == BottomSheetBehavior.STATE_SETTLING
+
+    // Runs [step] on the pre-draw of the frame of the sheet's next layout: the behavior has placed it by then.
+    private fun afterNextLayout(step: () -> Unit) {
+        container.addOnLayoutChangeListener(object : View.OnLayoutChangeListener {
+            override fun onLayoutChange(
+                view: View, left: Int, top: Int, right: Int, bottom: Int,
+                oldLeft: Int, oldTop: Int, oldRight: Int, oldBottom: Int,
+            ) {
+                view.removeOnLayoutChangeListener(this)
+                OneShotPreDrawListener.add(view, step)
+            }
+        })
+    }
+
+    private fun stateOf(detent: SheetDetent): Int = when (detent) {
+        stops.last() -> BottomSheetBehavior.STATE_EXPANDED
+        stops.first() -> BottomSheetBehavior.STATE_COLLAPSED
+        else -> BottomSheetBehavior.STATE_HALF_EXPANDED
     }
 
     private fun detentOf(state: Int): SheetDetent? = when (state) {
-        BottomSheetBehavior.STATE_EXPANDED -> detents.last()
-        BottomSheetBehavior.STATE_HALF_EXPANDED -> SheetDetent.Medium
-        BottomSheetBehavior.STATE_COLLAPSED -> detents.first()
+        BottomSheetBehavior.STATE_EXPANDED -> stops.last()
+        BottomSheetBehavior.STATE_HALF_EXPANDED -> stops.getOrNull(1)?.takeIf { stops.size == SheetStops.MAX_STOPS }
+        BottomSheetBehavior.STATE_COLLAPSED -> stops.first()
         else -> null
     }
 
+    private fun parentHeight(): Int = if (layout.height > 0) layout.height else layout.rootView.height
+
+    // The tallest a sheet is: the layout under the status bar.
+    private fun fullHeight(): Int = parentHeight() - topGap
+
     /** The height of the sheet at the detent, in px. */
     private fun heightOf(detent: SheetDetent): Int {
-        val full = (if (layout.height > 0) layout.height else layout.rootView.height) - topGap
+        val full = fullHeight()
         return when (detent) {
             SheetDetent.Large -> full
             SheetDetent.Medium -> (full + topGap) / 2
+            SheetDetent.Content -> contentHeight()?.coerceAtMost(full) ?: full
             is SheetDetent.Height -> detent.dp.toFloat().dp.coerceAtMost(full)
         }
     }
 
+    // The `content` detent follows the content of the screen shown now, and measures it after each of its mounts; a
+    // sheet without the detent follows nothing.
+    private fun followContent() {
+        val content = if (SheetDetent.Content in detents) shownContent() else null
+        if (content !== followed) {
+            followed?.setOnContentMounted(CONTENT_KEY, null)
+            followed = content
+            // The last height stays until the new content has one: a push in the sheet doesn't jump it to the top.
+            content?.setOnContentMounted(CONTENT_KEY) { contentMounted() }
+        }
+        measureContent()
+    }
+
+    // Fabric tells every mount of the app: the content is measured at most once per [MEASURE_INTERVAL_MS], the last
+    // mount of a burst included, so a screen that renders each frame elsewhere doesn't lay the sheet's tree out each
+    // frame too.
+    private fun contentMounted() {
+        val wait = lastMeasure + MEASURE_INTERVAL_MS - SystemClock.uptimeMillis()
+        if (wait > 0) {
+            if (!measureWaits) {
+                measureWaits = true
+                container.postDelayed(measureLater, wait)
+            }
+            return
+        }
+        measureLater.run()
+    }
+
+    // The content's own height at the width it has (the sheet's, before it is laid out); kept until a measure gives
+    // one again.
+    private fun measureContent() {
+        val content = followed ?: return
+        val width = content.asView().width.takeIf { it > 0 } ?: container.width.takeIf { it > 0 } ?: sheetWidth()
+        content.contentSize(width)?.let { contentBody = it.height }
+    }
+
+    // The height of the `content` detent: the content's own, the bars above it in the sheet (a stack's top bar), and
+    // the navigation bar below it, which a detent leaves room for as UIKit adds the bottom safe area; none before the
+    // content is measured.
+    private fun contentHeight(): Int? {
+        val body = contentBody ?: return null
+        val insets = ViewCompat.getRootWindowInsets(layout)
+        val bottom = insets?.getInsets(WindowInsetsCompat.Type.navigationBars())?.bottom ?: 0
+        return offsetAbove() + body + bottom
+    }
+
+    // How far below the sheet's top the content stands, by layout: the views between them, without their transforms.
+    private fun offsetAbove(): Int {
+        var view: View = followed?.asView() ?: return 0
+        var top = 0
+        while (view !== container) {
+            top += view.top
+            view = view.parent as? View ?: return 0
+        }
+        return top
+    }
+
+    // The content may have changed its height: the stops follow it.
+    private fun contentChanged() {
+        if (contentHeight() != appliedContentHeight) restop()
+    }
+
+    private fun sheetWidth(): Int {
+        val width = if (layout.width > 0) layout.width else layout.rootView.width
+        return width.coerceAtMost(MAX_WIDTH_DP.dp)
+    }
+
     private fun onState(state: Int) {
         when (state) {
-            BottomSheetBehavior.STATE_DRAGGING -> dragged = true
+            BottomSheetBehavior.STATE_DRAGGING -> {
+                dragged = true
+                awaiting = false
+            }
             BottomSheetBehavior.STATE_HIDDEN -> {
                 backFinishing = false
                 when {
@@ -357,7 +590,7 @@ internal class ModalSheet(
                 if (closing != null) return
                 val detent = detentOf(state)
                 // A drag down closes the sheet from its smallest detent only; from a larger one it stops at the next.
-                behavior.isHideable = swipeToDismiss && detent == detents.first()
+                behavior.isHideable = swipeToDismiss && detent == stops.first()
                 shown?.let {
                     shown = null
                     it()
@@ -367,6 +600,12 @@ internal class ModalSheet(
                     events.onDetentChanged(detent)
                 }
                 dragged = false
+                if (restopPending) {
+                    val arrived = pendingArrived
+                    restopPending = false
+                    pendingArrived = null
+                    container.post { restop(arrived = arrived) }
+                }
             }
         }
         updateScrim()
@@ -384,9 +623,9 @@ internal class ModalSheet(
         // Hidden at the end of back's slide, it still stands at its detent until the next layout.
         if (behavior.state == BottomSheetBehavior.STATE_HIDDEN) return setDim(0f)
         val height = layout.height - sheetTop()
-        val undimmed = options.largestUndimmedDetent?.takeIf { it in detents }
-        val from = undimmed?.let { heightOf(it) } ?: 0
-        val to = detents.firstOrNull { heightOf(it) > from }?.let { heightOf(it) } ?: return run { setDim(0f) }
+        val undimmed = stops.indexOf(options.largestUndimmedDetent).takeIf { it >= 0 }
+        val from = undimmed?.let { stopHeights.getOrNull(it) } ?: 0
+        val to = stopHeights.firstOrNull { it > from } ?: return run { setDim(0f) }
         setDim(((height - from).toFloat() / (to - from)).coerceIn(0f, 1f))
     }
 
@@ -406,9 +645,35 @@ internal class ModalSheet(
 
     private fun cornerRadius(): Int = if (options.cornerRadius.hasValue()) options.cornerRadius.get().toFloat().dp else 28.dp
 
-    private fun enableNestedScrolling(view: View) {
-        if (view is ScrollView && !view.isNestedScrollingEnabled) view.isNestedScrollingEnabled = true
-        if (view is ViewGroup) for (i in 0 until view.childCount) enableNestedScrolling(view.getChildAt(i))
+    // React Native mounts the lists of the shown screen after the sheet's layout, and its views take no layout of their
+    // own: the sheet hears each mount of the content and turns a new list to scroll nested there.
+    private fun hearContent() {
+        val content = if (behavior.dragAnywhere) shownContent() else null
+        if (content !== heard) {
+            heard?.setOnContentMounted(SCROLL_KEY, null)
+            heard = content
+            content?.setOnContentMounted(SCROLL_KEY) { turnScrollViews() }
+        }
+        turnScrollViews()
+    }
+
+    // The behavior finds the lists that scroll nested only in its layout of the sheet: a list turned so gets the sheet
+    // one more, else the behavior knows no list and takes a drag down on a scrolled one for a drag of the sheet.
+    private fun turnScrollViews() {
+        if (behavior.dragAnywhere && enableNestedScrolling(container)) container.requestLayout()
+    }
+
+    // Whether a list was turned to scroll nested now.
+    private fun enableNestedScrolling(view: View): Boolean {
+        var turned = false
+        if (view is ScrollView && !view.isNestedScrollingEnabled) {
+            view.isNestedScrollingEnabled = true
+            turned = true
+        }
+        if (view is ViewGroup) {
+            for (i in 0 until view.childCount) turned = enableNestedScrolling(view.getChildAt(i)) || turned
+        }
+        return turned
     }
 
     /** With `expandsOnScroll: false` only the top of the sheet, around the grabber, drags it; the rest scrolls. */
@@ -424,7 +689,7 @@ internal class ModalSheet(
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     downY = event.rawY
-                    downAtSmallest = detentOf(state) == detents.first()
+                    downAtSmallest = detentOf(state) == stops.first()
                 }
                 MotionEvent.ACTION_UP -> {
                     if (!swipeToDismiss && closing == null && downAtSmallest && event.rawY - downY > ATTEMPT_DISTANCE_DP.dp) {
@@ -467,5 +732,14 @@ internal class ModalSheet(
         private const val SCRIM_ALPHA = 0.32f
         private const val GRAB_AREA_DP = 48
         private const val ATTEMPT_DISTANCE_DP = 48
+
+        // The key of the sheet's handler of its content's mounts.
+        private const val CONTENT_KEY = "sheet.content"
+
+        // The least time between two measures of the content after its mounts.
+        private const val MEASURE_INTERVAL_MS = 100L
+
+        // The key of the sheet's handler that turns its content's lists to scroll nested.
+        private const val SCROLL_KEY = "sheet.scroll"
     }
 }

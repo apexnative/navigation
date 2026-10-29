@@ -9,7 +9,7 @@ import com.facebook.react.bridge.ReadableMap
  * first).
  */
 open class LayoutAnimation(
-    @JvmField var sharedElements: SharedElements = SharedElements(),
+    @OptionKey("sharedElementTransitions") @JvmField var sharedElements: SharedElements = SharedElements(),
     @JvmField var elementTransitions: ElementTransitions = ElementTransitions(),
 ) {
     open fun hasValue(): Boolean = sharedElements.hasValue() || elementTransitions.hasValue()

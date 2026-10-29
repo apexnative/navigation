@@ -12,13 +12,18 @@ NS_ASSUME_NONNULL_BEGIN
                     from:(UIViewController *)from
                       to:(UIViewController *)to;
 
+/// The interaction of the swipe back that plays `animator`; nil for any other transition.
+- (nullable id<UIViewControllerInteractiveTransitioning>)interactionForAnimator:
+    (id<UIViewControllerAnimatedTransitioning>)animator;
+
 @end
 
 /// The stack's delegate while a custom animation may be needed: it answers what the stack answers as its own delegate —
 /// every method the stack implements goes to the stack — and also the choice of the transition object. A delegate with
 /// that method turns the iOS 26 content swipe off, so the stack sets this one only while the top's `animations.pop`,
-/// the pushed screen's `animations.push` or a running `setStackRoot` is its own, and itself otherwise. Never an
-/// interaction controller: the custom transitions aren't interactive, the swipe stays UIKit's.
+/// the pushed screen's `animations.push` or a running `setStackRoot` is its own, and itself otherwise. An interaction
+/// controller only while `answersInteraction`: the stack's own swipe back then plays the top's own pop under the
+/// finger; otherwise UIKit doesn't see the method, and the swipe stays UIKit's.
 @interface ANNStackAnimatingDelegate : NSObject <UINavigationControllerDelegate>
 
 - (instancetype)initWithStack:(UINavigationController<ANNStackAnimating> *)stack
@@ -26,6 +31,10 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (instancetype)init NS_UNAVAILABLE;
 + (instancetype)new NS_UNAVAILABLE;
+
+/// The top's pop follows the swipe back (`animations.pop.interactive`). UIKit reads the delegate's methods when it is
+/// set: the stack sets the delegate again after a change.
+@property(nonatomic) BOOL answersInteraction;
 
 @end
 

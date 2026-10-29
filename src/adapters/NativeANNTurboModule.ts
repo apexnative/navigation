@@ -14,6 +14,13 @@ export interface Spec extends TurboModule {
   setDefaultOptions(options: CodegenTypes.UnsafeObject): void;
   /** Merges options into the layout with the id and applies them to what shows; an unknown id does nothing. */
   mergeOptions(componentId: string, options: CodegenTypes.UnsafeObject): void;
+  /**
+   * (Development) Takes the options at the paths (`topBar.subtitle`, a group's path for the whole group) out of the own
+   * options of the layout with the id, so it shows what the layouts around it and the defaults give there, and applies
+   * the result to what shows as `setDefaultOptions` does. An unknown id or path does nothing. Fast Refresh sends it
+   * for the options an edit took out of a screen that shows.
+   */
+  clearOptions(componentId: string, paths: ReadonlyArray<string>): void;
   /** Pushes a layout over the screen in its stack; resolves with the id of the screen that shows (of a pair: its id). */
   push(commandId: string, componentId: string, layout: CodegenTypes.UnsafeObject): Promise<string>;
   /**

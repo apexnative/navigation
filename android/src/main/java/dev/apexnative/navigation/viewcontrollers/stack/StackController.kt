@@ -31,6 +31,7 @@ import dev.apexnative.navigation.viewcontrollers.parent.OptionsScreen
 import dev.apexnative.navigation.viewcontrollers.parent.ParentController
 import dev.apexnative.navigation.viewcontrollers.parent.ReturnsScreenFromColumn
 import dev.apexnative.navigation.viewcontrollers.parent.nodeWith
+import dev.apexnative.navigation.viewcontrollers.stack.fab.FabMotion
 import dev.apexnative.navigation.viewcontrollers.stack.fab.FabPresenter
 import dev.apexnative.navigation.viewcontrollers.stack.topbar.LargeTitleCollapse
 import dev.apexnative.navigation.viewcontrollers.stack.topbar.TopBarPresenter
@@ -207,6 +208,17 @@ class StackController(
         screen.changeOptions { it.topBar.buttons.back.setVisible() }
     }
 
+    /**
+     * `clearOptions` took options out of the own options of [node], an entry of this stack or the options screen of
+     * one: the back arrow's rule ([join]) writes its part of them again, so the first screen keeps its arrow hidden
+     * and another shows it unless its options say otherwise.
+     */
+    internal fun ownOptionsCleared(node: ViewController<*>) {
+        val entries = queue.entries
+        val entry = entries.firstOrNull { it === node || optionsScreen(it) === node } ?: return
+        backRule(entry, first = entry === entries.first())
+    }
+
     /** The key of [entry]; none without one. */
     internal fun keyOf(entry: ViewController<*>): String? = keys[entry]
 
@@ -307,6 +319,9 @@ class StackController(
     // The back gesture over this stack whose preview hasn't ended yet; none.
     private var backGesture: BackGesture? = null
 
+    // A merge of `fab` into the top waits for the end of a back gesture's preview.
+    private var fabMergeWaits = false
+
     /**
      * A back gesture over the top of this stack ([startBackGesture]): its progress, its cancel, and its release, which
      * pops the top through the queue with the preview's end. A command accepted meanwhile, or the stack's destroy,
@@ -325,6 +340,10 @@ class StackController(
         private var targetAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
         private var revealed = false
         private var aborted = false
+
+        /** The preview shows the screen under the top, with its bar and its FAB. */
+        val isRevealed: Boolean
+            get() = revealed && !aborted
 
         /** The gesture moved: [progress] 0 … 1, the finger at [touchY]. */
         fun progress(progress: Float, touchY: Float) {
@@ -348,6 +367,9 @@ class StackController(
                 return true
             }
             if (backGesture === this) backGesture = null
+            // The top's FAB, set aside, leaves with it; a merge into it no longer matters.
+            fab.dropAside()
+            fabMergeWaits = false
             queue.cut(target, null, id, "go back in the stack '$id'", null, gesture = true)
             return true
         }
@@ -360,7 +382,8 @@ class StackController(
             restore()
         }
 
-        // The preview's picture is there: the screen under the top shows under it, and the bar shows that screen.
+        // The preview's picture is there: the screen under the top shows under it, and the bar and the FAB show that
+        // screen, at once.
         internal fun reveal() {
             val view = target.peekView() ?: return
             targetWasPlaced = view.parent === peekView() && view.visibility == View.VISIBLE
@@ -370,6 +393,8 @@ class StackController(
             views.reveal(target, top)
             view.alpha = 1f
             topBar.apply(target)
+            fab.setAside()
+            showFab(FabMotion.Move.AtOnce, target)
         }
 
         private fun restore() {
@@ -386,9 +411,14 @@ class StackController(
                     views.detach(target)
                 }
             }
-            // The bar shows the top again, its components appeared again.
+            // The bar and the FAB show the top again, the bar's components appeared again.
             val shown = queue.currentChild
             topBar.apply(shown)
+            fab.bringBack()
+            if (fabMergeWaits) {
+                fabMergeWaits = false
+                mergeFab()
+            }
             shown?.let {
                 topBar.screenWillAppear(optionsScreen(it))
                 topBar.screenDidAppear(optionsScreen(it))
@@ -462,7 +492,8 @@ class StackController(
         ContainerBackground.apply(this, options)
         updateBar()
         takeKeptMerge(child)?.let(::applyTopMerge)
-        if (queue.isAtRest) showFab()
+        // A back gesture's preview shows the FAB of the screen under the top.
+        if (queue.isAtRest && backGesture?.isRevealed != true) showFab()
         performOnParentController { it.applyChildOptions(withoutStackGroups(options), this) }
     }
 
@@ -670,15 +701,20 @@ class StackController(
         topBar.apply(queue.currentChild)
     }
 
-    // The FAB follows the top at the end of a transition.
-    private fun showFab() {
+    // The FAB follows [top] (the current child) from the start of a transition by [move], with the screens; at rest, a
+    // FAB that comes by Material's swap.
+    private fun showFab(move: FabMotion.Move = FabMotion.Move.Swap, top: ViewController<*>? = queue.currentChild) {
         val layout = peekView() ?: return
-        val top = queue.currentChild
         val screen = top?.let(::optionsScreen)
-        fab.showFor(layout, screen, top?.let(::resolvedOf)?.fab ?: FabOptions(), scrollOf(screen))
+        fab.showFor(layout, screen, top?.let(::resolvedOf)?.fab ?: FabOptions(), scrollOf(screen), move)
     }
 
     private fun mergeFab() {
+        // A back gesture's preview shows the FAB of the screen under the top: the top's merge waits for a cancel.
+        if (backGesture?.isRevealed == true) {
+            fabMergeWaits = true
+            return
+        }
         val layout = peekView() ?: return
         val top = queue.currentChild ?: return
         val screen = optionsScreen(top)
@@ -726,6 +762,9 @@ class StackController(
         override fun tabBarTransition(move: TabBarMotion.Move, side: BottomTabsEnterExitAnimationOptions?) {
             parentController?.tabBarTransition(this@StackController, move, side)
         }
+
+        // The FAB of the new top arrives with its screen, the old one leaves with its own.
+        override fun fabTransition(move: FabMotion.Move) = showFab(move)
 
         override fun operationEnded(topSettled: Boolean) {
             BackCallbackState.update()

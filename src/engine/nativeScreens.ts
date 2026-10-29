@@ -38,6 +38,8 @@ interface NativeProps {
 interface OpenScreen {
   id: string;
   name: string;
+  /** The props the command gave, as they are. */
+  given: object;
   props: NativeProps;
   /** The data the native side has, and the names of the functions; none before the command sends the screen. */
   sent?: { data: Map<string, string>; functions: string };
@@ -78,7 +80,7 @@ export const nativeScreenHooks = {
  * screen with `useProps` starts its hook, and its props go in once the hook has returned (`whenNativeScreensReady`).
  */
 export function showNativeScreen(node: LayoutNode, name: string, props: object): void {
-  const screen: OpenScreen = { id: node.id, name, props: toNativeProps(props) };
+  const screen: OpenScreen = { id: node.id, name, given: props, props: toNativeProps(props) };
   const Controller = nativeScreenController(name);
   if (Controller) {
     screen.first = deferred();
@@ -133,6 +135,13 @@ export function callNativeScreenFunction(id: string, name: string, args: unknown
   const fn = screen.props.functions.get(name);
   if (!fn) throw new Error(`[navigation] The props of '${screen.name}' have no function '${name}'`);
   return fn(...args);
+}
+
+/** The native screens with the name that are open, each with the props its command gave. */
+export function openNativeScreens(name: string): { id: string; props: object }[] {
+  return [...screens.values()]
+    .filter((screen) => screen.name === name)
+    .map((screen) => ({ id: screen.id, props: screen.given }));
 }
 
 /** The native screen with the id, for the navigation of its calls. */

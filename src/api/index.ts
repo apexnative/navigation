@@ -109,6 +109,7 @@ export type { NativeScreen } from './screens/nativeScreens';
 export { defineArrangement } from './screens/arrangement';
 export type { Arrangement, ArrangementDefinition, ScreenArrangement } from './screens/arrangement';
 export type {
+  DefinedScreen,
   OptionsEnvironment,
   ScreenDefinition,
   ScreenOptionsInput,

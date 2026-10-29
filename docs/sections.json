@@ -71,6 +71,7 @@
           ],
           "types": [
             "ScreenDefinition",
+            "DefinedScreen",
             "Screens",
             "ScreenEntry",
             "ScreenGroup",

@@ -78,6 +78,8 @@ object OptionsFixture {
         "rightButtonDisabledColor", color(),
         "centerButtonColor", color(),
         "centerButtonDisabledColor", color(),
+        "menuBackgroundColor", color(),
+        "menuTextColor", color(),
         "drawBehind", true,
         "testID", "TopBar",
         "title", title(),

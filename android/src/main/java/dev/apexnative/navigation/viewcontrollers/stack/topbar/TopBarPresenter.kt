@@ -7,17 +7,13 @@ import android.app.Activity
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.graphics.Color
-import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
-import android.view.Menu
-import android.view.MenuItem
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.LinearInterpolator
 import android.view.animation.PathInterpolator
 import android.widget.FrameLayout
-import android.widget.ImageView
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.core.graphics.drawable.DrawableCompat
 import androidx.core.view.WindowInsetsCompat
@@ -59,6 +55,7 @@ import dev.apexnative.navigation.views.stack.topbar.TitleBar
 import dev.apexnative.navigation.views.stack.topbar.TopBar
 import dev.apexnative.navigation.views.stack.topbar.TopBarDefaults
 import dev.apexnative.navigation.views.stack.topbar.titlebar.BarButtonComponentCell
+import dev.apexnative.navigation.views.stack.topbar.titlebar.BarMenu
 import dev.apexnative.navigation.views.stack.topbar.titlebar.ButtonBar
 import dev.apexnative.navigation.views.stack.topbar.titlebar.IconBackgroundDrawable
 import kotlin.math.roundToInt
@@ -142,8 +139,8 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
         this.layout = layout
         val bar = layout.topBar
         this.bar = bar
-        leftButtons = ButtonBar(bar.leftButtonBar, true, ::loadIcon, Buttons())
-        rightButtons = ButtonBar(bar.rightButtonBar, false, ::loadIcon, Buttons())
+        leftButtons = ButtonBar(bar.leftButtonBar, ::loadIcon, Buttons())
+        rightButtons = ButtonBar(bar.rightButtonBar, ::loadIcon, Buttons())
         visibility = TopBarVisibility(VisibilityTarget(bar) { collapse?.reset() })
         rowTransition = BarRowTransition(RowTarget(bar).also { rowTarget = it })
         collapse = TopBarCollapseBehavior(bar)
@@ -212,8 +209,8 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
      * bar as it is goes with [leaving], and the bar, which takes [incoming]'s options next, is drawn flat as [incoming]
      * moves — under [leaving] on a pop ([StackDisplay.BarTravel.Back]) (`StackLayout.barTravels`). No picture when the
      * bar doesn't show. Nothing travels when the new top hides the bar by a side of its own
-     * (`animations.*.topBar.exit`), which plays instead, or when the bar can't be drawn in software (a `HARDWARE`
-     * bitmap in it): the bar takes the options in its place.
+     * (`animations.*.topBar.exit`), which plays instead, or when the bar can't be recorded (a `HARDWARE` bitmap in it
+     * on Android 8): the bar takes the options in its place.
      */
     private fun beginTravel(
         bar: TopBar,
@@ -238,10 +235,10 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
 
     // The bar's picture where the bar is in the stack, its moves counted.
     private fun pictureOfBar(bar: TopBar): Drawable? {
-        val bitmap = bar.picture() ?: return null
+        val picture = bar.picture() ?: return null
         val left = (bar.left + bar.translationX).roundToInt()
         val top = (bar.top + bar.translationY).roundToInt()
-        return BitmapDrawable(bar.resources, bitmap).apply { setBounds(left, top, left + bitmap.width, top + bitmap.height) }
+        return picture.apply { setBounds(left, top, left + intrinsicWidth, top + intrinsicHeight) }
     }
 
     // The bar's travel ends: the picture goes, the bar is drawn in its place again with its shadow.
@@ -284,6 +281,8 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
         val bar = bar ?: return
         val screen = host.optionsScreen(entry)
         if (screen !== shownScreen) return apply(entry)
+        // An open menu has the colors of before.
+        if (delta.topBar.menuBackgroundColor.hasValue() || delta.topBar.menuTextColor.hasValue()) closeMenus()
         val options = host.resolvedOf(entry)
         applyAll(bar, entry, screen, options, merge = true, delta = delta)
     }
@@ -293,6 +292,8 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
      * now.
      */
     fun repaint(entry: ViewController<*>?) {
+        // An open menu has the old colors: it closes.
+        closeMenus()
         keys.clear()
         apply(entry)
         val options = entry?.let(host::resolvedOf) ?: return
@@ -582,16 +583,15 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
             keys[Part.Left] = leftKey
             reportWithoutId(topBar.buttons.left, "leftButtons")
             leftButtons?.set(
-                left.map { button(screen, it, roots) },
+                ButtonPlaces.line(left, left = true).map { button(screen, it, roots) },
                 emptyList(),
                 null,
                 merge && topBar.animateLeftButtons.isTrue,
             )
         }
         val overflow = topBar.overflowMenu?.takeIf { it.items.isNotEmpty() }
-        val menu = bar.rightButtonBar.menu
         search.applyMagnifier()
-        val taken = (0 until menu.size()).count { menu.getItem(it).itemId != Menu.NONE }
+        val taken = if (bar.rightButtonBar.trailingView != null) 1 else 0
         val configuration = context.resources.configuration
         val plan = ButtonPlaces.plan(
             right.map { ButtonPlaces.Button(ButtonPlaces.priorityOf(it.priority.get(null)), it.pinned.isTrue) },
@@ -612,12 +612,11 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
             keys[Part.Right] = rightKey
             reportWithoutId(topBar.buttons.right, "rightButtons")
             rightButtons?.set(
-                plan.inBar.map { button(screen, right[it], roots) },
+                ButtonPlaces.line(plan.inBar, left = false).map { button(screen, right[it], roots) },
                 plan.inOverflow.map { button(screen, right[it], roots) },
                 overflow,
                 merge && topBar.animateRightButtons.isTrue,
             )
-            search.applyMagnifier()
             rightButtons?.setOverflowColor(overflowColor)
         }
     }
@@ -639,9 +638,9 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
         ).joinToString()
         if (keys[Part.Back] == key) return
         keys[Part.Back] = key
-        val toolbar = bar.leftButtonBar
+        val row = bar.leftButtonBar
         if (!shown) {
-            toolbar.navigationIcon = null
+            row.navigationIcon = null
             return
         }
         val own = back.icon.get(null)?.let(::loadIcon)?.mutate()
@@ -668,19 +667,13 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
                 dp(background.height.get(0.0)),
             )
         } ?: icon
-        toolbar.navigationIcon = drawable
-        // Taking the icon, the navigation button gives it its own direction, which is stale while the button is new
-        // or the bar's direction has just changed; the toolbar corrects it only after the icon was drawn. So the arrow
-        // gets the bar's direction at once, on the drawable the button shows; a background passes it to the arrow.
-        val held = toolbar.navigationIcon ?: drawable
-        DrawableCompat.setLayoutDirection(held, arrowDirection)
-        if (held !== drawable) DrawableCompat.setLayoutDirection(drawable, arrowDirection)
-        toolbar.navigationContentDescription = label
-        // The toolbar uses its navigation button again from screen to screen: its id is set every time.
-        for (index in 0 until toolbar.childCount) {
-            val child = toolbar.getChildAt(index)
-            if ((child as? ImageView)?.drawable === held) TestIds.apply(child, testId)
-        }
+        row.navigationIcon = drawable
+        // Taking the icon, the back button gives it its own direction, which is stale while the button is new or the
+        // bar's direction has just changed; the button corrects it only once its direction is resolved again. So the
+        // arrow gets the bar's direction at once; a background passes it to the arrow.
+        DrawableCompat.setLayoutDirection(drawable, arrowDirection)
+        row.navigationContentDescription = label
+        row.navigationButton?.let { TestIds.apply(it, testId) }
     }
 
     // The background (`topBar.background.component`).
@@ -719,15 +712,14 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
 
     private fun pictureUnderRow(bar: TopBar, leaving: ViewController<*>) {
         val view = leaving.peekView() ?: return
-        val (bitmap, top) = bar.pictureUnderRow() ?: return
+        val (picture, top) = bar.pictureUnderRow() ?: return
         val barPlace = IntArray(2)
         val viewPlace = IntArray(2)
         bar.getLocationInWindow(barPlace)
         view.getLocationInWindow(viewPlace)
-        val picture = BitmapDrawable(bar.resources, bitmap)
         val left = barPlace[0] - viewPlace[0]
         val y = barPlace[1] + top - viewPlace[1]
-        picture.setBounds(left, y, left + bitmap.width, y + bitmap.height)
+        picture.setBounds(left, y, left + picture.intrinsicWidth, y + picture.intrinsicHeight)
         view.overlay.add(picture)
         underRow = leaving to picture
     }
@@ -1037,11 +1029,16 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
             return (buttons.left.orEmpty() + buttons.right.orEmpty()).firstOrNull { it.id.get(null) == buttonId }?.menu
         }
 
-        // The search's magnifier, the one item of the bar with an id of its own: `<topBar.searchBar.testID>.button`.
-        override fun testIdOf(item: MenuItem): String? {
-            if (item.itemId == Menu.NONE) return null
-            val entry = shownEntry ?: return null
-            return host.resolvedOf(entry).topBar.searchBar.testID.get(null)?.let { "$it.button" }
+        // Read as a menu opens, so they follow light and dark mode: `menuBackgroundColor`, else the bar's color as it
+        // shows (none when it lets something through), and then `menuTextColor` or else the title's color, the pair
+        // the bar shows; with neither, the theme's.
+        override fun menuColors(): BarMenu.Colors {
+            val topBar = shownEntry?.let(host::resolvedOf)?.topBar ?: return BarMenu.Colors(null, null)
+            val context = bar?.context ?: activity
+            val text = topBar.menuTextColor.get(context, null)
+            topBar.menuBackgroundColor.get(context, null)?.let { return BarMenu.Colors(it, text) }
+            val barColor = bar?.barColor?.takeIf { Color.alpha(it) == OPAQUE } ?: return BarMenu.Colors(null, text)
+            return BarMenu.Colors(barColor, text ?: topBar.title.color.get(context, null))
         }
     }
 
@@ -1183,6 +1180,7 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
 
     private companion object {
         const val DEFAULT_HEIGHT_DP = 64.0
+        const val OPAQUE = 255
         const val DEFAULT_TITLE_SP = 22.0
         const val DEFAULT_SUBTITLE_SP = 14.0
         const val CENTER = "center"

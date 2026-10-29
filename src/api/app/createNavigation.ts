@@ -1,7 +1,10 @@
 import type { ComponentType } from 'react';
+import { DevSettings } from 'react-native';
 import { setDefaultOptions, setRoot } from '../../engine/commands';
 import { type AppProvider, enableSlots, withSlots } from '../../engine/slots';
 import { listenToNativeScreens, startHost } from '../../engine/nativeScreens';
+import { sameValue } from '../../engine/optionsChange';
+import { familyOf, keepStateOf, refreshRuns } from '../../engine/refresh';
 import { listenToSplitViews } from '../../engine/places';
 import { hasNativeScreenHooks } from '../../engine/screens';
 import type { LayoutRoot } from '../../interfaces/Layout';
@@ -24,7 +27,10 @@ import type { ErrorFallbackProps } from '../screens/ScreenBoundary';
 import { getAppContext, setAppContext } from '../context/appContext';
 import {
   type AppOptionsInput,
+  getDirection,
+  getTheme,
   initTheme,
+  setTheme,
   type NavigationDirection,
   type NavigationTheme,
   themedDefaultOptions,
@@ -51,6 +57,7 @@ import {
   linksStarted,
   reportLink,
   setupLinking,
+  updateLinking,
 } from '../linking/linking';
 import type { LinkMatch } from '../linking/linkPaths';
 import type { LinkingConfig } from '../linking/types';
@@ -86,6 +93,9 @@ const starts = new WeakMap<NavigationApp<any, any>, () => Promise<void>>();
 
 /** Starts the app, or brings back its root when the native side launches again. */
 export function startApp(app: NavigationApp<any, any>): Promise<void> {
+  // An app made after another launched knows once its module ran whether it is that app's next version.
+  const waiting = pending.get(app);
+  if (waiting) return waiting.then(() => startApp(app));
   const start = starts.get(app);
   if (!start) throw new Error('[navigation] Not an app made by createNavigation');
   return start();
@@ -240,7 +250,11 @@ type CheckedRoots<Root, Roots, AppScreens> = {
 };
 
 export function isNavigationApp(value: unknown): value is NavigationApp {
-  return typeof value === 'object' && value !== null && starts.has(value as NavigationApp);
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (starts.has(value as NavigationApp) || pending.has(value as NavigationApp))
+  );
 }
 
 /**
@@ -277,14 +291,18 @@ export function createNavigation<
   > &
     NoInfer<CheckedRoots<FirstLayout, Roots, AllScreens<AppScreens, Groups>>>
 ): NavigationApp<Roots, AllScreens<AppScreens, Groups>> {
+  // The app that launched before, when this call may be its module running again after an edit (Fast Refresh): what
+  // the call starts waits until that is known.
+  const launched = __DEV__ ? hotCandidate() : undefined;
   // Counted from here: a "back again to leave" listener of the app's entry file comes after this call.
-  watchBackListeners();
+  if (!launched) watchBackListeners();
   // idle: not started yet, or the last start failed. mounting: the first root is on its way. mounted: it is shown.
   let phase: 'idle' | 'mounting' | 'mounted' = 'idle';
   let screensRegistered = false;
   // The splash shows at the first start of this runtime only: a start that failed and runs again goes without it.
   let splashChecked = false;
   let listening = false;
+  let removeListeners: (() => void) | undefined;
   let prepared: Promise<void> | undefined;
   let markMounted!: () => void;
   // A new activity came while the first root was on its way (Android): its link is taken once that root is shown.
@@ -325,6 +343,62 @@ export function createNavigation<
     return buildRoot(typeof root === 'function' ? root(context) : root);
   }
 
+  // The screens of the app, its groups, the screen of a failed start and the splash, with what wraps each of them.
+  function registerAppScreens() {
+    const wrapper = {
+      errorFallback: config.errorFallback,
+      loadingFallback: config.loadingFallback,
+      onError:
+        config.onError &&
+        ((error: unknown, screen: ScreenInfo, componentStack: string | null | undefined) =>
+          config.onError?.(error, { type: 'screen', screen, componentStack })),
+    };
+    registerScreens(
+      [
+        { source: 'screens', screens: config.screens ?? {} },
+        ...Object.entries(config.groups ?? {}).map(([group, { screens, options }]) => ({
+          source: `the group '${group}'`,
+          screens,
+          options,
+        })),
+        ...(config.errorFallback
+          ? [
+              {
+                source: 'the start',
+                screens: { [START_FAILURE_SCREEN]: startFailureScreen(config.errorFallback) },
+              },
+            ]
+          : []),
+      ],
+      { ...wrapper, provider: config.screenProvider }
+    );
+    // The splash renders before willMount ends: a root of its own, without the app's providers, which may need what
+    // willMount prepares.
+    if (config.splash) {
+      registerScreens(
+        [
+          {
+            source: 'the splash',
+            screens: { [SPLASH_SCREEN]: config.splash.component },
+            ownRoot: true,
+          },
+        ],
+        {
+          ...wrapper,
+          // A splash that failed to render can't call hide(): the start goes on without waiting for it.
+          onError: (
+            error: unknown,
+            screen: ScreenInfo,
+            componentStack: string | null | undefined
+          ) => {
+            releaseSplash();
+            wrapper.onError?.(error, screen, componentStack);
+          },
+        }
+      );
+    }
+  }
+
   async function mount() {
     phase = 'mounting';
     // The state before the first root: the links wait for a newer one, which tells the screen they act from.
@@ -333,54 +407,7 @@ export function createNavigation<
     let linkHandled = false;
     try {
       if (!screensRegistered) {
-        const wrapper = {
-          errorFallback: config.errorFallback,
-          loadingFallback: config.loadingFallback,
-          onError:
-            config.onError &&
-            ((error: unknown, screen: ScreenInfo, componentStack: string | null | undefined) =>
-              config.onError?.(error, { type: 'screen', screen, componentStack })),
-        };
-        registerScreens(
-          [
-            { source: 'screens', screens: config.screens ?? {} },
-            ...Object.entries(config.groups ?? {}).map(([group, { screens, options }]) => ({
-              source: `the group '${group}'`,
-              screens,
-              options,
-            })),
-            ...(config.errorFallback
-              ? [
-                  {
-                    source: 'the start',
-                    screens: { [START_FAILURE_SCREEN]: startFailureScreen(config.errorFallback) },
-                  },
-                ]
-              : []),
-          ],
-          { ...wrapper, provider: config.screenProvider }
-        );
-        // The splash renders before willMount ends: a root of its own, without the app's providers, which may need what
-        // willMount prepares.
-        if (config.splash) {
-          registerScreens(
-            [
-              {
-                source: 'the splash',
-                screens: { [SPLASH_SCREEN]: config.splash.component },
-                ownRoot: true,
-              },
-            ],
-            {
-              ...wrapper,
-              // A splash that failed to render can't call hide(): the start goes on without waiting for it.
-              onError: (error: unknown, screen: ScreenInfo, componentStack: string | null | undefined) => {
-                releaseSplash();
-                wrapper.onError?.(error, screen, componentStack);
-              },
-            }
-          );
-        }
+        registerAppScreens();
         screensRegistered = true;
       }
       // The link that launched the app is asked for first: on iOS the first React content to appear (the host below,
@@ -485,20 +512,13 @@ export function createNavigation<
   }
 
   async function launch() {
+    if (__DEV__) launchedApp = app;
     setActiveApp({ roots: config.roots, presentation: config.presentation, mounted });
     if (!listening) {
       listening = true;
       // The edges of `safeArea` go under the app's options; the window's color goes with them, as the native side
       // takes it from the default options.
-      initTheme(
-        config.theme,
-        {
-          under: config.safeArea && { layout: { safeAreaEdges: config.safeArea.edges } },
-          options: config.options,
-          over: config.window && { window: config.window },
-        },
-        config.direction
-      );
+      initTheme(config.theme, appDefaults(), config.direction);
       if (config.context !== undefined) setAppContext(config.context);
       if (config.appProvider) enableSlots(config.appProvider);
       listenToNavigationState();
@@ -507,7 +527,7 @@ export function createNavigation<
       listenToNativeScreens();
       listenToSplitViews();
       listenToNativeScreenCalls();
-      if (config.listeners) addNavigationListeners(config.listeners);
+      if (config.listeners) removeListeners = addNavigationListeners(config.listeners);
     }
     launchState.launch++;
     // A new activity has no default options: the last ones set come back, else the theme's and the app's.
@@ -528,17 +548,129 @@ export function createNavigation<
     relaunchWaiters.splice(0).forEach((resume) => resume());
   }
 
-  // The links listen from now on: one that comes before the native side launches waits for the first root.
-  if (config.linking) {
-    setupLinking(config.linking, {
+  // The routes of the links, the roots they name and where their errors go.
+  function linkingOptions() {
+    return {
       roots: config.roots,
-      onError: config.onError && ((error, url) => config.onError?.(error, { type: 'link', url })),
-    });
+      onError:
+        config.onError &&
+        ((error: unknown, url: string) => config.onError?.(error, { type: 'link', url })),
+    };
+  }
+
+  // Fast Refresh ran the module that makes the app again (development): its new config takes the place of the old.
+  // What only the start reads (the first root, willMount, the splash, the context) has done its part; the screens, the
+  // default options, the roots, the listeners and the links take the new one. A theme the same as before leaves the one
+  // the app set since. The providers and fallbacks are in the families of the ones before (`keepStateOf`): React
+  // Refresh puts the new ones in place, with the state of what they wrap.
+  function update(next: typeof config) {
+    const before = config;
+    // The app's one tree is set up at the start, or not: a provider added or taken out starts the app again.
+    if (!before.appProvider !== !next.appProvider) {
+      DevSettings.reload('[navigation] appProvider was added or taken out');
+      return;
+    }
+    config = next;
+    if (screensRegistered) registerAppScreens();
+    setActiveApp({ roots: config.roots, presentation: config.presentation, mounted });
+    // A direction the app set since stays too, unless the edit changes the config's.
+    const defaultsBefore = themedDefaultOptions();
+    const direction = sameValue(before.direction, next.direction) ? getDirection() : next.direction;
+    initTheme(getTheme(), appDefaults(), direction);
+    if (!sameValue(before.theme, next.theme)) {
+      setTheme(next.theme ?? {});
+    } else {
+      const defaults = themedDefaultOptions();
+      if (!sameValue(defaultsBefore, defaults)) setDefaultOptions(defaults ?? {});
+    }
+    if (listening) {
+      removeListeners?.();
+      removeListeners = config.listeners && addNavigationListeners(config.listeners);
+    }
+    if (config.linking && linkingStarted) updateLinking(config.linking, linkingOptions());
+    else startLinking();
+  }
+
+  // The default options of the app, under and over the theme's.
+  function appDefaults() {
+    return {
+      under: config.safeArea && { layout: { safeAreaEdges: config.safeArea.edges } },
+      options: config.options,
+      over: config.window && { window: config.window },
+    };
+  }
+
+  // The links listen from now on: one that comes before the native side launches waits for the first root.
+  let linkingStarted = false;
+  function startLinking() {
+    if (!config.linking || linkingStarted) return;
+    linkingStarted = true;
+    setupLinking(config.linking, linkingOptions());
+  }
+
+  // The components of the app keep their state across Fast Refresh, as the screens' do.
+  function keepComponentsState() {
+    if (!__DEV__) return;
+    keepStateOf(app, config.appProvider, 'appProvider');
+    keepStateOf(app, config.screenProvider, 'screenProvider');
+    keepStateOf(app, config.errorFallback, 'errorFallback');
+    keepStateOf(app, config.loadingFallback, 'loadingFallback');
+    keepStateOf(app, config.splash?.component, 'splash');
   }
 
   const app: NavigationApp<Roots, AllScreens<AppScreens, Groups>> = { [NAVIGATION_APP]: true };
-  starts.set(app, () => reportStart(launch));
+  keepComponentsState();
+  const start = () => {
+    startLinking();
+    starts.set(app, () => reportStart(launch));
+    if (__DEV__) updates.set(app, update as (config: unknown) => void);
+  };
+  if (!launched) {
+    start();
+    return app;
+  }
+  // Once the module ran, Metro has put its exports in the families of the ones of its run before: the same family as
+  // the app that launched, or the app's entry registering it under the app's name again (an app it doesn't export),
+  // means this is its module again, and the app that runs takes the new config.
+  pending.set(
+    app,
+    Promise.resolve().then(() => {
+      pending.delete(app);
+      const family = familyOf(app);
+      if ((family && family === familyOf(launched)) || replacing.delete(app)) {
+        updates.get(launched)?.(config);
+        starts.set(app, starts.get(launched)!);
+        updates.set(app, updates.get(launched)!);
+        return;
+      }
+      watchBackListeners();
+      start();
+    })
+  );
   return app;
+}
+
+// The app that launched in this runtime, and what takes the config of its module when it runs again (development).
+let launchedApp: NavigationApp<any, any> | undefined;
+const updates = new WeakMap<NavigationApp<any, any>, (config: unknown) => void>();
+// The apps made after the launch until their module ran, and those the app's entry registered again under its name.
+const pending = new WeakMap<NavigationApp<any, any>, Promise<void>>();
+const replacing = new WeakSet<NavigationApp<any, any>>();
+
+/**
+ * Notes an app the entry file registers under the name of the app that launched: the entry ran again after an edit
+ * (development), and the new app is the old one's next version.
+ */
+export function noteReplacingApp(app: unknown): void {
+  if (__DEV__ && launchedApp && typeof app === 'object' && app !== null && NAVIGATION_APP in app) {
+    replacing.add(app as NavigationApp<any, any>);
+  }
+}
+
+// The app that launched, when React Refresh runs and a new app may be its module running again: one its module
+// exports (Metro gives it a family), or one the entry registers again under the app's name.
+function hotCandidate(): NavigationApp<any, any> | undefined {
+  return launchedApp && refreshRuns() ? launchedApp : undefined;
 }
 
 // A willMount that never ends keeps the splash screen for good: in development the app hears of it.

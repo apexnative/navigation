@@ -8,12 +8,12 @@ import dev.apexnative.navigation.utils.UiUtils
 import kotlin.math.max
 
 /**
- * The cell of a React button in the bar (`topBar.leftButtons[].component`): the action view of the button's menu item,
- * as an icon's: 12 dp on each side, at least 48 dp wide, as high as the row, the content in its middle. The content (a
- * React root, or later a view of the screen's own tree) measures `AT_MOST` — the width at most what the row gives, the
- * height at most the row's — or exactly its `component.width` / `component.height` when the options give them
- * ([contentWidth], [contentHeight], pixels). The cell takes the menu's id; the content never gets one (React Native
- * rejects a root with an id). It never looks inside the content.
+ * The cell of a React button in the bar (`topBar.leftButtons[].component`), in the row of its side as an icon button
+ * stands there: 12 dp on each side, at least 48 dp wide, as high as the row gives, the content in its middle. The
+ * content (a React root, or later a view of the screen's own tree) measures `AT_MOST` — the width at most what the row
+ * gives, the height at most the row's — or exactly its `component.width` / `component.height` when the options give
+ * them ([contentWidth], [contentHeight], pixels). The cell takes the button's `testID`; the content never gets one
+ * (React Native rejects a root with an id). It never looks inside the content.
  */
 @SuppressLint("ViewConstructor")
 internal class BarButtonComponentCell(context: Context) : ViewGroup(context) {

@@ -51,8 +51,7 @@ export type OptionsModalTransitionStyle =
  *
  * On iOS `'medium'` and `'large'` are the system stops; a number and `'content'` need iOS 16 and are left out below it
  * with a warning in the log. On Android `'medium'` is half of the window, `'large'` the full height under the status
- * bar, a number is capped at `'large'`, and `'content'` stands in as `'medium'` because the Material sheet has no
- * height by content.
+ * bar, a number is capped at `'large'`, and `'content'` is the height of the content, measured as on iOS.
  */
 export type OptionsModalSheetDetent = 'medium' | 'large' | 'content' | number;
 
@@ -67,11 +66,11 @@ export type OptionsModalSheetDetent = 'medium' | 'large' | 'content' | number;
 export interface OptionsModalSheet {
   /**
    * The stops the sheet can rest on, and the user drags it between, in any order: on both platforms they are sorted by
-   * height and repeats dropped. On iOS `'medium'` counts as half of `'large'` there, and `'content'` takes its place by
-   * the height of the content, again whenever that changes; a list left empty by unsupported values gives
-   * `['large']`. On Android the Material sheet has three resting places at most: the lowest stop of the list, the
-   * highest, and `'medium'` between them when the list has both `'medium'` and `'large'`. A stop without a place is
-   * dropped.
+   * height and repeats dropped. On iOS `'medium'` counts as half of `'large'` there, and on both `'content'` takes its
+   * place by the height of the content, again whenever that changes; on iOS a list left empty by unsupported values
+   * gives `['large']`. On Android the Material sheet has three resting places at most: the lowest stop of the list, the
+   * highest, and one between them, `selectedDetent` when it stands there, else the lowest of the others; the rest are
+   * dropped. Stops of the same height there are one.
    * @default ['large']
    */
   detents?: OptionsModalSheetDetent[];

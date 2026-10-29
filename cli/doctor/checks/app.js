@@ -100,11 +100,12 @@ function appChecks({ root, run }) {
   const project = findProject(root, run);
   const plans = planProject(project);
   const app = plans.find(({ file }) => file !== undefined && file === project.app);
+  const metro = plans.find(({ file }) => file !== undefined && file === project.metroConfig);
   const manifest = plans.find(({ file }) => file !== undefined && file === project.manifest);
   const native = plans.filter((plan) => plan.platform !== 'js' && plan !== manifest);
   const types = plans.filter(({ name }) => name === ENV_FILE || name === 'tsconfig.json');
   const entry = plans.filter(
-    (plan) => plan.platform === 'js' && plan !== app && !types.includes(plan)
+    (plan) => plan.platform === 'js' && plan !== app && plan !== metro && !types.includes(plan)
   );
   checks.push(filesCheck('Native files', native), filesCheck('Entry point', entry));
   const typed = typesCheck(root, types);
@@ -117,6 +118,20 @@ function appChecks({ root, run }) {
       status: 'warn',
       detail: `${app.name} renders React Native's StatusBar, the screens set it`,
       fix: app.status === 'manual' ? { label: `Remove StatusBar from ${app.name}` } : SETUP,
+    });
+  }
+
+  // Without the navigation's Metro setup an edit that isn't a boundary of Fast Refresh reloads the app.
+  if (metro && metro.status !== 'done') {
+    checks.push({
+      group: 'app',
+      title: 'Fast Refresh',
+      status: 'warn',
+      detail: `${metro.name} doesn't use withApexNavigation: some edits reload the app`,
+      fix:
+        metro.status === 'manual'
+          ? { label: 'Wrap the config metro.config.js exports in withApexNavigation' }
+          : SETUP,
     });
   }
 

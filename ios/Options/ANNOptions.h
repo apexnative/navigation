@@ -58,6 +58,13 @@ void ANNCheckOptionClassesFrom(Class root);
 /// The group has any value.
 - (BOOL)hasValue;
 
+/// Takes the value at `path` out, in place: the JSON keys from this group, the last one a value, an array or a whole
+/// group, which gets what a freshly made group has there (unset). A key of a text's font goes through the text. A
+/// module's group (an empty field table) is walked by its properties named as the keys. NO, and nothing changes, when
+/// a key of the path is none of the group's or a key before the last is no group. Only on a copy of own options
+/// (`changeOwnOptions:`), never on options in use.
+- (BOOL)clearValueAtPath:(NSArray<NSString *> *)path;
+
 /// A deep copy: a new group of the same class with these merged into it. The copy shares values, never groups.
 - (instancetype)copy;
 

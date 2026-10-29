@@ -1,8 +1,6 @@
 package dev.apexnative.navigation.views.element.animators
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.abs
 
@@ -79,14 +77,6 @@ class FlightGeometryTest {
     }
 
     @Test
-    fun aViewWhoseParentScalesItHoldsItsEnd() {
-        val own = FlightEnd(centerX = 50f, centerY = 50f, width = 100f, height = 100f, rotation = 0f)
-        assertTrue(own.sameAs(FlightEnd(50.2f, 49.9f, 100f, 100f, 0.05f)))
-        assertFalse(own.sameAs(FlightEnd(50f, 50f, 50f, 50f, 0f)))
-        assertFalse(own.sameAs(FlightEnd(50f, 50f, 100f, 100f, 0f, mirrorX = -1f)))
-    }
-
-    @Test
     fun theAngleTakesTheShorterArcAndEndsOnTo() {
         assertEquals(45f, flight(0f, 90f).at(0.5f, 0.5f).rotation, DELTA)
         assertEquals(90f, flight(0f, 180f).at(0.5f, 0.5f).rotation, DELTA)
@@ -104,40 +94,17 @@ class FlightGeometryTest {
         val geometry = FlightGeometry(
             FlightEnd(centerX = 0f, centerY = 0f, width = 100f, height = 50f, rotation = 0f),
             FlightEnd(centerX = 200f, centerY = 100f, width = 300f, height = 150f, rotation = 0f),
-            toLeft = 50,
-            toTop = 25,
         )
         val half = geometry.at(0.5f, 0.5f)
         assertEquals(100f, half.centerX, DELTA)
         assertEquals(50f, half.centerY, DELTA)
         assertEquals(200f, half.width, DELTA)
         assertEquals(100f, half.height, DELTA)
-        assertEquals(300 to 150, geometry.largest)
-    }
-
-    @Test
-    fun aMovingViewTurnsAboutTheMiddleOfWhatShows() {
-        val geometry = flight(0f, 0f)
-        val frame = FlightEnd(centerX = 60f, centerY = 45f, width = 100f, height = 50f, rotation = 30f)
-        // Laid out at 100 × 50 from its margins (10, 20): no translation, the pivot in its middle.
-        val move = geometry.moveOf(frame, 100, 50)
-        assertEquals(0f, move[0], DELTA)
-        assertEquals(0f, move[1], DELTA)
-        assertEquals(50f, move[2], DELTA)
-        assertEquals(25f, move[3], DELTA)
-        // Showing 40 × 20 of a larger layout from its corner: the middle of those.
-        val part = geometry.moveOf(frame, 40, 20)
-        assertEquals(30f, part[0], DELTA)
-        assertEquals(15f, part[1], DELTA)
-        assertEquals(20f, part[2], DELTA)
-        assertEquals(10f, part[3], DELTA)
     }
 
     private fun flight(from: Float, to: Float) = FlightGeometry(
         FlightEnd(0f, 0f, 10f, 10f, from),
         FlightEnd(0f, 0f, 10f, 10f, to),
-        toLeft = 10,
-        toTop = 20,
     )
 
     private fun rn(

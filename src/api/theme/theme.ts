@@ -135,6 +135,11 @@ export function setTheme(next: NavigationTheme) {
   listeners.forEach((listener) => listener());
 }
 
+/** The direction of the app now: the config's, or the one `setDirection` gave since. */
+export function getDirection(): NavigationDirection | undefined {
+  return direction;
+}
+
 /** Changes the direction of the app: the bars, the transitions and the swipe back follow at once. */
 export function setDirection(next: NavigationDirection) {
   direction = next;

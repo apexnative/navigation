@@ -18,6 +18,7 @@ import dev.apexnative.navigation.viewcontrollers.child.ChildControllersRegistry
 import dev.apexnative.navigation.viewcontrollers.component.Readiness
 import dev.apexnative.navigation.viewcontrollers.parent.ScreensLeavingWithNode
 import dev.apexnative.navigation.viewcontrollers.stack.StackDisplay.Motion
+import dev.apexnative.navigation.viewcontrollers.stack.fab.FabMotion
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.Presenter
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.ViewController
 import dev.apexnative.navigation.views.animations.AnimationRules
@@ -495,6 +496,13 @@ internal class QueueHost(private val log: MutableList<String>) : StackQueue.Host
     override fun tabBarTransition(move: TabBarMotion.Move, side: BottomTabsEnterExitAnimationOptions?) {
         tabBarMoves += move.name
         tabBarSides += side != null && (side.enter.hasValue() || side.exit.hasValue())
+    }
+
+    /** How the FAB was told to go with each change of the current child. */
+    val fabMoves = mutableListOf<String>()
+
+    override fun fabTransition(move: FabMotion.Move) {
+        fabMoves += move.name
     }
 
     var topSettled = 0

@@ -4,7 +4,12 @@ import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.TimeInterpolator
 import android.animation.ValueAnimator
+import android.graphics.Canvas
+import android.graphics.Paint
 import android.graphics.Picture
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
+import android.graphics.RectF
 import android.util.Log
 import android.view.View
 import android.view.animation.LinearInterpolator
@@ -13,8 +18,7 @@ import dev.apexnative.navigation.views.element.elementStep
 
 /**
  * The view's own drawing with its children, as drawing commands: sharp at any scale. Its opacity and place belong to
- * the parent. Recording can fail (a hardware bitmap in an image on an older Android): the element then moves without
- * pictures.
+ * the parent. Recording can fail (a hardware bitmap in an image before Android 9): the pair then doesn't fly.
  */
 internal fun recordPicture(view: View): Picture? = try {
     Picture().also {
@@ -26,8 +30,57 @@ internal fun recordPicture(view: View): Picture? = try {
         }
     }
 } catch (e: RuntimeException) {
-    Log.w(NavigationLog.TAG, "Element transition: no picture of the element, it moves without one", e)
+    Log.w(NavigationLog.TAG, "[ApexNavigation] Element transition: no picture of the element", e)
     null
+}
+
+/**
+ * What a shared pair's flight draws in its transition's layer, in the layer's coordinates: the copy where the flight
+ * has brought it ([update]). The layer draws it while it is [shown]: from the start of the flight, and after a landing
+ * until the layer goes.
+ */
+internal abstract class FlightPicture {
+    /** Whether the layer draws it now. */
+    var shown = false
+
+    /** Whether what it draws changes by itself (an animated image): the layer draws it on every frame while shown. */
+    open val live: Boolean get() = false
+
+    /** What runs after its drawing failed: it is drawn no more, and the views of its pair show again. */
+    var onFailed: (Exception) -> Unit = {}
+
+    /** The copy at [time] (the part of the time), [progress] the curve's value. */
+    abstract fun update(time: Float, progress: Float)
+
+    /** The copy, on the layer's canvas; the layer saves and restores the canvas around it. */
+    abstract fun draw(canvas: Canvas)
+}
+
+/**
+ * The cut of a copy whose views' parents hide part of them ([FlightMask]): it keeps, of the mask the copy draws on its
+ * layer, only the part that shows. A layer of that part's rounded rect laid over the mask (`DST_IN`), not a clip path:
+ * its edges stay smooth.
+ */
+internal class MaskCut(private val mask: FlightMask) {
+    private val values = FloatArray(FlightMask.SIZE)
+    private val rect = RectF()
+    private val shape = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val cut = Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN) }
+
+    /** The cut at [time] (the part of the time), [progress] the curve's value. */
+    fun update(time: Float, progress: Float) = mask.at(progress, time, values)
+
+    /** Cuts the mask drawn so far on the copy's layer of [bounds], in the copy's coordinates (0, 0 its center). */
+    fun draw(canvas: Canvas, bounds: RectF) {
+        rect.set(values[0], values[1], values[2], values[3])
+        canvas.saveLayer(bounds, cut)
+        if (!rect.isEmpty) canvas.drawRoundRect(rect, values[RADIUS], values[RADIUS], shape)
+        canvas.restore()
+    }
+
+    private companion object {
+        const val RADIUS = 4
+    }
 }
 
 // Runs in linear time and keeps the curve it is given for the move: an element moves along the transition's curve,

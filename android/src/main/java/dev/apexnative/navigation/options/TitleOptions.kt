@@ -22,7 +22,7 @@ class TitleOptions {
     @JvmField var text: Text = NullText()
     @JvmField var fontSize: Fraction = NullFraction()
     @JvmField var color: ThemeColour = NullThemeColour()
-    @JvmField var font = FontOptions()
+    @ReadFromParent @JvmField var font = FontOptions()
     @JvmField var component = TitleComponentOptions()
     /** Shared between copies, as its module wants. */
     @JvmField var menu: ButtonMenuOptions? = null
@@ -98,7 +98,7 @@ class SubtitleOptions {
     @JvmField var text: Text = NullText()
     @JvmField var fontSize: Fraction = NullFraction()
     @JvmField var color: ThemeColour = NullThemeColour()
-    @JvmField var font = FontOptions()
+    @ReadFromParent @JvmField var font = FontOptions()
     @JvmField var alignment: Text = NullText()
 
     fun hasValue(): Boolean =

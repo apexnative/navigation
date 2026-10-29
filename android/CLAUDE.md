@@ -22,8 +22,9 @@ top-level folder. Main thread only, unless a line says otherwise.
   `Variant`, `ThemeColour`); `parsers/` reads them tolerantly from React Native data.
 - `react/`: the way in and out: `NavigationTurboModule`, `CommandRunner`, `CommandAnswer`, `ErrorTexts`,
   `OptionsCommands`, `PendingCalls` (a task behind the calls JavaScript made), `ReloadCoordinator`, `ReactGateway`,
-  `ReactView` (a React root), the stores (`ScreenEnvironment`: a screen's insets, padding, regions and pair state;
-  `Hinge`, `StartInfo`), `ScreenRegions` (measures a screen's regions), `LaunchLink`, `ScrollEvents`.
+  `ReactView` (a React root), `ContentHeights` (content measured without a height limit, through JNI), the stores
+  (`ScreenEnvironment`: a screen's insets, padding, regions and pair state; `Hinge`, `StartInfo`), `ScreenRegions`
+  (measures a screen's regions), `LaunchLink`, `ScrollEvents`.
 - `react/events/`: `AppearanceDispatcher`, `ScreenAppearance`, `EventEmitter`, `EventContract` (made by
   `scripts/contract.mjs`), `NavigationState`, `ComponentType`.
 - `viewcontrollers/viewcontroller/`: `ViewController` (the base of every node), `Presenter`, `IReactView` (what a
@@ -58,7 +59,8 @@ top-level folder. Main thread only, unless a line says otherwise.
   `DevelopmentLog`).
 - `android/src/main/jni/`: `CMakeLists.txt` builds the codegen target with the C++ of `ios/cpp` (the slot's and the
   safe area view's shadow nodes); `ApexNavigationSpec.h` replaces the generated header so autolinking sees their
-  descriptors.
+  descriptors; `ANNContentHeights.cpp` measures React content without a height limit for `react/ContentHeights.kt`
+  (a sheet's `'content'` detent).
 - `android/src/main/res/`: theme `Theme.ApexNavigation` (and `values-night`), `attrs.xml` (splash attributes),
   `ids.xml`, `dimens*.xml`, text colors, icons.
 - `android/src/test/java/…`: unit tests, one package per main package; fakes beside them (`Fakes.kt`,
@@ -80,10 +82,14 @@ top-level folder. Main thread only, unless a line says otherwise.
   preview of a pop during the back gesture (Android 14+): `StackController.BackGesture`, `BackPreview.kt`,
   `stackPoppedByBack` of the layouts; of a sheet's dismissal: `viewcontrollers/modal/SheetBack.kt`,
   `ModalCoordinator.backTargetSheet`, `ModalSheet.BackPreview`.
-- Stack FAB: `viewcontrollers/stack/fab/FabPresenter.kt`, `FabPlan.kt`, `FabPlacement.kt`; `views/stack/fab/`.
+- Stack FAB: `viewcontrollers/stack/fab/FabPresenter.kt`, `FabPlan.kt`, `FabPlacement.kt`, `FabMotion.kt` (how it goes
+  with a transition); `views/stack/fab/` (`FabCopy`: the picture of a FAB that leaves).
 - Top bar (title, buttons, menus, large title): `viewcontrollers/stack/topbar/TopBarPresenter.kt`, `TopBarRoom.kt`,
   `TopBarVisibility.kt`, `BarComponents.kt`, `ButtonPlaces.kt`, `LargeTitleCollapse.kt`, `BarRowTransition.kt`;
-  `views/stack/topbar/TopBar.kt`, `TitleBar.kt`, `titlebar/ButtonBar.kt`, `titlebar/ButtonMenus.kt`.
+  `views/stack/topbar/TopBar.kt`, `TitleBar.kt`, `titlebar/ButtonRow.kt` (the views of a side: back, buttons,
+  magnifier, "⋮"), `titlebar/ButtonBar.kt` (the buttons from the options, "⋮"'s popup), `titlebar/BarButtonView.kt`,
+  `titlebar/BarMenu.kt` (the bar's menus: a `ListPopupWindow` with the theme's popup style and the options' colors),
+  `titlebar/ButtonMenus.kt` (menu options to its items).
 - Search: `viewcontrollers/stack/search/StackSearchPresenter.kt`, `ScreenSearch.kt`, `SearchPanel.kt`;
   `views/stack/topbar/search/`.
 - Tabs: `viewcontrollers/bottomtabs/BottomTabsController.kt`, `BottomTabsPresenter.kt`, `TabSelection.kt`,
@@ -158,9 +164,9 @@ top-level folder. Main thread only, unless a line says otherwise.
 - Native code never touches React Native's views (their children, their layout): Fabric owns and recycles them. Move
   content through `SlotContainers` and `SlotView`, and find views by `nativeID` only through React Native's own search
   or its tag (`ReactR.id.view_tag_native_id`); a transition's elements in one walk per screen (`TransitionViews`).
-- Each step of a transition's element (its move into the layer, its animator, a flight's start and frames in
-  `MoveAnimator`) runs in `elementStep`: an exception skips that element only. A new step of an element goes there
-  too, or one bad element takes the whole transition down.
+- Each step of a transition's element (its start, its animator, a flight's start and frames in `MoveAnimator`) runs
+  in `elementStep`, and the layer draws each copy on its own: an exception skips that element only. A new step of an
+  element goes there too, or one bad element takes the whole transition down.
 - Every change of a stack's children goes through its `StackQueue`; a direct change of `shown` or of the container
   skips the table that decides interrupts and answers.
 - Every event of an appearance goes through `AppearanceDispatcher`. A container with its own loop of
@@ -200,8 +206,11 @@ top-level folder. Main thread only, unless a line says otherwise.
 - The bar measures to its children: a picture laid into it for a transition that is taller than the bar the incoming
   screen gives holds the bar at that height to the end (the row's picture of a pop from a large title). What doesn't
   stay in the bar rides with the leaving screen (`TopBarPresenter.pictureUnderRow`).
-- A `Toolbar` centers its navigation button and its menu in `min(minimumHeight, height)` (`buttonGravity` is top):
-  the row's toolbars take the row's height as their minimum (`TitleBar`); 0 pins the buttons to the row's top.
+- The bar's buttons are plain views of the row (`ButtonRow`), not a toolbar's menu: a button keeps its view while its id
+  stays, and its `testID` is set when it is bound. They copy a Material 3 toolbar's look through the theme's
+  attributes (`actionButtonStyle`, `actionMenuTextAppearance`, `actionOverflowButtonStyle`,
+  `toolbarNavigationButtonStyle`) and its `maxButtonHeight` of 56 dp; the count of places is AppCompat's
+  (`ButtonPlaces.maxActionButtons`).
 - A screen's overlay is clipped to the screen, and a screen without a large title is laid out under the bar (its `top`
   is the bar's height): a picture of the bar in its overlay doesn't show. The bar's picture in a transition of the
   stack's own is drawn by the stack's view with the screen's transform (`StackLayout.barTravels`).

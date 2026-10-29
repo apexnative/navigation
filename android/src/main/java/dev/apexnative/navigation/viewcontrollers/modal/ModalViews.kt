@@ -14,10 +14,13 @@ import android.widget.FrameLayout
 import androidx.coordinatorlayout.widget.CoordinatorLayout
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import dev.apexnative.navigation.options.DefaultOptions
 import dev.apexnative.navigation.options.ModalAnimationOptions
 import dev.apexnative.navigation.options.Options
 import dev.apexnative.navigation.utils.TestIds
 import dev.apexnative.navigation.utils.dp
+import dev.apexnative.navigation.viewcontrollers.component.ComponentViewController
+import dev.apexnative.navigation.viewcontrollers.parent.ParentController
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.ViewController
 import dev.apexnative.navigation.views.animations.AnimationLayer
 import dev.apexnative.navigation.views.animations.AnimationRules
@@ -96,7 +99,7 @@ internal class ModalViews(
         val container = parts.container
         container.isWaiting = false
         container.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
-        if (record.isSheet) return presentSheet(record, parts, options, seen, events, onEnd)
+        if (record.isSheet) return presentSheet(record, parts, options, animated, seen, events, onEnd)
         applyTestIds(record, parts, options)
         if (!animated || !seen) {
             SideAnimator.rest(container)
@@ -118,11 +121,13 @@ internal class ModalViews(
     }
 
     // The root's view leaves the container and goes into the sheet's, in one turn; the sheet slides to its first
-    // detent. Nobody sees the activity: the show counts as done now, the sheet's later end does nothing.
+    // detent, or stands there at once when not [animated]. Nobody sees the activity: the show counts as done now, the
+    // sheet's later end does nothing.
     private fun presentSheet(
         record: ModalRecord,
         parts: Parts,
         options: Options,
+        animated: Boolean,
         seen: Boolean,
         events: ModalSheet.Events,
         onEnd: () -> Unit,
@@ -130,7 +135,16 @@ internal class ModalViews(
         val container = parts.container
         val view = record.root.view
         container.removeView(view)
-        val sheet = ModalSheet(container, view, events)
+        val sheet = ModalSheet(
+            container,
+            view,
+            events,
+            shownContent = { (shownScreen(record.root) as? ComponentViewController)?.content },
+            adjustsForKeyboard = {
+                val screen = shownScreen(record.root)
+                screen == null || !screen.resolveCurrentOptions(DefaultOptions.current).layout.adjustResize.isFalse
+            },
+        )
         parts.sheet = sheet
         container.alpha = 1f
         applyTestIds(record, parts, options)
@@ -141,9 +155,16 @@ internal class ModalViews(
                 onEnd()
             }
         }
-        sheet.show(options.modal.sheet, swipeToDismissOf(options)) { shown() }
+        sheet.show(options.modal.sheet, swipeToDismissOf(options), animated) { shown() }
         if (!seen) shown()
         return { told = true }
+    }
+
+    // The screen a layout shows now: down through the child each parent shows.
+    private fun shownScreen(root: ViewController<*>): ViewController<*>? {
+        var node = root
+        while (node is ParentController<*>) node = node.currentChild ?: return null
+        return node
     }
 
     override fun dismiss(
@@ -159,7 +180,7 @@ internal class ModalViews(
         if (sheet != null) {
             if (!seen) return none(onEnd)
             var told = false
-            sheet.close {
+            sheet.close(animated) {
                 if (!told) {
                     told = true
                     onEnd()

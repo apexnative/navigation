@@ -1,3 +1,4 @@
+import { DynamicColorIOS, Platform } from 'react-native';
 import { toNativeOptions } from './options';
 import { forgetProps, isOptionsComponent, propsOf } from './props';
 
@@ -123,5 +124,55 @@ describe('the props of a component in options', () => {
       'Component8'
     );
     expect(isOptionsComponent('Title')).toBe(false);
+  });
+});
+
+describe('a color of an option', () => {
+  const colorOf = (color: unknown) =>
+    toNativeOptions<Fields>({ topBar: { title: { color } } } as Fields).topBar.title.color;
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  describe('on iOS', () => {
+    beforeEach(() => {
+      jest.replaceProperty(Platform, 'OS', 'ios');
+    });
+
+    it('goes as one number, a pair or no color', () => {
+      expect(colorOf('#FF0000')).toBe(0xffff0000);
+      expect(colorOf({ light: '#000000', dark: '#FFFFFF' })).toEqual({
+        light: 0xff000000,
+        dark: 0xffffffff,
+      });
+      expect(colorOf(null)).toBe('NoColor');
+    });
+
+    it("sends an app's DynamicColorIOS as a pair", () => {
+      expect(colorOf(DynamicColorIOS({ light: '#000000', dark: '#FFFFFF' }))).toEqual({
+        light: 0xff000000,
+        dark: 0xffffffff,
+      });
+    });
+
+    it('leaves out a side without a color', () => {
+      const color = colorOf({ dark: '#FFFFFF' });
+      expect(color).toEqual({ dark: 0xffffffff });
+      expect(JSON.parse(JSON.stringify(color))).toEqual({ dark: 0xffffffff });
+    });
+  });
+
+  describe('on Android', () => {
+    beforeEach(() => {
+      jest.replaceProperty(Platform, 'OS', 'android');
+    });
+
+    // Android's colors are signed 32-bit numbers: #FF0000 is -65536, #FFFFFF is -1.
+    it('is always a pair, with no color on a side without one', () => {
+      expect(colorOf('#FF0000')).toEqual({ light: -65536, dark: -65536 });
+      expect(colorOf({ dark: '#FFFFFF' })).toEqual({ light: 'NoColor', dark: -1 });
+      expect(colorOf(null)).toEqual({ light: 'NoColor', dark: 'NoColor' });
+    });
   });
 });

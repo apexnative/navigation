@@ -14,6 +14,7 @@ import { nextId } from './ids';
 import { showNativeScreen } from './nativeScreens';
 import { toNativeOptions } from './options';
 import { setProps } from './props';
+import { noteOwnOptions } from './rememberedOptions';
 import { getStartInfo } from './native';
 import { noteAlone } from './places';
 import {
@@ -103,6 +104,13 @@ function screen(component: LayoutComponent, inPair = false, keyed = !inPair): La
   if (nativeName) {
     // A native screen: its props go to the native side as data, its own options over those of the show.
     const options = takeButtonHandlers(id, component.options ?? {});
+    if (__DEV__) {
+      noteOwnOptions(
+        id,
+        name,
+        mergeOptions(screenOptions(name, props ?? {}), component.options ?? {})
+      );
+    }
     const node = external({
       id,
       name: nativeName,
@@ -113,8 +121,9 @@ function screen(component: LayoutComponent, inPair = false, keyed = !inPair): La
   }
   // The screen's own options under those of the show (a command has them there already: merging again changes
   // nothing).
-  const own = screenOptions(name, props ?? {});
-  const options = takeButtonHandlers(id, mergeOptions(own, component.options ?? {}));
+  const own = mergeOptions(screenOptions(name, props ?? {}), component.options ?? {});
+  noteOwnOptions(id, name, own);
+  const options = takeButtonHandlers(id, own);
   const key = keyed ? screenKey(name, props ?? {}) : undefined;
   setProps(id, props);
   return {

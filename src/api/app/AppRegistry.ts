@@ -1,8 +1,14 @@
 import { AppRegistry as ReactNativeAppRegistry } from 'react-native';
 import { onNativeEvent } from '../../engine/native';
+import { familyOf } from '../../engine/refresh';
 import { SLOT_HOST_MODULE } from '../../engine/slots';
 import { SlotHost } from '../slots/SlotHost';
-import { isNavigationApp, type NavigationApp, startApp } from './createNavigation';
+import {
+  isNavigationApp,
+  type NavigationApp,
+  noteReplacingApp,
+  startApp,
+} from './createNavigation';
 
 type NavigationAppProvider = () => NavigationApp<any, any>;
 
@@ -35,7 +41,15 @@ function registerComponent(
   navigation: NavigationApp<any, any> | NavigationAppProvider
 ): string {
   if (__DEV__ && registered) {
-    console.warn(`[navigation] '${key}' replaces the app registered as '${appKey}'`);
+    // The entry file running again after an edit (Fast Refresh) registers its new version of the same app under the
+    // same name; Metro puts one it exports in the family of the old one once the file ran.
+    if (key === appKey) noteReplacingApp(navigation);
+    const before = { key: appKey, app: registered };
+    Promise.resolve().then(() => {
+      const family = familyOf(before.app);
+      if (key === before.key || (family && family === familyOf(navigation))) return;
+      console.warn(`[navigation] '${key}' replaces the app registered as '${before.key}'`);
+    });
   }
   appKey = key;
   registered = navigation;

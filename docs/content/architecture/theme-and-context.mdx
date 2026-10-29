@@ -13,7 +13,7 @@ import { DeviceVideo } from '@site/src/components/DeviceVideo';
 Every screen of an app shares a look and a few facts: the colors of the bars, the signed-in user, the language. The navigation keeps both for every screen. The **theme** is the colors of the bars, tabs and backgrounds. The **context** is a small object of the app that every screen reads. This page answers:
 
 1. [Why the navigation keeps them](#why), and not a React provider.
-2. [The theme](#theme): its colors, dark mode, changing it, Android's own colors.
+2. [The theme](#theme): its colors, dark mode, changing it, [Android's theme](#android).
 3. [The context](#context): filling it, reading it, typing it.
 4. [What goes in the context](#context-roles), and what goes elsewhere.
 
@@ -49,7 +49,7 @@ Every top bar and the tab bar are navy with light titles; the buttons, the back 
 
 <DeviceVideo name="theme-switch" />
 
-A color left out keeps the platform's look. On iOS 26 a theme without `bar` keeps the bars on glass. On Android the bars take the colors of the app's Material 3 theme, neutral grays by default (see [Android's colors](#android)).
+A color left out keeps the platform's look. On iOS 26 a theme without `bar` keeps the bars on glass. On Android the bars take the colors of the app's Material 3 theme, neutral grays by default (see [Android's theme](#android)).
 
 The theme is the bottom layer of the options of every screen. A screen that needs its own look sets it in its options, and they go over the theme (see [Where a screen gets them](../fundamentals/screen-options#layers)).
 
@@ -118,9 +118,9 @@ The options of the app and of a screen can be built from the theme: their functi
 
 So a color that follows the theme belongs in the theme itself, or in the app's `options`.
 
-### Android's colors {#android}
+### Android's theme {#android}
 
-<Os name="Android" /> The bars, tabs, search, sheets and menus are Material 3 views. What the theme and the options leave out, they take from the app's Android theme, as every Material view of the app does. On an app made from React Native's template, `setup` makes the app's theme inherit `Theme.ApexNavigation`: Material 3 in neutral grays, light and dark, with no tint of its own.
+<Os name="Android" /> The bars, tabs, search, sheets, menus and the floating action button are Material 3 views. What the theme and the options leave out, they take from the app's Android theme, as every Material view of the app does. On an app made from React Native's template, `setup` makes the app's theme inherit `Theme.ApexNavigation`: Material 3 in neutral grays, light and dark, with no tint of its own.
 
 An app changes any of these colors in `styles.xml`. A color that differs in dark mode is a color resource with a second value in `values-night`, so the one style serves both modes:
 
@@ -142,19 +142,138 @@ The selected tab now sits on a peach pill in light mode, and a brown one in dark
 
 | Material 3 color | What takes it |
 | --- | --- |
-| `colorSurface` | The top bar. |
-| `colorOnSurface` | The title and the back arrow. |
-| `colorOnSurfaceVariant` | The subtitle and the "⋮" of the bar. |
-| `colorSurfaceContainer`, `colorSurfaceContainerLow`, `colorSurfaceContainerHigh` | The tab bar and the menus of the bar; a sheet; the search field. |
+| `colorSurface` | The top bar, and the menus of the bar while the bar is opaque. |
+| `colorOnSurface` | The title, the large title, the back arrow, the text of the search. |
+| `colorOnSurfaceVariant` | The subtitle and the "⋮" of the bar; the hint of the search. |
+| `colorSurfaceContainer` | The tab bar; the menus of the bar when the bar lets the screen through. |
+| `colorSurfaceContainerLow` | A sheet. |
+| `colorSurfaceContainerHigh` | The search field and its suggestions. |
 | `colorSecondaryContainer` | The pill of the selected tab, the selected scope of the search. |
 | `colorPrimaryContainer` | The floating action button. |
-| `colorError` | The badges of the tabs. |
+| `colorError` | The badges of the tabs, the destructive items of the bar's menus. |
+| `android:colorBackground` | Behind a screen without `layout.backgroundColor`. It comes from the activity's own theme, Material 3 or not; a screen in a sheet shows the sheet's color. |
 
-The theme's `colors` and a screen's options go over these: `bar` over the top bar and the tab bar, `text` over the titles, `badge` over the badges.
+The theme's `colors` and a screen's options go over these: `bar` over the top bar and the tab bar, `text` over the titles, `badge` over the badges. The menus of the bar take the bar's color and the title's color while the bar is opaque; `topBar.menuBackgroundColor` and `topBar.menuTextColor` set them apart. These two are Android only: iOS draws its menus in the system's colors.
 
 - **An app with a Material 3 theme of its own** keeps it, and the navigation takes its colors.
-- **An app with a theme that isn't Material 3** keeps it too. The bars, tabs, search and sheets then take `Theme.ApexNavigation` themselves, and follow the app's light or dark mode.
-- **An app that is only light** sets it in code: `AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)`.
+- **An app with a theme that isn't Material 3** keeps it too, and the navigation's views take `Theme.ApexNavigation` (see [the next section](#android-other-themes)).
+- **An app that is only light** sets it in code: `AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)`. `Theme.ApexNavigation` follows dark mode, so without it the navigation's views turn dark with the device.
+
+#### An app with an AppCompat or MaterialComponents theme {#android-other-themes}
+
+Many apps keep a theme of their own, such as `Theme.AppCompat.Light.NoActionBar` or `Theme.MaterialComponents.DayNight.NoActionBar`. `setup` leaves it as it is: it changes only the template's `Theme.AppCompat.DayNight.NoActionBar`.
+
+The navigation tells a Material 3 theme by `colorSurfaceContainerHigh`, a role only Material 3 themes have. When the activity's theme has none, each view of the navigation is made in a copy of the app's theme with `Theme.ApexNavigation` <Mark>laid over it</Mark>. Over it means it wins: the colors, text appearances and shapes it sets replace the app's, so the app's `colorPrimary` and `colorAccent` don't reach the bars, and the bars are neutral gray next to the app's own colors. The app's own views keep its theme.
+
+There are two ways to give the bars the app's colors.
+
+**Move the theme to Material 3.** The parent becomes `Theme.ApexNavigation`, or `Theme.Material3.DayNight.NoActionBar` for Material's own palette, and the brand colors go to Material 3's roles, the ones in the table above:
+
+```xml title="android/app/src/main/res/values/styles.xml"
+<!-- Before: parent="Theme.MaterialComponents.DayNight.NoActionBar" -->
+<style name="AppTheme" parent="Theme.ApexNavigation">
+  <item name="colorSecondaryContainer">@color/selected_tab</item>
+  <item name="colorPrimaryContainer">@color/brand</item>
+</style>
+```
+
+The selected tab and the floating action button take the brand colors. Attributes Material 3 has no role for, such as `colorAccent`, `colorPrimaryDark` or `colorPrimaryVariant`, do nothing in the navigation. The app's own native views change with the theme too: its AppCompat and Material widgets and dialogs take the Material 3 look.
+
+**Keep the theme, and color the navigation from JavaScript.** The colors of the [theme](#theme) are options, not Android theme attributes, so they paint the bars with any Android theme:
+
+```ts title="Navigation.ts"
+export const Navigation = createNavigation({
+  // … screens and root
+  theme: {
+    colors: {
+      primary: '#E76F51',
+      bar: '#1E2A44',
+      text: '#F3E9D2',
+      badge: '#E63946',
+    },
+  },
+});
+```
+
+The bars, the titles, the buttons, the selected tab and the badges take the brand colors. The rest stays in `Theme.ApexNavigation`'s grays: the pill of the selected tab, a sheet, the search field, the floating action button. The navigation has <Mark>no theme attribute or overlay of its own</Mark> for them. Two of them have an option of their color: `fab.backgroundColor` and `topBar.searchBar.backgroundColor`; the pill of the selected tab and a sheet have none.
+
+The way to recolor them in resources is to replace `Theme.ApexNavigation` itself: a style of the same name in the app wins over the library's when the build merges the resources. It replaces the whole style, so it has Material 3's parent, and it goes in `values` and again in `values-night`, or dark mode keeps the library's grays:
+
+```xml title="android/app/src/main/res/values/themes.xml"
+<style name="Theme.ApexNavigation"
+  parent="Theme.Material3.DayNight.NoActionBar">
+  <item name="colorSecondaryContainer">#FCE4D6</item>
+</style>
+```
+
+```xml title="android/app/src/main/res/values-night/themes.xml"
+<style name="Theme.ApexNavigation"
+  parent="Theme.Material3.DayNight.NoActionBar">
+  <item name="colorSecondaryContainer">#5C3B2E</item>
+</style>
+```
+
+A role the app's style leaves out takes Material 3's own palette, with its violet tint, and not the navigation's grays.
+
+#### Fonts and shapes {#android-fonts-shapes}
+
+An app with a font of its own sets it in the options, which work with any Android theme. The app's `options` give it to every screen:
+
+```ts title="Navigation.ts"
+export const Navigation = createNavigation({
+  // … screens and root
+  options: {
+    topBar: {
+      title: { fontFamily: 'Inter', fontWeight: '600' },
+      subtitle: { fontFamily: 'Inter' },
+      largeTitle: { fontFamily: 'Inter' },
+    },
+    bottomTab: { fontFamily: 'Inter' },
+  },
+});
+```
+
+The family is the name a `Text` style takes: a font in `assets/fonts/` or a `res/font` resource React Native knows. Without options, each text takes its font from the app's theme, or from Material 3's text appearances:
+
+| Text | Without options | Options over it |
+| --- | --- | --- |
+| The title and the subtitle | 22 sp and 14 sp, set in code; the theme's `android:fontFamily`, else the system font. | `topBar.title.fontFamily`, `fontSize`, `fontWeight`, `fontStyle`; the same in `topBar.subtitle`. |
+| The large title | 28 sp, set in code; the font as the title. | The same in `topBar.largeTitle`. |
+| A text button of the bar | The theme's `actionMenuTextAppearance`. | `fontFamily`, `fontSize`, `fontWeight`, `fontStyle` of the button. |
+| The labels of the tabs | `textAppearanceLabelMedium`, through Material 3's style of the tab bar. | `bottomTab.fontFamily`, `fontWeight`, `fontStyle`; `fontSize` and `selectedFontSize`. |
+| The items of the bar's menus | `textAppearanceLargePopupMenu`, which Material 3 points to `textAppearanceBodyLarge`; the title of a submenu `textAppearancePopupMenuHeader`. | None. |
+| The text of the search | 16 sp. The field in the bar takes the font as the title; the pill under the title, Material's `SearchBar`, its own `TextAppearance.Material3.SearchBar`. | None. |
+| The scopes of the search | `textAppearanceLabelLarge`. | None. |
+
+The shapes come mostly from code, not from `shapeAppearance…` attributes:
+
+| Shape | Without options | Option over it |
+| --- | --- | --- |
+| A sheet | 28 dp, the top corners only, set in code. | `modal.sheet.cornerRadius`. |
+| The menus of the bar | The theme's `popupMenuBackground`, a drawable: 4 dp in Material 3. | None. |
+| The search field | A capsule: set in code in the bar, Material's `SearchBar` style under the title; the suggestions 16 dp, set in code. While the search fills the screen, Material's `SearchView` has no corners. | None. |
+| The scopes of the search | `shapeAppearanceCornerSmall`. | None. |
+| The tab bar | Square. | `bottomTabs.cornerRadius`. |
+| The floating action button | `shapeAppearanceCornerLarge`. | None. |
+
+An app with a Material 3 theme changes the theme's part in `styles.xml`. These attributes are the app's own: its other views that use them change too.
+
+```xml title="android/app/src/main/res/values/styles.xml"
+<style name="AppTheme" parent="Theme.ApexNavigation">
+  <item name="android:fontFamily">@font/inter</item>
+  <item name="textAppearanceLabelMedium">@style/TabLabel</item>
+  <item name="popupMenuBackground">@drawable/menu</item>
+</style>
+
+<style name="TabLabel" parent="TextAppearance.Material3.LabelMedium">
+  <item name="fontFamily">@font/inter</item>
+  <item name="android:fontFamily">@font/inter</item>
+</style>
+```
+
+The title, the large title and the labels of the tabs are in Inter, and so is the search field in the bar from Android 8 on: before it, a plain text field can't load a font resource. The menus of the bar take the shape of `menu.xml`, in the bar's color while the bar is opaque.
+
+In an app whose theme isn't Material 3, `Theme.ApexNavigation` lies over the app's theme, so the text appearances, `popupMenuBackground` and the shapes are `Theme.ApexNavigation`'s whatever the app's theme says. `Theme.ApexNavigation` doesn't set `android:fontFamily`, so the app's own still reaches the title, the large title and the search field in the bar. For the rest, the options are the way.
 
 ## The context {#context}
 

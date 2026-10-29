@@ -29,9 +29,77 @@ export function rememberMergedOptions(id: string, options: Options): void {
   remembered.set(id, before ? mergeOptions(before, kept) : kept);
 }
 
+/** Takes the options at the paths, such as `['topBar', 'subtitle']`, out of those remembered for the node with the id. */
+export function forgetMergedPaths(id: string, paths: readonly string[][]): void {
+  const own = ownOptions.get(id);
+  if (own) own.options = withoutPaths(own.options, paths);
+  const options = remembered.get(id);
+  if (options) remembered.set(id, withoutPaths(options, paths));
+}
+
+// A copy of the options without the values at the paths.
+function withoutPaths(options: Options, paths: readonly string[][]): Options {
+  const kept = structuredCopy(options);
+  for (const path of paths) {
+    const parent = path
+      .slice(0, -1)
+      .reduce<Record<string, unknown> | undefined>(
+        (group, key) => group?.[key] as Record<string, unknown> | undefined,
+        kept
+      );
+    if (parent) delete parent[path[path.length - 1]!];
+  }
+  return kept as Options;
+}
+
+// A copy of the plain objects of options, the other values shared.
+function structuredCopy(options: Options): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(options).map(([key, value]) => [
+      key,
+      isGroup(value) ? structuredCopy(value as Options) : value,
+    ])
+  );
+}
+
+function isGroup(value: unknown): boolean {
+  return (
+    typeof value === 'object' && value !== null && Object.getPrototypeOf(value) === Object.prototype
+  );
+}
+
 /** Forgets the merged options of a node that went; a node of the last root keeps them until another root goes out. */
 export function forgetMergedOptions(id: string): void {
   if (!lastRoot?.ids.has(id)) remembered.delete(id);
+  ownOptions.delete(id);
+}
+
+// The own options of each screen as JavaScript sent them, in development: those it showed with, and every merge and
+// clear since. An edit of a screen's options (Fast Refresh) changes only what still has the old definition's value.
+const ownOptions = new Map<string, { name: string; options: Options }>();
+
+/** Notes the own options a screen of the name shows with (development). */
+export function noteOwnOptions(id: string, name: string, options: Options): void {
+  if (__DEV__) ownOptions.set(id, { name, options });
+}
+
+/** Notes a merge into a screen's own options (development). */
+export function noteMergedOwnOptions(id: string, options: Options): void {
+  const noted = __DEV__ ? ownOptions.get(id) : undefined;
+  if (noted) noted.options = mergeOptions(noted.options, options);
+}
+
+/** The own options of a screen as JavaScript sent them (development); undefined for a screen it didn't note. */
+export function ownOptionsOf(id: string): Options | undefined {
+  return ownOptions.get(id)?.options;
+}
+
+/**
+ * The ids of the screens of the name the native side has, mounted in React or not yet (a tab not selected yet), as
+ * development notes them.
+ */
+export function notedScreens(name: string): string[] {
+  return [...ownOptions].filter(([, noted]) => noted.name === name).map(([id]) => id);
 }
 
 /** The options merged into the node with the id, as remembered; undefined without any. */
@@ -55,6 +123,8 @@ export function rootGoesOut(nodes: LayoutNode[], again: SentRoot | undefined): v
   const before = lastRoot;
   lastRoot = { nodes, ids: new Set(nodes.flatMap(idsOf)) };
   if (!before) return;
+  // The screens of the root before go with it, the tabs React never mounted too.
+  for (const id of before.ids) if (!lastRoot.ids.has(id)) ownOptions.delete(id);
   const moved = new Map<string, Options>();
   if (again === before) {
     pairNodes(before.nodes, nodes, (old, node) => {

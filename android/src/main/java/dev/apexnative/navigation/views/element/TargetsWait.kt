@@ -7,6 +7,7 @@ import dev.apexnative.navigation.options.LayoutAnimation
 import dev.apexnative.navigation.react.events.AppearanceDispatcher
 import dev.apexnative.navigation.utils.DevelopmentLog
 import dev.apexnative.navigation.utils.NavigationLog
+import dev.apexnative.navigation.utils.SystemAnimations
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.ViewController
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -17,7 +18,8 @@ import kotlinx.coroutines.launch
 /**
  * The wait of a forward transition with elements for its targets: the module's frames (`awaitTransitionTargets`, 0.5 s
  * at most, then one frame more), then the images of the shared elements found ([ImageWait], 1 s at most each). It ends
- * early when the screen that goes is destroyed. A failure in it is logged and the transition starts. Main thread only.
+ * early when the screen that goes is destroyed, and doesn't wait with the system's animations off. A failure in it is
+ * logged and the transition starts. Main thread only.
  */
 internal object TargetsWait {
     // The waits run on the main thread's frames; each is cancelled on its own.
@@ -31,6 +33,11 @@ internal object TargetsWait {
         waiting: () -> Boolean,
         done: () -> Unit,
     ): () -> Unit {
+        // With the system's animations off no element moves ([ElementTransition.start]): nothing to wait for.
+        if (SystemAnimations.areOff(to.peekView()?.context)) {
+            guarded { done() }
+            return NOTHING
+        }
         var stopped = false
         var stopImages: () -> Unit = NOTHING
         val still = { !stopped && waiting() && from?.isDestroyed != true }

@@ -29,6 +29,21 @@ typedef struct {
     BOOL clipped;
 } ANNFlightEnd;
 
+// What the copy shows at one time: its size, center, transform and corners, its two pictures' frames and alphas, and
+// its visible part (in the copy's coordinates) with its corners.
+typedef struct {
+    CGSize size;
+    CGPoint center;
+    CATransform3D transform;
+    CGFloat cornerRadius;
+    CGRect fromFrame;
+    CGRect toFrame;
+    CGFloat fromAlpha;
+    CGFloat toAlpha;
+    CGRect mask;
+    CGFloat maskRadius;
+} ANNFlightState;
+
 static BOOL ANNIsText(UIView *view) {
     static Class paragraph;
     static dispatch_once_t once;
@@ -200,6 +215,30 @@ static UIImage *ANNPictureOf(UIView *view) {
     }];
 }
 
+// A layer at `frame` in its superlayer: its bounds and its position (its anchor is its center).
+static void ANNPlaceLayer(CALayer *layer, CGRect frame) {
+    layer.bounds = CGRectMake(0, 0, frame.size.width, frame.size.height);
+    layer.position = CGPointMake(CGRectGetMidX(frame), CGRectGetMidY(frame));
+}
+
+// The core's animation of `keyPath` on `layer` (`ANNKeyframes`), under its key.
+static void ANNAddKeyframes(CALayer *layer, NSString *keyPath, NSArray *values,
+                            NSArray<NSNumber *> *times, NSTimeInterval length) {
+    CAKeyframeAnimation *animation = ANNKeyframes(keyPath, values, times, length);
+    if (animation) {
+        [layer addAnimation:animation forKey:ANNAnimationKey(keyPath)];
+    }
+}
+
+// The bounds and the position of a layer at `frame`, as values of its animations.
+static NSValue *ANNBoundsValue(CGRect frame) {
+    return [NSValue valueWithCGRect:CGRectMake(0, 0, frame.size.width, frame.size.height)];
+}
+
+static NSValue *ANNPositionValue(CGRect frame) {
+    return [NSValue valueWithCGPoint:CGPointMake(CGRectGetMidX(frame), CGRectGetMidY(frame))];
+}
+
 @implementation ANNSharedElementFlight {
     __weak UIView *_fromView;
     __weak UIView *_toView;
@@ -208,7 +247,9 @@ static UIImage *ANNPictureOf(UIView *view) {
     UIView *_copy;
     UIImageView *_fromPicture;
     UIImageView *_toPicture;
-    CAShapeLayer *_mask;
+    // The visible part of the copy: a plain layer with corners, as Core Animation can't animate a path whose corners
+    // change.
+    CALayer *_mask;
     ANNFlightEnd _from;
     ANNFlightEnd _to;
     ANNTrack *_track;
@@ -343,7 +384,8 @@ static UIImage *ANNPictureOf(UIView *view) {
     // A text's pictures are neither clipped nor masked.
     _copy.clipsToBounds = !_text;
     if (!_text && (_from.clipped || _to.clipped)) {
-        _mask = [CAShapeLayer layer];
+        _mask = [CALayer layer];
+        _mask.backgroundColor = UIColor.blackColor.CGColor;
         _copy.layer.mask = _mask;
     }
     [_copy addSubview:_fromPicture];
@@ -360,11 +402,101 @@ static UIImage *ANNPictureOf(UIView *view) {
     [container addSubview:_copy];
     from.hidden = YES;
     to.hidden = YES;
-    [self applyAtTime:0];
+    [self placeAtTime:0];
 }
 
 - (UIView *)copyView {
     return _copy;
+}
+
+// The copy's whole state at `time`: its own geometry, its pictures' and its visible part's.
+- (ANNFlightState)stateAtTime:(NSTimeInterval)time {
+    ANNFlightState state;
+    double f = [_track fractionAt:time];
+    state.size = ANNInterpolateSize(_from.size, _to.size, f);
+    state.center = ANNInterpolatePoint(_from.center, _to.center, f);
+    state.transform = ANNTransformOfParts(ANNInterpolateTransformParts(_from.parts, _to.parts, f));
+    state.cornerRadius = 0;
+    state.mask = CGRectZero;
+    state.maskRadius = 0;
+    if (_text) {
+        [self placeTextPicturesOf:&state atTime:time];
+        return state;
+    }
+    state.cornerRadius = ANNInterpolateNumber(_from.cornerRadius, _to.cornerRadius, f);
+    CGRect whole = CGRectMake(0, 0, state.size.width, state.size.height);
+    state.fromFrame = whole;
+    state.toFrame = whole;
+    state.fromAlpha = 1;
+    state.toAlpha = (CGFloat)f;
+    if (_mask) {
+        CGRect fromWhole = CGRectMake(0, 0, _from.size.width, _from.size.height);
+        CGRect toWhole = CGRectMake(0, 0, _to.size.width, _to.size.height);
+        CGRect fromVisible = _from.clipped ? _from.visible : fromWhole;
+        CGRect toVisible = _to.clipped ? _to.visible : toWhole;
+        state.mask = ANNInterpolateRect(fromVisible, toVisible, f);
+        // At most half the shorter side, as a rounded path has it.
+        CGFloat radius = ANNInterpolateNumber(_from.visibleRadius, _to.visibleRadius, f);
+        CGFloat half = MIN(state.mask.size.width, state.mask.size.height) / 2;
+        state.maskRadius = MAX(MIN(radius, half), 0);
+    }
+    return state;
+}
+
+// The text's pictures keep their aspect at the height of the copy, at the line's start; they swap by the clock,
+// linearly, in the first quarter of the flight when the text grows, in the last when it shrinks.
+- (void)placeTextPicturesOf:(ANNFlightState *)state atTime:(NSTimeInterval)time {
+    CGRect frames[2];
+    UIImageView *pictures[2] = {_fromPicture, _toPicture};
+    for (int index = 0; index < 2; index++) {
+        CGSize imageSize = pictures[index].image.size;
+        CGFloat height = state->size.height;
+        CGFloat width = imageSize.height > 0 ? imageSize.width * height / imageSize.height : 0;
+        CGFloat x = _rightToLeft ? state->size.width - width : 0;
+        frames[index] = CGRectMake(x, 0, width, height);
+    }
+    state->fromFrame = frames[0];
+    state->toFrame = frames[1];
+    double swap = [self swapAtTime:time];
+    state->fromAlpha = (CGFloat)(1 - swap);
+    state->toAlpha = (CGFloat)swap;
+}
+
+// The quarter of the flight the text's pictures swap in.
+- (NSTimeInterval)swapStart {
+    NSTimeInterval duration = _track.duration;
+    return _track.delay + (_grows ? 0 : duration - duration / 4);
+}
+
+- (double)swapAtTime:(NSTimeInterval)time {
+    NSTimeInterval quarter = _track.duration / 4;
+    if (quarter <= 0) {
+        return time >= _track.delay ? 1 : 0;
+    }
+    return MIN(MAX((time - [self swapStart]) / quarter, 0.0), 1.0);
+}
+
+// The copy shows its state at `time` (its own values, with no animation).
+- (void)placeAtTime:(NSTimeInterval)time {
+    ANNFlightState state = [self stateAtTime:time];
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    _copy.layer.transform = CATransform3DIdentity;
+    _copy.bounds = CGRectMake(0, 0, state.size.width, state.size.height);
+    _copy.center = state.center;
+    _copy.layer.transform = state.transform;
+    if (!_text) {
+        _copy.layer.cornerRadius = state.cornerRadius;
+    }
+    ANNPlaceLayer(_fromPicture.layer, state.fromFrame);
+    ANNPlaceLayer(_toPicture.layer, state.toFrame);
+    _fromPicture.alpha = state.fromAlpha;
+    _toPicture.alpha = state.toAlpha;
+    if (_mask) {
+        ANNPlaceLayer(_mask, state.mask);
+        _mask.cornerRadius = state.maskRadius;
+    }
+    [CATransaction commit];
 }
 
 #pragma mark - ANNFrameClient
@@ -373,59 +505,65 @@ static UIImage *ANNPictureOf(UIView *view) {
     return _track.endTime;
 }
 
-- (void)applyAtTime:(NSTimeInterval)time {
+- (void)addAnimationsWithLength:(NSTimeInterval)length {
     if (_restored) {
         return;
     }
-    double f = [_track fractionAt:time];
-    CGSize size = ANNInterpolateSize(_from.size, _to.size, f);
-    _copy.layer.transform = CATransform3DIdentity;
-    _copy.bounds = CGRectMake(0, 0, size.width, size.height);
-    _copy.center = ANNInterpolatePoint(_from.center, _to.center, f);
-    _copy.layer.transform =
-        ANNTransformOfParts(ANNInterpolateTransformParts(_from.parts, _to.parts, f));
+    NSMutableArray<NSNumber *> *marks =
+        [NSMutableArray arrayWithObjects:@(_track.delay), @(_track.endTime), nil];
     if (_text) {
-        [self placeTextPicturesAtTime:time size:size];
-        return;
+        [marks addObject:@([self swapStart])];
+        [marks addObject:@([self swapStart] + _track.duration / 4)];
     }
-    _copy.layer.cornerRadius = ANNInterpolateNumber(_from.cornerRadius, _to.cornerRadius, f);
-    _fromPicture.frame = _copy.bounds;
-    _toPicture.frame = _copy.bounds;
-    _fromPicture.alpha = 1;
-    _toPicture.alpha = (CGFloat)f;
+    NSArray<NSNumber *> *times = ANNSampleTimes(_track.endTime, length, marks);
+    NSMutableArray *bounds = [NSMutableArray new];
+    NSMutableArray *positions = [NSMutableArray new];
+    NSMutableArray *transforms = [NSMutableArray new];
+    NSMutableArray *radii = [NSMutableArray new];
+    NSMutableArray *fromBounds = [NSMutableArray new];
+    NSMutableArray *fromPositions = [NSMutableArray new];
+    NSMutableArray *fromAlphas = [NSMutableArray new];
+    NSMutableArray *toBounds = [NSMutableArray new];
+    NSMutableArray *toPositions = [NSMutableArray new];
+    NSMutableArray *toAlphas = [NSMutableArray new];
+    NSMutableArray *maskBounds = [NSMutableArray new];
+    NSMutableArray *maskPositions = [NSMutableArray new];
+    NSMutableArray *maskRadii = [NSMutableArray new];
+    for (NSNumber *time in times) {
+        ANNFlightState state = [self stateAtTime:time.doubleValue];
+        CGRect whole = CGRectMake(0, 0, state.size.width, state.size.height);
+        [bounds addObject:ANNBoundsValue(whole)];
+        [positions addObject:[NSValue valueWithCGPoint:state.center]];
+        [transforms addObject:[NSValue valueWithCATransform3D:state.transform]];
+        [radii addObject:@(state.cornerRadius)];
+        [fromBounds addObject:ANNBoundsValue(state.fromFrame)];
+        [fromPositions addObject:ANNPositionValue(state.fromFrame)];
+        [fromAlphas addObject:@(state.fromAlpha)];
+        [toBounds addObject:ANNBoundsValue(state.toFrame)];
+        [toPositions addObject:ANNPositionValue(state.toFrame)];
+        [toAlphas addObject:@(state.toAlpha)];
+        [maskBounds addObject:ANNBoundsValue(state.mask)];
+        [maskPositions addObject:ANNPositionValue(state.mask)];
+        [maskRadii addObject:@(state.maskRadius)];
+    }
+    CALayer *copy = _copy.layer;
+    ANNAddKeyframes(copy, @"bounds", bounds, times, length);
+    ANNAddKeyframes(copy, @"position", positions, times, length);
+    ANNAddKeyframes(copy, @"transform", transforms, times, length);
+    if (!_text) {
+        ANNAddKeyframes(copy, @"cornerRadius", radii, times, length);
+    }
+    ANNAddKeyframes(_fromPicture.layer, @"bounds", fromBounds, times, length);
+    ANNAddKeyframes(_fromPicture.layer, @"position", fromPositions, times, length);
+    ANNAddKeyframes(_fromPicture.layer, @"opacity", fromAlphas, times, length);
+    ANNAddKeyframes(_toPicture.layer, @"bounds", toBounds, times, length);
+    ANNAddKeyframes(_toPicture.layer, @"position", toPositions, times, length);
+    ANNAddKeyframes(_toPicture.layer, @"opacity", toAlphas, times, length);
     if (_mask) {
-        CGRect fromWhole = CGRectMake(0, 0, _from.size.width, _from.size.height);
-        CGRect toWhole = CGRectMake(0, 0, _to.size.width, _to.size.height);
-        CGRect fromVisible = _from.clipped ? _from.visible : fromWhole;
-        CGRect toVisible = _to.clipped ? _to.visible : toWhole;
-        CGRect visible = ANNInterpolateRect(fromVisible, toVisible, f);
-        CGFloat radius = ANNInterpolateNumber(_from.visibleRadius, _to.visibleRadius, f);
-        _mask.frame = _copy.bounds;
-        _mask.path = [UIBezierPath bezierPathWithRoundedRect:visible cornerRadius:radius].CGPath;
+        ANNAddKeyframes(_mask, @"bounds", maskBounds, times, length);
+        ANNAddKeyframes(_mask, @"position", maskPositions, times, length);
+        ANNAddKeyframes(_mask, @"cornerRadius", maskRadii, times, length);
     }
-}
-
-// The text's pictures keep their aspect at the height of the copy, at the line's start; they swap by the clock,
-// linearly, in the first quarter of the flight when the text grows, in the last when it shrinks.
-- (void)placeTextPicturesAtTime:(NSTimeInterval)time size:(CGSize)size {
-    for (UIImageView *picture in @[ _fromPicture, _toPicture ]) {
-        CGSize imageSize = picture.image.size;
-        CGFloat height = size.height;
-        CGFloat width = imageSize.height > 0 ? imageSize.width * height / imageSize.height : 0;
-        CGFloat x = _rightToLeft ? size.width - width : 0;
-        picture.frame = CGRectMake(x, 0, width, height);
-    }
-    NSTimeInterval duration = _track.duration;
-    NSTimeInterval quarter = duration / 4;
-    NSTimeInterval start = _track.delay + (_grows ? 0 : duration - quarter);
-    double swap;
-    if (quarter <= 0) {
-        swap = time >= _track.delay ? 1 : 0;
-    } else {
-        swap = MIN(MAX((time - start) / quarter, 0.0), 1.0);
-    }
-    _fromPicture.alpha = (CGFloat)(1 - swap);
-    _toPicture.alpha = (CGFloat)swap;
 }
 
 - (void)restore {

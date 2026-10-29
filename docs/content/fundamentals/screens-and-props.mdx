@@ -80,7 +80,7 @@ What `screens` takes, from the simplest:
 | Entry | When |
 | --- | --- |
 | A component | A screen without options of its own: `Settings`. |
-| `defineScreen({ component, options })` | A screen with its options next to it: see [Options](#options). |
+| `defineScreen({ component, options })` | A screen with its options next to it: see [Options](#options). It returns a component that renders the screen. |
 | `{ load: () => import('./screens/Settings') }` | A screen whose code runs the first time it shows: see [Loading later](#lazy). |
 | `nativeScreen('ProfileScreen', …)` | A screen written in SwiftUI, UIKit or Compose: see [Native screens](../architecture/native-screens). |
 | `defineArrangement({ primary, secondary })` | Two screens shown as one, side by side in a large window: see [Arrangement](../containers/arrangement). |
@@ -186,9 +186,17 @@ export const DetailsScreen = defineScreen({
 | `props` | The props of this showing, typed from the component. |
 | `{ theme, context }` | The theme of the navigation and the app's context, as they are when the screen shows. |
 
+`defineScreen` returns a component of its own, typed `DefinedScreen<Props>`, which renders your component and carries the definition; your component stays as it is, for any other use of it. Put the result in `screens` as it is. Rendered alone, in a test, it renders the screen.
+
 The options go to the native side with the command, so they apply <Mark>before the screen appears</Mark>: the title is there from the first frame, not set after a render.
 
 Options come from several places, and the later go over the earlier: the screen's [group](#groups), its `defineScreen`, the `options` of the command, and `setOptions` or `useScreenOptions` from the screen itself. The whole order, with the theme and the defaults of the app: [Screen options](./screen-options).
+
+### Fast Refresh {#fast-refresh}
+
+An edit of a screen file updates the screen in place, with its state, when the file is a Fast Refresh boundary: it exports only screens and components. A constant or an object exported from it makes it not a boundary. With `withApexNavigation` in `metro.config.js` ([Installation](../start/installation#fast-refresh)) such an edit still doesn't reload the app: it goes up to the module of the app's `createNavigation`, which updates the running app.
+
+An edit of `options` reaches the screens of it at once, a tab not rendered yet too. Changed and added options are merged in; an option taken out is cleared. An option the command gave the screen, or one the screen set since (`useScreenOptions`, `mergeOptions`), stays as it is. An edit of `key` or `arrangement` applies from the next show.
 
 ## The life of a screen {#lifecycle}
 

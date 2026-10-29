@@ -19,8 +19,8 @@ typedef NS_ENUM(NSInteger, ANNTransitionKind) {
     ANNTransitionKindDismiss,
 };
 
-/// The screen fade of a transition with elements and no screen animation of its own, or of a dismissed popover with
-/// nothing to play.
+/// The screen fade of a transition with elements and no screen animation of its own, of a dismissed popover with
+/// nothing to play, or of any transition while the system's Reduce Motion is on (then nothing else plays).
 typedef NS_ENUM(NSInteger, ANNScreenFade) {
     ANNScreenFadeNone,
     /// The arriving screen from 0 to its alpha.

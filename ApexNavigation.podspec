@@ -2,7 +2,8 @@
 # ApexNavigation): the Objective-C++ core and modules under ios/, with the public headers of ios/Public/ApexNavigation
 # (<ApexNavigation/ApexNavigation.h>, <ApexNavigation/ANNAppDelegate.h>, <ApexNavigation/ANNSceneDelegate.h>). Other
 # headers stay private to the pod and are imported by bare name. The C++ of the Fabric components ANNSlot and
-# ANNSafeAreaView is header-only, under ios/cpp, next to the code React Native's codegen makes from src/.
+# ANNSafeAreaView is under ios/cpp, next to the code React Native's codegen makes from src/: headers, and one source
+# file with the store of the slots' measured heights.
 require "json"
 
 package = JSON.parse(File.read(File.join(__dir__, "package.json")))

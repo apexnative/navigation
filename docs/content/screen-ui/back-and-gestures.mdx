@@ -96,6 +96,8 @@ export const MapScreen = defineScreen({
 | `'edge'` | From the edge only: a swipe on the content stays with the content. |
 | `false` | Off. The back button still works. |
 
+<Os name="iOS" /> The swipe slides the screen out the system's way, also for a screen that leaves with a move of its own. `animations.pop.interactive` plays that move under the finger instead: [the swipe back with a pop of your own](../architecture/transitions#custom-swipe).
+
 <Os name="Android" /> The swipe is the system's back, from either edge, and `popGesture` doesn't apply to it. On Android 14+ it shows the pop before the user lets go: both screens shrink, the screen under comes in behind a dim, and the screen on top follows the finger. The user can stop halfway and stay, as on iOS. On Android 13 and older the screen pops when the swipe ends. When the preview shows and when it doesn't: [the preview of a pop](#pop-preview).
 
 ## The system back of Android {#system-back}
@@ -126,7 +128,7 @@ defineScreen({
 });
 ```
 
-iOS ignores it: the swipe back there is UIKit's.
+iOS ignores it: the swipe back there is UIKit's, or the pop's own move under the finger with `animations.pop.interactive`.
 
 ### The preview of a sheet closing {#sheet-preview}
 

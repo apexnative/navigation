@@ -44,7 +44,7 @@ Top-level files: `Package.swift` (SwiftPM; `headerFolders` lists every folder wh
 - Screen: React root, slot, native screen — `Layouts/Screen/`: `ANNComponentViewController`; `React/`: `ANNReactView`, `ANNReactViewCreator`, `Slots/`; `Layouts/External/`
 - Screen: insets, background, keyboard focus — `Layouts/Screen/`: `ANNScreenEnvironment`, `ANNScreenSafeArea`, `ANNScreenBars`, `ANNScreenPlace` (the safe area of a parked screen), `ANNComponentPresenter` (background, status bar blur), `ANNComponentViewController` (key commands)
 - Safe area view — `React/`: `ANNSafeAreaViewComponentView`; `Layouts/Screen/`: `ANNScreenReadiness`; `cpp/`
-- Stack: queue, commands, back, gestures — `Layouts/Stack/`: `ANNStackQueue`, `ANNStackCommands`, `ANNStackController`, `InteractivePopGestureDelegate`, `ANNStackAnimatingDelegate`
+- Stack: queue, commands, back, gestures — `Layouts/Stack/`: `ANNStackQueue`, `ANNStackCommands`, `ANNStackController`, `InteractivePopGestureDelegate`, `ANNStackAnimatingDelegate`, `ANNSwipePopInteraction`
 - Top bar: title, buttons, menus, large title — `TopBar/`: `ANNTopBarPresenter`, `ANNBarButtons`, `ANNBarAppearance`, `ANNLargeTitlePresenter`, `ANNBackButtonPresenter`, `ANNTitleView`, `ANNTitleGlassView`
 - Top bar: components, waits — `TopBar/`: `ANNBarComponentsWait`, `ANNBarBackgroundComponent`, `ANNTitleComponentView`, `ANNBarButtonComponentView`; `React/`: `ANNReactComponentRegistry`
 - Search — `TopBar/`: `ANNSearchPresenter`, `ANNSearchResultsViewController`
@@ -139,10 +139,17 @@ Top-level files: `Package.swift` (SwiftPM; `headerFolders` lists every folder wh
   (the root, a modal, an overlay: their record is listed and parked by then), and the modal's end steps inside UIKit's
   completions and delegate calls (`protectEndOf:showing:step:`, `protectBatch:step:`); the overlay's guard is
   `protectWaitOf:step:`.
-- Each step of a transition's element (a pair's start and take-off, an element's start, every frame and restore
+- Each step of a transition's element (a pair's start and take-off, an element's start, its animations and restore
   through `ANNIsolatedElement`) runs in `ANNElementStep`: an exception skips that element only. A new step of an
-  element goes there too, or one bad element stops the transition (a frame's exception ends the app). The elements of
-  a transition are found in one walk per screen (`ANNTransitionViews`).
+  element goes there too, or one bad element stops the transition. The elements of a transition are found in one walk
+  per screen (`ANNTransitionViews`).
+- A custom transition runs in Core Animation (`ANNFrameDriver`): each client samples its values once, at the start,
+  into keyframe animations under the core's keys (`ANNAnimationKey`), and `restore` removes them. It never writes a
+  view's own alpha or transform for a frame; a value the core writes for the transition (the arriving view's hide, a
+  hidden flag, a depth) goes back as before. A pop that follows the swipe back also stops the time of the transition's
+  container (`startPausedOn:done:`), and the container gets its time back before the clients restore. UIKit runs its
+  swipe back without asking the navigation's delegate for a transition (iOS 26 checked), so that pop follows the
+  stack's own swipe from the leading edge, and UIKit's swipes stand aside meanwhile (`swipeBackTakes:`).
 - An `ANNCommandAnswer` that goes away unanswered rejects (`notAnswered:`), but only once nothing holds it: a record,
   list or queue that keeps an answer still answers it on every exit, or the promise waits as long as the record lives.
 - On iOS 26 UIKit draws a screen's large title, for a whole pop or swipe back, inside the scroll view the bar follows
@@ -152,9 +159,10 @@ Top-level files: `Package.swift` (SwiftPM; `headerFolders` lists every folder wh
 - Under a hidden bar UIKit's swipe delegate refuses the swipes in questions of its own: `InteractivePopGestureDelegate`
   stops passing those on while the bar is hidden (`barHidden`, set again on the recognizer at each change, from
   `swipeBackFollowsBar`), and the core sorts the pans itself.
-- UIKit works out the safe area of the window's root view from where it is drawn: a `transform` that moves it (a
-  root's own `enter`) leaves it with no top inset, and putting the transform back doesn't work it out again. Lay the
-  root out after a restore (`+[ANNRootCoordinator stopAnimationOf:]`).
+- UIKit works out the safe area of the window's root view from where it is: a `transform` written on it that moves it
+  leaves it with no top inset, and putting the transform back doesn't work it out again. A root's own `enter` moves
+  only what Core Animation draws; the root is still laid out after a restore (`+[ANNRootCoordinator stopAnimationOf:]`).
+  While it animates, the new root takes no touches: it is drawn elsewhere than where it is.
 - UIKit's `hidesBarsWhenKeyboardAppears`, once on, keeps hiding the bar after it is set back to `NO`: the stack hides
   the bars for `topBar.hideOnKeyboard` itself (`keyboardWillShow:` / `keyboardDidHide:` of `ANNStackController`) and
   leaves the flag off.

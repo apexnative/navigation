@@ -12,16 +12,16 @@
     return self;
 }
 
-// The choice of the transition object is this delegate's own; the interaction controller is never answered. The other
-// methods of `UINavigationControllerDelegate` are the stack's when the stack has them; nothing outside the protocol is
-// forwarded (design 11).
+// The choice of the transition object is this delegate's own; the interaction controller too, answered only while
+// the top's pop follows the swipe. The other methods of `UINavigationControllerDelegate` are the stack's when the
+// stack has them; nothing outside the protocol is forwarded (design 11).
 static BOOL ANNIsOwnSelector(SEL selector) {
     SEL animation = @selector(navigationController:
                        animationControllerForOperation:fromViewController:toViewController:);
     return selector == animation;
 }
 
-static BOOL ANNIsNeverAnswered(SEL selector) {
+static BOOL ANNIsInteractionSelector(SEL selector) {
     return selector == @selector(navigationController:interactionControllerForAnimationController:);
 }
 
@@ -33,7 +33,7 @@ static BOOL ANNIsDelegateSelector(SEL selector) {
 
 // A method of the protocol this delegate passes to the stack.
 - (BOOL)forwardsToStack:(SEL)selector {
-    return !ANNIsOwnSelector(selector) && !ANNIsNeverAnswered(selector) &&
+    return !ANNIsOwnSelector(selector) && !ANNIsInteractionSelector(selector) &&
            ANNIsDelegateSelector(selector) && [_stack respondsToSelector:selector];
 }
 
@@ -41,8 +41,8 @@ static BOOL ANNIsDelegateSelector(SEL selector) {
     if (ANNIsOwnSelector(selector)) {
         return YES;
     }
-    if (ANNIsNeverAnswered(selector)) {
-        return NO;
+    if (ANNIsInteractionSelector(selector)) {
+        return _answersInteraction;
     }
     if ([super respondsToSelector:selector]) {
         return YES;
@@ -87,6 +87,13 @@ static BOOL ANNIsDelegateSelector(SEL selector) {
                  fromViewController:(UIViewController *)fromVC
                    toViewController:(UIViewController *)toVC {
     return [_stack animatorForOperation:operation from:fromVC to:toVC];
+}
+
+- (id<UIViewControllerInteractiveTransitioning>)
+                   navigationController:(UINavigationController *)navigationController
+    interactionControllerForAnimationController:
+        (id<UIViewControllerAnimatedTransitioning>)animationController {
+    return [_stack interactionForAnimator:animationController];
 }
 
 @end

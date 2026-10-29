@@ -3,6 +3,7 @@ package dev.apexnative.navigation.react
 import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Bundle
+import android.util.Size
 import android.view.MotionEvent
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -28,7 +29,9 @@ import dev.apexnative.navigation.viewcontrollers.viewcontroller.ScrollEventListe
  * never makes this one ready. A screen without a safe area view (no view ever told anything of its id) is ready once
  * the root view of its surface has children, read on this view's own layout passes. A root that renders at once
  * ([rendersAtOnce]: a component of a bar, a tab's cell) marks its id so from before its surface starts until it stops.
- * Ready once, ready for good; what waits for it ([whenReady]) runs then, once.
+ * Ready once, ready for good; what waits for it ([whenReady]) runs then, once. Its content measures without a height
+ * limit ([contentSize], `ContentHeights`), and the handlers of [setOnContentMounted] hear each mount of Fabric while
+ * the view is in a window.
  * Without a signal or children, the limits of what waits decide: the view has no timer of its own. It owns the
  * record of its appearance, which the dispatcher of the appearance events holds until the content is ready
  * (`AppearanceDispatcher`).
@@ -51,6 +54,7 @@ class ReactView @JvmOverloads constructor(
     private var readyTold = false
     private val readyListeners = mutableListOf<Runnable>()
     private var listening = false
+    private val mounts = ContentMounts { !destroyed && isAttachedToWindow }
 
     // What this root hears of its id: only the signals of its own surface.
     private val readiness = object : ScreenReadiness.Listener {
@@ -112,6 +116,16 @@ class ReactView @JvmOverloads constructor(
     override val touchRoot: ViewGroup?
         get() = surface?.view as? ViewGroup
 
+    override fun contentSize(maxWidth: Int): Size? {
+        val surface = surface ?: return null
+        val height = ContentHeights.surfaceHeight(context, surface, maxWidth) ?: return null
+        return Size(maxWidth, height)
+    }
+
+    override fun setOnContentMounted(key: String, handler: Runnable?) {
+        if (!destroyed) mounts.set(key, handler)
+    }
+
     override fun isReady(): Boolean {
         if (!ready && hasRendered()) ready = true
         return ready
@@ -167,6 +181,7 @@ class ReactView @JvmOverloads constructor(
         AppearanceDispatcher.didDisappear(appearance)
         destroyed = true
         readyListeners.clear()
+        mounts.clear()
         stopListening()
         if (rendersAtOnce) ScreenReadiness.setRendersAtOnce(componentId, this, false)
         val surface = surface ?: return

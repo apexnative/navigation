@@ -93,8 +93,8 @@ static ANNTrack *ANNTrackOf(Double *from, Double *to, Double *duration, Double *
     CGFloat _ownPerspective;
     BOOL _animatesTransform;
     BOOL _tilts;
-    BOOL _wroteAlpha;
-    BOOL _wroteTransform;
+    BOOL _addedAlpha;
+    BOOL _addedTransform;
     BOOL _restored;
     NSTimeInterval _endTime;
 }
@@ -235,17 +235,9 @@ static ANNTrack *ANNTrackOf(Double *from, Double *to, Double *duration, Double *
     return track ? [track valueAt:time] : [self viewValueOf:property];
 }
 
-- (void)applyAtTime:(NSTimeInterval)time {
-    if (_restored) {
-        return;
-    }
-    if (self.animatesAlpha) {
-        _view.alpha = (CGFloat)[_tracks[ANNViewPropertyAlpha] valueAt:time];
-        _wroteAlpha = YES;
-    }
-    if (!_animatesTransform) {
-        return;
-    }
+// The view's transform at `time`: every property of the transform at its value then, the ones that don't play at the
+// view's own.
+- (CATransform3D)transformAtTime:(NSTimeInterval)time {
     CGFloat scaleX = (CGFloat)[self valueOf:ANNViewPropertyScaleX at:time];
     CGFloat scaleY = (CGFloat)[self valueOf:ANNViewPropertyScaleY at:time];
     // The translation wins over the place when a side has both.
@@ -279,10 +271,48 @@ static ANNTrack *ANNTrackOf(Double *from, Double *to, Double *duration, Double *
         perspective.m34 = _ownPerspective != 0 ? _ownPerspective : -1.0 / ANNCameraDistance();
         transform = CATransform3DConcat(transform, perspective);
     }
-    transform = CATransform3DConcat(transform,
-                                    CATransform3DMakeTranslation(translationX, translationY, 0));
-    _view.layer.transform = transform;
-    _wroteTransform = YES;
+    return CATransform3DConcat(transform,
+                               CATransform3DMakeTranslation(translationX, translationY, 0));
+}
+
+- (void)addAnimationsWithLength:(NSTimeInterval)length {
+    if (_restored || !self.hasTracks) {
+        return;
+    }
+    // Every track's start and end is a sample, so a track that starts late or ends early does it on time.
+    NSMutableArray<NSNumber *> *marks = [NSMutableArray new];
+    for (NSInteger index = 0; index < ANNViewPropertyCount; index++) {
+        ANNTrack *track = _tracks[index];
+        if (track) {
+            [marks addObject:@(track.delay)];
+            [marks addObject:@(track.endTime)];
+        }
+    }
+    NSArray<NSNumber *> *times = ANNSampleTimes(_endTime, length, marks);
+    CALayer *layer = _view.layer;
+    if (self.animatesAlpha) {
+        NSMutableArray<NSNumber *> *values = [NSMutableArray arrayWithCapacity:times.count];
+        for (NSNumber *time in times) {
+            [values addObject:@([_tracks[ANNViewPropertyAlpha] valueAt:time.doubleValue])];
+        }
+        CAKeyframeAnimation *animation = ANNKeyframes(@"opacity", values, times, length);
+        if (animation) {
+            [layer addAnimation:animation forKey:ANNAnimationKey(@"opacity")];
+            _addedAlpha = YES;
+        }
+    }
+    if (_animatesTransform) {
+        NSMutableArray<NSValue *> *values = [NSMutableArray arrayWithCapacity:times.count];
+        for (NSNumber *time in times) {
+            CATransform3D transform = [self transformAtTime:time.doubleValue];
+            [values addObject:[NSValue valueWithCATransform3D:transform]];
+        }
+        CAKeyframeAnimation *animation = ANNKeyframes(@"transform", values, times, length);
+        if (animation) {
+            [layer addAnimation:animation forKey:ANNAnimationKey(@"transform")];
+            _addedTransform = YES;
+        }
+    }
 }
 
 - (void)restore {
@@ -290,11 +320,11 @@ static ANNTrack *ANNTrackOf(Double *from, Double *to, Double *duration, Double *
         return;
     }
     _restored = YES;
-    if (_wroteAlpha) {
-        _view.alpha = _alphaBefore;
+    if (_addedAlpha) {
+        [_view.layer removeAnimationForKey:ANNAnimationKey(@"opacity")];
     }
-    if (_wroteTransform) {
-        _view.layer.transform = _transformBefore;
+    if (_addedTransform) {
+        [_view.layer removeAnimationForKey:ANNAnimationKey(@"transform")];
     }
 }
 

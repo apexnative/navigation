@@ -58,8 +58,8 @@
 
 #pragma mark - ANNFrameClient
 
-- (void)applyAtTime:(NSTimeInterval)time {
-    [_tracks applyAtTime:time];
+- (void)addAnimationsWithLength:(NSTimeInterval)length {
+    [_tracks addAnimationsWithLength:length];
 }
 
 - (NSTimeInterval)endTime {

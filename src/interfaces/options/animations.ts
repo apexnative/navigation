@@ -262,8 +262,8 @@ export type ElementAnimation = AppearingElementAnimation | DisappearingElementAn
  * element's value, and a missing end is that value (a turn read from −180° to 180°, as React Native draws it). `x`
  * and `y` are the position in the parent of the element on both platforms. As on a side of a screen, don't set `x`
  * with `translationX` or `y` with `translationY` on one element: the translation plays and the position doesn't.
- * (Android) A view whose parent is a React view with `removeClippedSubviews` turned on, such as a child of a clipping
- * list, is not moved: it counts as not found.
+ * The element plays where it is, in its screen: it moves with its screen, its parents clip it, and the views drawn
+ * after it in its screen stay over it.
  */
 export interface ElementTransition {
   /** The `nativeID` of the view to animate. */
@@ -294,15 +294,20 @@ export interface ElementTransition {
  * A view that flies from the screen that goes to the screen that comes, changing its place, size, corners and look on
  * the way. A pair whose view is not found on either screen is skipped while the rest plays, and the transition waits
  * until the views are found. A pair that fails on the way (an error in its start or its flight) is skipped too, with a
- * warning in the log: its views show and hide with their screens, and the transition and its command go on. (iOS) So is
- * a pair with a view without a size, or one whose picture can't be taken. Without an animation of the screens of its
- * own, the screen that comes fades in (or the one that goes fades out) in 300 ms around the pair. Text keeps its
- * proportions and changes its picture within a quarter of the flight. A view turned or scaled by its own `transform` or
- * by a parent's flies from where it shows, and its angle goes to the other view's along the shorter arc. The angle is
- * the one React Native draws, from −180° to 180°: `rotate: '270deg'` turns back a quarter, and no pair spins a full
- * turn. (Android) A picture that doesn't load within a second drops out of the transition, and so does a pair with a
- * view whose parent is a React view with `removeClippedSubviews` turned on: it counts as not found. A skew and a tilt
- * (`skewX`, `rotateX`, …) don't fly: the view flies without them and has them again at the end.
+ * warning in the log: its views show and hide with their screens, and the transition and its command go on. So is a
+ * pair with a view without a size, or one whose picture can't be taken. Without an animation of the screens of its
+ * own, the screen that comes fades in (or the one that goes fades out) in 300 ms around the pair. What flies is a copy:
+ * pictures of the two views taken as the transition starts, while the views stay hidden in their places; what changes
+ * in them meanwhile shows when they are back. A view its parents cut (`overflow: hidden`, a scroll view, the edge of
+ * its screen) shows only the part they leave visible, and that part goes to the one of the other view on the way.
+ * Text keeps its proportions, flies whole and changes its picture within a quarter of the flight. A view turned or
+ * scaled by its own `transform` or by a parent's flies from where it shows, and its angle goes to the other view's
+ * along the shorter arc. The angle is the one React Native draws, from −180° to 180°:
+ * `rotate: '270deg'` turns back a quarter, and no pair spins a full turn. (Android) An image without a background or a
+ * border flies as the image of the view that comes, from the part and place the fit (`resizeMode`) shows in one view
+ * to those in the other, and an animated image plays on; images of other proportions fly as pictures. An image that
+ * doesn't load within a second drops out of the transition. A skew and a tilt (`skewX`, `rotateX`, …) don't fly: the
+ * view flies without them and has them again at the end.
  */
 export interface SharedElementTransition {
   /** The `nativeID` of the view on the screen that goes. */
@@ -411,14 +416,27 @@ export interface StackPushAnimationOptions extends StackAnimationOptions {
 }
 
 /**
- * The animation of a pop, read from the screen that goes. As {@link StackAnimationOptions}, with the preview of the
- * back gesture on Android.
+ * The animation of a pop, read from the screen that goes. As {@link StackAnimationOptions}, with the swipe back of iOS
+ * and the preview of the back gesture on Android.
  */
 export interface StackPopAnimationOptions extends StackAnimationOptions {
   /**
+   * (iOS) Whether the swipe back plays this pop under the finger. Without it, the swipe back plays UIKit's slide, and
+   * the pop's own animation plays only for the back button and `pop`. With `true`, the swipe from the edge plays the
+   * pop's own animation as far as the finger has gone across the screen: the user can stop halfway, and letting go
+   * finishes the pop or puts the screen back, the rest playing faster after a quick flick. It applies only when the pop
+   * has an animation of its own (`content`, `elementTransitions`, `sharedElementTransitions`). The top bar shows the
+   * screen under from the start of the swipe, as UIKit does in a transition of its own, and comes back when the swipe
+   * is given up. On iOS 26 the swipe from the content stays off for a screen with an own pop.
+   * Android ignores it: a pop with an animation of its own plays when the back gesture ends.
+   * @default false
+   */
+  interactive?: boolean;
+  /**
    * (Android 14+) Whether the back gesture on a pushed screen previews its pop as the user swipes: the screen shrinks
    * and follows the finger, the screen under it shows behind. `false` pops the screen when the gesture is released,
-   * as on Android 13 and older; back still pops it. iOS ignores it: its swipe back is UIKit's.
+   * as on Android 13 and older; back still pops it. iOS ignores it: its swipe back is UIKit's, or the pop's own
+   * animation with `interactive`.
    * @default true
    */
   preview?: boolean;
@@ -474,6 +492,12 @@ export interface ModalAnimationOptions extends EnterExitAnimationOptions {
  * options of the command. A change by `mergeOptions` is for the next command and animates nothing itself. A theme
  * switch or a rotation does not change an animation. Without a key, the transition is the platform's own.
  *
+ * The system's setting to reduce motion is respected, with no option to turn that off. (iOS) With Reduce Motion on, a
+ * transition of these keys is a fade of the same length: the screen that comes fades in (a push, `setStackRoot`, a
+ * modal's show, `setRoot`), the screen that goes fades out (a pop, a dismissal); no element moves. (Android) With
+ * Remove animations on (or the animator duration scale at 0), the transitions end at once, no element moves and none
+ * is waited for, a side menu opens and closes without its slide, and a sheet shows and closes without it.
+ *
  * ```ts
  * const options: Options = {
  *   animations: {
@@ -489,7 +513,8 @@ export interface AnimationOptions {
   push?: StackPushAnimationOptions;
   /**
    * The pop of a screen, also `popTo` and `popToRoot`, read from the screen that goes. The swipe back of iOS is
-   * UIKit's; the back gesture of Android previews the pop (`preview`).
+   * UIKit's, or the pop's own animation under the finger (`interactive`); the back gesture of Android previews the pop
+   * (`preview`).
    */
   pop?: StackPopAnimationOptions;
   /** The replacing of the screens of a stack, read from the new top screen. */

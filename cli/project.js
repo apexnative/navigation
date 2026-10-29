@@ -22,6 +22,7 @@ const { exec } = require('./exec');
  *   infoPlist?: string;
  *   entry?: string;
  *   app?: string;
+ *   metroConfig?: string;
  *   typescript: boolean;
  *   xcodeProject?: string;
  *   androidPackage?: string;
@@ -73,6 +74,9 @@ function findProject(root, run = exec) {
       .map((name) => path.join(root, name))
       .find((file) => fs.existsSync(file)),
     app: ['App.tsx', 'App.ts', 'App.jsx', 'App.js']
+      .map((name) => path.join(root, name))
+      .find((file) => fs.existsSync(file)),
+    metroConfig: ['metro.config.js', 'metro.config.cjs']
       .map((name) => path.join(root, name))
       .find((file) => fs.existsSync(file)),
     typescript: ['App.tsx', 'App.ts', 'tsconfig.json'].some((name) =>
