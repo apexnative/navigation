@@ -60,7 +60,8 @@ typedef NS_ENUM(NSInteger, ANNStackChange) {
 /// The stack's own view controller: the layout parent of the nodes it took and doesn't show yet.
 - (UIViewController *)stackViewController;
 
-/// The stack is seen: its view is in a window, and it isn't inside a layer that waits to show (`ANNPendingLayers`).
+/// The stack is seen: its view is in a window, and it isn't inside a layer that waits to show (`ANNPendingLayers`) nor
+/// in a tab that renders before it shows (`isInUnseenTab:` of the tabs).
 - (BOOL)stackIsOnScreen;
 
 /// A transition UIKit runs on the stack now (one the queue didn't start); nil when none runs.

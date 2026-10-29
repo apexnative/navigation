@@ -44,11 +44,16 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)render;
 
 /// Where the screen will show while it waits for its content out of it (parked by a stack's or `showInColumn`'s wait,
-/// `ANNParking`): it lays out with that place's safe area and bars (`ANNScreenPlace`), as it will once it shows there.
-/// Asked at each layout, and kept past the parking until UIKit gives the screen a safe area of its own in a parent
-/// (the push lays it out once before that, with none), or as it appears. Nil: its view's own. Set by the one that
-/// parks the screen.
+/// or in a tab rendered before it shows, `ANNParking`): it lays out with that place's safe area and bars
+/// (`ANNScreenPlace`), as it will once it shows there. Asked at each layout, and kept past the parking until UIKit
+/// gives the screen a safe area of its own in a parent (the push lays it out once before that, with none), or as it
+/// appears. Nil: its view's own. Set by the one that parks the screen.
 @property(nonatomic, copy, nullable) ANNScreenPlace *_Nullable (^placeWhileParked)(void);
+
+/// The place is kept until the screen appears, not only until UIKit gives it a safe area: a tab's screen rendered
+/// before the tab shows gets a part of it first (the bar without the status bar) as UIKit lays the tab out. Set with
+/// `placeWhileParked`, and goes with it.
+@property(nonatomic) BOOL placeKeptUntilAppearance;
 
 /// Applies the "under bars" rule to the root frame again, then gives the modules the insets, the padding and the
 /// regions of the screen. Nothing before the view loaded; the safe area only in a window.

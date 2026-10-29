@@ -7,11 +7,14 @@
 #import "ANNMoreNavigationDelegate.h"
 #import "ANNNavigationState.h"
 #import "ANNNodeRegistry.h"
+#import "ANNParking.h"
 #import "ANNPendingLayers.h"
 #import "ANNScreenBars.h"
+#import "ANNScreenPlace.h"
 #import "ANNScrollToTop.h"
 #import "ANNShownScreens.h"
 #import "ANNStackController.h"
+#import "ANNStackQueue.h"
 #import "ANNSystemUI.h"
 #import "ANNTabLongPress.h"
 #import "ANNTabsDesign.h"
@@ -27,6 +30,11 @@ static const NSTimeInterval ANNTabMountLimit = 0.5;
 
 // The key of the tabs' ready handlers on the screens of their selected tab (`afterInitialTab`).
 static NSString *const ANNTabsReadyKey = @"ApexNavigation.tabs";
+
+// The key of the tabs' ready handlers on the screens of a parked tab, and the longest such a tab waits for them in the
+// parking: past it, its screens render their content where the tab shows.
+static NSString *const ANNTabsUnseenKey = @"ApexNavigation.tabs.unseen";
+static const NSTimeInterval ANNUnseenRenderLimit = 5;
 
 // Whether UIKit pops the stack of a tab tapped again itself: the core answers "select" and lets it. NO would make the
 // core pop it for every source and answer "don't" (the simulator decides).
@@ -79,6 +87,12 @@ static void ANNStacksOfNode(UIViewController *node, NSMutableArray<ANNStackContr
     // The `UITab` of each tab, in layout order (iOS 18 and later).
     NSArray *_uiTabs;
     NSHashTable<UIViewController *> *_renderedTabs;
+    // The tabs rendered before they show (`together`, the chain of `afterInitialTab`) wait unseen and hidden in the
+    // tabs' view until their screens rendered their content, as on Android: a screen's safe area view lays out only in
+    // a window. They leave it then, since the core takes a view in a window for one that shows, and their screens keep
+    // the place they rendered at until they appear. Those not parked yet wait for the tabs' view in a window.
+    ANNParking *_unseenParking;
+    NSHashTable<UIViewController *> *_tabsToPark;
     // The chain of `afterInitialTab`: started once; a destroy ends it by its number.
     BOOL _chainStarted;
     NSUInteger _chainNumber;
@@ -133,6 +147,8 @@ static void ANNStacksOfNode(UIViewController *node, NSMutableArray<ANNStackContr
     if (self) {
         _tabs = [childViewControllers copy] ?: @[];
         _renderedTabs = [NSHashTable weakObjectsHashTable];
+        _unseenParking = [ANNParking new];
+        _tabsToPark = [NSHashTable weakObjectsHashTable];
         _staleTabs = [NSHashTable weakObjectsHashTable];
         _pressedIndex = NSNotFound;
         _codeChoiceIndex = NSNotFound;
@@ -469,12 +485,12 @@ static void ANNStacksOfNode(UIViewController *node, NSMutableArray<ANNStackContr
     if (self.nodeHelper.destroyed) {
         return;
     }
-    [self renderTabAtIndex:_selectedTabIndex];
+    [self renderTabAtIndex:_selectedTabIndex unseen:NO];
     switch (_attachMode) {
         case ANNTabsAttachModeTogether:
             for (NSUInteger index = 0; index < _tabs.count; index++) {
                 if (index != _selectedTabIndex) {
-                    [self renderTabAtIndex:index];
+                    [self renderTabAtIndex:index unseen:YES];
                 }
             }
             break;
@@ -556,6 +572,10 @@ static void ANNStacksOfNode(UIViewController *node, NSMutableArray<ANNStackContr
     }
     [_longPress detach];
     [self.nodeHelper unregisterNode];
+    [_tabsToPark removeAllObjects];
+    for (UIViewController *tab in _unseenParking.parkedNodes) {
+        [self unparkTab:tab showing:NO];
+    }
     for (UIViewController *tab in _tabs) {
         @try {
             [tab destroy];
@@ -585,6 +605,13 @@ static void ANNStacksOfNode(UIViewController *node, NSMutableArray<ANNStackContr
         [[self tabsPresenter] barDidLayOutInWindow];
     }
     [[self tabsPresenter] tabsDidLayOut];
+    // A tab UIKit shows by a way of its own leaves the parking too.
+    UIViewController *shown = self.selectedViewController;
+    if (shown && [_unseenParking isParked:shown]) {
+        [self unparkTab:shown showing:YES];
+    }
+    [self layOutParkedTabs];
+    [self parkUnseenTabs];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -601,9 +628,8 @@ static void ANNStacksOfNode(UIViewController *node, NSMutableArray<ANNStackContr
 
 #pragma mark - Rendering
 
-// A tab renders where it is, shown or not: the root of a tab not shown mounts and lays out outside the window, and its
-// screen renders its content when the tab shows (`ANNSafeAreaViewComponentView`).
-- (void)renderTabAtIndex:(NSUInteger)index {
+// A tab renders once. `unseen`: it renders before it shows, and waits in the parking until then.
+- (void)renderTabAtIndex:(NSUInteger)index unseen:(BOOL)unseen {
     if (index >= _tabs.count) {
         return;
     }
@@ -613,6 +639,202 @@ static void ANNStacksOfNode(UIViewController *node, NSMutableArray<ANNStackContr
     }
     [_renderedTabs addObject:tab];
     [tab render];
+    if (unseen) {
+        [_tabsToPark addObject:tab];
+        [self parkUnseenTabs];
+    }
+}
+
+// The tabs rendered unseen go into the parking once the tabs' view is in a window, at the back of it and hidden, so
+// that a switch's transition never shows them; the shown tab never, nor a tab with nothing to render (native screens).
+- (void)parkUnseenTabs {
+    if (_tabsToPark.count == 0 || !self.viewIfLoaded.window || self.nodeHelper.destroyed) {
+        return;
+    }
+    UIViewController *shown = self.selectedViewController;
+    UIViewController *selected = [self selectedTabNode];
+    for (UIViewController *tab in _tabsToPark.allObjects) {
+        [_tabsToPark removeObject:tab];
+        if (tab == shown || tab == selected || tab.viewIfLoaded.window ||
+            [_unseenParking isParked:tab]) {
+            continue;
+        }
+        NSArray<ANNComponentViewController *> *screens = [self unrenderedScreensOfTab:tab];
+        if (screens.count == 0) {
+            continue;
+        }
+        [_unseenParking park:tab inView:self.view];
+        tab.view.hidden = YES;
+        [self layOutParkedTabs];
+        [self placeScreensOfParkedTab:tab shownFirst:screens];
+        [self unparkTab:tab whenScreensRender:screens];
+    }
+}
+
+// The screens the tab shows first whose content didn't render yet.
+- (NSArray<ANNComponentViewController *> *)unrenderedScreensOfTab:(UIViewController *)tab {
+    NSMutableArray<ANNComponentViewController *> *screens = [NSMutableArray new];
+    for (UIViewController *node in [tab waitedComponentViewControllers]) {
+        if (![node isKindOfClass:ANNComponentViewController.class]) {
+            continue;
+        }
+        ANNComponentViewController *screen = (ANNComponentViewController *)node;
+        if (screen.reactView && !screen.reactView.isReady) {
+            [screens addObject:screen];
+        }
+    }
+    return screens;
+}
+
+// A parked tab lays out where the shown tab is: beside the sidebar on iPad too.
+- (void)layOutParkedTabs {
+    UIView *shownView = self.selectedViewController.viewIfLoaded;
+    if (!shownView.window) {
+        return;
+    }
+    CGRect frame = [self.view convertRect:shownView.bounds fromView:shownView];
+    for (UIViewController *tab in _unseenParking.parkedNodes) {
+        UIView *view = tab.viewIfLoaded;
+        if (view && !CGRectEqualToRect(view.frame, frame)) {
+            view.frame = frame;
+        }
+    }
+}
+
+// UIKit gives the views of a tab not shown no safe area: the screens on top of its stacks lay out with their place
+// there, measured in the view of what the tabs show (`ANNScreenPlace`), the safe area and bars they get as the tab
+// shows. A screen the tab shows first keeps the place it rendered at until it appears: as the tab shows, UIKit first
+// gives it a part of its safe area (the bar without the status bar). The others (a closed side menu's) keep it until
+// UIKit gives them a safe area of their own.
+- (void)placeScreensOfParkedTab:(UIViewController *)tab
+                     shownFirst:(NSArray<ANNComponentViewController *> *)shownFirst {
+    NSHashTable<ANNComponentViewController *> *placed = [NSHashTable weakObjectsHashTable];
+    NSMutableArray<ANNStackController *> *stacks = [NSMutableArray new];
+    ANNStacksOfNode(tab, stacks);
+    for (ANNStackController *stack in stacks) {
+        UIViewController *top = stack.topViewController;
+        for (ANNComponentViewController *screen in top ? ANNStackScreensOfEntry(top) : @[]) {
+            [self placeScreen:screen
+                        onTop:top
+                      ofStack:stack
+                  ofParkedTab:tab
+                         kept:[shownFirst containsObject:screen]];
+            [placed addObject:screen];
+        }
+    }
+    for (ANNComponentViewController *screen in shownFirst) {
+        if (![placed containsObject:screen]) {
+            [self placeScreen:screen onTop:nil ofStack:nil ofParkedTab:tab kept:YES];
+        }
+    }
+}
+
+// The place of one screen of a parked tab: on top of its stack, or a screen of its own. A screen covered since it
+// rendered (a push onto its stack before the tab showed) lays out with its own safe area.
+- (void)placeScreen:(ANNComponentViewController *)screen
+              onTop:(nullable UIViewController *)top
+            ofStack:(nullable UINavigationController *)stack
+        ofParkedTab:(UIViewController *)tab
+               kept:(BOOL)kept {
+    __weak ANNBottomTabsController *weakSelf = self;
+    __weak UIViewController *weakTab = tab;
+    __weak ANNComponentViewController *weakScreen = screen;
+    __weak UINavigationController *weakStack = stack;
+    __weak UIViewController *weakTop = top;
+    BOOL inStack = stack != nil;
+    __block ANNScreenPlace *last = nil;
+    screen.placeWhileParked = ^ANNScreenPlace * {
+      ANNComponentViewController *placed = weakScreen;
+      UINavigationController *placedStack = weakStack;
+      UIViewController *entry = weakTop;
+      if (inStack && (!placedStack || !entry || placedStack.topViewController != entry)) {
+          return nil;
+      }
+      UIView *host = [weakSelf placeHostForTab:weakTab];
+      if (!placed || !host) {
+          return last;
+      }
+      ANNScreenPlace *measured =
+          inStack ? [ANNScreenPlace placeOfEntry:entry
+                                         inStack:placedStack
+                                      measuredIn:host
+                                         options:[ANNStackOptionsScreen(entry)
+                                                     resolveOptionsWithDefault]]
+                  : [ANNScreenPlace placeOfScreen:placed measuredIn:host];
+      if (measured) {
+          last = measured;
+      }
+      return last;
+    };
+    screen.placeKeptUntilAppearance = kept;
+    [screen updateRootLayout];
+}
+
+// Where the screens of a tab rendered unseen measure their place: the view of what the tabs show now (UIKit's More
+// navigation too). Nil once the tab itself shows.
+- (nullable UIView *)placeHostForTab:(UIViewController *)tab {
+    UIViewController *shown = self.selectedViewController;
+    UIView *host = shown.viewIfLoaded;
+    UIView *tabView = tab.viewIfLoaded;
+    if (!tab || !host.window || shown == tab || [self selectedTabNode] == tab ||
+        (tabView && [host isDescendantOfView:tabView])) {
+        return nil;
+    }
+    return host;
+}
+
+// The parked tab leaves the parking once every screen it waits for rendered its content, or at the limit.
+- (void)unparkTab:(UIViewController *)tab
+    whenScreensRender:(NSArray<ANNComponentViewController *> *)screens {
+    __weak ANNBottomTabsController *weakSelf = self;
+    __weak UIViewController *weakTab = tab;
+    NSHashTable<ANNComponentViewController *> *waited = [NSHashTable weakObjectsHashTable];
+    for (ANNComponentViewController *screen in screens) {
+        [waited addObject:screen];
+    }
+    for (ANNComponentViewController *screen in screens) {
+        [screen
+            setReadyHandler:^{
+              for (ANNComponentViewController *other in waited.allObjects) {
+                  if (other.reactView && !other.reactView.isReady) {
+                      return;
+                  }
+              }
+              [weakSelf unparkTab:weakTab showing:NO];
+            }
+                     forKey:ANNTabsUnseenKey];
+    }
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(ANNUnseenRenderLimit * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+                     [weakSelf unparkTab:weakTab showing:NO];
+                   });
+}
+
+// The tab rendered, is about to show, or the tabs go: it leaves the parking, and UIKit places its view as it shows it.
+// `showing`: it shows in this turn, so UIKit's departure of a tab without a parent (More's, with the tab API) ends
+// here.
+- (void)unparkTab:(UIViewController *)tab showing:(BOOL)showing {
+    if (!tab) {
+        return;
+    }
+    [_tabsToPark removeObject:tab];
+    if (![_unseenParking isParked:tab]) {
+        return;
+    }
+    tab.viewIfLoaded.hidden = NO;
+    [_unseenParking unpark:tab endingDeparture:showing && !tab.parentViewController];
+}
+
++ (BOOL)isInUnseenTab:(UIViewController *)node {
+    UIViewController *child = node;
+    for (UIViewController *parent = node.layoutParent; parent;
+         child = parent, parent = parent.layoutParent) {
+        if ([parent isKindOfClass:ANNBottomTabsController.class] &&
+            [((ANNBottomTabsController *)parent)->_unseenParking isParked:child]) {
+            return YES;
+        }
+    }
+    return NO;
 }
 
 // `afterInitialTab`: the selected tab's shown screens ready (by their content), then the others one by one.
@@ -679,7 +901,7 @@ static void ANNStacksOfNode(UIViewController *node, NSMutableArray<ANNStackContr
     if (next == NSNotFound) {
         return;
     }
-    [self renderTabAtIndex:next];
+    [self renderTabAtIndex:next unseen:YES];
     __block BOOL stepped = NO;
     __weak ANNBottomTabsController *weakSelf = self;
     dispatch_block_t step = ^{
@@ -709,8 +931,17 @@ static void ANNStacksOfNode(UIViewController *node, NSMutableArray<ANNStackContr
     if (index >= _tabs.count) {
         return;
     }
-    [self renderTabAtIndex:index];
+    [self renderTabAtIndex:index unseen:NO];
     UIViewController *tab = _tabs[index];
+    // Its screens rendered unseen measure their place once more while the tab that shows now is still the host: the
+    // device may have turned since, or the shown tab laid out again.
+    for (UIViewController *node in [tab waitedComponentViewControllers]) {
+        if ([node isKindOfClass:ANNComponentViewController.class] &&
+            ((ANNComponentViewController *)node).placeKeptUntilAppearance) {
+            [(ANNComponentViewController *)node updateRootLayout];
+        }
+    }
+    [self unparkTab:tab showing:YES];
     if ([_staleTabs containsObject:tab]) {
         [_staleTabs removeObject:tab];
         [ANNBottomTabsPresenter repaintNode:tab];

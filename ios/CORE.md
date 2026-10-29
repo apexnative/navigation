@@ -128,8 +128,8 @@ Each of these owns one rule. Call it; do not copy it.
 - `ANNNavigationState`: The visible screen and the nearest tabs it is in (the last tabs met walking down); coalesced updates, holds, the state now. Called by: The dispatcher, `ANNCommandAnswer`, `ANNRootCoordinator`, `ANNModalCoordinator`, `ANNBottomTabsController`.
 - `ANNScreenReadiness`: The signals of a screen's safe area view (has one, laid out, content rendered), sticky, by screen id. Called by: `ANNSafeAreaViewComponentView`, `ANNReactView`.
 - `ANNRenderWait`: The one wait for the render of what a command shows: content, bar components, limits, the unknown-content rule. Called by: Root, stack queue, modals, overlays, `showInColumn`.
-- `ANNParking`: Where a view waits for its content unseen: the window, a stack's view, a preview's host view. Called by: Root, stack, modals, overlays, `ANNPreviewPush`.
-- `ANNScreenPlace`: The safe area a parked screen lays out with, measured where it will show on top of a stack. Called by: `ANNStackController` (`stackPark:`), `ANNSplitViewCommands` (`showInColumn`), through `placeWhileParked` of the screen.
+- `ANNParking`: Where a view waits for its content unseen: the window, a stack's view, a preview's host view, the tabs' view. Called by: Root, stack, modals, overlays, `ANNPreviewPush`, tabs (a tab rendered before it shows).
+- `ANNScreenPlace`: The safe area a parked screen lays out with, measured where it will show on top of a stack. Called by: `ANNStackController` (`stackPark:`), `ANNSplitViewCommands` (`showInColumn`), the tabs (a tab rendered before it shows, measured in the shown tab's view), through `placeWhileParked` of the screen.
 - `ANNPendingLayers`: Layers that wait to show (a pending root, a modal, an overlay); a node inside counts as off screen. Called by: The layer's owner; nodes ask.
 - `ANNShownScreens`: "What a node shows changed": tells the pending layer, the modal hold and the system UI, in that order. Called by: Every container that changes what it shows.
 - `ANNModalCoordinator`, `ANNModal`: One record per modal, its states and waiting commands. Called by: Commands, root, state, repaint, reload.

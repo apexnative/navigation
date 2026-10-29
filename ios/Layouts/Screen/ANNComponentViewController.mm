@@ -161,6 +161,7 @@
     // A parked screen whose place gave it no safe area at all lays out with its view's own from now on.
     if (self.placeWhileParked && ![ANNParking isUnseen:self]) {
         self.placeWhileParked = nil;
+        self.placeKeptUntilAppearance = NO;
         [self updateRootLayout];
     }
     // Once JavaScript heard the appearance (a driven one ends later, with its command).
@@ -372,7 +373,8 @@
     if (!place) {
         return nil;
     }
-    if (![ANNParking isUnseen:self] && self.parentViewController &&
+    if (!self.placeKeptUntilAppearance && ![ANNParking isUnseen:self] &&
+        self.parentViewController &&
         !UIEdgeInsetsEqualToEdgeInsets(self.view.safeAreaInsets, UIEdgeInsetsZero)) {
         self.placeWhileParked = nil;
         return nil;
