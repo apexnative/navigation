@@ -104,11 +104,13 @@ function screen(component: LayoutComponent, inPair = false, keyed = !inPair): La
   if (nativeName) {
     // A native screen: its props go to the native side as data, its own options over those of the show.
     const options = takeButtonHandlers(id, component.options ?? {});
-    noteOwnOptions(
-      id,
-      name,
-      mergeOptions(screenOptions(name, props ?? {}), component.options ?? {})
-    );
+    if (__DEV__) {
+      noteOwnOptions(
+        id,
+        name,
+        mergeOptions(screenOptions(name, props ?? {}), component.options ?? {})
+      );
+    }
     const node = external({
       id,
       name: nativeName,
