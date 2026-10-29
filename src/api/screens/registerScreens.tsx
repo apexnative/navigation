@@ -125,6 +125,8 @@ function applyEdit(next: object) {
     if (current === undefined || familyOf(current) !== family) continue;
     const native = isNativeScreen(current);
     const before = native ? newestType(current) : definitionOf(current);
+    // The screen as it was registered: its own module running, nothing edited yet.
+    if (before === edited) continue;
     // What a native screen is made of goes to the native side when it is registered and shown: a change of it starts
     // the app again.
     if (native && isNativeScreen(edited) && madeOtherwise(newestType(current), edited)) {

@@ -50,15 +50,18 @@ function isWholeValue(path: string[]): boolean {
 /**
  * Whether two values are the same: plain objects key by key, arrays item by item, anything else, functions too, by
  * identity. A module that ran again makes its functions anew, so they count as changed: Hermes keeps no source to tell
- * an edited one, and sending a button's handler again costs little.
+ * an edited one, and sending a button's handler again costs little. With `functionsAlike` any two functions are alike.
  */
-export function sameValue(a: unknown, b: unknown): boolean {
+export function sameValue(a: unknown, b: unknown, functionsAlike = false): boolean {
+  if (functionsAlike && typeof a === 'function' && typeof b === 'function') return true;
   if (Array.isArray(a) && Array.isArray(b)) {
-    return a.length === b.length && a.every((item, index) => sameValue(item, b[index]));
+    return (
+      a.length === b.length && a.every((item, index) => sameValue(item, b[index], functionsAlike))
+    );
   }
   if (isPlainObject(a) && isPlainObject(b)) {
     const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
-    return [...keys].every((key) => sameValue(a[key], b[key]));
+    return [...keys].every((key) => sameValue(a[key], b[key], functionsAlike));
   }
   return Object.is(a, b);
 }
@@ -75,7 +78,10 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  * own options now.
  */
 export function changeOverOwn(change: OptionsChange, before: Options, own: Options): OptionsChange {
-  const fromDefinition = (path: string[]) => sameValue(valueAt(own, path), valueAt(before, path));
+  // The functions of the definition are made anew each time it is read (a chain's button handlers): any function
+  // there stands for the definition's.
+  const fromDefinition = (path: string[]) =>
+    sameValue(valueAt(own, path), valueAt(before, path), true);
   const removed = change.removed.filter(fromDefinition);
   const merge =
     change.merge && (keptWhere(change.merge, [], fromDefinition) as Options | undefined);

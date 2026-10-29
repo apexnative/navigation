@@ -1,6 +1,8 @@
 import React, { createElement } from 'react';
 import { mergeOptions } from '../../engine/commands';
 import { commands as native } from '../../engine/native';
+import { toNativeLayout } from '../../engine/layout';
+import { notePlaces } from '../../engine/places';
 import { noteOwnOptions } from '../../engine/rememberedOptions';
 import { setProps } from '../../engine/props';
 import {
@@ -306,7 +308,8 @@ describe('an edit of the options of a screen that shows', () => {
     const before = defineScreen({ component: Tab, options: (s) => s.title('Tab') });
     register(before);
     registerScreens([{ source: 'screens', screens: { Tab: before } }]);
-    noteOwnOptions('Component31', 'Tab', { topBar: { title: { text: 'Tab' } } });
+    // Shown by a command: its layout noted its own options and its place.
+    notePlaces(toNativeLayout({ component: { id: 'Component31', name: 'Tab' } }), 'root');
     const after = defineScreen({
       component: function TabEdited() {
         return null;
@@ -316,5 +319,30 @@ describe('an edit of the options of a screen that shows', () => {
     register(after, before);
     await Promise.resolve();
     expect(sent.mock.calls).toEqual([['Component31', { topBar: { title: { text: 'Inbox' } } }]]);
+  });
+
+  it('reaches the buttons of options written as a chain, whose handlers are made anew', async () => {
+    function Feed() {
+      return null;
+    }
+    const before = defineScreen({
+      component: Feed,
+      options: (s) => s.rightButtons({ id: 'add', text: 'Add', onPress: () => {} }),
+    });
+    register(before);
+    registerScreens([{ source: 'screens', screens: { Feed: before } }]);
+    notePlaces(toNativeLayout({ component: { id: 'Component41', name: 'Feed' } }), 'root');
+    sent.mockClear();
+    const after = defineScreen({
+      component: function FeedEdited() {
+        return null;
+      },
+      options: (s) => s.rightButtons({ id: 'add', text: 'New post', onPress: () => {} }),
+    });
+    register(after, before);
+    await Promise.resolve();
+    const [[id, options]] = sent.mock.calls;
+    expect(id).toBe('Component41');
+    expect(options.topBar.rightButtons[0].text).toBe('New post');
   });
 });
