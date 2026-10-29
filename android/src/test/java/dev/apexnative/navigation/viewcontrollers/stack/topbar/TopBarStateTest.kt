@@ -90,6 +90,32 @@ class TopBarStateTest {
         assertTrue(visibility.isHidden)
     }
 
+    // The presenter holds the new screen's options back while the bar is on its way out, and gives them once it is gone.
+    @Test
+    fun aHideTellsWhileItMovesAndWhenTheBarIsGone() {
+        val bar = FakeBar()
+        var hidden = 0
+        val visibility = TopBarVisibility(bar) { hidden++ }
+        visibility.hide(animated = true)
+        assertTrue(visibility.isHiding)
+        assertEquals(0, hidden)
+        bar.end?.invoke()
+        assertFalse(visibility.isHiding)
+        assertEquals(1, hidden)
+        // A show cancels a hide: its end tells nothing.
+        visibility.show(animated = false)
+        visibility.hide(animated = true)
+        val hideEnd = bar.end
+        visibility.show(animated = true)
+        hideEnd?.invoke()
+        assertFalse(visibility.isHiding)
+        assertEquals(1, hidden)
+        // At once: gone and told at once.
+        visibility.hide(animated = false)
+        assertFalse(visibility.isHiding)
+        assertEquals(2, hidden)
+    }
+
     // In a transition the side of the options plays: its `exit` hides, its `enter` shows; `enabled: false` at once; a
     // side that doesn't play leaves the slide.
     @Test

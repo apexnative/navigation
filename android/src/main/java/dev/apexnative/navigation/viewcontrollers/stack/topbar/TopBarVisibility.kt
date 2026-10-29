@@ -10,9 +10,10 @@ import dev.apexnative.navigation.views.animations.AnimationRules
  * stack its side (`animations.*.topBar`) plays instead — its `exit` hides, its `enter` shows; `enabled: false` shows or
  * hides at once. A show cancels a running hide and a hide a running show, each with its own token, so `visible: false`
  * then `true` leaves the bar shown; a motion cancelled leaves the bar at rest; a bar shown again stands in its place
- * with its row seen (the hide on scroll's shift and fade reset). Main thread only.
+ * with its row seen (the hide on scroll's shift and fade reset). [onHidden] runs once a hide has made the bar `GONE`.
+ * Main thread only.
  */
-internal class TopBarVisibility(private val target: Target) {
+internal class TopBarVisibility(private val target: Target, private val onHidden: () -> Unit = {}) {
     /** What moves: the bar's view, or the unit tests' fake. */
     interface Target {
         /** How far up the bar goes to hide: its height and the room over it, in pixels. */
@@ -44,6 +45,10 @@ internal class TopBarVisibility(private val target: Target) {
     /** The bar is hidden, or hides. */
     val isHidden: Boolean
         get() = hidden
+
+    /** The bar is on its way out: a hide moves it and it still shows. */
+    val isHiding: Boolean
+        get() = hidden && sliding != null
 
     /** Shows the bar: by [side] when it plays, sliding down when [animated], else at once. */
     fun show(animated: Boolean, side: TopBarAnimationOptions? = null) {
@@ -84,6 +89,7 @@ internal class TopBarVisibility(private val target: Target) {
         if (!moves || target.isGone) {
             target.translationY = 0f
             target.isGone = true
+            onHidden()
             return
         }
         val token = Any()
@@ -93,6 +99,7 @@ internal class TopBarVisibility(private val target: Target) {
                 settle()
                 target.isGone = true
                 target.translationY = 0f
+                onHidden()
             }
         }
         val own = side?.takeIf { AnimationRules.sidePlays(it) }

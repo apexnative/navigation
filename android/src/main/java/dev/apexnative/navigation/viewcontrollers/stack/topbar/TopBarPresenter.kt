@@ -129,6 +129,8 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
     // The bar goes with the screens of a transition of the stack's own, and the screen that leaves with its picture.
     private var travelling = false
     private var travelLeaving: ViewController<*>? = null
+    // The bar hides as it shows now, and the options of the screen it hides for wait until it is gone.
+    private var waitsForHide = false
 
     private enum class Part { Look, Title, Left, Right, Back, LargeTitle, Visible, TestId }
 
@@ -141,7 +143,7 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
         this.bar = bar
         leftButtons = ButtonBar(bar.leftButtonBar, ::loadIcon, Buttons())
         rightButtons = ButtonBar(bar.rightButtonBar, ::loadIcon, Buttons())
-        visibility = TopBarVisibility(VisibilityTarget(bar) { collapse?.reset() })
+        visibility = TopBarVisibility(VisibilityTarget(bar) { collapse?.reset() }, ::hidden)
         rowTransition = BarRowTransition(RowTarget(bar).also { rowTarget = it })
         collapse = TopBarCollapseBehavior(bar)
         bar.leftButtonBar.setNavigationOnClickListener { host.backPressed() }
@@ -182,12 +184,22 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
         val bar = bar
         val leaving = shownEntry
         val lowers = bar != null && bar.isLargeTitleShown && incoming != null && leaving != null &&
+            !hidesMoving(host.resolvedOf(incoming), visibility, travel != null) &&
             lowersBar(motion, incoming, host.resolvedOf(incoming))
         rowTarget?.withLargeTitle = !lowers
         if (lowers) pictureUnderRow(bar, leaving)
         rowTransition?.begin(motion)
         endTravel()
         if (travel != null && bar != null && incoming != null) beginTravel(bar, leaving, incoming, travel, visibility)
+    }
+
+    // Whether a screen with [options] hides the bar, shown now, by a move of [change]: a slide, or the transition's
+    // side. The bar then leaves as it shows, its large title too (`applyAll`); while it goes with the screens of a
+    // transition of the stack's own ([travels]) only a side of its own moves it.
+    private fun hidesMoving(options: Options, change: StackDisplay.BarVisibility, travels: Boolean): Boolean {
+        val exit = change.side?.exit
+        return options.topBar.visible.isFalse && !options.topBar.animate.isFalse && change.animated &&
+            !AnimationRules.isTurnedOff(exit) && (!travels || AnimationRules.barSideGiven(exit))
     }
 
     /** The transition that brought the current child ended: the row at rest, the picture under it gone. */
@@ -306,6 +318,7 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
      * of the bar (the search) applies again.
      */
     fun onInsets() {
+        if (waitsForHide) return
         val bar = bar ?: return
         val entry = shownEntry ?: return
         val screen = shownScreen ?: return
@@ -380,6 +393,12 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
 
     /** [screen] is destroyed: its components and its search go. */
     fun screenDestroyed(screen: ViewController<*>, entryView: View?) {
+        // The bar may still show the components of the screen that goes: it is gone at once, with the options it held
+        // back, before they go; none when they are of the screen that goes.
+        if (waitsForHide) {
+            if (screen === shownScreen) waitsForHide = false
+            visibility?.hide(animated = false)
+        }
         if (screen === shownScreen) {
             shownScreen = null
             shownEntry = null
@@ -466,6 +485,26 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
         merge: Boolean,
         delta: Options? = null,
     ) {
+        // A screen that hides the bar: the bar leaves as it shows, its look, title and buttons those of the screen
+        // before, and takes this screen's options once it is gone. Taken first, they would paint the leaving bar (the
+        // default color over a bar that was transparent).
+        val waited = waitsForHide
+        waitsForHide = false
+        if (options.topBar.visible.isFalse && (!merge || waited)) {
+            applyVisibility(options, merge)
+            waitsForHide = visibility?.isHiding == true
+            if (waitsForHide) {
+                // The list of the screen before no longer moves the bar: a move of it would stop the hide.
+                collapse?.disableCollapse(reset = false)
+                return
+            }
+        }
+        // Shown again by a merge before it was gone: none of this screen's options are on the bar yet. It shows as a
+        // merge shows it, by `animate`, not by the transition's side.
+        if (merge && waited) {
+            visibilityChange = StackDisplay.BarVisibility(true, null)
+            return applyAll(bar, entry, screen, options, merge = false)
+        }
         applyLook(bar, entry, options)
         applyTitle(bar, screen, options)
         // The search first: its magnifier takes a place among the right buttons. It gets a copy of the group: it
@@ -792,6 +831,16 @@ internal class TopBarPresenter(private val activity: Activity, private val host:
         largeTitleOpening = null
         opening.removeAllUpdateListeners()
         opening.cancel()
+    }
+
+    // A hide that held the options back ended: the bar, gone now, takes them.
+    private fun hidden() {
+        if (!waitsForHide) return
+        waitsForHide = false
+        val bar = bar ?: return
+        val entry = shownEntry ?: return
+        val screen = shownScreen ?: return
+        applyAll(bar, entry, screen, host.resolvedOf(entry), merge = false)
     }
 
     // Shown or hidden: with the transition by its side, or by `animate` in a merge.
