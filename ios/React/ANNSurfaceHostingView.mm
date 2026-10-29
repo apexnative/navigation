@@ -11,6 +11,9 @@ static const void *ANNSurfaceStopperKey = &ANNSurfaceStopperKey;
 // The hosting views whose surface stops at its start; each keeps its surface. Main queue.
 static NSMutableSet<ANNSurfaceHostingView *> *ANNHostingViewsStoppingAtStart;
 
+// The size transitions of the window that run now. Main queue.
+static NSInteger ANNSizeTransitionCount;
+
 // The delegate of a surface its hosting view let go at the limit: the surface keeps it, and it keeps nothing, so
 // neither holds the other alive. A surface that something else still starts (a start already on its way holds its
 // surface; React Native restarts every surface it knows after a reload, holding it) stops at once, instead of running
@@ -60,6 +63,28 @@ static NSMutableSet<ANNSurfaceHostingView *> *ANNHostingViewsStoppingAtStart;
 
 #pragma mark - The surface's size
 
+// UIKit lays the screens out inside the animation of a rotation or a new window size, and React Native commits and
+// mounts the new layout synchronously inside the layout that gives it the size: every frame of its views animated
+// from the old size to the new one, and what a view draws itself (an SVG, a glass view, text) was drawn once at the new
+// size and stretched along that animation. During such a transition the content takes its new layout at once; the
+// hosting view itself still follows the animation. Other animated size changes (a sheet's detent, a split view's
+// column) keep the content's frames animated, so content pinned to the moving edge rides along with it.
++ (void)followSizeTransition:(id<UIViewControllerTransitionCoordinator>)coordinator {
+    ANNSizeTransitionCount++;
+    [coordinator animateAlongsideTransition:nil
+                                 completion:^(id<UIViewControllerTransitionCoordinatorContext> context) {
+                                   ANNSizeTransitionCount--;
+                                 }];
+}
+
++ (void)layOutContent:(void (^)(void))layout {
+    if (ANNSizeTransitionCount > 0) {
+        [UIView performWithoutAnimation:layout];
+    } else {
+        layout();
+    }
+}
+
 // React Native gives the surface its size here. A size change is noted for the next mount (see below). The note is
 // put aside during the call: the change's own commit mounts inside it and must not take an earlier note, or a size
 // that changes every frame (a sheet dragged between detents, a window resized) would lay out three times a frame. A
@@ -70,7 +95,9 @@ static NSMutableSet<ANNSurfaceHostingView *> *ANNHostingViewsStoppingAtStart;
     CGSize maximumSize = surface.maximumSize;
     BOOL sizeChangedBefore = _surfaceSizeChanged;
     _surfaceSizeChanged = NO;
-    [super layoutSubviews];
+    [ANNSurfaceHostingView layOutContent:^{
+      [super layoutSubviews];
+    }];
     BOOL sizeChanged = surface && (!CGSizeEqualToSize(minimumSize, surface.minimumSize) ||
                                    !CGSizeEqualToSize(maximumSize, surface.maximumSize));
     _surfaceSizeChanged = sizeChanged || sizeChangedBefore;

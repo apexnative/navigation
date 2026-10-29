@@ -8,6 +8,14 @@ NS_ASSUME_NONNULL_BEGIN
 /// every change on.
 @interface ANNSurfaceHostingView : RCTSurfaceHostingView
 
+/// A size transition of the window (a rotation, a new window size) runs until its coordinator completes. Meanwhile React
+/// content takes its new size without animation (`layOutContent:`). Each call ends with its own transition; main queue.
++ (void)followSizeTransition:(id<UIViewControllerTransitionCoordinator>)coordinator;
+
+/// Runs a layout that gives React content a new size: without animation while a size transition runs, as it is
+/// otherwise. Main queue.
++ (void)layOutContent:(void (^)(void))layout;
+
 /// Called at each mount of the hosted surface: after a change of the surface's size, the first one lays the surface
 /// out again, so a render that was on its way during the change doesn't keep the old size's layout.
 - (void)surfaceDidMount;
