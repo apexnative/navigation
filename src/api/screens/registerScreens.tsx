@@ -24,7 +24,12 @@ import {
 import { screenUnmounted } from '../events/screenLifecycle';
 import { mergeOptions } from '../../engine/mergeOptions';
 import { preparedPadding } from '../../engine/slots';
-import { buildScreenOptions, type ScreenDefinition, type ScreenOptionsInput } from './defineScreen';
+import {
+  buildScreenOptions,
+  definitionOf,
+  type ScreenDefinition,
+  type ScreenOptionsInput,
+} from './defineScreen';
 import { isNativeScreen, type NativeScreen } from './nativeScreens';
 import {
   type Arrangement,
@@ -164,17 +169,21 @@ function registerScreen(
     });
     return;
   }
-  const definition = toDefinition(entry);
+  // Read on every show: after Fast Refresh a screen of defineScreen gives its new options, key and pair.
+  const definition = () => toDefinition(entry);
   registerEngineScreen(name, {
-    component: () => wrapScreen(name, definition.component, wrapper),
+    component: () => wrapScreen(name, definition().component, wrapper),
     options: (props) =>
       mergeOptions(
         buildScreenOptions(groupOptions, props),
-        buildScreenOptions(definition.options, props)
+        buildScreenOptions(definition().options, props)
       ),
-    key: definition.key && ((props) => definition.key!(props)),
+    key: (props) => definition().key?.(props),
     ownRoot,
-    arrangement: pairOf(name, definition.arrangement),
+    arrangement: () => {
+      const arrangement = definition().arrangement;
+      return arrangement && toEngineArrangement(name, arrangement);
+    },
   });
 }
 
@@ -189,7 +198,9 @@ function pairOf(
 }
 
 function toDefinition(value: ScreenComponent | ScreenDefinition): ScreenDefinition {
-  return isObject(value) && 'component' in value ? value : { component: value };
+  const defined = definitionOf(value);
+  if (defined) return defined;
+  return isObject(value) && 'component' in value ? value : { component: value as ScreenComponent };
 }
 
 /**
@@ -198,15 +209,17 @@ function toDefinition(value: ScreenComponent | ScreenDefinition): ScreenDefiniti
  * screen) waits for it in Suspense.
  */
 function lazyScreen(loadModule: () => ScreenModule | PromiseLike<ScreenModule>) {
-  let definition: ScreenDefinition | undefined;
+  // The screen the module gives; its definition is read from it each time, the newest after Fast Refresh.
+  let loaded: ScreenComponent | ScreenDefinition | undefined;
   let loading: Promise<void> | undefined;
+  const definition = () => (loaded ? toDefinition(loaded) : undefined);
   const load = (): Promise<void> | undefined => {
-    if (definition) return undefined;
+    if (loaded) return undefined;
     if (!loading) {
       loading = Promise.resolve()
         .then(loadModule)
         .then((module) => {
-          definition = toDefinition(unwrapModule(module));
+          loaded = unwrapModule(module);
         });
       loading.catch(() => {
         loading = undefined;
@@ -216,14 +229,14 @@ function lazyScreen(loadModule: () => ScreenModule | PromiseLike<ScreenModule>) 
   };
   const Loaded = lazy(async () => {
     await load();
-    return { default: definition!.component };
+    return { default: definition()!.component };
   });
   function LazyScreen(props: object) {
     // The same component for the life of the view, so that the load doesn't mount it again.
-    const [Screen] = useState(() => definition?.component ?? Loaded);
+    const [Screen] = useState(() => definition()?.component ?? Loaded);
     return <Screen {...props} />;
   }
-  return { load, definition: () => definition, component: LazyScreen };
+  return { load, definition, component: LazyScreen };
 }
 
 function unwrapModule(loaded: ScreenModule): ScreenComponent | ScreenDefinition {
