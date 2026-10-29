@@ -1,20 +1,38 @@
 import React, { createElement } from 'react';
-import { arrangementOf, loadScreens, screenKey, screenOptions } from '../../engine/screens';
+import { commands as native } from '../../engine/native';
+import { setProps } from '../../engine/props';
+import {
+  arrangementOf,
+  loadScreens,
+  noteShown,
+  screenKey,
+  screenOptions,
+} from '../../engine/screens';
 import { defineScreen, definitionOf } from './defineScreen';
 import { registerScreens } from './registerScreens';
 
 jest.mock('../../engine/native', () => ({
-  commands: {},
+  commands: { mergeOptions: jest.fn() },
   getStartInfo: () => ({ coldStart: true, arrangements: false }),
   onNativeEvent: () => () => {},
 }));
 
-// React Refresh as React Native gives it in development: the newest version of each family by an older one.
-const newest = new Map<unknown, unknown>();
+// React Refresh as React Native gives it in development. Metro registers what a module exports in a family; when the
+// module runs again, the new version joins the family of the old one, and the refresh after it makes it the current.
+const families = new Map<unknown, { current: unknown }>();
+function register(type: unknown, older?: unknown) {
+  const family = (older !== undefined && families.get(older)) || { current: type };
+  families.set(type, family);
+}
+function refresh(older: unknown, newer: unknown) {
+  if (!families.has(older)) register(older);
+  register(newer, older);
+  families.get(older)!.current = newer;
+}
 beforeEach(() => {
-  newest.clear();
+  families.clear();
   (globalThis as Record<string, unknown>).__ReactRefresh = {
-    getFamilyByType: (type: unknown) => ({ current: newest.get(type) ?? type }),
+    getFamilyByType: (type: unknown) => families.get(type),
   };
 });
 afterEach(() => {
@@ -78,7 +96,7 @@ describe('a screen of defineScreen', () => {
       key: (props: { id: string }) => `room-${props.id}`,
       arrangement: { secondary: 'Details' },
     });
-    newest.set(before, after);
+    refresh(before, after);
     expect(screenOptions('Chat', { id: '1' })).toEqual({ topBar: { title: { text: 'After' } } });
     expect(screenKey('Chat', { id: '1' })).toBe('Chat:room-1');
     expect(arrangementOf('Chat')).toMatchObject({ primary: 'Chat', secondary: 'Details' });
@@ -111,7 +129,7 @@ describe('a screen of defineScreen', () => {
     const LaterEdited = function LaterEdited() {
       return null;
     };
-    newest.set(
+    refresh(
       loaded,
       defineScreen({ component: LaterEdited, options: { topBar: { title: { text: 'Edited' } } } })
     );
@@ -123,5 +141,77 @@ describe('a screen of defineScreen', () => {
       return null;
     }
     expect(createElement(defineScreen({ component: Home }), { name: 'Ann' }).type).toBe(Home);
+  });
+});
+
+describe('an edit of the options of a screen that shows', () => {
+  const sent = native.mergeOptions as jest.Mock;
+
+  it('sends what it changed to every screen of it that shows, with the props of each', async () => {
+    function Chat() {
+      return null;
+    }
+    const before = defineScreen({
+      component: Chat,
+      options: (s, props: { name: string }) => s.title(props.name).subtitle('Online'),
+    });
+    register(before);
+    registerScreens([{ source: 'screens', screens: { Chat: before } }]);
+    setProps('Component7', { name: 'Ann' });
+    setProps('Component9', { name: 'Bob' });
+    const hide7 = noteShown('Component7', 'Chat');
+    noteShown('Component9', 'Chat');
+
+    // The module ran again: Metro registers the new version, then React Refresh makes it the current.
+    const ChatEdited = function ChatEdited() {
+      return null;
+    };
+    const after = defineScreen({
+      component: ChatEdited,
+      options: (s, props: { name: string }) => s.title(`${props.name}!`).subtitle('Online'),
+    });
+    register(after, before);
+    await Promise.resolve();
+    refresh(before, after);
+
+    expect(sent.mock.calls).toEqual([
+      ['Component7', { topBar: { title: { text: 'Ann!' } } }],
+      ['Component9', { topBar: { title: { text: 'Bob!' } } }],
+    ]);
+
+    // A screen that went is left alone, and the same options again send nothing.
+    hide7();
+    sent.mockClear();
+    const again = defineScreen({
+      component: function ChatAgain() {
+        return null;
+      },
+      options: (s, props: { name: string }) => s.title(`${props.name}!`).subtitle('Online'),
+    });
+    register(again, after);
+    await Promise.resolve();
+    expect(sent).not.toHaveBeenCalled();
+  });
+
+  it('sends nothing for a screen of another module', async () => {
+    function Home() {
+      return null;
+    }
+    const home = defineScreen({
+      component: Home,
+      options: { topBar: { title: { text: 'Home' } } },
+    });
+    register(home);
+    registerScreens([{ source: 'screens', screens: { Home: home } }]);
+    noteShown('Component3', 'Home');
+    const other = defineScreen({
+      component: function Other() {
+        return null;
+      },
+      options: { topBar: { title: { text: 'Other' } } },
+    });
+    register(other);
+    await Promise.resolve();
+    expect(sent).not.toHaveBeenCalled();
   });
 });

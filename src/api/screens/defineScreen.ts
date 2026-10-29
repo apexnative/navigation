@@ -1,6 +1,6 @@
 import { type ComponentType, createElement } from 'react';
 import type { Options } from '../../interfaces/Options';
-import { newestType } from '../../engine/refresh';
+import { newestType, redefined } from '../../engine/refresh';
 import { getAppContext } from '../context/appContext';
 import { readScreenOptions, ScreenOptions } from '../options/ScreenOptions';
 import { getTheme, type NavigationTheme } from '../theme/theme';
@@ -60,6 +60,7 @@ export function defineScreen<Props>(definition: ScreenDefinition<Props>): Define
   // in a second definition gets a component of its own, as one component can't carry two.
   const screen: object = SCREEN_DEFINITION in component ? definedAgain(definition) : component;
   Object.defineProperty(screen, SCREEN_DEFINITION, { value: definition, configurable: true });
+  redefined(screen);
   return screen as DefinedScreen<Props>;
 }
 
@@ -77,10 +78,20 @@ function definedAgain<Props>({ component }: ScreenDefinition<Props>): ComponentT
  * undefined for anything else.
  */
 export function definitionOf(value: unknown): ScreenDefinition | undefined {
-  if ((typeof value !== 'function' && typeof value !== 'object') || value === null)
-    return undefined;
-  if (!(SCREEN_DEFINITION in value)) return undefined;
-  return (newestType(value) as { [SCREEN_DEFINITION]: ScreenDefinition })[SCREEN_DEFINITION];
+  return isDefinedScreen(value) ? ownDefinitionOf(newestType(value)) : undefined;
+}
+
+/** The definition a screen of `defineScreen` carries itself, not a newer one; undefined for anything else. */
+export function ownDefinitionOf(value: unknown): ScreenDefinition | undefined {
+  return isDefinedScreen(value) ? value[SCREEN_DEFINITION] : undefined;
+}
+
+function isDefinedScreen(value: unknown): value is DefinedScreen<any> {
+  return (
+    (typeof value === 'function' || typeof value === 'object') &&
+    value !== null &&
+    SCREEN_DEFINITION in value
+  );
 }
 
 export function buildScreenOptions<Props>(

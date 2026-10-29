@@ -20,13 +20,19 @@ import {
   onScreenUnmounted,
   registerScreen as registerEngineScreen,
   type ScreenRootProps,
+  shownScreens,
 } from '../../engine/screens';
 import { screenUnmounted } from '../events/screenLifecycle';
 import { mergeOptions } from '../../engine/mergeOptions';
 import { preparedPadding } from '../../engine/slots';
+import { mergeOptions as sendMergeOptions } from '../../engine/commands';
+import { optionsChange } from '../../engine/optionsChange';
+import { propsOf } from '../../engine/props';
+import { familyOf, onRedefined } from '../../engine/refresh';
 import {
   buildScreenOptions,
   definitionOf,
+  ownDefinitionOf,
   type ScreenDefinition,
   type ScreenOptionsInput,
 } from './defineScreen';
@@ -103,6 +109,39 @@ export interface ScreenSet {
 // The root of a screen tells when it unmounts: what the screen left behind goes.
 onScreenUnmounted(screenUnmounted);
 
+// The screens of defineScreen by name, in development: what `screens` gives (a lazy screen's module once loaded) and
+// the options of its group.
+const editable = new Map<
+  string,
+  { screen: () => unknown; groupOptions: ScreenOptionsInput<object> | undefined }
+>();
+
+onRedefined(applyEdit);
+
+// Fast Refresh ran the module of a screen again: the screens of it that show take what the edit changed in their
+// options, as a command would have shown them. The family's newest is still the version before the edit here, as React
+// Refresh moves it on only after the update.
+function applyEdit(next: object) {
+  const family = familyOf(next);
+  const edited = ownDefinitionOf(next);
+  if (!family || !edited) return;
+  for (const [name, { screen, groupOptions }] of editable) {
+    const current = screen();
+    if (current === undefined || familyOf(current) !== family) continue;
+    const before = definitionOf(current);
+    for (const id of shownScreens(name)) {
+      const props = propsOf(id);
+      const options = (definition: ScreenDefinition | undefined) =>
+        mergeOptions(
+          buildScreenOptions(groupOptions, props),
+          buildScreenOptions(definition?.options, props)
+        );
+      const { merge } = optionsChange(options(before), options(edited));
+      if (merge) sendMergeOptions(id, merge);
+    }
+  }
+}
+
 export function registerScreens(sets: ScreenSet[], wrapper: ScreenWrapper = {}) {
   // The screens of every set are in one namespace: a command names a screen without its group.
   const sources = new Map<string, string>();
@@ -151,6 +190,7 @@ function registerScreen(
   // React.memo and forwardRef components are objects, so the kind of entry is told by its keys.
   if (isObject(entry) && 'load' in entry) {
     const screen = lazyScreen(entry.load);
+    if (__DEV__) editable.set(name, { screen: screen.loaded, groupOptions });
     registerEngineScreen(name, {
       component: () => wrapScreen(name, screen.component, wrapper),
       // A command loads the screen before it reads its options.
@@ -171,6 +211,7 @@ function registerScreen(
   }
   // Read on every show: after Fast Refresh a screen of defineScreen gives its new options, key and pair.
   const definition = () => toDefinition(entry);
+  if (__DEV__) editable.set(name, { screen: () => entry, groupOptions });
   registerEngineScreen(name, {
     component: () => wrapScreen(name, definition().component, wrapper),
     options: (props) =>
@@ -236,7 +277,7 @@ function lazyScreen(loadModule: () => ScreenModule | PromiseLike<ScreenModule>) 
     const [Screen] = useState(() => definition()?.component ?? Loaded);
     return <Screen {...props} />;
   }
-  return { load, definition, component: LazyScreen };
+  return { load, definition, loaded: () => loaded, component: LazyScreen };
 }
 
 function unwrapModule(loaded: ScreenModule): ScreenComponent | ScreenDefinition {

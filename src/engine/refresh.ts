@@ -32,3 +32,20 @@ export function familyOf(type: unknown): Family | undefined {
 export function newestType<T extends object>(type: T): T {
   return (familyOf(type)?.current as T | undefined) ?? type;
 }
+
+let redefinedListener: ((screen: object) => void) | undefined;
+
+/** Sets what runs when a module makes a screen again: Fast Refresh ran it after an edit. */
+export function onRedefined(listener: (screen: object) => void): void {
+  redefinedListener = listener;
+}
+
+/**
+ * Tells about a screen a module made, once the module ran: Metro registers its exports after it, so the family of the
+ * screen is known by then, and a new version of a screen that shows is found by it. Development only.
+ */
+export function redefined(screen: object): void {
+  if (!__DEV__ || !redefinedListener) return;
+  const listener = redefinedListener;
+  Promise.resolve().then(() => listener(screen));
+}

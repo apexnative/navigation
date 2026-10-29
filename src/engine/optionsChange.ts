@@ -1,0 +1,54 @@
+import type { Options } from '../interfaces/Options';
+
+/** What an edit of a screen's options changed: the options to merge, and the paths of the options it took out. */
+export interface OptionsChange {
+  /** The options that are new or have another value; undefined when none. */
+  merge?: Options;
+  /** The paths of the options set before and not now, such as `['topBar', 'subtitle']`. */
+  removed: string[][];
+}
+
+/**
+ * What `next` changes of `previous`, both the options of one screen. Objects compare key by key; anything else, an
+ * array such as buttons too, changes as a whole. Functions compare by their source: a module that ran again makes them
+ * all anew.
+ */
+export function optionsChange(previous: Options, next: Options): OptionsChange {
+  const removed: string[][] = [];
+  const merge = changed(previous, next, [], removed) as Options | undefined;
+  return merge ? { merge, removed } : { removed };
+}
+
+function changed(previous: unknown, next: unknown, path: string[], removed: string[][]): unknown {
+  if (!isPlainObject(previous) || !isPlainObject(next)) {
+    return sameValue(previous, next) ? undefined : next;
+  }
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(next)) {
+    if (value === undefined) continue;
+    const change = changed(previous[key], value, [...path, key], removed);
+    if (change !== undefined) result[key] = change;
+  }
+  for (const [key, value] of Object.entries(previous)) {
+    if (value !== undefined && next[key] === undefined) removed.push([...path, key]);
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function sameValue(a: unknown, b: unknown): boolean {
+  if (typeof a === 'function' && typeof b === 'function') return String(a) === String(b);
+  if (Array.isArray(a) && Array.isArray(b)) {
+    return a.length === b.length && a.every((item, index) => sameValue(item, b[index]));
+  }
+  if (isPlainObject(a) && isPlainObject(b)) {
+    const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+    return [...keys].every((key) => sameValue(a[key], b[key]));
+  }
+  return Object.is(a, b);
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}

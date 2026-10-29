@@ -68,6 +68,29 @@ let unmounted: ((screenId: string) => void) | undefined;
 // bar of every screen that shows it. The id lets its props go only with the last of them. A slot of the app's one tree
 // has no tag: while the one tree shows a screen with the id, no root of that id lets it go.
 const owners = new Map<string, Set<number>>();
+// The screens that show by their ids: the name, and how many roots or slots of the id are mounted (a component of the
+// options has a root in the bar of every screen that shows it).
+const shown = new Map<string, { name: string; mounts: number }>();
+
+/**
+ * Notes a screen as shown, a React root or slot of it or the controller of a native screen, until the function it
+ * gives is called.
+ */
+export function noteShown(componentId: string, name: string): () => void {
+  const entry = shown.get(componentId);
+  if (entry?.name === name) entry.mounts++;
+  else shown.set(componentId, { name, mounts: 1 });
+  return () => {
+    const current = shown.get(componentId);
+    if (current?.name !== name) return;
+    if (--current.mounts === 0) shown.delete(componentId);
+  };
+}
+
+/** The ids of the screens with the name that show now. */
+export function shownScreens(name: string): string[] {
+  return [...shown].filter(([, entry]) => entry.name === name).map(([id]) => id);
+}
 
 /** Whether a React root of the screen with the id is mounted now (a slot of the app's one tree doesn't count). */
 export function hasRoot(componentId: string): boolean {
@@ -235,6 +258,7 @@ export function screenRoot(name: string): ComponentType<NativeRootProps> | undef
         [componentId]
       );
       const props = useSyncExternalStore(watch, () => propsOf(componentId));
+      useEffect(() => noteShown(componentId, name), [componentId]);
       useEffect(() => {
         if (rootTag !== undefined) {
           const tags = owners.get(componentId) ?? new Set<number>();
