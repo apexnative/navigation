@@ -455,7 +455,7 @@ static void ANNStacksOfNode(UIViewController *node, NSMutableArray<ANNStackContr
 }
 
 // The selected tab's waited screens by the command's rule; with `together` the top screen of every other tab too, by
-// the first mount of its root (More's tabs too).
+// its content rendered unseen (More's tabs too).
 - (NSArray<UIViewController *> *)waitedComponentViewControllers {
     NSMutableArray<UIViewController *> *screens =
         [[[self selectedTabNode] waitedComponentViewControllers] mutableCopy]
@@ -475,7 +475,7 @@ static void ANNStacksOfNode(UIViewController *node, NSMutableArray<ANNStackContr
 
 - (ANNWaitedReadiness)waitedReadinessOfScreen:(UIViewController *)screen {
     NSUInteger index = [self indexOfTabHolding:screen];
-    return index != NSNotFound && index != _selectedTabIndex ? ANNWaitedReadinessRootMounted
+    return index != NSNotFound && index != _selectedTabIndex ? ANNWaitedReadinessUnseen
                                                              : ANNWaitedReadinessContent;
 }
 

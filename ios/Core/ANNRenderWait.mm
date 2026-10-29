@@ -47,10 +47,10 @@ static NSUInteger ANNRenderWaitCount;
     // The content nodes still waited, and every node the wait set its ready handler on.
     NSHashTable<UIViewController *> *_waited;
     NSHashTable<UIViewController *> *_listened;
-    // The waited screens of the "root mounted" kind (a subset of `_waited`), and whether their limit passed in this
-    // start (a retake waits for them no more then).
-    NSHashTable<UIViewController *> *_mountWaited;
-    BOOL _mountLimitPassed;
+    // The waited screens of the "unseen" kind (a subset of `_waited`), and whether their limit passed in this start (a
+    // retake waits for them no more then).
+    NSHashTable<UIViewController *> *_unseenWaited;
+    BOOL _unseenLimitPassed;
     ANNBarComponentsWait *_barWait;
     // What the last take of the running phase took: its screens (weakly) and, in the content phase, what the take read
     // of each to decide what it waits for (`takeStateOfScreens:`). A retake that would take the same does nothing.
@@ -75,7 +75,7 @@ static NSUInteger ANNRenderWaitCount;
             stringWithFormat:@"ApexNavigation.renderWait.%lu", (unsigned long)++ANNRenderWaitCount];
         _waited = [NSHashTable weakObjectsHashTable];
         _listened = [NSHashTable weakObjectsHashTable];
-        _mountWaited = [NSHashTable weakObjectsHashTable];
+        _unseenWaited = [NSHashTable weakObjectsHashTable];
     }
     return self;
 }
@@ -89,7 +89,7 @@ static NSUInteger ANNRenderWaitCount;
     }
     _isWaiting = YES;
     _isInBarPhase = NO;
-    _mountLimitPassed = NO;
+    _unseenLimitPassed = NO;
     _startTime = CACurrentMediaTime();
     NSUInteger number = ++_number;
     _starting = YES;
@@ -108,10 +108,10 @@ static NSUInteger ANNRenderWaitCount;
                          [weakSelf limitOfNumber:number];
                        });
     }
-    if (_mountLimit > 0) {
-        int64_t delay = (int64_t)(_mountLimit * NSEC_PER_SEC);
+    if (_unseenLimit > 0) {
+        int64_t delay = (int64_t)(_unseenLimit * NSEC_PER_SEC);
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, delay), dispatch_get_main_queue(), ^{
-          [weakSelf mountLimitOfNumber:number];
+          [weakSelf unseenLimitOfNumber:number];
         });
     }
     if (_unknownContentRule) {
@@ -162,8 +162,8 @@ static NSUInteger ANNRenderWaitCount;
         case ANNRenderWaitContentNone:
             break;
         case ANNRenderWaitContentEachScreen:
-            // Each screen by the readiness it needs: its content, or the first mount of its root (an unselected
-            // tab's screen). A screen with no content to wait for (a native screen) is ready.
+            // Each screen by its content; an unselected tab's to the unseen limit. A screen with no content to wait
+            // for (a native screen) is ready.
             for (UIViewController *node in screens) {
                 if (![node isKindOfClass:ANNComponentViewController.class]) {
                     continue;
@@ -177,25 +177,11 @@ static NSUInteger ANNRenderWaitCount;
                     [self listenTo:screen number:number];
                     continue;
                 }
-                if (_mountLimitPassed) {
+                if (_unseenLimitPassed) {
                     continue;
                 }
-                [_mountWaited addObject:screen];
-                // A slot screen's readiness is its mount: its ready handler serves.
-                if (![content respondsToSelector:@selector(whenMounted:)]) {
-                    [self listenTo:screen number:number];
-                    continue;
-                }
-                if (content.hasMounted) {
-                    [_mountWaited removeObject:screen];
-                    continue;
-                }
-                [_waited addObject:screen];
-                __weak ANNRenderWait *weakSelf = self;
-                __weak UIViewController *weakScreen = screen;
-                [content whenMounted:^{
-                  [weakSelf node:weakScreen readyOfNumber:number];
-                }];
+                [_unseenWaited addObject:screen];
+                [self listenTo:screen number:number];
             }
             break;
         case ANNRenderWaitContentNode:
@@ -271,19 +257,19 @@ static NSUInteger ANNRenderWaitCount;
     [self phaseOfNumber:number endedMarkingReady:NO];
 }
 
-// The screens of the "root mounted" kind are waited no longer: nobody sees them, nothing of theirs is held.
-- (void)mountLimitOfNumber:(NSUInteger)number {
+// The screens of the "unseen" kind are waited no longer: nobody sees them, nothing of theirs is held.
+- (void)unseenLimitOfNumber:(NSUInteger)number {
     if (![self runs:number]) {
         return;
     }
-    _mountLimitPassed = YES;
-    if (_mountWaited.count == 0) {
+    _unseenLimitPassed = YES;
+    if (_unseenWaited.count == 0) {
         return;
     }
-    for (UIViewController *node in _mountWaited.allObjects) {
+    for (UIViewController *node in _unseenWaited.allObjects) {
         [_waited removeObject:node];
     }
-    [_mountWaited removeAllObjects];
+    [_unseenWaited removeAllObjects];
     if (_waited.count == 0 && !_barWait) {
         [self phaseOfNumber:number endedMarkingReady:NO];
     }
@@ -464,7 +450,7 @@ static NSUInteger ANNRenderWaitCount;
     }
     [_listened removeAllObjects];
     [_waited removeAllObjects];
-    [_mountWaited removeAllObjects];
+    [_unseenWaited removeAllObjects];
 }
 
 #pragma mark - Helpers
@@ -476,15 +462,14 @@ static NSUInteger ANNRenderWaitCount;
 }
 
 // What the content phase's take reads of each screen to decide what it waits for: the readiness it needs, whether it
-// has its content yet, whether that content is ready, and whether its root mounted.
+// has its content yet, and whether that content is ready.
 - (NSArray<NSNumber *> *)takeStateOfScreens:(NSArray<UIViewController *> *)screens {
     NSMutableArray<NSNumber *> *states = [NSMutableArray arrayWithCapacity:screens.count];
     for (UIViewController *node in screens) {
-        NSUInteger state = (NSUInteger)ANNWaitedReadinessOf(node) << 3;
+        NSUInteger state = (NSUInteger)ANNWaitedReadinessOf(node) << 2;
         if ([node isKindOfClass:ANNComponentViewController.class]) {
             UIView<ANNComponentProtocol> *content = ((ANNComponentViewController *)node).reactView;
-            BOOL mounted = [content respondsToSelector:@selector(hasMounted)] && content.hasMounted;
-            state |= (content ? 1 : 0) | (content.isReady ? 2 : 0) | (mounted ? 4 : 0);
+            state |= (content ? 1 : 0) | (content.isReady ? 2 : 0);
         }
         [states addObject:@(state)];
     }

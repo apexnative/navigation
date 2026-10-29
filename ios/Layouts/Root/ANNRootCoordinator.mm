@@ -300,7 +300,7 @@ static __weak ANNRootShow *ANNAnimatingShow;
               barLimits:contentFirst ? ownPhase : withContent];
     // A screen the user won't see at once (an unselected tab's) never holds the root longer than the limit, also with
     // `waitForRender: true`.
-    wait.mountLimit = ANNRootRenderLimit;
+    wait.unseenLimit = ANNRootRenderLimit;
     wait.protect = ^(dispatch_block_t step) {
       [ANNRootCoordinator protect:weakShow step:step];
     };

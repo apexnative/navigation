@@ -36,7 +36,7 @@ typedef NS_ENUM(NSInteger, ANNRenderWaitBar) {
 
 /// `screens` gives the screens the wait is about: their bar components, the screens the limit marks ready, the screens
 /// of the unknown-content rule, and with `ANNRenderWaitContentEachScreen` the screens whose content it waits for, each
-/// by the readiness it needs (`ANNWaitedReadinessOf`: content, or "root mounted" without its bar components). It is
+/// by the readiness it needs (`ANNWaitedReadinessOf`: content, or "unseen" content without its bar components). It is
 /// asked as the wait starts, as it takes its screens again (`retakeScreens:`) and as its bar phase starts. `node` is
 /// the node of `ANNRenderWaitContentNode`; nil otherwise. `limit` 0: no limit.
 - (instancetype)initWithContent:(ANNRenderWaitContent)content
@@ -49,10 +49,10 @@ typedef NS_ENUM(NSInteger, ANNRenderWaitBar) {
 - (instancetype)init NS_UNAVAILABLE;
 + (instancetype)new NS_UNAVAILABLE;
 
-/// The longest a waited screen of the "root mounted" kind (`ANNWaitedReadinessOf`, an unselected tab's screen) is
-/// waited for, from the start, also when the wait has no limit: a screen the user doesn't see never holds a command for
-/// long. 0: only the wait's own limit.
-@property(nonatomic) NSTimeInterval mountLimit;
+/// The longest a waited screen of the "unseen" kind (`ANNWaitedReadinessOf`, an unselected tab's screen) is waited
+/// for, from the start, also when the wait has no limit: a screen the user doesn't see never holds a command for long.
+/// 0: only the wait's own limit.
+@property(nonatomic) NSTimeInterval unseenLimit;
 
 /// The rule for content of unknown readiness: 1 s after the start, a screen whose rendered state stays unknown (no safe
 /// area view says it) counts as ready; a screen whose safe area view spoke waits for its signal. Off by default (a root
