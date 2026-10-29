@@ -44,34 +44,66 @@ function Profile(_props: { name: string }) {
 }
 
 describe('a screen of defineScreen', () => {
-  it('is its component, so a file exporting it stays a boundary of Fast Refresh', () => {
+  it('is a component of its own that renders its component, a boundary of Fast Refresh', () => {
     const ProfileScreen = defineScreen({
       component: Profile,
       options: { topBar: { title: { text: 'A' } } },
     });
-    expect(ProfileScreen).toBe(Profile);
+    expect(ProfileScreen).not.toBe(Profile);
+    expect(ProfileScreen.name).toMatch(/^[A-Z]/);
+    expect(ProfileScreen.displayName).toBe('Profile');
+    const element = (ProfileScreen as (props: object) => React.ReactElement)({ name: 'Ann' });
+    expect(element.type).toBe(Profile);
     expect(definitionOf(ProfileScreen)?.options).toEqual({ topBar: { title: { text: 'A' } } });
   });
 
-  it('gets a component of its own when its component is in a second definition', () => {
+  it("leaves the app's component as it is, for a plain use of it and a second definition", () => {
     function Card() {
       return null;
     }
-    const First = defineScreen({
-      component: Card,
-      options: { topBar: { title: { text: 'First' } } },
+    const First = defineScreen({ component: Card, options: { topBar: { title: { text: '1' } } } });
+    const Second = defineScreen({ component: Card, options: { topBar: { title: { text: '2' } } } });
+    registerScreens([{ source: 'screens', screens: { First, Second, Plain: Card } }]);
+    expect(screenOptions('First', {})).toEqual({ topBar: { title: { text: '1' } } });
+    expect(screenOptions('Second', {})).toEqual({ topBar: { title: { text: '2' } } });
+    expect(screenOptions('Plain', {})).toEqual({});
+  });
+
+  it('keeps its definition when the module of its component runs again', () => {
+    // Profile's own module ran again: Profile's family has a new version, the screen's is the same.
+    const ProfileScreen = defineScreen({
+      component: Profile,
+      options: { topBar: { title: { text: 'Kept' } } },
     });
-    const Second = defineScreen({
-      component: Card,
-      options: { topBar: { title: { text: 'Second' } } },
+    register(ProfileScreen);
+    refresh(Profile, function ProfileEdited() {
+      return null;
     });
-    expect(First).toBe(Card);
-    expect(Second).not.toBe(Card);
-    expect(Second.displayName).toBe('Card');
-    expect(definitionOf(First)?.options).toEqual({ topBar: { title: { text: 'First' } } });
-    expect(definitionOf(Second)?.options).toEqual({ topBar: { title: { text: 'Second' } } });
-    const element = (Second as (props: object) => React.ReactElement)({});
-    expect(element.type).toBe(Card);
+    registerScreens([{ source: 'screens', screens: { Kept: ProfileScreen } }]);
+    expect(screenOptions('Kept', {})).toEqual({ topBar: { title: { text: 'Kept' } } });
+  });
+
+  it("puts its component in a family by the screen's, once the module ran", async () => {
+    const registered = jest.fn();
+    (globalThis as unknown as { __ReactRefresh: Record<string, unknown> }).__ReactRefresh.register =
+      registered;
+    function Inbox() {
+      return null;
+    }
+    const InboxScreen = defineScreen({ component: Inbox });
+    register(InboxScreen);
+    await Promise.resolve();
+    const [[component, id]] = registered.mock.calls;
+    expect(component).toBe(Inbox);
+
+    // The module ran again: the new component goes under the same id.
+    const InboxEdited = function InboxEdited() {
+      return null;
+    };
+    const edited = defineScreen({ component: InboxEdited });
+    register(edited, InboxScreen);
+    await Promise.resolve();
+    expect(registered.mock.calls[1]).toEqual([InboxEdited, id]);
   });
 
   it('shows with the options, key and pair of the newest version after Fast Refresh', () => {
@@ -140,7 +172,9 @@ describe('a screen of defineScreen', () => {
     function Home(_props: { name: string }) {
       return null;
     }
-    expect(createElement(defineScreen({ component: Home }), { name: 'Ann' }).type).toBe(Home);
+    const element = createElement(defineScreen({ component: Home }), { name: 'Ann' });
+    const rendered = (element.type as (props: object) => React.ReactElement)(element.props);
+    expect(rendered.type).toBe(Home);
   });
 });
 

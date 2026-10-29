@@ -243,8 +243,10 @@ function registerScreen(
 }
 
 function toDefinition(value: ScreenComponent | ScreenDefinition): ScreenDefinition {
+  // A screen of defineScreen renders as itself: React Refresh knows it by its module's export, and the version of the
+  // newest definition renders in its place.
   const defined = definitionOf(value);
-  if (defined) return defined;
+  if (defined) return { ...defined, component: value as ScreenComponent };
   return isObject(value) && 'component' in value ? value : { component: value as ScreenComponent };
 }
 

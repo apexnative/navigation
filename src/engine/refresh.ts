@@ -10,6 +10,12 @@ interface Family {
 
 interface ReactRefresh {
   getFamilyByType?: (type: unknown) => Family | undefined;
+  register?: (type: unknown, id: string) => void;
+  createSignatureFunctionForTransform?: () => (
+    type: unknown,
+    key: string,
+    forceReset?: boolean
+  ) => unknown;
 }
 
 // React Native puts React Refresh where Metro's module system finds it, in development only.
@@ -48,4 +54,38 @@ export function redefined(screen: object): void {
   if (!__DEV__ || !redefinedListener) return;
   const listener = redefinedListener;
   Promise.resolve().then(() => listener(screen));
+}
+
+// The id each family of screens gives the components they render, so their versions join one family too.
+const innerIds = new WeakMap<Family, string>();
+let innerCount = 0;
+
+/**
+ * Puts the component a screen renders in a family of its own, once the screen's module ran and Metro has given the
+ * screen its family: the next version of the screen registers its component under the same id, so React Refresh keeps
+ * the component's state when the module runs again, also when the module doesn't export it. A component React Refresh
+ * knows already (its module exports it, or Babel registered it) keeps its own family. Development only.
+ */
+export function keepStateOf(screen: object, component: unknown): void {
+  const refresh = reactRefresh();
+  if (!refresh?.register) return;
+  const register = refresh.register;
+  Promise.resolve().then(() => {
+    const family = familyOf(screen);
+    if (!family) return;
+    let id = innerIds.get(family);
+    if (id === undefined) {
+      id = `apexnative.navigation.screen#${++innerCount}`;
+      innerIds.set(family, id);
+    }
+    register(component, id);
+  });
+}
+
+/**
+ * Makes React Refresh mount a component of the library again, not keep its state, when a new version of it comes: its
+ * hooks are the app's, which may have changed, and the library's code has no signature of them. Development only.
+ */
+export function resetOnEdit(type: object): void {
+  reactRefresh()?.createSignatureFunctionForTransform?.()(type, 'apexnative.navigation', true);
 }
