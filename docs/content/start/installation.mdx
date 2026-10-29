@@ -215,7 +215,22 @@ These files are the same on both platforms.
 | `index.js` | Starts the app through the navigation. | `AppRegistry` of the package starts `createNavigation` instead of mounting one root component. |
 | `Navigation.ts` | New: shows `App` as the first screen. | The app keeps working as it was, now as the first screen of a stack. |
 | `App.tsx` | Takes out the template's `<StatusBar>`. | React Native's `StatusBar` logs an error on iOS once the screens set the status bar. |
+| `metro.config.js` | Wraps the exported config in `withApexNavigation`. | Fast Refresh: an edit of a screen updates the running app in place, with its state, instead of reloading it. See [Fast Refresh](#fast-refresh). |
 | `navigation-env.d.ts` | New: ties the commands to the screens of `Navigation.ts`. | The commands come from the package and can't see the app's screens. This declaration links them, so names and props are checked. See [Typed commands](#typed-commands). |
+
+### Fast Refresh {#fast-refresh}
+
+`setup` wraps your `metro.config.js` in `withApexNavigation`; in a new app `init` has done it. By hand:
+
+```js title="metro.config.js"
+const { withApexNavigation } = require('@apexnative/navigation/metro');
+
+module.exports = withApexNavigation(mergeConfig(getDefaultConfig(__dirname), config));
+```
+
+It does two things. React Native 0.87's transformer doesn't apply React Refresh's Babel plugin (Metro no longer passes it `hot`), and without the plugin a component that its module doesn't export loses its state at every edit. And it makes the module that imports `createNavigation` accept hot updates, so an edit of the `screens` map or of the app's config updates the running app without a reload: the screens, the default options (when `theme` or `options` changed), the roots, the listeners and the link routes. What only the start reads isn't run again: the first root, `willMount`, the splash and the context.
+
+`doctor` warns under Fast Refresh when the Metro config doesn't use it. What to write in a screen file so that its edits update in place: [Fast Refresh](../fundamentals/screens-and-props#fast-refresh).
 
 ### Typed commands {#typed-commands}
 

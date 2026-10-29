@@ -271,6 +271,10 @@ A wrong name or a missing prop is an error of the compiler, not of the app at ru
 - **Which are left out:** a screen with a required prop that is a function, and one with a prop whose type has no native form (see [Types](#types)). `codegen` names each in a warning. Native code still opens it by its name, `push("Settings", props: [:])`, with its props as a plain dictionary or map.
 - **After a change** of the screens or their props, run `codegen` again; `doctor` says when the generated code is behind.
 
+## Fast Refresh {#fast-refresh}
+
+`nativeScreen` returns a component that runs `useProps`. An edit of the hook or of the options applies in place, with the app running. A change of the native name, or adding or removing `useProps`, restarts the app (a reload).
+
 ## UIKit and Android views {#imperative}
 
 A screen of UIKit or Android views gets the same `screen`, and follows its props as they change:
