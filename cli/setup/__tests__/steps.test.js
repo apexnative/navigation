@@ -10,6 +10,7 @@ const { planInfoPlist } = require('../steps/infoPlist');
 const { planMainActivity } = require('../steps/mainActivity');
 const { planMainApplication } = require('../steps/mainApplication');
 const { planManifest } = require('../steps/manifest');
+const { planMetro } = require('../steps/metro');
 const { planSceneDelegate } = require('../steps/sceneDelegate');
 const { planStyles } = require('../steps/styles');
 
@@ -26,6 +27,7 @@ const STEPS = /** @type {const} */ ([
   ['Info.plist', planInfoPlist],
   ['index.js', planEntry],
   ['App.tsx', planApp],
+  ['metro.config.js', planMetro],
 ]);
 
 describe.each(['template-0.85', 'template-0.87'])('the React Native template (%s)', (template) => {
@@ -306,5 +308,20 @@ describe('a file changed by hand', () => {
       'hidden'
     );
     expect(planApp(text).status).toBe('manual');
+  });
+});
+
+describe('metro.config.js', () => {
+  it('wraps a config exported at the end, after the requires', () => {
+    const result = planMetro("const x = require('x');\n\nmodule.exports = x({});\n");
+    expect(result.status === 'change' && result.next).toBe(
+      "const x = require('x');\nconst { withApexNavigation } = require('@apexnative/navigation/metro');\n\n" +
+        'module.exports = withApexNavigation(x({}));\n'
+    );
+  });
+
+  it("can't tell how to wrap a config changed after it is exported", () => {
+    const text = 'module.exports = {};\nmodule.exports.resolver = {};\n';
+    expect(planMetro(text).status).toBe('manual');
   });
 });

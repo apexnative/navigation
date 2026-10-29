@@ -16,6 +16,7 @@ const { planEntry, navigationFile, HOW_TO: ENTRY_HOW_TO } = require('./steps/ent
 const { planEnv, targetOf } = require('./steps/env');
 const { planInfoPlist } = require('./steps/infoPlist');
 const { planMainActivity } = require('./steps/mainActivity');
+const { planMetro } = require('./steps/metro');
 const { planSceneDelegate } = require('./steps/sceneDelegate');
 const { planMainApplication } = require('./steps/mainApplication');
 const { planManifest } = require('./steps/manifest');
@@ -134,6 +135,10 @@ function planProject(project) {
   plans.push(...planEnv(project.root, navigation, ts));
   // The template's App renders React Native's status bar; one moved elsewhere or written anew has nothing to change.
   if (project.app) plans.push(planFile('App.tsx', 'js', project.app, planApp, APP_HOW_TO));
+  // Fast Refresh for every edit; an app without a Metro config of its own has nothing to change.
+  if (project.metroConfig) {
+    plans.push(planFile('metro.config.js', 'js', project.metroConfig, planMetro, ''));
+  }
   return plans;
 }
 
