@@ -19,10 +19,7 @@
 #import "ANNTopBarPresenter.h"
 #import "ANNUtils.h"
 
-@implementation ANNComponentViewController {
-    // Where the content is lent while it mounts unseen (the tabs' preload window).
-    __weak UIView *_contentLentTo;
-}
+@implementation ANNComponentViewController
 
 - (instancetype)initWithLayoutInfo:(ANNLayoutInfo *)layoutInfo
                            creator:(id<ANNComponentViewCreator>)creator
@@ -146,8 +143,6 @@
 // command's order: the command reports instead.
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
-    // A tab shows for the first time while its content still mounts in the preload window.
-    [self takeContentBack];
     // A preview screen that UIKit's menu takes leaves its unseen place first, so that the menu reports it.
     [ANNPreviewPush screenWillAppear:self];
     if (![ANNAppearanceDispatcher isAppearanceDriven:self]) {
@@ -402,7 +397,7 @@
     }
     ANNNavigationOptions *options = [self resolveOptionsWithDefault];
     UIView<ANNComponentProtocol> *content = _reactView;
-    if (content && !self.contentIsLent) {
+    if (content) {
         CGRect frame = [self rootFrameForOptions:options];
         if (!CGRectEqualToRect(content.frame, frame)) {
             content.frame = frame;
@@ -553,37 +548,6 @@
     });
 }
 
-#pragma mark - The preload window
-
-- (BOOL)contentIsLent {
-    return _contentLentTo != nil;
-}
-
-- (BOOL)lendContentTo:(UIView *)host {
-    UIView<ANNComponentProtocol> *content = _reactView;
-    if (!content || _contentLentTo || content.window || self.nodeHelper.destroyed ||
-        ![content isKindOfClass:ANNReactView.class]) {
-        return NO;
-    }
-    _contentLentTo = host;
-    [host addSubview:content];
-    return YES;
-}
-
-- (void)takeContentBack {
-    if (!_contentLentTo) {
-        return;
-    }
-    _contentLentTo = nil;
-    UIView<ANNComponentProtocol> *content = _reactView;
-    if (!content || self.nodeHelper.destroyed) {
-        [content removeFromSuperview];
-        return;
-    }
-    [self.view insertSubview:content atIndex:0];
-    [self updateRootLayout];
-}
-
 #pragma mark - Leaving
 
 - (void)screenWillLeave {
@@ -674,9 +638,7 @@
     [topBar releaseLists];
     [topBar stopComponents];
     [self destroyReactView];
-    // The stop holds the hosting view until the surface stopped: the screen lets go of its content view now, wherever
-    // it is (a preload window too).
-    _contentLentTo = nil;
+    // The stop holds the hosting view until the surface stopped: the screen lets go of its content view now.
     [_reactView removeFromSuperview];
     // The data is kept by id: a node that holds the id now (a new JavaScript reused it while this screen waited for
     // its destroy, as at a reload) keeps it.

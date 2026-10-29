@@ -15,7 +15,6 @@
 #import "ANNSystemUI.h"
 #import "ANNTabLongPress.h"
 #import "ANNTabsDesign.h"
-#import "ANNTabsPreloadWindow.h"
 #import "InteractivePopGestureDelegate.h"
 #import <React/RCTLog.h>
 
@@ -23,8 +22,7 @@
 // waits for it; the drive only must not stay).
 static const NSTimeInterval ANNSwitchDriveLimit = 2;
 
-// How long a step of `afterInitialTab` waits for its tab's root to mount before the next one starts, and how long a
-// lent React view stays in the preload window at most without mounting.
+// How long a step of `afterInitialTab` waits for its tab's root to mount before the next one starts.
 static const NSTimeInterval ANNTabMountLimit = 0.5;
 
 // The key of the tabs' ready handlers on the screens of their selected tab (`afterInitialTab`).
@@ -81,8 +79,6 @@ static void ANNStacksOfNode(UIViewController *node, NSMutableArray<ANNStackContr
     // The `UITab` of each tab, in layout order (iOS 18 and later).
     NSArray *_uiTabs;
     NSHashTable<UIViewController *> *_renderedTabs;
-    ANNTabsPreloadWindow *_preloadWindow;
-    NSHashTable<ANNComponentViewController *> *_lentScreens;
     // The chain of `afterInitialTab`: started once; a destroy ends it by its number.
     BOOL _chainStarted;
     NSUInteger _chainNumber;
@@ -137,7 +133,6 @@ static void ANNStacksOfNode(UIViewController *node, NSMutableArray<ANNStackContr
     if (self) {
         _tabs = [childViewControllers copy] ?: @[];
         _renderedTabs = [NSHashTable weakObjectsHashTable];
-        _lentScreens = [NSHashTable weakObjectsHashTable];
         _staleTabs = [NSHashTable weakObjectsHashTable];
         _pressedIndex = NSNotFound;
         _codeChoiceIndex = NSNotFound;
@@ -474,12 +469,12 @@ static void ANNStacksOfNode(UIViewController *node, NSMutableArray<ANNStackContr
     if (self.nodeHelper.destroyed) {
         return;
     }
-    [self renderTabAtIndex:_selectedTabIndex preloading:NO];
+    [self renderTabAtIndex:_selectedTabIndex];
     switch (_attachMode) {
         case ANNTabsAttachModeTogether:
             for (NSUInteger index = 0; index < _tabs.count; index++) {
                 if (index != _selectedTabIndex) {
-                    [self renderTabAtIndex:index preloading:YES];
+                    [self renderTabAtIndex:index];
                 }
             }
             break;
@@ -569,7 +564,6 @@ static void ANNStacksOfNode(UIViewController *node, NSMutableArray<ANNStackContr
                        tab.layoutInfo.componentId ?: @"", exception.reason ?: exception.name);
         }
     }
-    [self closePreloadWindow];
     [[self tabsPresenter] tabsWillGo];
     [_components stopAll];
 }
@@ -605,9 +599,11 @@ static void ANNStacksOfNode(UIViewController *node, NSMutableArray<ANNStackContr
     [[self tabsPresenter] tabsDidAppear];
 }
 
-#pragma mark - Rendering and the preload window
+#pragma mark - Rendering
 
-- (void)renderTabAtIndex:(NSUInteger)index preloading:(BOOL)preloading {
+// A tab renders where it is, shown or not: the root of a tab not shown mounts and lays out outside the window, and its
+// screen renders its content when the tab shows (`ANNSafeAreaViewComponentView`).
+- (void)renderTabAtIndex:(NSUInteger)index {
     if (index >= _tabs.count) {
         return;
     }
@@ -617,62 +613,6 @@ static void ANNStacksOfNode(UIViewController *node, NSMutableArray<ANNStackContr
     }
     [_renderedTabs addObject:tab];
     [tab render];
-    if (preloading) {
-        [self lendTopOfTabAtIndex:index];
-    }
-}
-
-// The React view of the tab's top screen mounts in the preload window and comes back into its screen at its mount or
-// when its tab first shows, whichever comes first; a native screen stays where it is.
-- (void)lendTopOfTabAtIndex:(NSUInteger)index {
-    UIViewController *node = [self screenOfTabAtIndex:index];
-    if (![node isKindOfClass:ANNComponentViewController.class]) {
-        return;
-    }
-    ANNComponentViewController *screen = (ANNComponentViewController *)node;
-    UIView<ANNComponentProtocol> *content = screen.reactView;
-    if (![content respondsToSelector:@selector(whenMounted:)] || content.hasMounted) {
-        return;
-    }
-    if (!_preloadWindow) {
-        _preloadWindow = [ANNTabsPreloadWindow preloadWindow];
-    }
-    if (![screen lendContentTo:_preloadWindow]) {
-        return;
-    }
-    [_lentScreens addObject:screen];
-    __weak ANNBottomTabsController *weakSelf = self;
-    __weak ANNComponentViewController *weakScreen = screen;
-    [content whenMounted:^{
-      [weakSelf takeBack:weakScreen];
-    }];
-    // A root that never mounts goes back anyway: it renders where its tab shows.
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(ANNTabMountLimit * 2 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-                     [weakSelf takeBack:weakScreen];
-                   });
-}
-
-- (void)takeBack:(ANNComponentViewController *)screen {
-    if (screen) {
-        [screen takeContentBack];
-        [_lentScreens removeObject:screen];
-    }
-    for (ANNComponentViewController *lent in _lentScreens.allObjects) {
-        if (lent.contentIsLent) {
-            return;
-        }
-    }
-    [self closePreloadWindow];
-}
-
-- (void)closePreloadWindow {
-    for (ANNComponentViewController *screen in _lentScreens.allObjects) {
-        [screen takeContentBack];
-    }
-    [_lentScreens removeAllObjects];
-    [_preloadWindow close];
-    _preloadWindow = nil;
 }
 
 // `afterInitialTab`: the selected tab's shown screens ready (by their content), then the others one by one.
@@ -739,7 +679,7 @@ static void ANNStacksOfNode(UIViewController *node, NSMutableArray<ANNStackContr
     if (next == NSNotFound) {
         return;
     }
-    [self renderTabAtIndex:next preloading:YES];
+    [self renderTabAtIndex:next];
     __block BOOL stepped = NO;
     __weak ANNBottomTabsController *weakSelf = self;
     dispatch_block_t step = ^{
@@ -769,7 +709,7 @@ static void ANNStacksOfNode(UIViewController *node, NSMutableArray<ANNStackContr
     if (index >= _tabs.count) {
         return;
     }
-    [self renderTabAtIndex:index preloading:NO];
+    [self renderTabAtIndex:index];
     UIViewController *tab = _tabs[index];
     if ([_staleTabs containsObject:tab]) {
         [_staleTabs removeObject:tab];
