@@ -175,6 +175,7 @@ function applyChange(name: string, native: boolean, before: ShownOptions, after:
 
 // The screens map registered again (Fast Refresh ran the module of the app): a screen written in the map itself, a
 // definition no module exports, has no family to tell its edit, so its definition before and after are compared here.
+// The options of its group too: a group is written in the app's module, and an edit of them leaves the screen as it was.
 function applyRegisteredAgain(
   name: string,
   entry: unknown,
@@ -182,7 +183,14 @@ function applyRegisteredAgain(
 ) {
   const previous = editable.get(name);
   const before = previous?.screen();
-  if (before === undefined || before === entry) return;
+  if (before === undefined) return;
+  if (before === entry) {
+    if (previous!.groupOptions === group) return;
+    const native = isNativeScreen(entry);
+    const definition = native ? newestType(entry) : definitionOf(entry);
+    applyChange(name, native, { group: previous!.groupOptions, definition }, { group, definition });
+    return;
+  }
   if (isNativeScreen(before) && isNativeScreen(entry)) {
     if (madeOtherwise(newestType(before), entry)) {
       DevSettings.reload('[navigation] A native screen changed its name or its useProps');
@@ -273,7 +281,14 @@ function registerScreen(
   // React.memo and forwardRef components are objects, so the kind of entry is told by its keys.
   if (isObject(entry) && 'load' in entry) {
     const screen = lazyScreen(entry.load);
-    if (__DEV__) editable.set(name, { screen: screen.loaded, groupOptions });
+    if (__DEV__) {
+      // A lazy screen registered again loads its module on its next show: until then the one loaded before stands for
+      // it, so the screens of it that show take an edit of their group's options, and of their module, as before.
+      const before = editable.get(name)?.screen();
+      const loaded = () => screen.loaded() ?? before;
+      applyRegisteredAgain(name, loaded(), groupOptions);
+      editable.set(name, { screen: loaded, groupOptions });
+    }
     registerEngineScreen(name, {
       component: () => wrapScreen(name, screen.component, wrapper),
       // A command loads the screen before it reads its options.
