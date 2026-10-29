@@ -6,17 +6,15 @@ import React, {
   lazy,
   type ReactNode,
   Suspense,
-  useEffect,
   useMemo,
   useState,
 } from 'react';
-import { Platform, StyleSheet } from 'react-native';
+import { DevSettings, Platform, StyleSheet } from 'react-native';
 import ANNTurboModule from '../../adapters/NativeANNTurboModule';
 import type { NativeControllerProps } from '../../engine/nativeScreens';
 import { isButtonRoot } from '../../engine/props';
 import {
   checkArrangements,
-  type EngineArrangement,
   onScreenUnmounted,
   registerScreen as registerEngineScreen,
   type ScreenRootProps,
@@ -27,8 +25,9 @@ import { mergeOptions } from '../../engine/mergeOptions';
 import { preparedPadding } from '../../engine/slots';
 import { mergeOptions as sendMergeOptions } from '../../engine/commands';
 import { optionsChange } from '../../engine/optionsChange';
+import { openNativeScreens } from '../../engine/nativeScreens';
 import { propsOf } from '../../engine/props';
-import { familyOf, onRedefined } from '../../engine/refresh';
+import { familyOf, newestType, onRedefined } from '../../engine/refresh';
 import {
   buildScreenOptions,
   definitionOf,
@@ -36,13 +35,8 @@ import {
   type ScreenDefinition,
   type ScreenOptionsInput,
 } from './defineScreen';
-import { isNativeScreen, type NativeScreen } from './nativeScreens';
-import {
-  type Arrangement,
-  isArrangement,
-  type ScreenArrangement,
-  toEngineArrangement,
-} from './arrangement';
+import { isNativeScreen, type NativeScreen, type NativeScreenHookProps } from './nativeScreens';
+import { type Arrangement, isArrangement, toEngineArrangement } from './arrangement';
 import { type ErrorFallbackProps, ScreenBoundary } from './ScreenBoundary';
 import ANNSafeAreaView from '../safeArea/ANNSafeAreaViewNativeComponent';
 
@@ -123,15 +117,24 @@ onRedefined(applyEdit);
 // Refresh moves it on only after the update.
 function applyEdit(next: object) {
   const family = familyOf(next);
-  const edited = ownDefinitionOf(next);
+  const edited = ownDefinitionOf(next) ?? (isNativeScreen(next) ? next : undefined);
   if (!family || !edited) return;
   for (const [name, { screen, groupOptions }] of editable) {
     const current = screen();
     if (current === undefined || familyOf(current) !== family) continue;
-    const before = definitionOf(current);
-    for (const id of shownScreens(name)) {
-      const props = propsOf(id);
-      const options = (definition: ScreenDefinition | undefined) =>
+    const native = isNativeScreen(current);
+    const before = native ? newestType(current) : definitionOf(current);
+    // What a native screen is made of goes to the native side when it is registered and shown: a change of it starts
+    // the app again.
+    if (native && isNativeScreen(edited) && madeOtherwise(newestType(current), edited)) {
+      DevSettings.reload('[navigation] A native screen changed its name or its useProps');
+      return;
+    }
+    const shown = native
+      ? openNativeScreens(name)
+      : shownScreens(name).map((id) => ({ id, props: propsOf(id) }));
+    for (const { id, props } of shown) {
+      const options = (definition: { options?: ScreenOptionsInput<any> } | undefined) =>
         mergeOptions(
           buildScreenOptions(groupOptions, props),
           buildScreenOptions(definition?.options, props)
@@ -140,6 +143,10 @@ function applyEdit(next: object) {
       if (merge) sendMergeOptions(id, merge);
     }
   }
+}
+
+function madeOtherwise(before: NativeScreen<any>, after: NativeScreen<any>): boolean {
+  return before.nativeName !== after.nativeName || !before.useProps !== !after.useProps;
 }
 
 export function registerScreens(sets: ScreenSet[], wrapper: ScreenWrapper = {}) {
@@ -175,15 +182,21 @@ function registerScreen(
     return;
   }
   if (isNativeScreen(entry)) {
+    // Read on every show, the newest after Fast Refresh, as for a screen of defineScreen.
+    const screen = () => newestType(entry);
+    if (__DEV__) editable.set(name, { screen: () => entry, groupOptions });
     registerEngineScreen(name, {
       nativeName: entry.nativeName,
       options: (props) =>
         mergeOptions(
           buildScreenOptions(groupOptions, props),
-          buildScreenOptions(entry.options, props)
+          buildScreenOptions(screen().options, props)
         ),
-      controller: entry.useProps && wrapNativeScreen(name, entry.useProps, wrapper),
-      arrangement: pairOf(name, entry.arrangement),
+      controller: entry.useProps && wrapNativeScreen(name, entry, wrapper),
+      arrangement: () => {
+        const arrangement = screen().arrangement;
+        return arrangement && toEngineArrangement(name, arrangement);
+      },
     });
     return;
   }
@@ -226,16 +239,6 @@ function registerScreen(
       return arrangement && toEngineArrangement(name, arrangement);
     },
   });
-}
-
-// The pair of a screen whose `arrangement` is known at registration: checked and filled in once.
-function pairOf(
-  name: string,
-  arrangement: ScreenArrangement<any> | undefined
-): (() => EngineArrangement) | undefined {
-  if (!arrangement) return undefined;
-  const pair = toEngineArrangement(name, arrangement);
-  return () => pair;
 }
 
 function toDefinition(value: ScreenComponent | ScreenDefinition): ScreenDefinition {
@@ -351,15 +354,11 @@ function wrapScreen(name: string, Screen: ScreenComponent, wrapper: ScreenWrappe
  */
 function wrapNativeScreen(
   name: string,
-  useProps: (props: object) => object,
+  entry: NativeScreen<any>,
   { provider: Provider, onError }: ScreenWrapper
 ): ComponentType<NativeControllerProps> {
-  function Hook({ props, onProps }: Pick<NativeControllerProps, 'props' | 'onProps'>) {
-    const result = useProps(props);
-    // After each render React committed, so the native side never shows what the app did not.
-    useEffect(() => onProps(result));
-    return null;
-  }
+  // The screen's own component runs the hook: Fast Refresh puts a new version of it in place.
+  const Hook = entry as unknown as ComponentType<NativeScreenHookProps<object>>;
   function NativeScreenProps({
     componentId,
     props,
