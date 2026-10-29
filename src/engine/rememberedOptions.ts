@@ -31,8 +31,14 @@ export function rememberMergedOptions(id: string, options: Options): void {
 
 /** Takes the options at the paths, such as `['topBar', 'subtitle']`, out of those remembered for the node with the id. */
 export function forgetMergedPaths(id: string, paths: readonly string[][]): void {
+  const own = ownOptions.get(id);
+  if (own) ownOptions.set(id, withoutPaths(own, paths));
   const options = remembered.get(id);
-  if (!options) return;
+  if (options) remembered.set(id, withoutPaths(options, paths));
+}
+
+// A copy of the options without the values at the paths.
+function withoutPaths(options: Options, paths: readonly string[][]): Options {
   const kept = structuredCopy(options);
   for (const path of paths) {
     const parent = path
@@ -43,7 +49,7 @@ export function forgetMergedPaths(id: string, paths: readonly string[][]): void 
       );
     if (parent) delete parent[path[path.length - 1]!];
   }
-  remembered.set(id, kept);
+  return kept as Options;
 }
 
 // A copy of the plain objects of options, the other values shared.
@@ -65,6 +71,27 @@ function isGroup(value: unknown): boolean {
 /** Forgets the merged options of a node that went; a node of the last root keeps them until another root goes out. */
 export function forgetMergedOptions(id: string): void {
   if (!lastRoot?.ids.has(id)) remembered.delete(id);
+  ownOptions.delete(id);
+}
+
+// The own options of each screen as JavaScript sent them, in development: those it showed with, and every merge and
+// clear since. An edit of a screen's options (Fast Refresh) changes only what still has the old definition's value.
+const ownOptions = new Map<string, Options>();
+
+/** Notes the own options a screen shows with (development). */
+export function noteOwnOptions(id: string, options: Options): void {
+  if (__DEV__) ownOptions.set(id, options);
+}
+
+/** Notes a merge into a screen's own options (development). */
+export function noteMergedOwnOptions(id: string, options: Options): void {
+  const before = __DEV__ ? ownOptions.get(id) : undefined;
+  if (before) ownOptions.set(id, mergeOptions(before, options));
+}
+
+/** The own options of a screen as JavaScript sent them (development); undefined for a screen it didn't note. */
+export function ownOptionsOf(id: string): Options | undefined {
+  return ownOptions.get(id);
 }
 
 /** The options merged into the node with the id, as remembered; undefined without any. */

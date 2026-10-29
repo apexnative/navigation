@@ -24,7 +24,8 @@ import { screenUnmounted } from '../events/screenLifecycle';
 import { mergeOptions } from '../../engine/mergeOptions';
 import { preparedPadding } from '../../engine/slots';
 import { clearOptions, mergeOptions as sendMergeOptions } from '../../engine/commands';
-import { optionsChange } from '../../engine/optionsChange';
+import { changeOverOwn, optionsChange } from '../../engine/optionsChange';
+import { ownOptionsOf } from '../../engine/rememberedOptions';
 import { openNativeScreens } from '../../engine/nativeScreens';
 import { propsOf } from '../../engine/props';
 import { familyOf, newestType, onRedefined } from '../../engine/refresh';
@@ -139,7 +140,9 @@ function applyEdit(next: object) {
           buildScreenOptions(groupOptions, props),
           buildScreenOptions(definition?.options, props)
         );
-      const { merge, removed } = optionsChange(options(before), options(edited));
+      const shownWith = options(before);
+      const change = optionsChange(shownWith, options(edited));
+      const { merge, removed } = changeOverOwn(change, shownWith, ownOptionsOf(id) ?? shownWith);
       if (removed.length > 0) clearOptions(id, removed);
       if (merge) sendMergeOptions(id, merge);
     }

@@ -68,3 +68,34 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
 }
+
+/**
+ * The part of an edit's change that the screen shows the old definition's value of: where the command that showed it,
+ * or a merge since, set another value, that value stays. `before` is what the old definition gave, `own` the screen's
+ * own options now.
+ */
+export function changeOverOwn(change: OptionsChange, before: Options, own: Options): OptionsChange {
+  const fromDefinition = (path: string[]) => sameValue(valueAt(own, path), valueAt(before, path));
+  const removed = change.removed.filter(fromDefinition);
+  const merge =
+    change.merge && (keptWhere(change.merge, [], fromDefinition) as Options | undefined);
+  return merge ? { merge, removed } : { removed };
+}
+
+function keptWhere(value: unknown, path: string[], keep: (path: string[]) => boolean): unknown {
+  if (!isPlainObject(value) || isWholeValue(path)) return keep(path) ? value : undefined;
+  const result: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value)) {
+    const kept = keptWhere(item, [...path, key], keep);
+    if (kept !== undefined) result[key] = kept;
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+/** The value at a path of options, such as `['topBar', 'title', 'text']`; undefined where there is none. */
+export function valueAt(options: unknown, path: readonly string[]): unknown {
+  return path.reduce<unknown>(
+    (value, key) => (isPlainObject(value) ? value[key] : undefined),
+    options
+  );
+}

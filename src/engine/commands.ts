@@ -14,6 +14,7 @@ import { forgetProps } from './props';
 import {
   forgetMergedOptions,
   forgetMergedPaths,
+  noteMergedOwnOptions,
   rememberMergedOptions,
   rootGoesOut,
   sentRoot,
@@ -145,6 +146,7 @@ export function mergeOptions(componentId: string, options: Options): void {
   const nativeOptions = toNativeOptions(options, componentId);
   const send = () => {
     rememberMergedOptions(componentId, options);
+    noteMergedOwnOptions(componentId, options);
     native.mergeOptions(componentId, nativeOptions);
   };
   const prepared =

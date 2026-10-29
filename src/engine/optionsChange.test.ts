@@ -1,5 +1,5 @@
 import type { Options } from '../interfaces/Options';
-import { optionsChange } from './optionsChange';
+import { changeOverOwn, optionsChange } from './optionsChange';
 
 describe('the change of a screen’s options after an edit', () => {
   it('is nothing for the same options', () => {
@@ -66,5 +66,22 @@ describe('the change of a screen’s options after an edit', () => {
       merge: { topBar: { title: { color: { light: 'black' } } } },
       removed: [['topBar', 'title', 'color']],
     });
+  });
+});
+
+describe("an edit's change over a screen's own options", () => {
+  const before: Options = { topBar: { title: { text: 'Home' }, subtitle: { text: 'All' } } };
+  const after: Options = { topBar: { title: { text: 'Start' } } };
+
+  it('goes where the screen shows the old definition', () => {
+    expect(changeOverOwn(optionsChange(before, after), before, before)).toEqual({
+      merge: { topBar: { title: { text: 'Start' } } },
+      removed: [['topBar', 'subtitle']],
+    });
+  });
+
+  it('leaves what the command or a merge since set to another value', () => {
+    const own: Options = { topBar: { title: { text: 'Order 42' }, subtitle: { text: 'Paid' } } };
+    expect(changeOverOwn(optionsChange(before, after), before, own)).toEqual({ removed: [] });
   });
 });

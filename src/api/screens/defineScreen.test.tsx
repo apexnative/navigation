@@ -1,5 +1,7 @@
 import React, { createElement } from 'react';
+import { mergeOptions } from '../../engine/commands';
 import { commands as native } from '../../engine/native';
+import { noteOwnOptions } from '../../engine/rememberedOptions';
 import { setProps } from '../../engine/props';
 import {
   arrangementOf,
@@ -271,6 +273,29 @@ describe('an edit of the options of a screen that shows', () => {
     expect((native.clearOptions as jest.Mock).mock.calls).toEqual([
       ['Component11', ['topBar.subtitle', 'topBar.largeTitle']],
     ]);
+    expect(sent).not.toHaveBeenCalled();
+  });
+
+  it('leaves an option the screen got from a merge since it showed', async () => {
+    function Order() {
+      return null;
+    }
+    const before = defineScreen({ component: Order, options: (s) => s.title('Order') });
+    register(before);
+    registerScreens([{ source: 'screens', screens: { Order: before } }]);
+    noteOwnOptions('Component21', { topBar: { title: { text: 'Order' } } });
+    noteShown('Component21', 'Order');
+    // The screen set its own title (useScreenOptions).
+    mergeOptions('Component21', { topBar: { title: { text: 'Order 42' } } });
+    sent.mockClear();
+    const after = defineScreen({
+      component: function OrderEdited() {
+        return null;
+      },
+      options: (s) => s.title('Order details'),
+    });
+    register(after, before);
+    await Promise.resolve();
     expect(sent).not.toHaveBeenCalled();
   });
 });
