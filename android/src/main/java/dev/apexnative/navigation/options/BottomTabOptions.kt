@@ -105,7 +105,7 @@ class BottomTabOptions {
     @JvmField var textColor: ThemeColour = NullThemeColour()
     @JvmField var selectedIconColor: ThemeColour = NullThemeColour()
     @JvmField var selectedTextColor: ThemeColour = NullThemeColour()
-    @JvmField var font = FontOptions()
+    @ReadFromParent @JvmField var font = FontOptions()
     @JvmField var fontSize: Fraction = NullFraction()
     @JvmField var selectedFontSize: Fraction = NullFraction()
     @JvmField var iconInsets = IconInsetsOptions()

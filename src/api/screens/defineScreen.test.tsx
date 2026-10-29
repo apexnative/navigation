@@ -12,7 +12,7 @@ import { defineScreen, definitionOf } from './defineScreen';
 import { registerScreens } from './registerScreens';
 
 jest.mock('../../engine/native', () => ({
-  commands: { mergeOptions: jest.fn() },
+  commands: { mergeOptions: jest.fn(), clearOptions: jest.fn() },
   getStartInfo: () => ({ coldStart: true, arrangements: false }),
   onNativeEvent: () => () => {},
 }));
@@ -212,6 +212,31 @@ describe('an edit of the options of a screen that shows', () => {
     });
     register(other);
     await Promise.resolve();
+    expect(sent).not.toHaveBeenCalled();
+  });
+
+  it('takes the options it took out off the screens that show', async () => {
+    function Inbox() {
+      return null;
+    }
+    const before = defineScreen({
+      component: Inbox,
+      options: (s) => s.title('Inbox').subtitle('3 new').largeTitle(),
+    });
+    register(before);
+    registerScreens([{ source: 'screens', screens: { Inbox: before } }]);
+    noteShown('Component11', 'Inbox');
+    const after = defineScreen({
+      component: function InboxEdited() {
+        return null;
+      },
+      options: (s) => s.title('Inbox'),
+    });
+    register(after, before);
+    await Promise.resolve();
+    expect((native.clearOptions as jest.Mock).mock.calls).toEqual([
+      ['Component11', ['topBar.subtitle', 'topBar.largeTitle']],
+    ]);
     expect(sent).not.toHaveBeenCalled();
   });
 });

@@ -208,6 +208,17 @@ class StackController(
         screen.changeOptions { it.topBar.buttons.back.setVisible() }
     }
 
+    /**
+     * `clearOptions` took options out of the own options of [node], an entry of this stack or the options screen of
+     * one: the back arrow's rule ([join]) writes its part of them again, so the first screen keeps its arrow hidden
+     * and another shows it unless its options say otherwise.
+     */
+    internal fun ownOptionsCleared(node: ViewController<*>) {
+        val entries = queue.entries
+        val entry = entries.firstOrNull { it === node || optionsScreen(it) === node } ?: return
+        backRule(entry, first = entry === entries.first())
+    }
+
     /** The key of [entry]; none without one. */
     internal fun keyOf(entry: ViewController<*>): String? = keys[entry]
 

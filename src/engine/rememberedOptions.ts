@@ -29,6 +29,39 @@ export function rememberMergedOptions(id: string, options: Options): void {
   remembered.set(id, before ? mergeOptions(before, kept) : kept);
 }
 
+/** Takes the options at the paths, such as `['topBar', 'subtitle']`, out of those remembered for the node with the id. */
+export function forgetMergedPaths(id: string, paths: readonly string[][]): void {
+  const options = remembered.get(id);
+  if (!options) return;
+  const kept = structuredCopy(options);
+  for (const path of paths) {
+    const parent = path
+      .slice(0, -1)
+      .reduce<Record<string, unknown> | undefined>(
+        (group, key) => group?.[key] as Record<string, unknown> | undefined,
+        kept
+      );
+    if (parent) delete parent[path[path.length - 1]!];
+  }
+  remembered.set(id, kept);
+}
+
+// A copy of the plain objects of options, the other values shared.
+function structuredCopy(options: Options): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(options).map(([key, value]) => [
+      key,
+      isGroup(value) ? structuredCopy(value as Options) : value,
+    ])
+  );
+}
+
+function isGroup(value: unknown): boolean {
+  return (
+    typeof value === 'object' && value !== null && Object.getPrototypeOf(value) === Object.prototype
+  );
+}
+
 /** Forgets the merged options of a node that went; a node of the last root keeps them until another root goes out. */
 export function forgetMergedOptions(id: string): void {
   if (!lastRoot?.ids.has(id)) remembered.delete(id);

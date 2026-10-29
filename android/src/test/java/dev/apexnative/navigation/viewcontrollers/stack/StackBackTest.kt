@@ -5,6 +5,7 @@ import dev.apexnative.navigation.layout.LayoutNode
 import dev.apexnative.navigation.layout.LayoutType
 import dev.apexnative.navigation.layout.RootLayout
 import dev.apexnative.navigation.options.ButtonOptions
+import dev.apexnative.navigation.options.OptionPaths
 import dev.apexnative.navigation.options.Options
 import dev.apexnative.navigation.options.params.Bool
 import dev.apexnative.navigation.options.params.Text
@@ -148,6 +149,19 @@ class StackBackTest {
         assertTrue(second.options.topBar.buttons.back.visible.isTrue)
         assertFalse(withButtons.options.topBar.buttons.back.visible.hasValue())
         assertTrue(hidden.options.topBar.buttons.back.visible.isFalse)
+    }
+
+    @Test
+    fun theArrowsRuleWritesAgainAfterAClear() {
+        h.start(h.screen("A"), h.screen("B"))
+        h.display.finishAll()
+        val (a, b) = h.queue.entries
+        for (screen in listOf(a, b)) screen.changeOptions { OptionPaths.clear(it, "topBar.backButton") }
+        assertFalse(a.options.topBar.buttons.back.visible.hasValue())
+        h.stack.ownOptionsCleared(a)
+        h.stack.ownOptionsCleared(b)
+        assertTrue(a.options.topBar.buttons.back.visible.isFalse)
+        assertTrue(b.options.topBar.buttons.back.visible.isTrue)
     }
 
     @Test

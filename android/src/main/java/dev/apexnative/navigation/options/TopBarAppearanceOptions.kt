@@ -109,7 +109,7 @@ class TopBarBackgroundOptions {
  */
 class ScrollEdgeAppearanceTitleOptions {
     @JvmField var color: ThemeColour = NullThemeColour()
-    @JvmField var font = FontOptions()
+    @ReadFromParent @JvmField var font = FontOptions()
     @JvmField var fontSize: Fraction = NullFraction()
 
     fun hasValue(): Boolean = color.hasValue() || font.hasValue() || fontSize.hasValue()

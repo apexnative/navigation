@@ -1,6 +1,7 @@
 #import "ANNTurboModule.h"
 #import "ANNAppDirection.h"
 #import "ANNArrangementState.h"
+#import "ANNArrangementViewController.h"
 #import "ANNCommandRunner.h"
 #import "ANNComponentViewController.h"
 #import "ANNDeepLinkQueue.h"
@@ -241,6 +242,51 @@ RCT_EXPORT_MODULE(ANNTurboModule)
                                if ([screen isKindOfClass:ANNComponentViewController.class]) {
                                    [(ANNComponentViewController *)screen takeKeyCommandsFocus];
                                }
+                           }
+                         }];
+}
+
+// `clearOptions` (development: Fast Refresh took options out of a screen that shows): the values at the paths leave
+// the node's own options, so it resolves to what its parents and the defaults give there, and what shows applies the
+// new resolution as after `setDefaultOptions`. The window and the node are found as for `mergeOptions`; an unknown
+// id, or no path that names an option, does nothing, without a log. The user layer stays.
+- (void)clearOptions:(NSString *)componentId paths:(NSArray *)paths {
+    NSString *what = ANNWhat(@"clear the options of the screen '%@'", componentId);
+    [ANNCommandRunner runVoid:@"clearOptions"
+                         what:what
+                         body:^{
+                           if (!ApexNavigation.mainWindow) {
+                               [ANNCommandRunner logFailure:@"clearOptions"
+                                                       text:ANNErrorTexts.nowhereToShow];
+                               return;
+                           }
+                           UIViewController *node = ANNCommandNode(componentId);
+#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 270100
+                           // The options set with a pair's id are its primary's, as for `mergeOptions`.
+                           if (@available(iOS 27.1, *)) {
+                               if ([node isKindOfClass:ANNArrangementViewController.class]) {
+                                   node = ((ANNArrangementViewController *)node).primary;
+                               }
+                           }
+#endif
+                           NSMutableArray<NSArray<NSString *> *> *keyPaths = [NSMutableArray new];
+                           for (id path in [paths isKindOfClass:NSArray.class] ? paths : @[]) {
+                               if ([path isKindOfClass:NSString.class] && [path length] > 0) {
+                                   [keyPaths addObject:[path componentsSeparatedByString:@"."]];
+                               }
+                           }
+                           if (!node || keyPaths.count == 0) {
+                               return;
+                           }
+                           __block BOOL cleared = NO;
+                           [node changeOwnOptions:^(ANNNavigationOptions *options) {
+                             for (NSArray<NSString *> *keyPath in keyPaths) {
+                                 cleared = [options clearValueAtPath:keyPath] || cleared;
+                             }
+                           }];
+                           // Paths that name no option change nothing that shows.
+                           if (cleared) {
+                               [ANNOptionsRepaint applyNewDefaultOptions:ANNDefaultOptions.current];
                            }
                          }];
 }

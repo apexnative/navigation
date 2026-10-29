@@ -22,7 +22,7 @@ class LargeTitleOptions {
     @JvmField var collapseOnScroll: Bool = NullBool()
     @JvmField var fontSize: Fraction = NullFraction()
     @JvmField var color: ThemeColour = NullThemeColour()
-    @JvmField var font = FontOptions()
+    @ReadFromParent @JvmField var font = FontOptions()
 
     /**
      * When the large title shows: [ALWAYS], [NEVER] or [AUTOMATIC], as on the screen below. `displayMode` over

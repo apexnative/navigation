@@ -398,6 +398,51 @@ static NSArray *ANNCopyItems(NSArray *items) {
     return NO;
 }
 
+// Generic over the whole tree, so that any option an edit takes out (`clearOptions`) goes without a list of options:
+// the field table names each key's property; a module's group, which reads its JSON itself, names its properties as
+// the keys.
+- (BOOL)clearValueAtPath:(NSArray<NSString *> *)path {
+    NSString *key = path.firstObject;
+    if (key.length == 0) {
+        return NO;
+    }
+    NSArray<ANNOptionField *> *fields = ANNFieldsOf(self.class);
+    NSString *property = nil;
+    if (fields.count) {
+        for (ANNOptionField *field in fields) {
+            if ([field.key isEqualToString:key]) {
+                property = field.property;
+                break;
+            }
+        }
+        if (!property) {
+            // A group without a key (the font of a text) holds keys of its parent's object.
+            for (ANNOptionField *field in fields) {
+                if (field.kind == ANNOptionFieldKindGroup && !field.key &&
+                    [[self valueForKey:field.property] clearValueAtPath:path]) {
+                    return YES;
+                }
+            }
+            return NO;
+        }
+    } else if ([ANNValuePropertiesOf(self.class) containsObject:key]) {
+        property = key;
+    } else {
+        return NO;
+    }
+    if (path.count == 1) {
+        ANNOptions *fresh = [[self.class alloc] initWithDict:nil];
+        [self setValue:[fresh valueForKey:property] forKey:property];
+        return YES;
+    }
+    id value = [self valueForKey:property];
+    if (![value isKindOfClass:ANNOptions.class]) {
+        return NO;
+    }
+    NSArray<NSString *> *rest = [path subarrayWithRange:NSMakeRange(1, path.count - 1)];
+    return [(ANNOptions *)value clearValueAtPath:rest];
+}
+
 - (id)copyWithZone:(NSZone *)zone {
     ANNOptions *copy = [[self.class alloc] initWithDict:nil];
     [copy mergeOptions:self];

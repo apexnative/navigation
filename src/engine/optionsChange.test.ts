@@ -54,4 +54,16 @@ describe('the change of a screen’s options after an edit', () => {
       )
     ).toEqual({ removed: [['topBar', 'subtitle'], ['statusBar']] });
   });
+
+  it('gives a color, an icon or a menu whole when a part of it is taken out', () => {
+    expect(
+      optionsChange(
+        { topBar: { title: { color: { light: 'black', dark: 'white' } } } },
+        { topBar: { title: { color: { light: 'black' } } } }
+      )
+    ).toEqual({
+      merge: { topBar: { title: { color: { light: 'black' } } } },
+      removed: [['topBar', 'title', 'color']],
+    });
+  });
 });

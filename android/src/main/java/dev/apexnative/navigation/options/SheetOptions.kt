@@ -50,7 +50,7 @@ class SheetOptions {
     @JvmField var selectedDetent: SheetDetent? = null
     @JvmField var largestUndimmedDetent: SheetDetent? = null
     /** The options give `largestUndimmedDetent`, `null` included. */
-    @JvmField var hasLargestUndimmedDetent = false
+    @OptionKey("largestUndimmedDetent") @JvmField var hasLargestUndimmedDetent = false
     @JvmField var grabber: Bool = NullBool()
     @JvmField var expandsOnScroll: Bool = NullBool()
     @JvmField var cornerRadius: Fraction = NullFraction()

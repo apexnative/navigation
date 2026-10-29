@@ -20,6 +20,12 @@ export function optionsChange(previous: Options, next: Options): OptionsChange {
 }
 
 function changed(previous: unknown, next: unknown, path: string[], removed: string[][]): unknown {
+  if (isWholeValue(path) && isPlainObject(previous) && isPlainObject(next)) {
+    if (sameValue(previous, next)) return undefined;
+    // A part of it taken out: the native side may merge the parts, so the value goes first.
+    if (Object.keys(previous).some((key) => next[key] === undefined)) removed.push(path);
+    return next;
+  }
   if (!isPlainObject(previous) || !isPlainObject(next)) {
     return sameValue(previous, next) ? undefined : next;
   }
@@ -33,6 +39,13 @@ function changed(previous: unknown, next: unknown, path: string[], removed: stri
     if (value !== undefined && next[key] === undefined) removed.push([...path, key]);
   }
   return Object.keys(result).length > 0 ? result : undefined;
+}
+
+// A color (`{ light, dark }`), an icon or an image, and a menu are one value each on the native side, not a group: a
+// part of one taken out goes as the whole value again.
+function isWholeValue(path: string[]): boolean {
+  const key = path[path.length - 1];
+  return key !== undefined && /^(color|icon|image|menu)$|(Color|Icon|Image)$/.test(key);
 }
 
 /**

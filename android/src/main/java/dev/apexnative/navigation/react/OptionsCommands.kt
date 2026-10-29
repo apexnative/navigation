@@ -1,8 +1,11 @@
 package dev.apexnative.navigation.react
 
 import android.content.Context
+import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.bridge.ReadableMap
+import com.facebook.react.bridge.ReadableType
 import dev.apexnative.navigation.options.DefaultOptions
+import dev.apexnative.navigation.options.OptionPaths
 import dev.apexnative.navigation.options.Options
 import dev.apexnative.navigation.options.OptionsReader
 import dev.apexnative.navigation.system.AppDirection
@@ -10,9 +13,9 @@ import dev.apexnative.navigation.viewcontrollers.navigator.Navigators
 import dev.apexnative.navigation.viewcontrollers.viewcontroller.ViewController
 
 /**
- * The commands of the options, `setDefaultOptions` and `mergeOptions`: both without a promise. Their options are read
- * on the module thread, in the runner's step before the main task; the main task stores and applies them. What can't be
- * read is logged (`[ApexNavigation] <method>: <text>`); the app goes on.
+ * The commands of the options, `setDefaultOptions`, `mergeOptions` and `clearOptions`: all without a promise. Their
+ * options and paths are read on the module thread, in the runner's step before the main task; the main task stores
+ * and applies them. What can't be read is logged (`[ApexNavigation] <method>: <text>`); the app goes on.
  */
 internal class OptionsCommands(
     private val runner: CommandRunner,
@@ -30,6 +33,11 @@ internal class OptionsCommands(
      * system UI follows (`Navigator.optionsMerged`, `mergeOptions` step 5). Main thread.
      */
     private val merged: (ViewController<*>, Options) -> Unit = { _, _ -> },
+    /**
+     * Repaints what shows in the current navigation activity, as [repaint] does without new default options
+     * (`Navigator.repaint`), after `clearOptions`. Main thread.
+     */
+    private val repaintCurrent: () -> Unit = {},
 ) {
     constructor(runner: CommandRunner, context: () -> Context?) : this(
         runner = runner,
@@ -40,6 +48,7 @@ internal class OptionsCommands(
             Navigators.all().forEach { it.navigator?.defaultOptionsChanged(direction) }
         },
         merged = { node, options -> Navigators.current()?.navigator?.optionsMerged(node, options) },
+        repaintCurrent = { Navigators.current()?.navigator?.repaint() },
     )
 
     /**
@@ -82,8 +91,37 @@ internal class OptionsCommands(
         merged(node, read.options)
     }
 
+    /**
+     * `clearOptions` (development: Fast Refresh, after an edit took options out of a screen that shows): the values at
+     * [paths] (`topBar.subtitle`; a group's path for the whole group) leave the own options of the node [componentId]
+     * names, through `ViewController.changeOptions` ([OptionPaths.clear]), so it resolves to what the layouts around it
+     * and the defaults give there; the user layer stays. The stack it is in writes its back arrow's visibility into
+     * them again (`StackController.ownOptionsCleared`), then what shows is repainted as after `setDefaultOptions`. No
+     * node with that id, or no path that names an option: nothing, not even a log line. Without an activity: one log
+     * line, as `mergeOptions`.
+     */
+    fun clearOptions(componentId: String, paths: ReadableArray) = runner.runVoid(
+        name = CLEAR_OPTIONS,
+        what = "clear the options of the screen '$componentId'",
+        prepare = {
+            (0 until paths.size()).filter { paths.getType(it) == ReadableType.String }.mapNotNull(paths::getString)
+        },
+    ) { read ->
+        if (!runner.hasActivity()) {
+            runner.logFailure(CLEAR_OPTIONS, ErrorTexts.nowhereToShow())
+            return@runVoid
+        }
+        val node = findNode(componentId) ?: return@runVoid
+        val known = read.filter { OptionPaths.find(node.options, it) != null }
+        if (known.isEmpty()) return@runVoid
+        node.changeOptions { own -> known.forEach { OptionPaths.clear(own, it) } }
+        node.findParentStack()?.ownOptionsCleared(node)
+        repaintCurrent()
+    }
+
     private companion object {
         const val SET_DEFAULT_OPTIONS = "setDefaultOptions"
         const val MERGE_OPTIONS = "mergeOptions"
+        const val CLEAR_OPTIONS = "clearOptions"
     }
 }

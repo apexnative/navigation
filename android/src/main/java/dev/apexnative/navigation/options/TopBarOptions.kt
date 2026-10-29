@@ -41,7 +41,7 @@ class TopBarOptions {
     @JvmField var title = TitleOptions()
     @JvmField var subtitle = SubtitleOptions()
     /** `backButton`, `leftButtons`, `rightButtons`, `centerButtons`. */
-    @JvmField var buttons = TopBarButtons()
+    @ReadFromParent @JvmField var buttons = TopBarButtons()
     @JvmField var customizationId: Text = NullText()
     /** Shared between copies, as its module wants. */
     @JvmField var overflowMenu: ButtonMenuOptions? = null
@@ -221,13 +221,13 @@ class TopBarOptions {
  * don't give it; `[]` takes the buttons of the layers below away.
  */
 class TopBarButtons {
-    @JvmField var back = BackButtonOptions()
+    @OptionKey("backButton") @JvmField var back = BackButtonOptions()
     /** `topBar.leftButtons`; null when the options don't give them. */
-    @JvmField var left: List<ButtonOptions>? = null
+    @OptionKey("leftButtons") @JvmField var left: List<ButtonOptions>? = null
     /** `topBar.rightButtons`; null when the options don't give them. */
-    @JvmField var right: List<ButtonOptions>? = null
+    @OptionKey("rightButtons") @JvmField var right: List<ButtonOptions>? = null
     /** `topBar.centerButtons`; null when the options don't give them. */
-    @JvmField var center: List<ButtonOptions>? = null
+    @OptionKey("centerButtons") @JvmField var center: List<ButtonOptions>? = null
 
     fun hasValue(): Boolean = back.hasValue() || left != null || right != null || center != null
 
@@ -272,7 +272,7 @@ class BackButtonOptions {
     @JvmField var showTitle: Bool = NullBool()
     @JvmField var color: ThemeColour = NullThemeColour()
     @JvmField var fontSize: Fraction = NullFraction()
-    @JvmField var font = FontOptions()
+    @ReadFromParent @JvmField var font = FontOptions()
     @JvmField var iconBackground = IconBackgroundOptions()
     @JvmField var testID: Text = NullText()
     @JvmField var enableMenu: Bool = NullBool()
