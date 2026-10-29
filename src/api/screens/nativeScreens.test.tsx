@@ -87,4 +87,13 @@ describe('a native screen', () => {
     await Promise.resolve();
     expect(reload).toHaveBeenCalledTimes(1);
   });
+
+  it('mounts anew when an edit gives a new version, as its hook may have other hooks', () => {
+    const signed = jest.fn();
+    (
+      globalThis as unknown as { __ReactRefresh: Record<string, unknown> }
+    ).__ReactRefresh.createSignatureFunctionForTransform = () => signed;
+    const screen = nativeScreen('Feed', { useProps: () => ({}) });
+    expect(signed).toHaveBeenCalledWith(screen, 'apexnative.navigation', true);
+  });
 });

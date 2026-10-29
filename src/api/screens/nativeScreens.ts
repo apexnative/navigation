@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { redefined } from '../../engine/refresh';
+import { redefined, resetOnEdit } from '../../engine/refresh';
 import type { ScreenArrangement } from './arrangement';
 import type { ScreenOptionsInput } from './defineScreen';
 
@@ -69,6 +69,8 @@ export function nativeScreen<Props extends object = {}>(
     useProps: definition.useProps,
     arrangement,
   });
+  // The hook is the app's and may have other hooks after an edit: its new version mounts anew.
+  resetOnEdit(screen);
   redefined(screen);
   return screen;
 }
