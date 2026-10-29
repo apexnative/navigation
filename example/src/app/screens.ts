@@ -53,6 +53,7 @@ import { MiniPlayerOverlay } from '../demo/MiniPlayerOverlay';
 import { PlainListScreen } from '../demo/PlainListScreen';
 import { TitleView } from '../demo/TitleView';
 import { ToastOverlay } from '../demo/ToastOverlay';
+import { SchemeOverlay } from '../demo/SchemeOverlay';
 import { ShapeScreen } from '../demo/ShapeScreen';
 import { ShapesScreen } from '../demo/ShapesScreen';
 import { BarAvatar } from '../examples/BarAvatar';
@@ -89,6 +90,8 @@ export const screens = {
   DialogOverlay,
   MiniPlayerOverlay,
   FormOverlay,
+  // The overlay of 15.3.
+  SchemeOverlay,
   // The demo of tabs of section 9.
   TabsDemo: TabsDemoScreen,
   TabsAccessory,

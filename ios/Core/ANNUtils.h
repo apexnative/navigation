@@ -23,6 +23,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// The key window of `scene`; nil when none of its windows is key.
 + (nullable UIWindow *)keyWindowOfScene:(nullable UIWindowScene *)scene;
 
+/// A new window of `windowClass` (`UIWindow` or a subclass) for the core: in the navigation window's scene, or at the
+/// size of `mainScreen` before that window has one. It takes the navigation window's `overrideUserInterfaceStyle`:
+/// React Native's `Appearance.setColorScheme` sets the style once, on the windows there are at that moment, and a
+/// window of the system's style would show its screens in the other theme and switch the app's theme in JS when its
+/// hosting views move in. Every window the core makes but the main window, the style's source, comes from here.
++ (__kindof UIWindow *)makeWindowOfClass:(Class)windowClass;
+
 /// The status bar's frame in the navigation window's scene (its status bar manager); `CGRectZero` without a scene.
 @property(class, nonatomic, readonly) CGRect statusBarFrame;
 
