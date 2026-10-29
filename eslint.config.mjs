@@ -48,8 +48,8 @@ export default defineConfig([
     },
   },
   {
-    // The CLI: CommonJS run by Node.
-    files: ['cli/**/*.js'],
+    // The CLI and the Metro setup: CommonJS run by Node.
+    files: ['cli/**/*.js', 'metro/**/*.js'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'commonjs',
