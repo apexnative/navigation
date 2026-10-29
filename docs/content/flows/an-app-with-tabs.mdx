@@ -250,7 +250,7 @@ Each screen is a React root of its own, and each tab holds its screens: a React 
 
 ## Heavy tabs and a fast start {#lazy}
 
-By default every tab is created with the tabs. With many heavy tabs, `Tabs(…).lazy()` creates each the first time it shows, so the app starts faster. A tab not created yet runs none of its code: its `useTabPress` and its effects wait for the first visit. On <Os name="iOS" /> that holds for every tab but the selected one, lazy or not: a screen's component renders the first time its tab shows. That is one more reason the badge of step 5 comes from a store, not from the Inbox screen. More: [When tabs are created](../containers/tabs#lazy).
+By default every tab is created with the tabs. With many heavy tabs, `Tabs(…).lazy()` creates each the first time it shows, so the app starts faster. A tab not created yet runs none of its code: its `useTabPress` and its effects wait for the first visit. That is one more reason the badge of step 5 comes from a store, not from the Inbox screen. More: [When tabs are created](../containers/tabs#lazy).
 
 ## On iPad and iOS 26 {#platforms}
 
