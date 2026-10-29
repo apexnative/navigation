@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.0-alpha.8](https://github.com/apexnative/navigation/compare/v1.0.0-alpha.7...v1.0.0-alpha.8) (2026-10-29)
+
+
+### Bug Fixes
+
+* group options reach the screens that show, and the android bar hides as it shows ([#63](https://github.com/apexnative/navigation/issues/63)) ([474ca8a](https://github.com/apexnative/navigation/commit/474ca8aae53e5284d64a5d90dd852fdbdcbabcac))
+* **ios:** overlays and preloaded tabs take the scheme the app set with Appearance.setColorScheme ([#61](https://github.com/apexnative/navigation/issues/61)) ([232d7e0](https://github.com/apexnative/navigation/commit/232d7e038b53cd9656e59c7cfa5cbf0f52f9b587))
+
 ## [1.0.0-alpha.7](https://github.com/apexnative/navigation/compare/v1.0.0-alpha.6...v1.0.0-alpha.7) (2026-10-29)
 
 
