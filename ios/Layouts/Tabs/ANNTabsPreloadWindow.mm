@@ -1,6 +1,6 @@
 #import "ANNTabsPreloadWindow.h"
 #import "ANNAssert.h"
-#import "ApexNavigation+Internal.h"
+#import "ANNUtils.h"
 
 // Every live preload window, weakly: the reload hides them, the scene's connection moves them. Main queue.
 static NSHashTable<ANNTabsPreloadWindow *> *ANNPreloadWindows(void) {
@@ -15,9 +15,7 @@ static NSHashTable<ANNTabsPreloadWindow *> *ANNPreloadWindows(void) {
 
 + (instancetype)preloadWindow {
     ANNAssertMainQueue();
-    UIWindowScene *scene = ApexNavigation.mainWindow.windowScene;
-    ANNTabsPreloadWindow *window =
-        scene ? [[self alloc] initWithWindowScene:scene] : [[self alloc] initWithFrame:CGRectZero];
+    ANNTabsPreloadWindow *window = [ANNUtils makeWindowOfClass:self];
     window.frame = CGRectZero;
     window.clipsToBounds = YES;
     window.userInteractionEnabled = NO;

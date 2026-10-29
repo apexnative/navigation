@@ -133,7 +133,10 @@ Top-level files: `Package.swift` (SwiftPM; `headerFolders` lists every folder wh
 - Use an `@available` check for newer OS APIs, and `#if __IPHONE_OS_VERSION_MAX_ALLOWED >= …` for names of a newer SDK.
 - React Native hears of the app's light or dark style only from its hosting views in the window. A view that stands in
   for one (`ANNSlotScreenView`, the screens of one tree) posts the trait change itself, with the window filter of
-  `ANNSurfaceHostingView`; without it `useColorScheme` keeps the old theme.
+  `ANNSurfaceHostingView`; without it `useColorScheme` keeps the old theme. `Appearance.setColorScheme` sets the style
+  only on the windows there are at that moment: every window the core makes but the main window comes from
+  `+[ANNUtils makeWindowOfClass:]`, which gives it the main window's style. A window of the system's style would draw
+  its screens in the other theme, and its hosting views would switch the app's theme in JS.
 - A step that runs later in a command (a ready handler, a timer, a transition's end) goes through the owner's guard
   (`protect:step:`), so an exception rejects the command instead of crashing the app. So does the start of a wait
   (the root, a modal, an overlay: their record is listed and parked by then), and the modal's end steps inside UIKit's

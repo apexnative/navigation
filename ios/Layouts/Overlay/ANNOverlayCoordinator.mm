@@ -238,13 +238,7 @@ static NSMutableArray<ANNOverlay *> *ANNOverlays;
                 [self dismiss:shown answer:nil];
             }
         }
-        UIWindow *mainWindow = ApexNavigation.mainWindow;
-        UIWindowScene *scene = mainWindow.windowScene;
-        // `initWithFrame:` is deprecated from iOS 26 on and warns only with a deployment target from 26: a window
-        // without a scene is made so, and joins the scene as the main window gets it.
-        ANNOverlayWindow *window =
-            scene ? [[ANNOverlayWindow alloc] initWithWindowScene:scene]
-                  : [[ANNOverlayWindow alloc] initWithFrame:ANNUtils.mainScreen.bounds];
+        ANNOverlayWindow *window = [ANNUtils makeWindowOfClass:ANNOverlayWindow.class];
         window.windowLevel = UIWindowLevelNormal;
         window.backgroundColor = UIColor.clearColor;
         window.previousWindow = [self keyWindow];

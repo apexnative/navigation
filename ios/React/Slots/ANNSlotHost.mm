@@ -35,9 +35,7 @@ static RCTFabricSurface *ANNSlotHostSurface;
 
     // Hidden and without a root view controller: it takes no touches and has no say in the orientation or the status
     // bar (a visible window above the app does). The tree still mounts; the slots move their content into screens.
-    UIWindowScene *scene = ANNUtils.mainWindow.windowScene;
-    UIWindow *window = scene ? [[UIWindow alloc] initWithWindowScene:scene]
-                             : [[UIWindow alloc] initWithFrame:ANNUtils.mainScreen.bounds];
+    UIWindow *window = [ANNUtils makeWindowOfClass:UIWindow.class];
     surfaceView.frame = window.bounds;
     [window addSubview:surfaceView];
     window.hidden = YES;

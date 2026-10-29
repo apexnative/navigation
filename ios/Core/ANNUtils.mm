@@ -26,6 +26,16 @@
     return windows;
 }
 
++ (UIWindow *)makeWindowOfClass:(Class)windowClass {
+    UIWindowScene *scene = self.mainWindow.windowScene;
+    // `initWithFrame:` is deprecated from iOS 26 on and warns only with a deployment target from 26: a window without a
+    // scene is made so, and joins the scene as the main window gets it.
+    UIWindow *window = scene ? [[windowClass alloc] initWithWindowScene:scene]
+                             : [[windowClass alloc] initWithFrame:self.mainScreen.bounds];
+    window.overrideUserInterfaceStyle = self.mainWindow.overrideUserInterfaceStyle;
+    return window;
+}
+
 + (UIWindow *)keyWindowOfScene:(UIWindowScene *)scene {
     for (UIWindow *window in scene.windows) {
         if (window.isKeyWindow) {
