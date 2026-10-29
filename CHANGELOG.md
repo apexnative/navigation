@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.0-alpha.7](https://github.com/apexnative/navigation/compare/v1.0.0-alpha.6...v1.0.0-alpha.7) (2026-10-29)
+
+
+### Features
+
+* own android sheet and bar row, ios transitions in core animation, fast refresh of screens ([#56](https://github.com/apexnative/navigation/issues/56)) ([3113b42](https://github.com/apexnative/navigation/commit/3113b42a466f59490faaca181178a7840dab2826))
+
 ## [1.0.0-alpha.6](https://github.com/apexnative/navigation/compare/v1.0.0-alpha.5...v1.0.0-alpha.6) (2026-10-25)
 
 
