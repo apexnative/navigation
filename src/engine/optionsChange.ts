@@ -35,7 +35,11 @@ function changed(previous: unknown, next: unknown, path: string[], removed: stri
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
-function sameValue(a: unknown, b: unknown): boolean {
+/**
+ * Whether two values are the same: plain objects key by key, arrays item by item, functions by their source (a module
+ * that ran again makes them anew), anything else by identity.
+ */
+export function sameValue(a: unknown, b: unknown): boolean {
   if (typeof a === 'function' && typeof b === 'function') return String(a) === String(b);
   if (Array.isArray(a) && Array.isArray(b)) {
     return a.length === b.length && a.every((item, index) => sameValue(item, b[index]));
