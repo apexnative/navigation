@@ -11,10 +11,10 @@ NS_ASSUME_NONNULL_BEGIN
 typedef NS_ENUM(NSInteger, ANNWaitedReadiness) {
     /// The screen's content rendered: what the user sees.
     ANNWaitedReadinessContent,
-    /// The screen's root mounted once: a screen the user doesn't see yet (an unselected tab of `together`), which
-    /// renders its content only where it shows. Its part of a wait ends at the command's 0.5 s at the latest, and its
-    /// bar components are not waited for.
-    ANNWaitedReadinessRootMounted,
+    /// The screen's content rendered, on a screen the user doesn't see yet (an unselected tab of `together`, which
+    /// renders unseen in the tabs' view). Its part of a wait ends at the command's 0.5 s at the latest, and its bar
+    /// components are not waited for.
+    ANNWaitedReadinessUnseen,
 };
 
 /// A transition of the navigation is done: what it moved is in place.
@@ -97,7 +97,7 @@ typedef void (^ANNTransitionRejectionBlock)(NSString *message, NSError *_Nullabl
 - (NSArray<UIViewController *> *)waitedComponentViewControllers;
 
 /// The readiness a wait needs of `screen`, a waited screen inside this node; a node without an answer leaves it to its
-/// parents (`ANNWaitedReadinessOf`). The tabs answer "root mounted" for the screens of their unselected tabs.
+/// parents (`ANNWaitedReadinessOf`). The tabs answer "unseen" for the screens of their unselected tabs.
 - (ANNWaitedReadiness)waitedReadinessOfScreen:(UIViewController *)screen;
 
 #pragma mark - The children

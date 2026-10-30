@@ -128,8 +128,8 @@ using namespace facebook::react;
 
 // The screen renders its content once this view is laid out in its place with a size, as
 // react-native-safe-area-context does: a list that is there before the first layout of the top bar
-// makes UIKit start the large title collapsed. A tab that isn't shown has its root outside the
-// window: it renders its content when it shows.
+// makes UIKit start the large title collapsed. A tab rendered before it shows lays out in the
+// tabs' view, unseen, and renders its content there.
 - (void)sendReadyIfLaidOut {
     if (_readySent || _eventEmitter == nullptr || self.superview == nil) {
         return;

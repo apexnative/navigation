@@ -4,10 +4,11 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// A place where the views of nodes wait for their content unseen (their safe area views lay out only in a window): the
 /// window under the current root while a root waits, a stack's view under UIKit's container while a screen of the stack
-/// waits or renders. A parked view sits at the back of its host, at the host's size and following it (a rotation, a
-/// resize), gets no touches and is hidden from accessibility; it isn't a child of anything there, and its node's
-/// appearance is driven meanwhile (`ANNAppearanceDispatcher driveAppearanceOf:`), so UIKit's appearance callbacks
-/// report nothing for it. Each node leaves it as it was. Main queue.
+/// waits or renders, the tabs' view while a tab rendered before it shows renders its content. A parked view sits at the
+/// back of its host, at the host's size and following it (a rotation, a resize), gets no touches and is hidden from
+/// accessibility; it isn't a child of anything there (a tab stays the tabs' child), and its node's appearance is driven
+/// meanwhile (`ANNAppearanceDispatcher driveAppearanceOf:`), so UIKit's appearance callbacks report nothing for it.
+/// Each node leaves it as it was. Main queue.
 @interface ANNParking : NSObject
 
 /// `node`'s view waits in `host` from now on, with what it had kept. NO when it waits here already.

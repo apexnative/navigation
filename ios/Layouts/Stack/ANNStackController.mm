@@ -3,6 +3,7 @@
 #import "ANNAppDirection.h"
 #import "ANNAppearanceDispatcher.h"
 #import "ANNAssert.h"
+#import "ANNBottomTabsController.h"
 #import "ANNComponentViewController.h"
 #import "ANNElementFinder.h"
 #import "ANNErrorTexts.h"
@@ -1175,10 +1176,12 @@ static const CGFloat ANNOwnSwipeEdgeWidth = 20;
     return self;
 }
 
-// In More the More navigation is what shows the screens.
+// In More the More navigation is what shows the screens. A tab rendered before it shows is in a window while its
+// screens render there, and not on screen.
 - (BOOL)stackIsOnScreen {
     return self.shownNavigationController.viewIfLoaded.window != nil &&
-           ![ANNPendingLayers isWaitingToShow:self];
+           ![ANNPendingLayers isWaitingToShow:self] &&
+           ![ANNBottomTabsController isInUnseenTab:self];
 }
 
 // Only the stack's own transitions (a push, a pop, a replace of its view controllers, the interactive pop): a

@@ -179,7 +179,7 @@ static NSMutableArray<ANNOverlay *> *ANNOverlays;
                   limit:ANNOverlayRenderLimit
                     bar:ANNRenderWaitBarWithContent
               barLimits:withContent];
-    wait.mountLimit = ANNOverlayRenderLimit;
+    wait.unseenLimit = ANNOverlayRenderLimit;
     wait.protect = ^(dispatch_block_t step) {
       [ANNOverlayCoordinator protectWaitOf:weakOverlay step:step];
     };

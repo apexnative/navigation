@@ -27,6 +27,18 @@ NS_ASSUME_NONNULL_BEGIN
                                   inStack:(UINavigationController *)stack
                                   options:(ANNNavigationOptions *)options;
 
+/// The same, measured in `host` instead of the stack's view: for a stack UIKit gives no safe area yet (a tab not shown,
+/// parked in the tabs' view), `host` is a view with the safe area the stack gets as it shows (the shown tab's). Nil
+/// when `host` isn't in a window.
++ (nullable ANNScreenPlace *)placeOfEntry:(UIViewController *)entry
+                                  inStack:(UINavigationController *)stack
+                               measuredIn:(UIView *)host
+                                  options:(ANNNavigationOptions *)options;
+
+/// The place of a screen that is a tab of its own, with no stack: the safe area of `host` (the shown tab's view), no
+/// top bar. Nil when `host` isn't in a window.
++ (nullable ANNScreenPlace *)placeOfScreen:(UIViewController *)screen measuredIn:(UIView *)host;
+
 /// The safe area of the entry's view in the place.
 @property(nonatomic, readonly) UIEdgeInsets safeArea;
 

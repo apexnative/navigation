@@ -45,6 +45,9 @@ typedef NS_ENUM(NSInteger, ANNTabPressSource) {
 /// The nearest tabs among the layout parents of `node` (not `node` itself); nil out of tabs.
 + (nullable ANNBottomTabsController *)tabsOf:(UIViewController *)node;
 
+/// `node` is in a tab rendered before it shows, which renders its content in its tabs' view: in a window, not shown.
++ (BOOL)isInUnseenTab:(UIViewController *)node;
+
 /// The tabs in layout order.
 @property(nonatomic, copy, readonly) NSArray<UIViewController *> *layoutTabs;
 

@@ -106,6 +106,9 @@ Top-level files: `Package.swift` (SwiftPM; `headerFolders` lists every folder wh
   list would move as the push starts and UIKit would show the large title only after the transition. On iOS 26 its
   large title also keeps a place of the core's for the push (`arrivesByPushOn:`). Check Showcase 1.4 (with a font
   size), every section panel and 12.6 on push, pop and swipe after any change to waits, parking or the large title.
+  A tab rendered before it shows keeps its parent, yet UIKit gives its views no safe area either: it renders parked
+  in the tabs' view with places measured in the shown tab's view, then leaves the parking, since the core takes a view
+  in a window for one on screen (`isInUnseenTab:`); its screens keep that place until they appear.
 - Every change of a stack's children goes through its `ANNStackQueue`. The core's own calls to UIKit's navigation
   come only from there; UIKit's own pops are followed (`uikitShows:`), not fought.
 - Every UIKit present and dismiss in the main window is a step in `ANNPresentationGate`. UIKit drops a transition

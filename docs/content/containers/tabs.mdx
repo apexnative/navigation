@@ -161,7 +161,7 @@ From a screen of the tab, `setTabBadge(count)` needs no id: it sets the badge of
 
 ## When tabs are created {#lazy}
 
-By default every tab is created with the tabs, so a switch shows it at once. Its screen renders then on <Os name="Android" />; on <Os name="iOS" /> the screen's component renders the first time the tab shows, so an effect that must run from the start goes in `appProvider` or a screen of the selected tab. `Tabs().lazy()` creates each tab the first time it shows. The app starts faster when its tabs are heavy, and a tab the user never opens costs nothing.
+By default every tab is created with the tabs, so a switch shows it at once. On <Os name="iOS" /> a text input's `autoFocus` in a tab not selected yet does nothing then: focus the field in `useScreenAppear`. `Tabs().lazy()` creates each tab the first time it shows. The app starts faster when its tabs are heavy, and a tab the user never opens costs nothing.
 
 ```ts
 const main = Tabs(/* … */).lazy();

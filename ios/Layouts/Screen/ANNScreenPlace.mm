@@ -49,17 +49,16 @@ static void ANNCopyBarItem(UINavigationItem *from, UINavigationItem *to) {
 }
 
 // Everything the measure reads: the same answer while none of it changed.
-static NSString *ANNPlaceSignature(UINavigationItem *item, UINavigationController *stack, BOOL showsTopBar,
-                                   BOOL showsToolbar) {
-    UIView *stackView = stack.view;
+static NSString *ANNPlaceSignature(UINavigationItem *item, UINavigationController *stack,
+                                   UIView *host, BOOL showsTopBar, BOOL showsToolbar) {
     NSMutableString *signature = [NSMutableString
         stringWithFormat:@"%@|%@|%ld|%p|%p|%p|%p|%p|%d|%d|%d|%d|%@|%@", item.title, item.prompt,
                          (long)item.largeTitleDisplayMode, item.standardAppearance,
                          item.scrollEdgeAppearance, item.compactAppearance,
                          item.compactScrollEdgeAppearance, item.searchController,
                          item.hidesSearchBarWhenScrolling, stack.navigationBar.prefersLargeTitles,
-                         showsTopBar, showsToolbar, NSStringFromCGSize(stackView.bounds.size),
-                         NSStringFromUIEdgeInsets(stackView.safeAreaInsets)];
+                         showsTopBar, showsToolbar, NSStringFromCGSize(host.bounds.size),
+                         NSStringFromUIEdgeInsets(host.safeAreaInsets)];
     [signature appendFormat:@"|%p|%ld", stack,
                             (long)stack.topViewController.navigationItem.largeTitleDisplayMode];
     if (@available(iOS 16.0, *)) {
@@ -91,9 +90,19 @@ static NSString *ANNPlaceSignature(UINavigationItem *item, UINavigationControlle
 + (ANNScreenPlace *)placeOfEntry:(UIViewController *)entry
                          inStack:(UINavigationController *)stack
                          options:(ANNNavigationOptions *)options {
-    ANNAssertMainQueue();
     UIView *stackView = stack.viewIfLoaded;
-    UIWindow *window = stackView.window;
+    if (!stackView) {
+        return nil;
+    }
+    return [self placeOfEntry:entry inStack:stack measuredIn:stackView options:options];
+}
+
++ (ANNScreenPlace *)placeOfEntry:(UIViewController *)entry
+                         inStack:(UINavigationController *)stack
+                      measuredIn:(UIView *)host
+                         options:(ANNNavigationOptions *)options {
+    ANNAssertMainQueue();
+    UIWindow *window = host.window;
     if (!window) {
         return nil;
     }
@@ -102,19 +111,20 @@ static NSString *ANNPlaceSignature(UINavigationItem *item, UINavigationControlle
     BOOL showsTabBar = !entry.hidesBottomBarWhenPushed &&
                        [[ANNBottomTabsController tabsOf:entry] showsTabBarForScreen:entry];
     NSString *signature =
-        ANNPlaceSignature(entry.navigationItem, stack, showsTopBar, showsToolbar);
+        ANNPlaceSignature(entry.navigationItem, stack, host, showsTopBar, showsToolbar);
     ANNScreenPlace *kept = objc_getAssociatedObject(entry, ANNScreenPlaceKey);
     if (kept && kept.showsTabBar == showsTabBar && [kept->_signature isEqualToString:signature]) {
         return kept;
     }
     UIEdgeInsets safeArea = [self measureEntry:entry
                                        inStack:stack
+                                          host:host
                                    showsTopBar:showsTopBar
                                   showsToolbar:showsToolbar];
-    // The measure stands in the stack's view, whose safe area has the tab bar shown now: an entry that hides it gets
-    // the window's bottom there.
+    // The measure stands in the host, whose safe area has the tab bar shown now: an entry that hides it gets the
+    // window's bottom there.
     if (!showsTabBar) {
-        CGFloat tabBar = stackView.safeAreaInsets.bottom - window.safeAreaInsets.bottom;
+        CGFloat tabBar = host.safeAreaInsets.bottom - window.safeAreaInsets.bottom;
         if (tabBar > 0) {
             safeArea.bottom = MAX(safeArea.bottom - tabBar, 0);
         }
@@ -127,10 +137,31 @@ static NSString *ANNPlaceSignature(UINavigationItem *item, UINavigationControlle
     return place;
 }
 
-// The probe lays out at the stack's size in the stack's view, unseen and for this moment only, and leaves no search
-// field behind.
++ (ANNScreenPlace *)placeOfScreen:(UIViewController *)screen measuredIn:(UIView *)host {
+    ANNAssertMainQueue();
+    UIWindow *window = host.window;
+    if (!window) {
+        return nil;
+    }
+    BOOL showsTabBar = [[ANNBottomTabsController tabsOf:screen] showsTabBarForScreen:screen];
+    UIEdgeInsets safeArea = host.safeAreaInsets;
+    if (!showsTabBar) {
+        CGFloat tabBar = safeArea.bottom - window.safeAreaInsets.bottom;
+        if (tabBar > 0) {
+            safeArea.bottom = MAX(safeArea.bottom - tabBar, 0);
+        }
+    }
+    return [[ANNScreenPlace alloc] initWithSafeArea:safeArea
+                                        showsTopBar:NO
+                                        showsTabBar:showsTabBar
+                                          signature:@""];
+}
+
+// The probe lays out at the host's size in the host, unseen and for this moment only, and leaves no search field
+// behind.
 + (UIEdgeInsets)measureEntry:(UIViewController *)entry
                      inStack:(UINavigationController *)stack
+                        host:(UIView *)host
                  showsTopBar:(BOOL)showsTopBar
                 showsToolbar:(BOOL)showsToolbar {
     UINavigationController *probe = ANNPlaceProbeOf(stack);
@@ -152,7 +183,6 @@ static NSString *ANNPlaceSignature(UINavigationItem *item, UINavigationControlle
                                                           action:nil] ]
                      : nil;
     __block UIEdgeInsets safeArea = UIEdgeInsetsZero;
-    UIView *stackView = stack.view;
     UIView *probeView = probe.view;
     [UIView performWithoutAnimation:^{
       [probe setNavigationBarHidden:!showsTopBar animated:NO];
@@ -160,8 +190,8 @@ static NSString *ANNPlaceSignature(UINavigationItem *item, UINavigationControlle
       probeView.alpha = 0;
       probeView.userInteractionEnabled = NO;
       probeView.accessibilityElementsHidden = YES;
-      probeView.frame = stackView.bounds;
-      [stackView insertSubview:probeView atIndex:0];
+      probeView.frame = host.bounds;
+      [host insertSubview:probeView atIndex:0];
       [probeView layoutIfNeeded];
       [top.view layoutIfNeeded];
       safeArea = top.view.safeAreaInsets;

@@ -233,7 +233,7 @@ static void ANNCollectIds(UIViewController *node, NSMutableSet<NSString *> *ids)
                   limit:contentFirst ? 0 : ANNModalRenderLimit
                     bar:contentFirst ? ANNRenderWaitBarAfterContent : ANNRenderWaitBarWithContent
               barLimits:contentFirst ? ownPhase : withContent];
-    wait.mountLimit = ANNModalRenderLimit;
+    wait.unseenLimit = ANNModalRenderLimit;
     wait.protect = ^(dispatch_block_t step) {
       [ANNModalCoordinator protect:weakModal step:step];
     };
