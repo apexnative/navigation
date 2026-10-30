@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.0-alpha.10](https://github.com/apexnative/navigation/compare/v1.0.0-alpha.9...v1.0.0-alpha.10) (2026-10-30)
+
+
+### Bug Fixes
+
+* **ios:** insets reach JavaScript once a fold of iPhone Duo settles ([#69](https://github.com/apexnative/navigation/issues/69)) ([7831546](https://github.com/apexnative/navigation/commit/78315463a69af5c683cfaffc7d4fd56fd20f3096))
+
 ## [1.0.0-alpha.9](https://github.com/apexnative/navigation/compare/v1.0.0-alpha.8...v1.0.0-alpha.9) (2026-10-30)
 
 

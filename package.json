@@ -1,6 +1,6 @@
 {
   "name": "@apexnative/navigation",
-  "version": "1.0.0-alpha.9",
+  "version": "1.0.0-alpha.10",
   "description": "Native navigation for React Native: platform stacks, tabs, modals and side menus on iOS, iPadOS and Android",
   "keywords": [
     "react-native",
