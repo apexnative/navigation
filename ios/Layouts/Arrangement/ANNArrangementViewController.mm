@@ -186,6 +186,10 @@ static BOOL ANNIsShown(UIViewController *screen, UIArrangementViewState *state, 
     // What UIKit has now, once an arrangement went to it.
     BOOL _arranged;
     BOOL _primaryAlone;
+    // The scene's size classes the pair takes for a size transition, and which transition set them last: only that
+    // one's end takes them away.
+    BOOL _sceneSizeClasses;
+    NSUInteger _sceneSizeClassesTransition;
 }
 
 - (instancetype)initWithLayoutInfo:(ANNLayoutInfo *)layoutInfo
@@ -225,7 +229,7 @@ static BOOL ANNIsShown(UIViewController *screen, UIArrangementViewState *state, 
     _arrangement = ANNArrangementOfData(data);
     _primaryAloneWhenSmall = ![@"pair" isEqual:data[@"compact"]];
     // Before it is in a window: the window's size classes, which it will most likely have.
-    [self arrangeForTraits:ANNUtils.mainWindow.traitCollection animated:NO];
+    [self arrangeForTraits:ANNUtils.mainWindow.traitCollection];
     if (!_arranged) {
         [self updateArrangement:_arrangement animated:NO];
     }
@@ -239,7 +243,7 @@ static BOOL ANNIsShown(UIViewController *screen, UIArrangementViewState *state, 
 // `compact: 'primary'`: the pair shows only in a large window; in any other (an iPhone, iPhone Duo folded) the primary
 // shows alone, and the secondary waits out of the window until the window is large (iPhone Duo unfolded). With
 // `compact: 'pair'` UIKit lays the pair out everywhere.
-- (void)arrangeForTraits:(UITraitCollection *)traits animated:(BOOL)animated {
+- (void)arrangeForTraits:(UITraitCollection *)traits {
     NSNumber *large = ANNIsLargeWindow(traits);
     if (!large) {
         return;
@@ -251,7 +255,7 @@ static BOOL ANNIsShown(UIViewController *screen, UIArrangementViewState *state, 
     BOOL changed = _arranged;
     _arranged = YES;
     _primaryAlone = alone;
-    [self updateArrangement:alone ? ANNPrimaryAloneArrangement() : _arrangement animated:animated];
+    [self updateArrangement:alone ? ANNPrimaryAloneArrangement() : _arrangement animated:NO];
     // A secondary that leaves the window renders no content: the pair waits for it no more.
     if (alone && _secondaryCounted) {
         _secondaryCounted = NO;
@@ -264,8 +268,69 @@ static BOOL ANNIsShown(UIViewController *screen, UIArrangementViewState *state, 
     }
 }
 
+// New size classes come with a new window size, which leads the pair to its new place. UIKit's own animation of the
+// arrangement would aim at a layout it gives only in between (on iPhone Duo, one above the other while the window
+// still has its old size classes) and play on after the pair took its real one: the screens lagged by half a second.
 - (void)sizeClassesDidChange {
-    [self arrangeForTraits:self.traitCollection animated:self.viewIfLoaded.window != nil];
+    [self arrangeForTraits:self.traitCollection];
+}
+
+// On iPhone Duo the scene has its new size classes as the size transition starts, and the pair gets them only after
+// UIKit laid it out in the new size: the primary first filled the whole open window, then gave half of it to the
+// secondary. For the transition the pair takes the scene's size classes, so it lies as it will from its first layout.
+// Only where the pair has the window's size classes: a sheet or a split view's column has its own.
+- (void)viewWillTransitionToSize:(CGSize)size
+       withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator {
+    [super viewWillTransitionToSize:size withTransitionCoordinator:coordinator];
+    UITraitCollection *scene = self.viewIfLoaded.window.windowScene.traitCollection;
+    NSNumber *large = ANNIsLargeWindow(self.traitCollection);
+    NSNumber *largeScene = scene ? ANNIsLargeWindow(scene) : nil;
+    if (!large || !largeScene || ![self hasWindowSizeClasses]) {
+        return;
+    }
+    // The size classes the pair has now are the scene's of an earlier transition, still running: this one keeps them
+    // until its own end.
+    if ([large isEqual:largeScene] && !_sceneSizeClasses) {
+        return;
+    }
+    _sceneSizeClasses = YES;
+    NSUInteger transition = ++_sceneSizeClassesTransition;
+    self.traitOverrides.horizontalSizeClass = scene.horizontalSizeClass;
+    self.traitOverrides.verticalSizeClass = scene.verticalSizeClass;
+    [self updateTraitsIfNeeded];
+    __weak ANNArrangementViewController *weakSelf = self;
+    void (^ended)(id<UIViewControllerTransitionCoordinatorContext>) =
+        ^(id<UIViewControllerTransitionCoordinatorContext> context) {
+          [weakSelf dropSceneSizeClassesOfTransition:transition];
+        };
+    [coordinator animateAlongsideTransition:nil completion:ended];
+}
+
+- (void)dropSceneSizeClassesOfTransition:(NSUInteger)transition {
+    if (!_sceneSizeClasses || transition != _sceneSizeClassesTransition) {
+        return;
+    }
+    _sceneSizeClasses = NO;
+    [self.traitOverrides removeTrait:UITraitHorizontalSizeClass.class];
+    [self.traitOverrides removeTrait:UITraitVerticalSizeClass.class];
+}
+
+// The pair's size classes are the window's: it stands in the window's root, not in a presented layer, and no split
+// view's column is between them.
+- (BOOL)hasWindowSizeClasses {
+    UIWindow *window = self.viewIfLoaded.window;
+    if (!window) {
+        return NO;
+    }
+    UIViewController *top = self;
+    for (UIViewController *parent = self.parentViewController; parent;
+         parent = parent.parentViewController) {
+        if ([parent isKindOfClass:UISplitViewController.class]) {
+            return NO;
+        }
+        top = parent;
+    }
+    return top == window.rootViewController;
 }
 
 // The first state, before the pair is laid out: as UIKit lays it out in the window's shape (measured on iPhone Duo),
@@ -439,7 +504,7 @@ static BOOL ANNIsShown(UIViewController *screen, UIArrangementViewState *state, 
 // In the window now: its own size classes, which the window's stood in for.
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
-    [self arrangeForTraits:self.traitCollection animated:NO];
+    [self arrangeForTraits:self.traitCollection];
 }
 
 - (void)viewDidAppear:(BOOL)animated {
