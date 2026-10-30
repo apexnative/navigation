@@ -8,6 +8,9 @@ NSNotificationName const ANNScreenSettlingDidEndNotification = @"ANNScreenSettli
 // How long the values of the screens stand still before the settling ends. On iPhone Duo UIKit's last step of a fold
 // comes some 30 ms after the size transition's end, and the size transition some 50 ms after the bar's new edge.
 static const CFTimeInterval ANNScreenSettlingQuietTime = 0.15;
+// Once the size transition ended, UIKit's last steps come within some 30 ms: the screens are on the new display by
+// then, and every held moment shows them with the old one's insets.
+static const CFTimeInterval ANNScreenSettlingQuietTimeAfterTransition = 0.05;
 // The settling holds the insets no longer than this after its last start, whatever keeps changing.
 static const CFTimeInterval ANNScreenSettlingLongest = 1.0;
 // The degrees the hinge turns before it counts as a move: a device held half open trembles a little.
@@ -16,6 +19,11 @@ static const double ANNScreenSettlingHingeStep = 2;
 static BOOL ANNSettling;
 // The size transitions that began and haven't ended: each screen counts its own call of the same transition.
 static NSInteger ANNSettlingTransitions;
+// A size transition of this settling ended: the hinge, still turning, no longer holds the insets.
+static BOOL ANNSettlingTransitionEnded;
+// Until when the hinge's turns after a size transition count for nothing: the hinge goes on turning to its end once
+// the display switched, and holds nothing until it rests a while.
+static CFTimeInterval ANNSettlingHingeIgnoredUntil;
 static CFTimeInterval ANNSettlingStart;
 static CFTimeInterval ANNSettlingLastChange;
 // Only the check scheduled last runs.
@@ -51,13 +59,22 @@ static NSNumber *ANNSettlingHingeAngle;
         return;
     }
     double turned = fabs(angle.doubleValue - ANNSettlingHingeAngle.doubleValue);
-    BOOL moved = ![state isEqual:ANNSettlingHingeState] || !angle || !ANNSettlingHingeAngle ||
-                 turned >= ANNScreenSettlingHingeStep;
+    BOOL newState = ![state isEqual:ANNSettlingHingeState];
+    BOOL moved =
+        newState || !angle || !ANNSettlingHingeAngle || turned >= ANNScreenSettlingHingeStep;
     if (!moved) {
         return;
     }
     ANNSettlingHingeState = state;
     ANNSettlingHingeAngle = angle;
+    // A new state may bring a new layout; a turn after a size transition only goes on to the hinge's end.
+    CFTimeInterval now = CACurrentMediaTime();
+    BOOL afterTransition = (ANNSettling && ANNSettlingTransitionEnded) ||
+                           now < ANNSettlingHingeIgnoredUntil;
+    if (!newState && afterTransition) {
+        ANNSettlingHingeIgnoredUntil = now + ANNScreenSettlingQuietTime;
+        return;
+    }
     [self beginForTraitChange];
 }
 
@@ -66,6 +83,7 @@ static NSNumber *ANNSettlingHingeAngle;
         return;
     }
     [self begin];
+    ANNSettlingTransitionEnded = NO;
     ANNSettlingTransitions += 1;
     NSUInteger epoch = ANNSettlingEpoch;
     void (^ended)(id<UIViewControllerTransitionCoordinatorContext>) =
@@ -74,8 +92,12 @@ static NSNumber *ANNSettlingHingeAngle;
               return;
           }
           ANNSettlingTransitions = MAX(0, ANNSettlingTransitions - 1);
+          if (ANNSettlingTransitions == 0) {
+              ANNSettlingTransitionEnded = YES;
+              ANNSettlingHingeIgnoredUntil = CACurrentMediaTime() + ANNScreenSettlingQuietTime;
+          }
           [ANNScreenSettling valuesDidChange];
-          [ANNScreenSettling checkAfter:ANNScreenSettlingQuietTime];
+          [ANNScreenSettling checkAfter:[ANNScreenSettling quietTime]];
         };
     [coordinator animateAlongsideTransition:nil completion:ended];
     // The longest still holds should the transition's end never come.
@@ -84,8 +106,19 @@ static NSNumber *ANNSettlingHingeAngle;
 
 // Only iPhone Duo has a vertical bar: no need to ask for the hinge.
 + (void)beginForTraitChange {
+    // After the transition the bar's new edge is one of its last steps: it holds the values a little longer only.
+    if (ANNSettling && ANNSettlingTransitionEnded) {
+        [self valuesDidChange];
+        [self checkAfter:[self quietTime]];
+        return;
+    }
     [self begin];
     [self checkAfter:ANNScreenSettlingQuietTime];
+}
+
++ (CFTimeInterval)quietTime {
+    return ANNSettlingTransitionEnded ? ANNScreenSettlingQuietTimeAfterTransition
+                                      : ANNScreenSettlingQuietTime;
 }
 
 + (void)begin {
@@ -121,10 +154,11 @@ static NSNumber *ANNSettlingHingeAngle;
     }
     CFTimeInterval now = CACurrentMediaTime();
     CFTimeInterval longest = ANNSettlingStart + ANNScreenSettlingLongest;
-    CFTimeInterval quiet = ANNSettlingLastChange + ANNScreenSettlingQuietTime;
+    CFTimeInterval quiet = ANNSettlingLastChange + [self quietTime];
     if (now >= longest || (ANNSettlingTransitions == 0 && now >= quiet)) {
         ANNSettling = NO;
         ANNSettlingTransitions = 0;
+        ANNSettlingTransitionEnded = NO;
         ANNSettlingEpoch += 1;
         [NSNotificationCenter.defaultCenter postNotificationName:ANNScreenSettlingDidEndNotification
                                                           object:nil];
