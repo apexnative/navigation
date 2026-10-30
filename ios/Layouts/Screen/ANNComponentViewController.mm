@@ -13,13 +13,19 @@
 #import "ANNScreenReadiness.h"
 #import "ANNScreenRegions.h"
 #import "ANNScreenSafeArea.h"
+#import "ANNScreenSettling.h"
 #import "ANNStackController.h"
 #import "ANNSurfaceHostingView.h"
 #import "ANNSystemUI.h"
 #import "ANNTopBarPresenter.h"
 #import "ANNUtils.h"
 
-@implementation ANNComponentViewController
+@implementation ANNComponentViewController {
+    // What the screen would send while the geometry settles (`ANNScreenSettling`), and whether it still owes it.
+    UIEdgeInsets _settlingInsets;
+    UIEdgeInsets _settlingPadding;
+    BOOL _settlingHeld;
+}
 
 - (instancetype)initWithLayoutInfo:(ANNLayoutInfo *)layoutInfo
                            creator:(id<ANNComponentViewCreator>)creator
@@ -43,8 +49,8 @@
                           defaultOptions:defaultOptions
                                presenter:presenter
                             eventEmitter:eventEmitter];
-    // While the screen lives (removed at its destroy): the end of an edit gives the key commands back, and a change of
-    // the hinge's state moves the regions without a change of size or traits.
+    // While the screen lives (removed at its destroy): the end of an edit gives the key commands back, a change of the
+    // hinge's state moves the regions without a change of size or traits, and the end of a fold sends the insets.
     NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
     [center addObserver:self
                selector:@selector(textDidEndEditing:)
@@ -57,6 +63,10 @@
     [center addObserver:self
                selector:@selector(hingeDidChange:)
                    name:ANNHingeDidChangeNotification
+                 object:nil];
+    [center addObserver:self
+               selector:@selector(screenSettlingDidEnd:)
+                   name:ANNScreenSettlingDidEndNotification
                  object:nil];
     return self;
 }
@@ -102,10 +112,12 @@
 
 // UIKit names the size transition as the moment the status bar's frame changes (a rotation, a new window size): the
 // blur follows it along the animation and takes the final frame at its end. The React content takes its new size
-// without animation meanwhile, or what it draws itself is stretched along the animation (`ANNSurfaceHostingView`).
+// without animation meanwhile, or what it draws itself is stretched along the animation (`ANNSurfaceHostingView`). On
+// a device with a hinge the insets wait until the geometry settles.
 - (void)viewWillTransitionToSize:(CGSize)size
        withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator {
     [super viewWillTransitionToSize:size withTransitionCoordinator:coordinator];
+    [ANNScreenSettling beginWithTransition:coordinator];
     [ANNSurfaceHostingView followSizeTransition:coordinator];
     __weak ANNComponentViewController *weakSelf = self;
     [coordinator
@@ -123,9 +135,20 @@
 }
 
 // The regions UIKit reserves are still the old ones while it tells of new traits: they are read again on the next turn
-// of the main queue. A fold changes the traits, not always the size.
+// of the main queue. A fold changes the traits, not always the size; a new edge of the vertical bar comes before the
+// safe area that goes with it, so the insets wait until the geometry settles.
 - (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
     [super traitCollectionDidChange:previousTraitCollection];
+#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 270100
+    if (@available(iOS 27.1, *)) {
+        // A screen that comes into the window gets the bar's edge from none: that is no fold.
+        UIVerticalBarEdge before = previousTraitCollection.verticalBarEdge;
+        if (self.viewIfLoaded.window && before != UIVerticalBarEdgeUnspecified &&
+            before != self.traitCollection.verticalBarEdge) {
+            [ANNScreenSettling beginForTraitChange];
+        }
+    }
+#endif
     [self updateRootLayout];
     [self.arrangement screenDidChangeLayout:self];
     __weak ANNComponentViewController *weakSelf = self;
@@ -141,6 +164,15 @@
 // hide. They are the screen's report as a container gives it; the dispatcher keeps it to one per appearance. While a
 // command drives the appearance (a window's root replaced), UIKit's calls come at its own moments and would break the
 // command's order: the command reports instead.
+// A screen that left the window while the geometry settled sends what it held as it comes back: the end of the settling
+// found it out of the window.
+- (void)viewIsAppearing:(BOOL)animated {
+    [super viewIsAppearing:animated];
+    if (_settlingHeld && !ANNScreenSettling.isSettling) {
+        [self updateRootLayout];
+    }
+}
+
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
     // A preview screen that UIKit's menu takes leaves its unseen place first, so that the menu reports it.
@@ -433,7 +465,9 @@
 // The insets and the padding of a React screen or a slot screen go to the store, which keeps them, gives JavaScript
 // what still covers the content and tells only of changes; the regions in the same pass. Only in a window and with an
 // id; never after the destroy, which removed them (a late layout would bring them back), nor for the JavaScript that
-// went (an old screen held after a reload: the new JavaScript may give its id to a new screen).
+// went (an old screen held after a reload: the new JavaScript may give its id to a new screen). While the geometry
+// settles they are only noted, the steps of a fold would reach JavaScript one by one; but a screen's first values go at
+// once, since JavaScript reads them as it renders the screen.
 - (void)updateSafeAreaWithOptions:(ANNNavigationOptions *)options {
     UIView<ANNComponentProtocol> *content = _reactView;
     NSString *componentId = self.layoutInfo.componentId;
@@ -454,6 +488,17 @@
         .verticalBarSide = [self verticalBarSide],
     };
     UIEdgeInsets padding = ANNScreenPadding(insets, options, context);
+    if (ANNScreenSettling.isSettling && [ANNScreenEnvironment insetsForScreenId:componentId]) {
+        if (!UIEdgeInsetsEqualToEdgeInsets(insets, _settlingInsets) ||
+            !UIEdgeInsetsEqualToEdgeInsets(padding, _settlingPadding)) {
+            _settlingInsets = insets;
+            _settlingPadding = padding;
+            [ANNScreenSettling valuesDidChange];
+        }
+        _settlingHeld = YES;
+        return;
+    }
+    _settlingHeld = NO;
     [ANNScreenEnvironment setInsets:insets
                             padding:padding
                         forScreenId:componentId
@@ -461,9 +506,13 @@
     [self updateRegions];
 }
 
-// The regions in the same pass, and on the next turn after a change of the hinge's state (`hingeDidChange:`). Nil
-// before iOS 27.1: nothing to keep. The store neither keeps nor sends an empty first result.
+// The regions in the same pass, and on the next turn after a change of the hinge's state (`hingeDidChange:`); not while
+// the geometry settles, whose end sends them with the insets. Nil before iOS 27.1: nothing to keep. The store neither
+// keeps nor sends an empty first result.
 - (void)updateRegions {
+    if (ANNScreenSettling.isSettling) {
+        return;
+    }
     UIView<ANNComponentProtocol> *content = _reactView;
     NSString *componentId = self.layoutInfo.componentId;
     ANNEventEmitter *eventEmitter = self.eventEmitter;
@@ -478,6 +527,10 @@
         return;
     }
     [ANNScreenEnvironment setRegions:regions forScreenId:componentId eventEmitter:eventEmitter];
+}
+
+- (void)screenSettlingDidEnd:(NSNotification *)notification {
+    [self updateRootLayout];
 }
 
 - (void)hingeDidChange:(NSNotification *)notification {

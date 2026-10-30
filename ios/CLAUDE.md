@@ -42,7 +42,7 @@ Top-level files: `Package.swift` (SwiftPM; `headerFolders` lists every folder wh
 - Launch, the app-facing API — `Public/ApexNavigation/`; `Core/`: `ApexNavigation.mm`, `ANNAppDelegate.mm`, `ANNSceneDelegate.mm`, `ApexNavigation+Internal.h`
 - Root, splash, reload — `Layouts/Root/`: `ANNRootCoordinator`, `ANNSplashViewController`; `Core/`: `ANNReloadCoordinator`
 - Screen: React root, slot, native screen — `Layouts/Screen/`: `ANNComponentViewController`; `React/`: `ANNReactView`, `ANNReactViewCreator`, `Slots/`; `Layouts/External/`
-- Screen: insets, background, keyboard focus — `Layouts/Screen/`: `ANNScreenEnvironment`, `ANNScreenSafeArea`, `ANNScreenBars`, `ANNScreenPlace` (the safe area of a parked screen), `ANNComponentPresenter` (background, status bar blur), `ANNComponentViewController` (key commands)
+- Screen: insets, background, keyboard focus — `Layouts/Screen/`: `ANNScreenEnvironment`, `ANNScreenSafeArea`, `ANNScreenBars`, `ANNScreenPlace` (the safe area of a parked screen), `ANNScreenSettling` (iPhone Duo: the insets wait while a fold settles), `ANNComponentPresenter` (background, status bar blur), `ANNComponentViewController` (key commands)
 - Safe area view — `React/`: `ANNSafeAreaViewComponentView`; `Layouts/Screen/`: `ANNScreenReadiness`; `cpp/`
 - Stack: queue, commands, back, gestures — `Layouts/Stack/`: `ANNStackQueue`, `ANNStackCommands`, `ANNStackController`, `InteractivePopGestureDelegate`, `ANNStackAnimatingDelegate`, `ANNSwipePopInteraction`
 - Top bar: title, buttons, menus, large title — `TopBar/`: `ANNTopBarPresenter`, `ANNBarButtons`, `ANNBarAppearance`, `ANNLargeTitlePresenter`, `ANNBackButtonPresenter`, `ANNTitleView`, `ANNTitleGlassView`
