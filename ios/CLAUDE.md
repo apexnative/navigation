@@ -20,7 +20,7 @@ Swift is not used here: apps reach the core through the public headers (`Public/
 - `Layouts/Screen/`: The screen (`ANNComponentViewController`), its presenter, readiness, its environment for JS (`ANNScreenEnvironment`), regions, safe-area math, the main list rule, previews.
 - `Layouts/External/`: Native screens: `ANNExternalViewController`, `ANNNativeScreenCalls`.
 - `Layouts/Stack/`: `ANNStackController`, `ANNStackQueue`, `ANNStackCommands`, `ANNStackPresenter`, `ANNPreviewPush`, the swipe-back delegate.
-- `Layouts/Tabs/`: `ANNBottomTabsController`, its presenter, item builder, custom row, preload window, More delegate, long press, dots.
+- `Layouts/Tabs/`: `ANNBottomTabsController`, its presenter, item builder, custom row, More delegate, long press, dots.
 - `Layouts/Modal/`: `ANNModalCoordinator`, `ANNModal`, `ANNPresentationGate`, `ANNModalPresentation`, `ANNModalTransitions`, sheets and popovers.
 - `Layouts/Overlay/`: `ANNOverlayCoordinator`, `ANNOverlayWindow`.
 - `Layouts/SideMenu/`: The side menu module and its presenter and wrapper.

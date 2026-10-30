@@ -9,7 +9,6 @@
 #import "ANNReloadCoordinator.h"
 #import "ANNSlotHost.h"
 #import "ANNSplashViewController.h"
-#import "ANNTabsPreloadWindow.h"
 #import "ANNUtils.h"
 #import <React/RCTLog.h>
 #import <ReactCommon/RCTHost.h>
@@ -149,9 +148,7 @@ static UIWindowScene *ANNConnectedWindowScene(void) {
     ANNMainWindow.windowScene = windowScene;
     ANNMainWindow.frame = windowScene.coordinateSpace.bounds;
     [ANNMainWindow makeKeyAndVisible];
-    // The tabs' preload windows, the overlay windows and the slot host's window made before the scene go where the
-    // main window is.
-    [ANNTabsPreloadWindow mainWindowSceneDidConnect:windowScene];
+    // The overlay windows and the slot host's window made before the scene go where the main window is.
     [ANNOverlayCoordinator mainWindowSceneDidConnect:windowScene];
     [ANNSlotHost mainWindowSceneDidConnect:windowScene];
     // A direction the app set before the window had a scene takes the scene now.

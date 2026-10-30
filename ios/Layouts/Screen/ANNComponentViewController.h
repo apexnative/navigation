@@ -54,17 +54,6 @@ NS_ASSUME_NONNULL_BEGIN
 /// regions of the screen. Nothing before the view loaded; the safe area only in a window.
 - (void)updateRootLayout;
 
-/// The content view (only the core's React view, never the screen's own view) mounts unseen in `host` (the tabs'
-/// preload window) at the frame it has, while the screen's tab isn't shown. NO when there is nothing to lend: no React
-/// view of its own, in a window already, lent already, or the screen went.
-- (BOOL)lendContentTo:(UIView *)host;
-
-/// The lent content comes back into the screen's view at its root frame; also as the screen first appears.
-- (void)takeContentBack;
-
-/// The content is lent (`lendContentTo:`): `updateRootLayout` leaves its frame alone meanwhile.
-@property(nonatomic, readonly) BOOL contentIsLent;
-
 /// The transition that removes the screen starts (before its destroy): with `blurOnUnmount` in its resolved options,
 /// the editing inside its view ends and the keyboard goes (`blurOnUnmount`).
 - (void)screenWillLeave;

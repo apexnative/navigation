@@ -15,7 +15,6 @@
 #import "ANNScreenReadiness.h"
 #import "ANNSplashViewController.h"
 #import "ANNSplitViewCommands.h"
-#import "ANNTabsPreloadWindow.h"
 #import "ApexNavigation+Internal.h"
 #import "UIViewController+LayoutProtocol.h"
 #import <React/RCTConstants.h>
@@ -143,9 +142,7 @@ static BOOL ANNWatchingBundles;
     [oldScreens addObjectsFromArray:[ANNOverlayCoordinator takeAllForReload]];
     // 4. The bar components and the tabs' cells and accessories have no store to empty: each screen and each tabs node
     // keeps its own roots in its registry, so a new node never gets an old root by its id, and the old roots stop with
-    // their old nodes after the hold. The tabs' preload windows hide at once; their views go with their tabs. The loop
-    // updates are off already.
-    [ANNTabsPreloadWindow hideAllAfterReload];
+    // their old nodes after the hold. The loop updates are off already.
     // 5. The native screens of the old screens are silent by their emitter. The modals and overlays waiting to show
     // left what waits for them in steps 2 and 3; the screens that wait to show in a split view's column leave it here,
     // without an answer.

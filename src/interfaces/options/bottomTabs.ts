@@ -208,10 +208,12 @@ export interface OptionsBottomTabs {
    */
   backgroundColor?: Color;
   /**
-   * When the screens of the tabs are created: `'together'` creates and draws every tab at the start, and the tabs are
-   * ready when all of them are; `'afterInitialTab'` creates the selected tab first and the others right after it;
+   * When the screens of the tabs are created: `'together'` creates every tab at the start, and the tabs are ready when
+   * all of them are; `'afterInitialTab'` creates the selected tab first and the others right after it;
    * `'onSwitchToTab'` creates a tab the first time it is selected. The screens of tabs not yet selected get no appear
-   * events in any mode. It applies when the tabs are created; `mergeOptions` does not change it.
+   * events in any mode. On iOS a tab created before it shows has its screen's React root mounted, and the screen's
+   * component renders the first time the tab shows; on Android it renders as the tab is created. It applies when the
+   * tabs are created; `mergeOptions` does not change it.
    * @default 'together'
    */
   tabsAttachMode?: 'together' | 'afterInitialTab' | 'onSwitchToTab';

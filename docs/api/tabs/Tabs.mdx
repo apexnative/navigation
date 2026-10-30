@@ -123,8 +123,10 @@ Tabs(Tab('Home'), Tab('Inbox'), Tab('Profile')).lazy();
 
 The trade-off: the first switch to a tab waits for its screen to render, and a tab not created yet runs no code. A
 screen that should load data before the user opens it, or listen to events from the start, stays out of a lazy tab.
-Without `lazy()` every tab is created with the tabs. `options({ tabsAttachMode: 'afterInitialTab' })` is the middle
-way: the selected tab first, the others right after it.
+Without `lazy()` every tab is created with the tabs. On <Os name="Android" /> the screen of each tab renders then;
+on <Os name="iOS" /> the tab's React root mounts, and the screen's component renders the first time the tab shows,
+so code that must run before that belongs in `appProvider` or in a screen of the selected tab.
+`options({ tabsAttachMode: 'afterInitialTab' })` is the middle way: the selected tab first, the others right after it.
 
 ### `id()` {#id}
 
