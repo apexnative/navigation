@@ -1,5 +1,6 @@
 #import "ANNSearchResultsViewController.h"
 #import "ANNScreenEnvironment.h"
+#import "ANNScreenSettling.h"
 
 @implementation ANNSearchResultsViewController {
     NSString *_componentId;
@@ -13,6 +14,10 @@
     _reactView = reactView;
     _componentId = [componentId copy];
     _eventEmitter = eventEmitter;
+    [NSNotificationCenter.defaultCenter addObserver:self
+                                           selector:@selector(screenSettlingDidEnd:)
+                                               name:ANNScreenSettlingDidEndNotification
+                                             object:nil];
     return self;
 }
 
@@ -29,11 +34,29 @@
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
     _reactView.frame = self.view.bounds;
-    if (_componentId) {
+    [self updateInsets];
+}
+
+// Not while the geometry settles: the steps of a fold would reach JavaScript one by one, and its end sends them. The
+// first values go at once: JavaScript reads them as it renders the results.
+- (void)updateInsets {
+    if (!_componentId) {
+        return;
+    }
+    if (!ANNScreenSettling.isSettling || ![ANNScreenEnvironment insetsForScreenId:_componentId]) {
         [ANNScreenEnvironment setInsets:self.view.safeAreaInsets
                                 padding:UIEdgeInsetsZero
                             forScreenId:_componentId
                            eventEmitter:_eventEmitter];
+    }
+}
+
+// Only results that show, for the JavaScript they were made for, and while their record is kept: the search bar's
+// removal removed it, and hidden results send theirs as they lay out again.
+- (void)screenSettlingDidEnd:(NSNotification *)notification {
+    if (_componentId && self.viewIfLoaded.window && _eventEmitter.isCurrent &&
+        [ANNScreenEnvironment insetsForScreenId:_componentId]) {
+        [self updateInsets];
     }
 }
 

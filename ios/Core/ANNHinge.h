@@ -5,6 +5,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Posted on the main queue when the state of the hinge changes (closed, partly open, open), once a screen showed.
 extern NSNotificationName const ANNHingeDidChangeNotification;
+/// Posted on the main queue for each new value of the hinge (the first one, a move, a new state, the hinge's coming or
+/// going), once a screen showed.
+extern NSNotificationName const ANNHingeDidMoveNotification;
 
 /// The device's hinge (`useHinge`), iOS 27.1: one UIHingeInteraction on the app's window, which runs once a screen
 /// showed (the regions of the screens follow the hinge's state) and while JavaScript asks for updates (it counts its
@@ -20,6 +23,9 @@ extern NSNotificationName const ANNHingeDidChangeNotification;
 
 /// The last value, `{}` before the first update and without a hinge. Any thread.
 + (NSDictionary<NSString *, id> *)lastValue;
+
+/// Whether the device has a hinge, as the last update tells: NO before the first one. Any thread.
++ (BOOL)isPresent;
 
 @end
 

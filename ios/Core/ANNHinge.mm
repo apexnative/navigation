@@ -4,6 +4,7 @@
 #import "ANNUtils.h"
 
 NSNotificationName const ANNHingeDidChangeNotification = @"ANNHingeDidChange";
+NSNotificationName const ANNHingeDidMoveNotification = @"ANNHingeDidMove";
 
 // Main queue.
 static ANNEventEmitter *ANNHingeEventEmitter;
@@ -102,6 +103,8 @@ static NSDictionary<NSString *, id> *ANNHingeValue(UIHinge *hinge) API_AVAILABLE
     if (ANNHingeUpdatesEnabled) {
         [ANNHingeEventEmitter sendHingeChanged:value];
     }
+    NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
+    [center postNotificationName:ANNHingeDidMoveNotification object:nil];
     id state = value[ANNEventContract.HingeChanged.state];
     if (previousState != state && ![previousState isEqual:state]) {
         [NSNotificationCenter.defaultCenter postNotificationName:ANNHingeDidChangeNotification
@@ -112,6 +115,12 @@ static NSDictionary<NSString *, id> *ANNHingeValue(UIHinge *hinge) API_AVAILABLE
 + (NSDictionary<NSString *, id> *)lastValue {
     @synchronized(ANNHinge.class) {
         return ANNLastHinge ?: @{};
+    }
+}
+
++ (BOOL)isPresent {
+    @synchronized(ANNHinge.class) {
+        return ANNLastHinge[ANNEventContract.HingeChanged.state] != nil;
     }
 }
 
