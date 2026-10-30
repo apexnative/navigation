@@ -95,6 +95,9 @@ export type SideMenuOpenGestureMode = 'bezel' | 'entireScreen';
  */
 export type SideMenuAnimationType = 'parallax' | 'slide' | 'slide-and-scale' | 'door';
 
+/** When the screens of the menus of a side menu are created: see `sideMenu.menusAttachMode`. */
+export type SideMenuAttachMode = 'together' | 'afterCenter' | 'onOpen';
+
 /**
  * The options of a side menu: a center with a menu on the left, on the right or on both sides. They are set in the
  * options of the side menu, in the options of the screens inside it (through `mergeOptions` or the screen definition)
@@ -122,6 +125,20 @@ export interface OptionsSideMenu {
    * the center moves. It does nothing in `'aboveContent'` mode. A change applies at once. Android doesn't read it.
    */
   animationType?: SideMenuAnimationType;
+  /**
+   * When the screens of the menus are created, together with their React content: `'together'` creates them with the
+   * center; `'afterCenter'` creates them right after the center first appears, so they don't compete with its first
+   * render and still show at once on the first open; `'onOpen'` creates a menu the first time it starts to open — from
+   * a swipe, from `visible: true` or from `visible` in the layout — and until React draws its screen the menu shows its
+   * background. A command to a screen of a menu not created yet works: a push into its stack and `mergeOptions` wait
+   * for the menu like a tab not yet selected. The screens of a menu get appear events only when it opens, in every
+   * mode. With `appProvider` the screens render in the app's React tree at once in every mode, and the mode delays only
+   * their native containers. On iOS a menu's test identifier (`<testID>.left`, `<testID>.right`) is there once the menu
+   * is created; on Android from the start. It applies when the side menu is created, from its own options or the default options;
+   * `mergeOptions` does not change it.
+   * @default 'together'
+   */
+  menusAttachMode?: SideMenuAttachMode;
   /**
    * The test identifier of the side menu's container (on iOS its view, on Android the drawer). The parts derive from
    * it: `<testID>.center`, `<testID>.left`, `<testID>.right`, and on iOS `<testID>.scrim` for the dimming over the

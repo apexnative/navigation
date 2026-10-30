@@ -82,6 +82,12 @@ internal class SideMenuMotion(
         /** `sideMenu.<side>.enabled` of the side menu's options now. */
         fun isEnabled(side: Side): Boolean
 
+        /**
+         * The menu on [side] starts to show: the drawer's first movement, or a command that opens it. Before its
+         * screen hears that it appears.
+         */
+        fun starts(side: Side)
+
         /** `visible: true` for a side the layout doesn't have: a warning, nothing else. */
         fun missingSide(side: Side)
 
@@ -122,6 +128,7 @@ internal class SideMenuMotion(
     fun slid(side: Side, offset: Float) {
         // Not more than 0 also takes a NaN: `DrawerLayout` divides by the drawer's width, which may be 0.
         if (destroyed || !(offset > 0f)) return
+        if (!isOnScreen(side)) host.starts(side)
         onScreen += side
         if (side in appearing || !host.appeared) return
         appearing += side
@@ -207,6 +214,7 @@ internal class SideMenuMotion(
         }
         // Never decided by where the other menu is: a side asked to open in the same merge hasn't moved yet.
         if (drawer.has(side.other)) move(side.other, open = false, animate = animated)
+        if (!isOnScreen(side)) host.starts(side)
         onScreen += side
         // A locked menu opened from code can be dragged closed while it is open.
         drawer.lock(side, locked = false)

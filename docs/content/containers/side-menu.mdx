@@ -133,6 +133,21 @@ On iOS the content moves aside, and the menu comes in under it with a parallax; 
 
 <Os name="iOS" /> 26: `left({ glass: true })` puts the menu on Liquid Glass. The glass shows where the menu's screen has no background of its own.
 
+## When the menus are created {#attach}
+
+The screens of the menus are created with the side menu by default, with their React content. A heavy menu competes
+with the first render of the center. `options({ menusAttachMode })` moves the creation:
+
+```ts
+SideMenu({ left: 'Menu', center: 'Home' }).options({ menusAttachMode: 'onOpen' });
+```
+
+- `'together'` (the default): with the center.
+- `'afterCenter'`: right after the side menu first appears. The menus don't compete with the first render of the center and are ready at the first open.
+- `'onOpen'`: each menu the first time it starts to open, from a swipe, `openMenu`, `visible: true` or `visible` in the layout. Until React draws the menu, it shows its background (`backgroundColor`). A second open reuses it.
+
+The trade-off of `'onOpen'`: the first open of a menu doesn't wait for its render and shows its background for a moment, while a menu not opened yet runs no code. A push into the stack of such a menu and `mergeOptions` on its screen wait for the menu, like a tab not yet selected. The screens of the menus get appear events only when the menu opens, in every mode. The mode is read once, when the side menu is created, from its own options, else the default options; `mergeOptions` doesn't change it. With `appProvider` the screens render in the app's React tree at once in every mode, and the mode delays only their native containers. It means the same on iOS and Android.
+
 ## Where the swipe is off {#swipe}
 
 A swipe from the edge can clash with the content, such as a map or a carousel. A screen turns it off <Mark>while it is on top of the center</Mark>, in its options:

@@ -140,8 +140,14 @@ internal class FakeMotionHost(
 ) : SideMenuMotion.Host {
     override var appeared = true
     val enabled = HashMap<Side, Boolean>()
+    /** The sides that started to show, in order. */
+    val started = mutableListOf<Side>()
 
     override fun child(side: Side): ViewController<*>? = if (side == Side.Left) left else right
+
+    override fun starts(side: Side) {
+        started += side
+    }
 
     override fun isEnabled(side: Side): Boolean = enabled[side] != false
 

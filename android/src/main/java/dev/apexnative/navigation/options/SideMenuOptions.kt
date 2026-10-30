@@ -20,16 +20,18 @@ class SideMenuOptions {
     @JvmField var right = SideMenuSideOptions()
     @JvmField var openGestureMode: Text = NullText()
     @JvmField var animationType: Text = NullText()
+    @JvmField var menusAttachMode: Text = NullText()
     @JvmField var testID: Text = NullText()
 
     fun hasValue(): Boolean = left.hasValue() || right.hasValue() || openGestureMode.hasValue() ||
-        animationType.hasValue() || testID.hasValue()
+        animationType.hasValue() || menusAttachMode.hasValue() || testID.hasValue()
 
     fun mergeWith(other: SideMenuOptions) {
         left.mergeWith(other.left)
         right.mergeWith(other.right)
         if (other.openGestureMode.hasValue()) openGestureMode = other.openGestureMode
         if (other.animationType.hasValue()) animationType = other.animationType
+        if (other.menusAttachMode.hasValue()) menusAttachMode = other.menusAttachMode
         if (other.testID.hasValue()) testID = other.testID
     }
 
@@ -38,6 +40,7 @@ class SideMenuOptions {
         right.mergeWithDefault(defaults.right)
         if (!openGestureMode.hasValue()) openGestureMode = defaults.openGestureMode
         if (!animationType.hasValue()) animationType = defaults.animationType
+        if (!menusAttachMode.hasValue()) menusAttachMode = defaults.menusAttachMode
         if (!testID.hasValue()) testID = defaults.testID
     }
 
@@ -46,6 +49,7 @@ class SideMenuOptions {
     companion object {
         private val OPEN_GESTURE_MODES = setOf("bezel", "entireScreen")
         private val ANIMATION_TYPES = setOf("parallax", "slide", "slide-and-scale", "door")
+        private val MENUS_ATTACH_MODES = setOf("together", "afterCenter", "onOpen")
 
         @JvmStatic
         fun parse(map: ReadableMap?): SideMenuOptions {
@@ -55,6 +59,7 @@ class SideMenuOptions {
             options.right = map.group("right") { SideMenuSideOptions.parse(it) }
             options.openGestureMode = TextParser.parse(map, "openGestureMode", OPEN_GESTURE_MODES)
             options.animationType = TextParser.parse(map, "animationType", ANIMATION_TYPES)
+            options.menusAttachMode = TextParser.parse(map, "menusAttachMode", MENUS_ATTACH_MODES)
             options.testID = TextParser.parse(map, "testID")
             return options
         }

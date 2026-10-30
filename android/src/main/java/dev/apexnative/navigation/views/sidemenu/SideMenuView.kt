@@ -48,13 +48,22 @@ internal class SideMenuView(context: Context) : DrawerLayout(context), SideMenuM
         center.addView(content, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
     }
 
-    /** The part of [side], holding [content]: a drawer at that edge, the whole height of the side menu. */
-    fun addPart(side: Side, content: View): FrameLayout {
+    /**
+     * The part of [side], empty until [fillPart]: a drawer at that edge, the whole height of the side menu. It opens,
+     * closes and takes its width and lock without its content.
+     */
+    fun addPart(side: Side): FrameLayout {
         val part = FrameLayout(context)
-        part.addView(content, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         addView(part, LayoutParams(MATCH_PARENT, MATCH_PARENT, gravityOf(side)))
         parts[side.ordinal] = part
         return part
+    }
+
+    /** [content] fills the part of [side], once. */
+    fun fillPart(side: Side, content: View) {
+        val part = partOf(side) ?: return
+        if (content.parent === part) return
+        part.addView(content, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
     }
 
     /** The part of [side]; none when the layout has no menu there. */

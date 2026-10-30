@@ -181,7 +181,7 @@ Without it the menu stays in place while the center moves off it. With `'aboveCo
 <ApiMember data={data} of="SideMenuElement" name="options" />
 
 The `sideMenu` options as an object, the same keys as the methods above: `left`, `right`, `openGestureMode`,
-`animationType`. For options built elsewhere, such as from a config:
+`animationType`; and `menusAttachMode`, which has no method. For options built elsewhere, such as from a config:
 
 ```ts
 SideMenu({ left: 'Menu', center: 'Home' }).options({
@@ -223,7 +223,8 @@ SideMenu({ left: 'Menu', center: 'Home' }).android((menu) =>
 
 ## Over time {#over-time}
 
-- **The menu stays mounted** while it is closed: it renders once, with the side menu, and keeps its state between
+- **The menu stays mounted** while it is closed: it renders once, with the side menu (or later with
+  `menusAttachMode`; see [When the menus are created](/docs/containers/side-menu#attach)), and keeps its state between
   openings. A menu that shows fresh data refreshes when it appears (`useScreenAppear`).
 - **The center keeps its stack** while the menu is open. A pick that should start a section over uses `replace` or
   `setStack` from the menu.
