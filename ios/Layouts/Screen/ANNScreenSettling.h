@@ -18,7 +18,9 @@ extern NSNotificationName const ANNScreenSettlingDidEndNotification;
 + (void)beginWithTransition:(id<UIViewControllerTransitionCoordinator>)coordinator;
 
 /// The vertical bar's edge changed: the size transition, when one follows, comes a little later. The hinge's moves
-/// begin the settling too (`ANNHingeDidMoveNotification`): UIKit may give a new safe area before either.
+/// begin the settling too (`ANNHingeDidMoveNotification`): UIKit may give a new safe area before either. Once the size
+/// transition ended the screens are on their new display: the hinge, turning on to its end, holds nothing until it
+/// rests (a new state of the hinge still does), and the settling ends after a shorter quiet time.
 + (void)beginForTraitChange;
 
 /// Whether the screens hold their insets now.
