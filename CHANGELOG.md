@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.0.0-alpha.9](https://github.com/apexnative/navigation/compare/v1.0.0-alpha.8...v1.0.0-alpha.9) (2026-10-30)
+
+
+### Features
+
+* side menus can be created after the center or at their first open ([#67](https://github.com/apexnative/navigation/issues/67)) ([a4a0ecf](https://github.com/apexnative/navigation/commit/a4a0ecfdc04ccd13d2c96b5799b45e510113a7e8))
+
+
+### Bug Fixes
+
+* **android:** the room beside a moving screen goes on with what its edge shows ([#64](https://github.com/apexnative/navigation/issues/64)) ([eb0936f](https://github.com/apexnative/navigation/commit/eb0936f15d8d157d31621917920814df2c725ff1))
+* **ios:** tabs not shown yet render their screens before they show ([#68](https://github.com/apexnative/navigation/issues/68)) ([cf34a09](https://github.com/apexnative/navigation/commit/cf34a09a772865a8e3ff377b053c968e306f4972))
+
 ## [1.0.0-alpha.8](https://github.com/apexnative/navigation/compare/v1.0.0-alpha.7...v1.0.0-alpha.8) (2026-10-29)
 
 
