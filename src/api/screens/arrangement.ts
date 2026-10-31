@@ -26,13 +26,23 @@ export interface ScreenArrangement<Props extends object = {}> {
 
 /** A pair under a name of its own, with every setting: `defineArrangement`. */
 export interface ArrangementDefinition<Props extends object = {}> extends ScreenArrangement<Props> {
-  /** The screen that owns the bar: its title, buttons, toolbar and status bar are the pair's. A name of `screens`. */
+  /**
+   * The screen that owns the bar: its title, buttons, toolbar and status bar are the pair's. It shows alone outside a
+   * large window (`compact: 'primary'`), and `primaryEdge` puts it on either side. A name of `screens`.
+   */
   primary: string;
   /** The axes the pair may use. Where the window allows none of them, only the primary shows. @default 'both' */
   axes?: 'horizontal' | 'vertical' | 'both';
   /** `split`: the primary's share along the split, above 0 and below 1, where the fold does not decide. @default 0.5 */
   fraction?: number;
-  /** `overlay`: the edge the primary takes when the pair goes side by side. @default 'trailing' */
+  /**
+   * The edge the primary takes. `split`: `leading` or `top` puts the primary first, at the leading side or on top;
+   * `trailing` or `bottom` puts it second, at the trailing side or at the bottom (one setting for both ways the pair
+   * may lie). `overlay`: the primary's edge when the pair goes side by side; an edge of the other axis counts as the
+   * nearest one (`top` as leading, `bottom` as trailing). Whatever the edge, the primary is the screen that shows
+   * alone outside a large window with `compact: 'primary'`: to show the other screen there, make it the primary.
+   * @default 'leading' for split, 'trailing' for overlay
+   */
   primaryEdge?: 'leading' | 'trailing' | 'top' | 'bottom';
   /**
    * Outside a large window: `primary` — the primary alone, as a plain screen; `pair` — the pair as the system lays it
@@ -85,14 +95,17 @@ export function toEngineArrangement(
 ): EngineArrangement {
   const full = arrangement as ArrangementDefinition<any>;
   checkFraction(full.fraction);
+  const style = arrangement.style ?? 'split';
   return {
     primary,
     secondary: arrangement.secondary,
     secondaryProps: arrangement.secondaryProps,
-    style: arrangement.style ?? 'split',
+    style,
     axes: full.axes ?? 'both',
     fraction: full.fraction ?? 0.5,
-    primaryEdge: full.primaryEdge ?? 'trailing',
+    // Where UIKit puts the primary of each style without an edge set: first in a split, at the trailing side of an
+    // overlay that goes side by side.
+    primaryEdge: full.primaryEdge ?? (style === 'split' ? 'leading' : 'trailing'),
     compact: full.compact ?? 'primary',
   };
 }

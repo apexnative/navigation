@@ -48,6 +48,14 @@ static NSDirectionalRectEdge ANNOppositeEdge(NSDirectionalRectEdge edge) {
     }
 }
 
+// `primaryEdge` of a split: whether the primary goes second, at the trailing side or at the bottom. A split has no edge
+// of its own: UIKit puts the view of its primary placement first along either axis (measured on iPhone Duo), so the
+// edge decides which screen goes into that placement.
+static BOOL ANNSecondaryFirst(NSDictionary *data) {
+    return ![@"overlay" isEqual:data[@"style"]] &&
+           ([@"trailing" isEqual:data[@"primaryEdge"]] || [@"bottom" isEqual:data[@"primaryEdge"]]);
+}
+
 // Overlay view properties with the edge a view takes when the pair goes side by side.
 static UIOverlayArrangementViewProperties *ANNOverlayProperties(UIOverlayArrangement *overlay,
                                                                NSDirectionalRectEdge edge)
@@ -95,8 +103,11 @@ static UIArrangement *ANNArrangementOfData(NSDictionary *data) API_AVAILABLE(ios
             height.preferred = dimension;
             primary.height = height;
         }
-        [split setViewProperties:primary
-                    forPlacement:UIArrangementViewControllerViewPlacementPrimary];
+        // The share is the primary screen's, in whichever placement it is.
+        UIArrangementViewControllerViewPlacement placement =
+            ANNSecondaryFirst(data) ? UIArrangementViewControllerViewPlacementSecondary
+                                    : UIArrangementViewControllerViewPlacementPrimary;
+        [split setViewProperties:primary forPlacement:placement];
     }
     return split;
 }
@@ -106,6 +117,38 @@ static UIArrangement *ANNArrangementOfData(NSDictionary *data) API_AVAILABLE(ios
 static UIArrangement *ANNPrimaryAloneArrangement(void) API_AVAILABLE(ios(27.1)) {
     UISplitArrangement *split = [UISplitArrangement splitArrangement];
     split.axes = UIAxisNeither;
+    return split;
+}
+
+// A size range from `minimum` to `maximum`, preferring `preferred`.
+static UISplitArrangementDimensionRange *ANNDimensionRange(UISplitArrangementDimension *minimum,
+                                                           UISplitArrangementDimension *preferred,
+                                                           UISplitArrangementDimension *maximum)
+    API_AVAILABLE(ios(27.1)) {
+    UISplitArrangementDimensionRange *range = [UISplitArrangementDimensionRange new];
+    range.minimum = minimum;
+    range.preferred = preferred;
+    range.maximum = maximum;
+    return range;
+}
+
+// The primary alone in the secondary placement, with the primary placement empty. UIKit keeps the empty placement's
+// share of a split (measured on iPhone Duo folded: the primary in the lower half, the upper one blank), so the empty
+// placement gets no room and the primary all of it, along either axis, which no shape of the window leaves out.
+static UIArrangement *ANNSecondPlacementAloneArrangement(void) API_AVAILABLE(ios(27.1)) {
+    UISplitArrangement *split = [UISplitArrangement splitArrangement];
+    split.axes = UIAxisHorizontal | UIAxisVertical;
+    UISplitArrangementDimension *none = [UISplitArrangementDimension absoluteDimension:0];
+    UISplitArrangementDimension *all = [UISplitArrangementDimension fractionalDimension:1];
+    UISplitArrangementViewProperties *empty = [split.defaultViewProperties copy];
+    empty.width = ANNDimensionRange(none, none, none);
+    empty.height = ANNDimensionRange(none, none, none);
+    [split setViewProperties:empty forPlacement:UIArrangementViewControllerViewPlacementPrimary];
+    UISplitArrangementViewProperties *primary = [split.defaultViewProperties copy];
+    primary.width = ANNDimensionRange(all, all, all);
+    primary.height = ANNDimensionRange(all, all, all);
+    [split setViewProperties:primary
+                forPlacement:UIArrangementViewControllerViewPlacementSecondary];
     return split;
 }
 
@@ -183,6 +226,13 @@ static BOOL ANNIsShown(UIViewController *screen, UIArrangementViewState *state, 
     // (`compact: 'primary'`).
     UIArrangement *_arrangement;
     BOOL _primaryAloneWhenSmall;
+    // `primaryEdge` of a split at the trailing side or the bottom: the secondary is in UIKit's primary placement, the
+    // primary in its secondary one. The primary alone keeps its placement and the secondary leaves its own, so the
+    // primary never changes its container at a fold. The axes the pair may use, for the primary alone then.
+    BOOL _secondaryFirst;
+    UIAxis _axes;
+    // The size a running size transition leads to, zero without one: the shape the pair decides its axes by.
+    CGSize _transitionSize;
     // What UIKit has now, once an arrangement went to it.
     BOOL _arranged;
     BOOL _primaryAlone;
@@ -222,9 +272,11 @@ static BOOL ANNIsShown(UIViewController *screen, UIArrangementViewState *state, 
             ((ANNComponentViewController *)screen).arrangement = self;
         }
     }
-    [self setViewController:primary
+    _secondaryFirst = ANNSecondaryFirst(data);
+    _axes = ANNArrangementAxes(data[@"axes"]);
+    [self setViewController:_secondaryFirst ? secondary : primary
                forPlacement:UIArrangementViewControllerViewPlacementPrimary];
-    [self setViewController:secondary
+    [self setViewController:_secondaryFirst ? primary : secondary
                forPlacement:UIArrangementViewControllerViewPlacementSecondary];
     _arrangement = ANNArrangementOfData(data);
     _primaryAloneWhenSmall = ![@"pair" isEqual:data[@"compact"]];
@@ -248,14 +300,28 @@ static BOOL ANNIsShown(UIViewController *screen, UIArrangementViewState *state, 
     if (!large) {
         return;
     }
-    BOOL alone = _primaryAloneWhenSmall && !large.boolValue;
+    BOOL alone = (_primaryAloneWhenSmall && !large.boolValue) ||
+                 (_secondaryFirst && ![self axesAllowSize:[self pairSize]]);
     if (_arranged && alone == _primaryAlone) {
         return;
     }
     BOOL changed = _arranged;
     _arranged = YES;
     _primaryAlone = alone;
-    [self updateArrangement:alone ? ANNPrimaryAloneArrangement() : _arrangement animated:NO];
+    if (_secondaryFirst) {
+        // The secondary leaves the window with its placement, as a split with no axis takes it out otherwise.
+        UIViewController *first = alone ? nil : _secondary;
+        if ([self viewControllerForPlacement:UIArrangementViewControllerViewPlacementPrimary] !=
+            first) {
+            [self setViewController:first
+                       forPlacement:UIArrangementViewControllerViewPlacementPrimary
+                           animated:NO];
+        }
+        [self updateArrangement:alone ? ANNSecondPlacementAloneArrangement() : _arrangement
+                       animated:NO];
+    } else {
+        [self updateArrangement:alone ? ANNPrimaryAloneArrangement() : _arrangement animated:NO];
+    }
     // A secondary that leaves the window renders no content: the pair waits for it no more.
     if (alone && _secondaryCounted) {
         _secondaryCounted = NO;
@@ -266,6 +332,26 @@ static BOOL ANNIsShown(UIViewController *screen, UIArrangementViewState *state, 
     if (changed) {
         [ANNShownScreens changedIn:self];
     }
+}
+
+// Where the axes leave the pair no room, UIKit shows its primary placement alone: with the secondary first that would
+// be the secondary, so the pair takes it out itself, by the shape UIKit goes by (side by side in a wide window, one
+// above the other in a tall one, measured on iPhone Duo).
+- (BOOL)axesAllowSize:(CGSize)size {
+    if ((_axes & UIAxisHorizontal) && (_axes & UIAxisVertical)) {
+        return YES;
+    }
+    BOOL wide = size.width > size.height;
+    return (_axes & (wide ? UIAxisHorizontal : UIAxisVertical)) != 0;
+}
+
+// The pair's size: where a size transition leads, its own once laid out, the window's before.
+- (CGSize)pairSize {
+    if (!CGSizeEqualToSize(_transitionSize, CGSizeZero)) {
+        return _transitionSize;
+    }
+    CGSize size = self.viewIfLoaded.bounds.size;
+    return size.width > 0 && size.height > 0 ? size : ANNUtils.mainWindow.bounds.size;
 }
 
 // New size classes come with a new window size, which leads the pair to its new place. UIKit's own animation of the
@@ -282,6 +368,20 @@ static BOOL ANNIsShown(UIViewController *screen, UIArrangementViewState *state, 
 - (void)viewWillTransitionToSize:(CGSize)size
        withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator {
     [super viewWillTransitionToSize:size withTransitionCoordinator:coordinator];
+    // A new shape may leave the axes no room, or give it back: the pair takes it before its first layout in the size.
+    if (_secondaryFirst) {
+        _transitionSize = size;
+        [self arrangeForTraits:self.traitCollection];
+        __weak ANNArrangementViewController *weakPair = self;
+        void (^sized)(id<UIViewControllerTransitionCoordinatorContext>) =
+            ^(id<UIViewControllerTransitionCoordinatorContext> context) {
+              ANNArrangementViewController *pair = weakPair;
+              if (pair && CGSizeEqualToSize(pair->_transitionSize, size)) {
+                  pair->_transitionSize = CGSizeZero;
+              }
+            };
+        [coordinator animateAlongsideTransition:nil completion:sized];
+    }
     UITraitCollection *scene = self.viewIfLoaded.window.windowScene.traitCollection;
     NSNumber *large = ANNIsLargeWindow(self.traitCollection);
     NSNumber *largeScene = scene ? ANNIsLargeWindow(scene) : nil;
@@ -498,6 +598,10 @@ static BOOL ANNIsShown(UIViewController *screen, UIArrangementViewState *state, 
 
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
+    // A size of its own without a transition (a column of a split view): the axes may allow another shape now.
+    if (_secondaryFirst) {
+        [self arrangeForTraits:self.traitCollection];
+    }
     [self setNeedsStateUpdate];
 }
 
@@ -544,10 +648,12 @@ static BOOL ANNIsShown(UIViewController *screen, UIArrangementViewState *state, 
     if (!self.viewIfLoaded.window || _screensDestroyed) {
         return;
     }
+    // By the screens' placements: with `primaryEdge` at the trailing side or the bottom they are the other way round,
+    // and a secondary out of its placement has none.
     UIArrangementViewState *primaryState =
-        [self stateForPlacement:UIArrangementViewControllerViewPlacementPrimary];
+        [self stateForPlacement:[self placementForViewController:_primary]];
     UIArrangementViewState *secondaryState =
-        [self stateForPlacement:UIArrangementViewControllerViewPlacementSecondary];
+        [self stateForPlacement:[self placementForViewController:_secondary]];
     CGRect primaryFrame = ANNShownFrame(_primary.viewIfLoaded, self.view);
     CGRect secondaryFrame = ANNShownFrame(_secondary.viewIfLoaded, self.view);
     BOOL primaryShown = ANNIsShown(_primary, primaryState, primaryFrame);
@@ -563,7 +669,8 @@ static BOOL ANNIsShown(UIViewController *screen, UIArrangementViewState *state, 
         CGRect overlap = CGRectIntersection(primaryFrame, secondaryFrame);
         if (!CGRectIsNull(overlap) && overlap.size.width > 1 && overlap.size.height > 1) {
             layout = @"overlay";
-            // UIKit puts the primary over the secondary (zIndex 1 and 0).
+            // UIKit puts the primary over the secondary (zIndex 1 and 0); an overlay keeps the screens in their own
+            // placements.
             primaryFront = primaryState.zIndex >= secondaryState.zIndex;
             secondaryFront = !primaryFront;
         } else {

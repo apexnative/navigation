@@ -45,8 +45,9 @@ internal fun WindowFolds.Fold.across(area: Rect): PairFold? {
 /**
  * Decides the frames of a pair. A window too small for a pair (`largeWindow` false: Material's compact width or
  * height) shows the primary alone with `compact: 'primary'`. Otherwise, and with `compact: 'pair'`: `split` lies side
- * by side when wider than tall, else one above the other, the primary at the leading side or on top with its
- * `fraction`; a fold across the pair puts the boundary on it, and the screens on its two sides, off its bounds.
+ * by side when wider than tall, else one above the other, the primary first (at the leading side or on top) or, with
+ * `primaryEdge` trailing or bottom, second, with its `fraction`; a fold across the pair puts the boundary on it, and
+ * the screens on its two sides, off its bounds.
  * `overlay`: both the whole size, the primary over the secondary; side by side at a fold that the device is partly
  * folded at, or that hides what is under it, the primary on `primaryEdge`. Where the axes don't allow the way the pair
  * would lie, only the primary shows (an overlay stays one over the other).
@@ -67,9 +68,9 @@ internal object ArrangementPlanner {
                 val sideBySide = fold?.vertical ?: (width > height)
                 when {
                     !definition.allows(sideBySide) -> ArrangementPlan(Layout.SINGLE, whole, null)
-                    // The primary at the leading side, or on top.
-                    fold != null -> atFold(fold, width, height, primaryFirst = !fold.vertical || !rtl)
-                    else -> byFraction(definition.fraction, width, height, sideBySide, rtl)
+                    fold != null ->
+                        atFold(fold, width, height, primaryFirst(definition.primaryEdge, fold.vertical, rtl))
+                    else -> byFraction(definition, width, height, sideBySide, rtl)
                 }
             }
             Style.OVERLAY ->
@@ -92,27 +93,31 @@ internal object ArrangementPlanner {
     }
 
     private fun byFraction(
-        fraction: Float,
+        definition: ArrangementDefinition,
         width: Int,
         height: Int,
         sideBySide: Boolean,
         rtl: Boolean,
     ): ArrangementPlan {
+        val first = primaryFirst(definition.primaryEdge, sideBySide, rtl)
         if (!sideBySide) {
-            val share = (height * fraction).roundToInt()
-            return ArrangementPlan(Layout.STACKED, Rect(0, 0, width, share), Rect(0, share, width, height))
+            val share = (height * definition.fraction).roundToInt()
+            val boundary = if (first) share else height - share
+            val top = Rect(0, 0, width, boundary)
+            val bottom = Rect(0, boundary, width, height)
+            return ArrangementPlan(Layout.STACKED, if (first) top else bottom, if (first) bottom else top)
         }
-        val share = (width * fraction).roundToInt()
-        // The primary at the leading side: the right one from right to left.
-        val boundary = if (rtl) width - share else share
+        val share = (width * definition.fraction).roundToInt()
+        // The primary's part on the left or on the right: the leading side is the right one from right to left.
+        val boundary = if (first) share else width - share
         val left = Rect(0, 0, boundary, height)
         val right = Rect(boundary, 0, width, height)
-        return ArrangementPlan(Layout.SIDE_BY_SIDE, if (rtl) right else left, if (rtl) left else right)
+        return ArrangementPlan(Layout.SIDE_BY_SIDE, if (first) left else right, if (first) right else left)
     }
 
-    // Whether the primary takes the left part of a vertical fold, or the top part of a horizontal one. An edge of the
-    // other axis counts as the nearest one: leading as top and top as leading, trailing as bottom and bottom as
-    // trailing.
+    // Whether the primary takes the left part of a vertical fold (or of a pair side by side), or the top part of a
+    // horizontal one (or of a pair one above the other). An edge of the other axis counts as the nearest one: leading
+    // as top and top as leading, trailing as bottom and bottom as trailing.
     private fun primaryFirst(edge: Edge, vertical: Boolean, rtl: Boolean): Boolean {
         val first = edge == Edge.LEADING || edge == Edge.TOP
         return if (vertical) first != rtl else first

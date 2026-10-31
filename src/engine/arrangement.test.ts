@@ -22,7 +22,7 @@ const PAIR: Omit<EngineArrangement, 'primary' | 'secondary'> = {
   style: 'split',
   axes: 'both',
   fraction: 0.5,
-  primaryEdge: 'trailing',
+  primaryEdge: 'leading',
   compact: 'primary',
 };
 
@@ -76,7 +76,7 @@ describe('pairs of screens', () => {
       style: 'split',
       axes: 'both',
       fraction: 0.5,
-      primaryEdge: 'trailing',
+      primaryEdge: 'leading',
       compact: 'primary',
     });
     const [primary, secondary] = node.children;
