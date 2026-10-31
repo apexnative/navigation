@@ -154,7 +154,7 @@ The type argument is the props of the pair, which the commands check as for any 
 
 - **`axes`**: `'horizontal'` side by side only, `'vertical'` one above the other only, `'both'` by default. Where the window allows neither, only the primary shows.
 - **`fraction`**: the primary's share of a split, above 0 and below 1, half by default. At a fold the fold decides.
-- **`primaryEdge`**: where the primary goes when an overlay goes side by side, `'trailing'` by default.
+- **`primaryEdge`**: the side the primary takes. In a split `'leading'`, the default, puts it first, `'trailing'` second; in an overlay that goes side by side, `'trailing'` by default.
 - **`compact`**: what a window that isn't large shows: `'primary'`, the default, or `'pair'`.
 
 A pair has two screens, never more: in a `defineArrangement`, the primary's own `arrangement` doesn't count. Every key: [`defineArrangement`](/api/arrangement/defineArrangement).
@@ -176,6 +176,22 @@ A pair shows both screens in a <Mark>large window</Mark>: on <Os name="iOS" /> a
 Where only the primary shows, the secondary is still there, out of the window, and comes in when the window grows, as when the user opens iPhone Duo. Before iOS 27.1 there is no secondary at all: the primary is a plain screen.
 
 With `compact: 'pair'` of `defineArrangement` the pair shows everywhere: on a phone held upright, one above the other.
+
+### Which screen shows alone, and on which side {#primary-and-sides}
+
+The primary leads the pair: its bar is the pair's, and it is the screen that shows alone outside a large window. To have the other screen alone on a phone or on iPhone Duo folded, make that one the primary. `primaryEdge` then puts it on the side the layout asks for:
+
+```ts
+// The list on the leading side, the details on
+// the trailing one; folded, the details alone
+ItemWithList: defineArrangement<{ id: string }>({
+  primary: 'Details',
+  secondary: 'List',
+  primaryEdge: 'trailing',
+}),
+```
+
+The bar stays the details' bar folded and open, so opening iPhone Duo changes nothing in it: the list comes in beside the details, which keep their place in the window. One setting serves both ways a split lies: `'trailing'` and `'bottom'` put the primary second, at the trailing side or at the bottom; `'leading'` and `'top'` put it first.
 
 ## Split and overlay {#style}
 

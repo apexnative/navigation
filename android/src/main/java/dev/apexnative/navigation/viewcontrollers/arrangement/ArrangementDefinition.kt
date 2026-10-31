@@ -11,7 +11,10 @@ data class ArrangementDefinition(
     val axes: Axes,
     /** `split`: the primary's share along the split, 0–1, where a fold doesn't decide. */
     val fraction: Float,
-    /** `overlay`: the edge the primary takes when the pair goes side by side at a fold. */
+    /**
+     * The edge the primary takes. `split`: leading or top puts it first, trailing or bottom second; `overlay`: its edge
+     * when the pair goes side by side at a fold.
+     */
     val primaryEdge: Edge,
     /** What a window too small for a pair shows. */
     val compact: Compact,
@@ -36,8 +39,9 @@ data class ArrangementDefinition(
         @JvmStatic
         fun parse(data: JSONObject): ArrangementDefinition {
             val fraction = data.optDouble("fraction", DEFAULT_FRACTION).takeUnless { it.isNaN() } ?: DEFAULT_FRACTION
+            val style = if (data.optString("style") == "overlay") Style.OVERLAY else Style.SPLIT
             return ArrangementDefinition(
-                style = if (data.optString("style") == "overlay") Style.OVERLAY else Style.SPLIT,
+                style = style,
                 axes = when (data.optString("axes")) {
                     "horizontal" -> Axes.HORIZONTAL
                     "vertical" -> Axes.VERTICAL
@@ -48,7 +52,9 @@ data class ArrangementDefinition(
                     "leading" -> Edge.LEADING
                     "top" -> Edge.TOP
                     "bottom" -> Edge.BOTTOM
-                    else -> Edge.TRAILING
+                    "trailing" -> Edge.TRAILING
+                    // The default of each style: the primary first in a split, at the trailing side of an overlay.
+                    else -> if (style == Style.SPLIT) Edge.LEADING else Edge.TRAILING
                 },
                 compact = if (data.optString("compact") == "pair") Compact.PAIR else Compact.PRIMARY,
             )

@@ -20,7 +20,7 @@ function PairProfile({ id }: { id: string }) {
   const fold = division[0];
   return (
     <Screen style={[styles.tint, { backgroundColor: PRIMARY }]}>
-      <PairBadge text="PRIMARY · Profile" color={brand.coral} />
+      <PairBadge text={`${roleOf(pair)} · Profile`} color={brand.coral} />
       <Card title={`Profile ${id}`}>
         <Muted>{explain(pair)}</Muted>
         <KeyValue label="useArrangement" value={describePair(pair)} />
@@ -40,6 +40,9 @@ const PRIMARY = 'rgba(231, 111, 81, 0.16)';
 
 function explain(pair: ArrangementState | null): string {
   if (!pair) return 'Not in a pair.';
+  if (pair.placement === 'secondary') {
+    return 'Details leads this pair: the bar is Details’, and Details shows alone outside a large window. Profile stays on the leading side.';
+  }
   if (pair.layout !== 'single') {
     return 'Details is the other screen of this pair. The bar is Profile’s; back takes both.';
   }
@@ -51,6 +54,11 @@ export function describePair(pair: ArrangementState | null): string {
   if (!pair) return 'null — not in a pair';
   const marks = [pair.front && 'front', pair.hidden && 'hidden'].filter(Boolean);
   return [pair.placement, pair.layout, ...marks].join(' · ');
+}
+
+/** The role of a screen in its pair, for its badge: a screen alone counts as the primary. */
+export function roleOf(pair: ArrangementState | null): string {
+  return pair?.placement === 'secondary' ? 'SECONDARY' : 'PRIMARY';
 }
 
 /** A big label that tells the two screens of a pair apart. */
