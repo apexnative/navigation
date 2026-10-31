@@ -15,6 +15,8 @@ import { SplitItemsScreen } from '../demo/SplitItemsScreen';
 import { SplitSidebarScreen } from '../demo/SplitSidebarScreen';
 import { PairDetailsScreen } from '../demo/PairDetailsScreen';
 import { PairProfileScreen } from '../demo/PairProfileScreen';
+import { PairSettingsScreen } from '../demo/PairSettingsScreen';
+import { pairVariants } from '../demo/pairVariants';
 import { HardwareRegionsScreen } from '../demo/HardwareRegionsScreen';
 import { HingeDemoScreen } from '../demo/HingeDemoScreen';
 import { StackStepScreen } from '../demo/StackStepScreen';
@@ -126,6 +128,16 @@ export const screens = {
     fraction: 1 / 3,
     compact: 'pair',
   }),
+  // Details leads this pair: its bar, alone outside a large window, on the trailing side beside Profile.
+  PairDetailsFirst: defineArrangement<{ id: string }>({
+    primary: 'PairDetails',
+    secondary: 'PairProfile',
+    primaryEdge: 'trailing',
+    fraction: 0.6,
+  }),
+  // The settings screen of 11.7 and every pair it can show.
+  PairSettings: PairSettingsScreen,
+  ...pairVariants,
   // The screens of 6.9 and 6.10.
   HardwareRegions: HardwareRegionsScreen,
   HingeDemo: HingeDemoScreen,
