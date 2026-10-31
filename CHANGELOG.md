@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.0.0-alpha.11](https://github.com/apexnative/navigation/compare/v1.0.0-alpha.10...v1.0.0-alpha.11) (2026-10-31)
+
+
+### Features
+
+* a pair's primary can take the trailing side or the bottom of a split ([#73](https://github.com/apexnative/navigation/issues/73)) ([90ddcd3](https://github.com/apexnative/navigation/commit/90ddcd3c62fa5878cc98651ca7a2cfcdf4645197))
+
+
+### Bug Fixes
+
+* **ios:** a pair and its insets settle at once when iPhone Duo folds or unfolds ([#71](https://github.com/apexnative/navigation/issues/71)) ([ad87ce1](https://github.com/apexnative/navigation/commit/ad87ce1669b55dfb6ad65bedfb8e119f08abb04e))
+
 ## [1.0.0-alpha.10](https://github.com/apexnative/navigation/compare/v1.0.0-alpha.9...v1.0.0-alpha.10) (2026-10-30)
 
 
