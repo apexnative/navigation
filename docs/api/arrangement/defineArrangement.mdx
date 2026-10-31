@@ -124,8 +124,25 @@ It applies where the fold doesn't decide: on a partly folded device each screen 
 
 <ApiMember data={data} of="ArrangementDefinition" name="primaryEdge" />
 
-In an overlay that goes side by side at a fold, the side the primary takes: `'leading'`, `'trailing'`, or at a fold
-from side to side `'top'` and `'bottom'`. A split has no such setting.
+The side the primary takes.
+
+- In a split, its place in the pair: `'leading'` (the default) or `'top'` puts it first, at the leading side or on top;
+  `'trailing'` or `'bottom'` puts it second, at the trailing side or at the bottom. One setting serves both ways the
+  pair lies, side by side and one above the other.
+- In an overlay that goes side by side at a fold: `'leading'`, `'trailing'` (the default), or at a fold from side to
+  side `'top'` and `'bottom'`.
+
+The edge doesn't change which screen leads: the primary keeps the bar, and shows alone outside a large window with
+`compact: 'primary'`. To show the other screen alone there, make it the [`primary`](#primary) and put it on the
+trailing side:
+
+```ts
+defineArrangement({
+  primary: 'Details',
+  secondary: 'List',
+  primaryEdge: 'trailing',
+});
+```
 
 ## A window that isn't large {#compact-group}
 
